@@ -24,7 +24,7 @@ export const WhatsAppWidget = () => {
   if (hiddenPaths.includes(location.pathname) || location.pathname.startsWith('/admin')) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-[90] flex items-end justify-end group pb-[72px] md:pb-0">
+    <div className="fixed bottom-24 right-4 md:bottom-24 md:right-6 z-[80] flex items-end justify-end group pb-[72px] md:pb-0">
       {/* Tooltip */}
       <div className="absolute right-0 bottom-full mb-3 origin-bottom-right scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
         <div className="bg-card text-foreground text-sm font-medium px-4 py-2 rounded-xl shadow-premium border border-border/50 whitespace-nowrap">

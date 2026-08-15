@@ -125,18 +125,22 @@ function AppContent() {
   );
 }
 
+import { MaintenanceGuard } from './components/MaintenanceGuard';
+
 function App() {
   return (
     <ThemeProvider>
       <Router>
         <ErrorBoundary>
           <AuthProvider>
-            <Toaster richColors position="top-right" />
-            <AppContent />
-            <WhatsAppWidget />
-            <GlobalSearch />
-            <InstallPrompt />
-            <OfflineIndicator />
+            <MaintenanceGuard>
+              <Toaster richColors position="top-right" />
+              <AppContent />
+              <WhatsAppWidget />
+              <GlobalSearch />
+              <InstallPrompt />
+              <OfflineIndicator />
+            </MaintenanceGuard>
           </AuthProvider>
         </ErrorBoundary>
       </Router>

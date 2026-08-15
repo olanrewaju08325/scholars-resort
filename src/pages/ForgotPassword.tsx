@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Mail, ArrowLeft, CheckCircle2, ShieldCheck, KeyRound, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
+import { sendPasswordResetEmail } from '@/services/emailService';
 
 export default function ForgotPassword() {
   const navigate = useNavigate();
@@ -23,26 +24,30 @@ export default function ForgotPassword() {
     setFallbackPin(null);
     try {
       const redirectUrl = `${window.location.origin}/reset-password`;
+      const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
+      
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: redirectUrl,
       });
       
+      // Dispatch branded reset email payload via email service
+      await sendPasswordResetEmail(email, generatedPin, `${redirectUrl}?code=${generatedPin}&email=${encodeURIComponent(email)}`);
+
       if (error) {
         console.warn("Supabase Auth reset email failed:", error.message);
-        // Fallback: Generate a recovery PIN so user can safely reset password in-app
-        const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
         sessionStorage.setItem('scholars_recovery_email', email);
         sessionStorage.setItem('scholars_recovery_pin', generatedPin);
         setFallbackPin(generatedPin);
         setSuccess(true);
-        toast.info("Recovery code generated for account verification.");
+        toast.info("Password recovery security PIN generated.");
       } else {
         sessionStorage.setItem('scholars_recovery_email', email);
+        sessionStorage.setItem('scholars_recovery_pin', generatedPin);
+        setFallbackPin(generatedPin);
         setSuccess(true);
-        toast.success('Password reset instructions sent!');
+        toast.success('Password reset instructions & PIN sent to your email address!');
       }
     } catch (error: any) {
-      // Fallback recovery PIN
       const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
       sessionStorage.setItem('scholars_recovery_email', email);
       sessionStorage.setItem('scholars_recovery_pin', generatedPin);

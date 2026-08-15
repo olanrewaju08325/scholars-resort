@@ -1,15 +1,17 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Sparkles, Wand2, BookOpen, CheckCircle, AlertTriangle, Loader2,
-  Copy, FileText, BrainCircuit, ClipboardList, RefreshCw
+  Copy, FileText, BrainCircuit, ClipboardList, RefreshCw, Key, Zap
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { callGroqAPI } from '@/services/aiService';
+import { aiRateLimiter } from '@/services/aiRateLimiter';
+import type { AIQuotaStatus } from '@/services/aiRateLimiter';
 
 type AITool = 'generate_question' | 'explain' | 'validate' | 'flashcards' | 'lesson_notes' | 'quiz' | 'admin_assistant';
 
@@ -65,7 +67,6 @@ const TOOLS: { id: AITool; label: string; icon: any; description: string; placeh
   }
 ];
 
-
 const buildPrompt = (toolId: AITool, difficulty: string, input: string): string => {
   switch (toolId) {
     case 'generate_question':
@@ -87,7 +88,6 @@ const buildPrompt = (toolId: AITool, difficulty: string, input: string): string 
   }
 };
 
-
 export const AdminAITab = () => {
   const [activeTool, setActiveTool] = useState<AITool>('generate_question');
   const [input, setInput] = useState('');
@@ -95,6 +95,37 @@ export const AdminAITab = () => {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState('');
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  
+  // AI Monitoring & API Key state
+  const [quotaStatus, setQuotaStatus] = useState<AIQuotaStatus | null>(null);
+  const [newKeyInput, setNewKeyInput] = useState('');
+  const [updatingKey, setUpdatingKey] = useState(false);
+
+  useEffect(() => {
+    loadQuota();
+  }, []);
+
+  const loadQuota = async () => {
+    const status = await aiRateLimiter.getQuotaStatus();
+    setQuotaStatus(status);
+  };
+
+  const handleUpdateKey = async () => {
+    if (!newKeyInput.trim()) {
+      toast.error('Please enter a valid Groq/Gemini API Key.');
+      return;
+    }
+    setUpdatingKey(true);
+    try {
+      const updated = await aiRateLimiter.updateKeyAndResetQuota(newKeyInput.trim(), 'gemini', 100000);
+      setQuotaStatus(updated);
+      setNewKeyInput('');
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setUpdatingKey(false);
+    }
+  };
 
   const currentTool = TOOLS.find(t => t.id === activeTool)!;
 
@@ -109,7 +140,9 @@ export const AdminAITab = () => {
       const prompt = buildPrompt(activeTool, difficulty, input);
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
       setResult(content || 'No response from AI.');
-      toast.success('Generated successfully via Groq AI!');
+      await aiRateLimiter.recordTokenUsage(650);
+      await loadQuota();
+      toast.success('Generated successfully via AI Engine!');
     } catch (err: any) {
       toast.error('AI request failed: ' + err.message);
     } finally {
@@ -155,10 +188,75 @@ export const AdminAITab = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="text-2xl font-bold">AI Content Studio</h2>
-        <p className="text-slate-400 text-sm mt-1">AI-powered tools to create, validate, and enhance educational content.</p>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-bold font-display">AI Content Studio & Monitoring</h2>
+          <p className="text-slate-400 text-sm mt-1">Monitor AI API token usage, manage Gemini/Groq keys, and generate educational content.</p>
+        </div>
       </div>
+
+      {/* AI Token Quota Monitoring & API Key Replacement Card */}
+      {quotaStatus && (
+        <Card className={`border transition-all ${quotaStatus.warningTriggered ? 'bg-amber-950/40 border-amber-600/60' : 'bg-slate-900 border-slate-800'}`}>
+          <CardContent className="p-5">
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
+              
+              {/* Usage Stats */}
+              <div className="space-y-2 flex-1">
+                <div className="flex items-center gap-2">
+                  <Zap className={`w-5 h-5 ${quotaStatus.warningTriggered ? 'text-amber-400 animate-pulse' : 'text-purple-400'}`} />
+                  <span className="font-bold text-base text-slate-100">AI API Token Quota Status</span>
+                  {quotaStatus.warningTriggered && (
+                    <span className="bg-amber-500/20 text-amber-300 border border-amber-500/40 text-xs px-2.5 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3.5 h-3.5" /> Threshold Alert (80%+ Consumed)
+                    </span>
+                  )}
+                </div>
+                
+                {/* Progress bar */}
+                <div className="w-full bg-slate-950 h-3 rounded-full overflow-hidden border border-slate-800">
+                  <div
+                    className={`h-full transition-all duration-500 ${
+                      quotaStatus.warningTriggered ? 'bg-gradient-to-r from-amber-500 to-red-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'
+                    }`}
+                    style={{ width: `${Math.min(100, (quotaStatus.tokensUsed / quotaStatus.totalLimit) * 100)}%` }}
+                  />
+                </div>
+                
+                <div className="flex justify-between text-xs text-slate-400 font-medium">
+                  <span>Used: <strong className="text-slate-200">{quotaStatus.tokensUsed.toLocaleString()}</strong> / {quotaStatus.totalLimit.toLocaleString()} Tokens</span>
+                  <span>Usage: <strong className={quotaStatus.warningTriggered ? 'text-amber-400' : 'text-purple-400'}>{Math.round((quotaStatus.tokensUsed / quotaStatus.totalLimit) * 100)}%</strong></span>
+                </div>
+              </div>
+
+              {/* Replace Key Input */}
+              <div className="w-full lg:w-96 space-y-2 bg-slate-950/60 p-3.5 rounded-xl border border-slate-800">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                  <Key className="w-3.5 h-3.5 text-purple-400" /> Replace API Key & Reset Quota
+                </label>
+                <div className="flex gap-2">
+                  <Input
+                    type="password"
+                    placeholder="Enter new AI API Key (gsk_...)"
+                    value={newKeyInput}
+                    onChange={(e) => setNewKeyInput(e.target.value)}
+                    className="bg-slate-900 border-slate-700 text-xs font-mono text-slate-100"
+                  />
+                  <Button
+                    onClick={handleUpdateKey}
+                    disabled={updatingKey || !newKeyInput.trim()}
+                    size="sm"
+                    className="bg-purple-600 hover:bg-purple-700 text-xs font-semibold shrink-0"
+                  >
+                    {updatingKey ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : 'Update & Reset'}
+                  </Button>
+                </div>
+              </div>
+
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tool Selector */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">

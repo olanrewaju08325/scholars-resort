@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { 
   Timer, BrainCircuit, Calendar, Swords, BookOpen, 
-  History, Trophy, Target, Zap, RotateCcw 
+  History, Trophy, Target, Zap, RotateCcw, Monitor 
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -93,6 +93,23 @@ export default function CBTCenter() {
           </Button>
         )}
       </motion.div>
+
+      {/* CBT Device Recommendation Notice */}
+      <div className="p-4 rounded-2xl bg-gradient-to-r from-blue-900/40 via-purple-900/40 to-slate-900/60 border border-blue-500/30 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 text-slate-200 shadow-md">
+        <div className="flex items-start md:items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0 border border-blue-500/30">
+            <Monitor className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="font-bold text-sm text-white flex items-center gap-2">
+              Best CBT Exam Experience Recommendation
+            </h4>
+            <p className="text-xs text-slate-300 mt-0.5 leading-relaxed">
+              For the most realistic JAMB exam environment—featuring standard desktop keyboard shortcuts (<kbd className="bg-slate-800 px-1 py-0.5 rounded text-[10px] text-blue-300 font-mono">A</kbd>, <kbd className="bg-slate-800 px-1 py-0.5 rounded text-[10px] text-blue-300 font-mono">B</kbd>, <kbd className="bg-slate-800 px-1 py-0.5 rounded text-[10px] text-blue-300 font-mono">C</kbd>, <kbd className="bg-slate-800 px-1 py-0.5 rounded text-[10px] text-blue-300 font-mono">D</kbd>, <kbd className="bg-slate-800 px-1 py-0.5 rounded text-[10px] text-blue-300 font-mono">N</kbd>, <kbd className="bg-slate-800 px-1 py-0.5 rounded text-[10px] text-blue-300 font-mono">P</kbd>), full split-screen question navigation, and high-speed multi-subject toggles—we strongly advise using a <strong>Laptop or Desktop Computer</strong>.
+            </p>
+          </div>
+        </div>
+      </div>
 
       {/* Navigation Tabs */}
       <div className="flex gap-2 overflow-x-auto pb-2 hide-scrollbar">
