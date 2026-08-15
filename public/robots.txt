@@ -1,0 +1,12 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /cbt
+Disallow: /exam
+Disallow: /profile
+Disallow: /plan
+Disallow: /practice
+Disallow: /guardian
+Disallow: /scholarresortadmin@benedict
+
+Sitemap: https://scholarsresort.com/sitemap.xml

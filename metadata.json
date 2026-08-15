@@ -1,0 +1,6 @@
+{
+  "name": "Scholars Resort",
+  "description": "Premium JAMB CBT simulator and AI learning ecosystem designed for Nigerian students.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

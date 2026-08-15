@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/jpeg" href="/scholar.jpg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0B1526" />
+    <meta name="description" content="Scholars Resort is the premium JAMB CBT simulator and AI learning ecosystem designed to help Nigerian students score 300+ in their UTME." />
+    <meta name="keywords" content="JAMB, UTME, CBT, Nigeria, admission, post-utme, past questions, ai tutor, study plan, Scholars Resort" />
+    <meta name="author" content="Scholars Resort" />
+    
+    <!-- Security Hardening: CSP -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://*.supabase.co; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: https:; connect-src 'self' wss://*.supabase.co https://*.supabase.co https://api.groq.com;" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://scholarsresort.com/" />
+    <meta property="og:title" content="Scholars Resort - Learn Smart. Score High. Secure Your Future." />
+    <meta property="og:description" content="The ultimate AI-powered JAMB CBT preparation platform. Practice past questions, get a personalized study plan, and ace your exams." />
+    <meta property="og:image" content="https://scholarsresort.com/scholar.jpg" />
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:url" content="https://scholarsresort.com/" />
+    <meta property="twitter:title" content="Scholars Resort - Learn Smart. Score High. Secure Your Future." />
+    <meta property="twitter:description" content="The ultimate AI-powered JAMB CBT preparation platform. Practice past questions, get a personalized study plan, and ace your exams." />
+    <meta property="twitter:image" content="https://scholarsresort.com/scholar.jpg" />
+
+    <link rel="canonical" href="https://scholarsresort.com/" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Poppins:wght@600;700&family=Roboto+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <title>Scholars Resort - Learn Smart. Score High. Secure Your Future.</title>
+    
+    <!-- JSON-LD Structured Data -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "EducationalOrganization",
+      "name": "Scholars Resort",
+      "url": "https://scholarsresort.com",
+      "logo": "https://scholarsresort.com/scholar.jpg",
+      "description": "Premium JAMB CBT preparation platform with AI tutoring.",
+      "sameAs": [
+        "https://twitter.com/scholarsresort",
+        "https://facebook.com/scholarsresort"
+      ]
+    }
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        document.body.innerHTML = '<div style="color:red;padding:20px;font-family:monospace"><h2>Runtime Error</h2><p>' + message + '</p><pre>' + (error ? error.stack : '') + '</pre></div>';
+      };
+      window.addEventListener('unhandledrejection', function(event) {
+        document.body.innerHTML = '<div style="color:red;padding:20px;font-family:monospace"><h2>Promise Rejection</h2><p>' + event.reason + '</p></div>';
+      });
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
