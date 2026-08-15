@@ -1,32 +1,38 @@
-# React + TypeScript + Vite
+# Scholars Resort — Complete JAMB UTME CBT & AI Learning Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Scholars Resort is a full-featured, AI-powered UTME CBT preparation platform built with React 18, TypeScript, Tailwind CSS, Supabase PostgreSQL, and Vite.
 
-Currently, two official plugins are available:
+## 🚀 Key Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **UTME CBT Exam Simulator**: Realistic JAMB examination environment with timer controls, question palette, flagging, and automated scoring.
+- **AI Tutor & Score Predictor**: Algorithmic JAMB score readiness estimation and personalized subject analysis.
+- **LaTeX Math & Chemical Expressions**: Embedded KaTeX renderer for science formulas, calculations, and detailed step-by-step explanations.
+- **Performance Analytics & Progress Badges**: Interactive charts (Recharts) and milestone badge unlocking system with audio-visual feedback.
+- **Guardian & Admin Portals**: Parent monitoring portal, candidate management, content studio, and platform maintenance guard.
+- **Offline Safety Engine**: Dexie.js (IndexedDB) session recovery allowing students to resume exams uninterrupted after refreshing or closing their browser.
 
-## React Compiler
+## 🛠️ Tech Stack
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Lucide Icons, Recharts, KaTeX.
+- **Backend & Database**: Supabase (PostgreSQL with RLS, SECURITY DEFINER functions, Triggers, Full-Text Search), Edge Functions.
+- **Deployment**: Configured for Netlify (`netlify.toml` + `public/_redirects`), Vercel, or Cloud Run.
 
-## Expanding the Oxlint configuration
+## ⚡ Build & Run Instructions
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+```bash
+# Install dependencies
+npm install
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+# Start local development server
+npm run dev
+
+# Production build
+npm run build
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+## 🌐 Netlify Deployment
+
+1. Connect your GitHub repository to Netlify.
+2. Build command: `npm run build`
+3. Publish directory: `dist`
+4. Routing: Handled automatically via `netlify.toml` & `public/_redirects`.

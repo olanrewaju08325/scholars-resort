@@ -201,7 +201,7 @@ const Signup = () => {
             <CardFooter className="flex flex-col gap-4">
               <p className="text-center w-full text-xs text-muted-foreground">
                 By creating an account, you agree to our <br/>
-                <a href="#" className="text-primary hover:underline">Terms of Service</a> and <a href="#" className="text-primary hover:underline">Privacy Policy</a>.
+                <Link to="/terms" target="_blank" className="text-primary hover:underline font-medium">Terms of Service</Link> and <Link to="/privacy" target="_blank" className="text-primary hover:underline font-medium">Privacy Policy</Link>.
               </p>
               <p className="text-center w-full text-sm text-muted-foreground">
                 Already have an account? <Link to="/login" className="font-semibold text-primary hover:underline">Log in</Link>

@@ -10,6 +10,7 @@ import Signup from './pages/Signup';
 
 // Lazy-loaded pages
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
+const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const CBTCenter = lazy(() => import('./pages/CBTCenter'));
@@ -71,6 +72,7 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
+          <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/guardian-info" element={<GuardianLanding />} />
           <Route path="/guardian-connect" element={<GuardianConnect />} />
           <Route path="/onboarding" element={<Onboarding />} />
