@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { errorTracker } from '@/lib/errorTracker';
+import { sendPlatformEmail } from '@/lib/emailService';
 
 export interface SMTPConfig {
   host: string;
@@ -31,80 +32,41 @@ export const testSMTPEmail = async (
       throw new Error('SMTP Host and Port are required.');
     }
 
-    // 1. First attempt Supabase Edge Function 'communication-center' if active
-    let edgeSuccess = false;
-    let edgeMsg = '';
-
-    try {
-      const { data, error } = await supabase.functions.invoke('communication-center', {
-        body: {
-          action: 'test_smtp',
-          payload: {
-            host: config.host,
-            port: config.port,
-            user: config.user,
-            pass: config.pass,
-            recipient: recipientEmail,
-            from: config.fromEmail || 'no-reply@scholarsresort.com'
-          }
-        }
-      });
-
-      if (!error && data?.success) {
-        edgeSuccess = true;
-        edgeMsg = data.message || 'SMTP Edge Function verified successfully.';
-      }
-    } catch (e: any) {
-      console.warn('Edge function test_smtp unreached, falling back to direct verification:', e.message);
-    }
-
-    const latency = Date.now() - startTime;
-
-    // 2. Log the test event into Supabase audit_logs & communication_logs
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      
-      await supabase.from('communication_logs').insert({
-        recipient_email: recipientEmail,
-        email_type: 'smtp_test',
-        subject: `SMTP Test Dispatch (${config.host}:${config.port})`,
-        status: edgeSuccess ? 'delivered' : 'pending',
-        sent_at: new Date().toISOString()
-      });
-
-      if (user) {
-        await supabase.from('audit_logs').insert({
-          user_id: user.id,
-          action: `SMTP Test Dispatch (${config.host})`,
-          entity_type: 'communication',
-          entity_id: 'smtp_test',
-          status: 'success',
-          created_at: new Date().toISOString()
-        });
-      }
-    } catch (dbErr) {
-      console.warn('Non-blocking log error:', dbErr);
-    }
-
-    return {
-      success: true,
-      latency,
-      message: edgeSuccess 
-        ? edgeMsg 
-        : `SMTP Configuration Verified! Host (${config.host}:${config.port}) validated with dispatch test payload in ${latency}ms.`
-    };
-  } catch (err: any) {
-    const latency = Date.now() - startTime;
-    errorTracker.logError({
-      type: 'runtime_error',
-      message: `SMTP Test Error: ${err.message}`,
-      component: 'emailService.testSMTPEmail'
+    const response = await fetch('/api/test-smtp', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        host: config.host,
+        port: config.port,
+        user: config.user,
+        pass: config.pass,
+        fromEmail: config.fromEmail,
+        testRecipient: recipientEmail
+      })
     });
 
+    const data = await response.json();
+    const latency = Date.now() - startTime;
+
+    if (response.ok && data.success) {
+      return {
+        success: true,
+        latency: data.latency || latency,
+        message: data.message || `SMTP Connection Verified!`
+      };
+    } else {
+      return {
+        success: false,
+        latency,
+        message: data.message || data.error || 'SMTP Connection Failed'
+      };
+    }
+  } catch (err: any) {
+    const latency = Date.now() - startTime;
     return {
       success: false,
       latency,
-      message: err.message || 'Failed to connect to SMTP server.'
+      message: err.message || 'SMTP Service Endpoint Error'
     };
   }
 };
@@ -201,21 +163,21 @@ export const sendPasswordResetEmail = async (
   email: string,
   pin: string,
   resetUrl: string
-): Promise<{ success: boolean; message: string }> => {
-  const subject = '🔒 Scholars Resort - Password Reset Instructions';
+): Promise<{ success: boolean; delivered?: boolean; message: string; error?: string }> => {
+  const subject = '🔒 Scholars Resort - Password Reset Security Code';
   const htmlBody = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; rounded: 12px; background: #ffffff;">
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
       <div style="text-align: center; margin-bottom: 20px;">
         <h2 style="color: #4f46e5; margin: 0;">Scholars Resort</h2>
         <p style="color: #64748b; font-size: 14px;">UTME/JAMB Exam Prep & Learning Platform</p>
       </div>
       <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-      <h3 style="color: #0f172a;">Password Reset Request</h3>
+      <h3 style="color: #0f172a;">Password Reset Security Code</h3>
       <p style="color: #334155; font-size: 15px; line-height: 1.6;">
         We received a request to reset your Scholars Resort account password for <strong>${email}</strong>.
       </p>
       <div style="background: #f8fafc; border: 1px dashed #cbd5e1; padding: 15px; text-align: center; margin: 20px 0; border-radius: 8px;">
-        <p style="margin: 0 0 5px 0; font-size: 12px; color: #64748b; font-weight: bold; text-transform: uppercase;">Your Security Verification PIN</p>
+        <p style="margin: 0 0 5px 0; font-size: 12px; color: #64748b; font-weight: bold; text-transform: uppercase;">Your 6-Digit Verification PIN</p>
         <span style="font-family: monospace; font-size: 32px; font-weight: bold; color: #4f46e5; letter-spacing: 6px;">${pin}</span>
       </div>
       <p style="color: #334155; font-size: 14px;">
@@ -225,49 +187,39 @@ export const sendPasswordResetEmail = async (
         <a href="${resetUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">Reset Password Now</a>
       </div>
       <p style="color: #94a3b8; font-size: 12px; margin-top: 30px; text-align: center;">
-        If you did not request this password reset, please ignore this email or contact support.
+        If you did not request this password reset, please ignore this email.
       </p>
     </div>
   `;
 
-  try {
-    // Attempt edge function dispatch for real SMTP delivery
-    try {
-      await supabase.functions.invoke('communication-center', {
-        body: {
-          action: 'send_email',
-          payload: {
-            to: email,
-            subject,
-            html: htmlBody,
-            text: `Your Scholars Resort Password Reset Security PIN is: ${pin}. Reset URL: ${resetUrl}`
-          }
-        }
-      });
-    } catch (e: any) {
-      console.info('Edge SMTP function info:', e.message);
-    }
+  const res = await sendPlatformEmail({
+    to: email,
+    subject,
+    body: `Your Scholars Resort Password Reset 6-digit PIN is: ${pin}. Reset URL: ${resetUrl}`,
+    html: htmlBody
+  });
 
-    // Record audit log entry in communication_logs
+  const expiresAt = Date.now() + 15 * 60 * 1000;
+  try {
     await supabase.from('communication_logs').insert({
-      recipient_email: email,
+      recipient_email: email.toLowerCase().trim(),
       email_type: 'password_reset',
       subject,
-      metadata: { pin, reset_url: resetUrl },
-      status: 'delivered',
+      metadata: { pin, reset_url: resetUrl, expires_at: expiresAt, used: false },
+      status: res.success ? 'delivered' : 'failed',
       sent_at: new Date().toISOString()
     });
-
-    return {
-      success: true,
-      message: 'Password reset email dispatched successfully via SMTP.'
-    };
   } catch (err: any) {
-    console.warn('Password reset log info:', err.message);
-    return {
-      success: true,
-      message: 'Password reset dispatch recorded.'
-    };
+    console.warn('Communication log insert notice:', err.message);
   }
+
+  return {
+    success: res.success,
+    delivered: res.delivered,
+    error: res.error,
+    message: res.success 
+      ? 'Password reset email dispatched successfully via SMTP server.'
+      : `Email dispatch notice: ${res.error || 'SMTP server not configured'}`
+  };
 };
 

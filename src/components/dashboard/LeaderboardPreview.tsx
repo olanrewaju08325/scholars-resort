@@ -47,7 +47,7 @@ export const LeaderboardPreview = () => {
              <div className="p-4 text-center text-sm text-muted-foreground">No entries yet. Be the first!</div>
           ) : (
             leaders.map((entry, index) => (
-              <div key={entry.user_id || `leader-${index}`} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
+              <div key={entry.user_id ? `leaderboard-user-${entry.user_id}` : `leaderboard-idx-${index}`} className="p-4 flex items-center justify-between hover:bg-muted/30 transition-colors">
                 <div className="flex items-center gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm
                     ${index === 0 ? 'bg-yellow-500/20 text-yellow-500' : 

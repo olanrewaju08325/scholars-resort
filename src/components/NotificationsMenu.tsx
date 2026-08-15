@@ -82,9 +82,9 @@ export function NotificationsMenu() {
             </div>
           ) : (
             <div className="flex flex-col divide-y divide-border">
-              {notifications.map((n) => (
+              {notifications.map((n, i) => (
                 <div 
-                  key={n.id} 
+                  key={n.id ? `notif-menu-item-${n.id}` : `notif-menu-idx-${i}`} 
                   className={`p-4 cursor-pointer transition-colors hover:bg-muted/30 ${!n.is_read ? 'bg-primary/5' : ''}`}
                   onClick={() => !n.is_read && markAsRead(n.id)}
                 >

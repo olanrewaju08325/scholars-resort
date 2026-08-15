@@ -21,6 +21,36 @@ const Login = () => {
     e.preventDefault();
     setLoading(true);
     setError('');
+
+    const cleanEmail = email.trim().toLowerCase();
+    const isMasterAdmin = cleanEmail === 'olanrewajuhamilot@gmail.com' || cleanEmail === 'admitwise2@gmail.com';
+
+    // Strict Maintenance Mode Check from Supabase DB settings
+    try {
+      const { data: adminData } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'maintenance_mode')
+        .maybeSingle();
+
+      const isMaint = adminData?.setting_value?.enabled;
+      if (isMaint && !isMasterAdmin) {
+        // Also check if profile is admin
+        const { data: profileCheck } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('email', cleanEmail)
+          .maybeSingle();
+        
+        if (profileCheck?.role !== 'admin' && profileCheck?.role !== 'superadmin') {
+          setError('Platform is currently under scheduled maintenance. Non-master administrative accounts are restricted from logging in.');
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (mErr) {
+      console.warn('Maintenance pre-check notice:', mErr);
+    }
     
     const { error } = await supabase.auth.signInWithPassword({
       email,

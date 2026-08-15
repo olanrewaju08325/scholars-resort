@@ -18,8 +18,8 @@ export const QuickActions = () => {
     <div>
       <h2 className="text-xl font-bold font-display mb-4">Quick Actions</h2>
       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-        {ACTIONS.map((action, i) => (
-          <Link key={i} to={action.link} className="group">
+        {ACTIONS.map((action) => (
+          <Link key={action.link} to={action.link} className="group">
             <Card className="h-full bg-card hover:bg-accent border-border transition-all duration-200 hover:shadow-md hover:-translate-y-1">
               <CardContent className="p-4 flex flex-col items-center justify-center text-center gap-3">
                 <div className={`w-10 h-10 rounded-xl ${action.bg} flex items-center justify-center transition-transform group-hover:scale-110`}>

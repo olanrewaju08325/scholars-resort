@@ -23,19 +23,30 @@ export default function ForgotPassword() {
     setLoading(true);
     setFallbackPin(null);
     try {
+      const cleanEmail = email.trim().toLowerCase();
       const redirectUrl = `${window.location.origin}/reset-password`;
       const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
+      const expiresAt = Date.now() + 15 * 60 * 1000;
+
+      const recoveryToken = {
+        email: cleanEmail,
+        pin: generatedPin,
+        expiresAt,
+        used: false
+      };
+      sessionStorage.setItem('scholars_recovery_token', JSON.stringify(recoveryToken));
+      sessionStorage.setItem('scholars_recovery_email', cleanEmail);
       
       // 1. Dispatch custom branded reset email via SMTP mail service first
-      const smtpRes = await sendPasswordResetEmail(
-        email, 
+      await sendPasswordResetEmail(
+        cleanEmail, 
         generatedPin, 
-        `${redirectUrl}?code=${generatedPin}&email=${encodeURIComponent(email)}`
+        `${redirectUrl}?code=${generatedPin}&email=${encodeURIComponent(cleanEmail)}`
       );
 
-      // 2. Safely attempt Supabase Auth recovery trigger without breaking on default SMTP errors
+      // 2. Safely attempt Supabase Auth recovery trigger
       try {
-        const { error: supabaseAuthErr } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error: supabaseAuthErr } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
           redirectTo: redirectUrl,
         });
 
@@ -46,18 +57,23 @@ export default function ForgotPassword() {
         console.info("Supabase auth trigger info:", sbErr.message);
       }
 
-      sessionStorage.setItem('scholars_recovery_email', email);
-      sessionStorage.setItem('scholars_recovery_pin', generatedPin);
       setFallbackPin(generatedPin);
       setSuccess(true);
-      toast.success('Password reset security PIN and link dispatched via SMTP!');
+      toast.success('6-digit Security Verification PIN sent to your email!');
     } catch (error: any) {
+      const cleanEmail = email.trim().toLowerCase();
       const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
-      sessionStorage.setItem('scholars_recovery_email', email);
-      sessionStorage.setItem('scholars_recovery_pin', generatedPin);
+      const expiresAt = Date.now() + 15 * 60 * 1000;
+      sessionStorage.setItem('scholars_recovery_token', JSON.stringify({
+        email: cleanEmail,
+        pin: generatedPin,
+        expiresAt,
+        used: false
+      }));
+      sessionStorage.setItem('scholars_recovery_email', cleanEmail);
       setFallbackPin(generatedPin);
       setSuccess(true);
-      toast.success("Password reset security PIN generated.");
+      toast.success("Security PIN generated.");
     } finally {
       setLoading(false);
     }

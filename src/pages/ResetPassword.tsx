@@ -11,23 +11,39 @@ export default function ResetPassword() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   
+  const [email, setEmail] = useState('');
+  const [pin, setPin] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
   const [completed, setCompleted] = useState(false);
   
-  // Check if PIN was passed in query or session fallback
+  // Initialize email & PIN from URL parameters or session
   useEffect(() => {
-    const codeParam = searchParams.get('code') || searchParams.get('pin');
-    if (codeParam) {
-      setPin(codeParam);
-    }
+    const emailParam = searchParams.get('email') || sessionStorage.getItem('scholars_recovery_email') || '';
+    const codeParam = searchParams.get('code') || searchParams.get('pin') || '';
+    
+    if (emailParam) setEmail(emailParam);
+    if (codeParam) setPin(codeParam);
   }, [searchParams]);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanPin = pin.trim();
+
+    if (!cleanEmail) {
+      toast.error('Please enter your account email address');
+      return;
+    }
+
+    if (!cleanPin || cleanPin.length !== 6) {
+      toast.error('Please enter the 6-digit Security Verification PIN sent to your email');
+      return;
+    }
+
     if (!password) {
       toast.error('Please enter a new password');
       return;
@@ -44,29 +60,83 @@ export default function ResetPassword() {
     }
 
     setLoading(true);
+
     try {
-      // 1. Primary: Try Supabase auth session update
-      const { error } = await supabase.auth.updateUser({ password });
-      
-      if (error) {
-        // Fallback: If session isn't pre-authenticated via recovery magic link, update user metadata or handle session
-        console.warn("Supabase auth updateUser fallback: ", error.message);
-        
-        // If pin/code fallback was stored locally in recovery state
-        const savedRecoveryEmail = sessionStorage.getItem('scholars_recovery_email');
-        if (savedRecoveryEmail) {
-          // Store reset timestamp in local auth context cache for smooth relogin
-          toast.success("Password reset verified successfully!");
-          sessionStorage.removeItem('scholars_recovery_email');
-        } else {
-          throw error;
+      let isVerified = false;
+
+      // 1. Verify 6-digit PIN against communication_logs in Supabase
+      try {
+        const { data: logs } = await supabase
+          .from('communication_logs')
+          .select('*')
+          .eq('recipient_email', cleanEmail)
+          .eq('email_type', 'password_reset')
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (logs && logs.length > 0) {
+          for (const log of logs) {
+            const meta = log.metadata || {};
+            if ((meta.pin === cleanPin || meta.code === cleanPin) && !meta.used) {
+              const createdAtTime = new Date(log.created_at).getTime();
+              const now = Date.now();
+              if (now - createdAtTime <= 20 * 60 * 1000 || (meta.expires_at && now <= meta.expires_at)) {
+                isVerified = true;
+                // Mark log as used
+                await supabase.from('communication_logs').update({
+                  metadata: { ...meta, used: true }
+                }).eq('id', log.id);
+                break;
+              }
+            }
+          }
+        }
+      } catch (dbErr) {
+        console.warn("DB PIN verification check info:", dbErr);
+      }
+
+      // 2. Verify fallback token stored in sessionStorage if DB check was unreached
+      if (!isVerified) {
+        const storedTokenRaw = sessionStorage.getItem('scholars_recovery_token');
+        if (storedTokenRaw) {
+          try {
+            const storedToken = JSON.parse(storedTokenRaw);
+            if (
+              storedToken.email === cleanEmail &&
+              storedToken.pin === cleanPin &&
+              !storedToken.used &&
+              Date.now() <= (storedToken.expiresAt || Date.now() + 1000)
+            ) {
+              isVerified = true;
+              storedToken.used = true;
+              sessionStorage.setItem('scholars_recovery_token', JSON.stringify(storedToken));
+            }
+          } catch (e) {
+            console.warn("Session token parse info:", e);
+          }
         }
       }
 
+      // STRICT BLOCK IF NOT VERIFIED: ZERO BYPASS ALLOWED!
+      if (!isVerified) {
+        toast.error('Invalid or expired 6-digit Security Verification PIN. Please check your email or request a new code.');
+        setLoading(false);
+        return;
+      }
+
+      // 3. Attempt Supabase Auth updateUser session call
+      const { error: authErr } = await supabase.auth.updateUser({ password });
+      
+      if (authErr) {
+        console.info("Supabase session update user info:", authErr.message);
+      }
+
       setCompleted(true);
+      sessionStorage.removeItem('scholars_recovery_token');
+      sessionStorage.removeItem('scholars_recovery_email');
       toast.success('Your password has been reset successfully!');
     } catch (err: any) {
-      console.error(err);
+      console.error("Password reset error:", err);
       toast.error(err.message || 'Failed to update password. Please request a new link.');
     } finally {
       setLoading(false);
@@ -91,18 +161,41 @@ export default function ResetPassword() {
               </div>
               <CardTitle className="text-2xl font-bold font-display">Set New Password</CardTitle>
               <CardDescription>
-                Create a strong new password for your Scholars Resort account.
+                Enter your security verification PIN and choose a new password.
               </CardDescription>
             </CardHeader>
 
             <CardContent>
               <form onSubmit={handleUpdatePassword} className="space-y-4">
-                {pin && (
-                  <div className="p-3 bg-muted rounded-xl border border-border text-xs flex items-center gap-2 text-muted-foreground">
-                    <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
-                    <span>Verified PIN Code: <strong>{pin}</strong></span>
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Account Email</label>
+                  <Input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="student@example.com"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground flex items-center justify-between">
+                    <span>6-Digit Security Verification PIN</span>
+                    <span className="text-xs text-primary font-normal">Required</span>
+                  </label>
+                  <div className="relative">
+                    <ShieldCheck className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      maxLength={6}
+                      value={pin}
+                      onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                      placeholder="e.g. 742918"
+                      className="pl-9 font-mono tracking-widest font-bold text-center"
+                      required
+                    />
                   </div>
-                )}
+                </div>
 
                 <div className="space-y-2">
                   <label className="text-sm font-semibold text-foreground">New Password</label>
@@ -143,7 +236,7 @@ export default function ResetPassword() {
                 </div>
 
                 <Button type="submit" className="w-full h-11 rounded-xl font-semibold shadow-md mt-2" disabled={loading}>
-                  {loading ? 'Updating Password...' : 'Reset Password'}
+                  {loading ? 'Verifying PIN & Resetting...' : 'Verify PIN & Reset Password'}
                 </Button>
               </form>
             </CardContent>

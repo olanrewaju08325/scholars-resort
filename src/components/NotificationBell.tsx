@@ -133,7 +133,7 @@ export const NotificationBell = () => {
                 const meta = n.metadata || {};
                 return (
                   <div
-                    key={n.id || i}
+                    key={n.id ? `notif-bell-item-${n.id}` : `notif-bell-idx-${i}`}
                     className="p-4 border-b border-border last:border-0 hover:bg-muted/30 transition-colors cursor-pointer group"
                   >
                     <div className="flex gap-3">
