@@ -65,7 +65,7 @@ export function NotificationsMenu() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-80 p-0 mt-2 border-border shadow-2xl rounded-xl overflow-hidden z-[100]" align="end" sideOffset={8}>
+      <PopoverContent className="fixed left-4 right-4 top-16 sm:fixed sm:left-auto sm:right-6 sm:top-16 sm:w-80 md:absolute md:right-0 md:left-auto md:top-12 md:w-96 p-0 border border-border shadow-2xl rounded-xl overflow-hidden z-[100] bg-card text-card-foreground" align="end" sideOffset={8}>
         <div className="bg-muted/50 p-4 border-b border-border flex items-center justify-between">
           <h4 className="font-bold">Notifications</h4>
           {unreadCount > 0 && (

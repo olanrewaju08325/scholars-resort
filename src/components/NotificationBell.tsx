@@ -103,7 +103,7 @@ export const NotificationBell = () => {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-12 w-[calc(100vw-2.5rem)] sm:w-80 md:w-96 bg-card border border-border rounded-2xl shadow-2xl z-[100] overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200">
+        <div className="fixed left-4 right-4 top-16 sm:fixed sm:left-auto sm:right-6 sm:top-16 sm:w-80 md:absolute md:right-0 md:left-auto md:top-12 md:w-96 bg-card text-card-foreground border border-border rounded-2xl shadow-2xl z-[100] overflow-hidden animate-in slide-in-from-top-2 fade-in duration-200">
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b border-border bg-muted/20">
             <div>

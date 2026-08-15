@@ -99,6 +99,10 @@ function AppContent() {
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/support" element={<Support />} />
               <Route path="/tournaments" element={<Tournaments />} />
+              <Route path="/analytics" element={<Leaderboard />} />
+              <Route path="/bookmarks" element={<Library />} />
+              <Route path="/history" element={<CBTCenter />} />
+              <Route path="/ai-tutor" element={<WeaknessDrill />} />
             </Route>
 
             {/* Fullscreen / Immersive Pages (No Navigation) */}
