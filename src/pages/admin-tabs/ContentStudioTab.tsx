@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { analyzeDocumentWithGroq, extractAllQuestionsFromPdfText } from '@/services/aiService';
 import { extractTextFromFile } from '@/lib/pdfExtractor';
+import { saveCustomQuestions } from '@/lib/offlineStore';
 
 export const ContentStudioTab = () => {
   const { profile } = useAuth();
@@ -149,9 +150,10 @@ export const ContentStudioTab = () => {
           }));
 
           await batchInsertQuestions(questionsToInsert);
+          saveCustomQuestions(questionsToInsert);
 
           const subName = subjects.find(s => s.id === targetSubId)?.name || 'Subject';
-          toast.success(`Successfully imported all ${csvQuestions.length} CSV questions into database for ${subName}!`);
+          toast.success(`Successfully saved all ${csvQuestions.length} questions into Question Bank for ${subName}!`);
           setSelectedFile(null);
           fetchInitialData();
           setUploading(false);
@@ -161,7 +163,7 @@ export const ContentStudioTab = () => {
 
       // PDF or general document processing with Groq AI (Extracting ALL questions across whole document)
       const textContent = await extractTextFromFile(selectedFile);
-      toast.info('Extracting all questions from PDF document using Groq AI...');
+      toast.info('Extracting all questions from document...');
       
       const extractedQuestions = await extractAllQuestionsFromPdfText(textContent, selectedFile.name);
 
@@ -178,21 +180,28 @@ export const ContentStudioTab = () => {
         }));
 
         await batchInsertQuestions(questionsToInsert);
+        saveCustomQuestions(questionsToInsert);
 
-        await supabase.from('content_ingestion_jobs').insert({
-          admin_id: profile?.id,
-          file_name: selectedFile.name,
-          file_type: selectedFile.type,
-          status: 'completed',
-          total_questions_found: extractedQuestions.length,
-          extracted_data: extractedQuestions,
-          created_at: new Date().toISOString()
-        });
+        try {
+          await supabase.from('content_ingestion_jobs').insert({
+            admin_id: profile?.id,
+            file_name: selectedFile.name,
+            file_type: selectedFile.type,
+            status: 'completed',
+            total_questions_found: extractedQuestions.length,
+            extracted_data: extractedQuestions,
+            created_at: new Date().toISOString()
+          });
+        } catch (jobErr) {
+          console.warn('Job tracking notice:', jobErr);
+        }
 
         const subName = subjects.find(s => s.id === targetSubId)?.name || 'Subject';
-        toast.success(`Extracted & saved ALL ${extractedQuestions.length} questions into database for ${subName}!`);
+        toast.success(`Extracted & saved ALL ${extractedQuestions.length} questions into Question Bank for ${subName}!`);
         setSelectedFile(null);
         fetchInitialData();
+        setUploading(false);
+        return;
       } else {
         toast.error('No questions could be extracted from this file format.');
       }

@@ -104,3 +104,27 @@ export const checkForPackUpdates = async (): Promise<{ updatedSubjects: string[]
   localStorage.setItem(STORAGE_KEY, JSON.stringify(packs));
   return { updatedSubjects, packUpdatesMap };
 };
+
+export const saveCustomQuestions = (questions: any[]) => {
+  try {
+    const existingRaw = localStorage.getItem('scholar_custom_questions');
+    const existing: any[] = existingRaw ? JSON.parse(existingRaw) : [];
+    const updated = [...existing, ...questions];
+    localStorage.setItem('scholar_custom_questions', JSON.stringify(updated));
+  } catch (e) {
+    console.warn('Failed to save custom questions to localStorage:', e);
+  }
+};
+
+export const getCustomQuestions = (subjectId?: string): any[] => {
+  try {
+    const raw = localStorage.getItem('scholar_custom_questions');
+    const questions: any[] = raw ? JSON.parse(raw) : [];
+    if (subjectId) {
+      return questions.filter((q: any) => !q.subject_id || q.subject_id === subjectId);
+    }
+    return questions;
+  } catch {
+    return [];
+  }
+};

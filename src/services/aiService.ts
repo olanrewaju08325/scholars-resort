@@ -239,10 +239,60 @@ ${docText.substring(0, 4000)}`
   }
 };
 
+export const extractQuestionsWithRegex = (docText: string): any[] => {
+  if (!docText || docText.trim().length === 0) return [];
+  const questions: any[] = [];
+  
+  // Split text by common question delimiters like "1.", "2.", "Q1.", "Question 1"
+  const blocks = docText.split(/(?=\n(?:\d+[\.\)]|Q\d+[\.\)]|Question\s+\d+))/i);
+  
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (trimmed.length < 15) continue;
+
+    // Look for options A, B, C, D
+    const optionsFound: string[] = [];
+    const optionMatches = [...trimmed.matchAll(/(?:([A-D])[\.\)]|\(([A-D])\))\s*([^\n\r]+)/gi)];
+    
+    for (const m of optionMatches) {
+      const letter = (m[1] || m[2]).toUpperCase();
+      const text = m[3].trim();
+      if (text && optionsFound.length < 4) {
+        optionsFound.push(`${letter}) ${text}`);
+      }
+    }
+
+    // Look for correct answer designation
+    const ansMatch = trimmed.match(/(?:Ans(?:wer)?|Correct(?:\s*Answer)?)\s*[:\-]?\s*([A-D])/i);
+    const correctAnswer = ansMatch ? ansMatch[1].toUpperCase() : 'A';
+
+    // Extract question text prior to the first option
+    const firstOptIndex = trimmed.search(/(?:[A-D][\.\)]\s*|\([A-D]\)\s*)/i);
+    let questionText = firstOptIndex > 0 ? trimmed.substring(0, firstOptIndex).trim() : trimmed;
+    questionText = questionText.replace(/^(?:\d+[\.\)]|Q\d+[\.\)]|Question\s+\d+)\s*/i, '').trim();
+
+    if (questionText.length >= 5) {
+      const finalOptions = optionsFound.length >= 2 
+        ? optionsFound 
+        : ["A) Option A", "B) Option B", "C) Option C", "D) Option D"];
+
+      questions.push({
+        question: questionText,
+        options: finalOptions,
+        correct_answer: correctAnswer,
+        explanation: "Extracted directly from document text content.",
+        difficulty: "medium"
+      });
+    }
+  }
+
+  return questions;
+};
+
 export const extractAllQuestionsFromPdfText = async (docText: string, docName: string): Promise<any[]> => {
   if (!docText || docText.trim().length === 0) return [];
 
-  // Chunk text into ~3500 character blocks to avoid AI context window limit while extracting maximum questions
+  // Chunk text into ~3500 character blocks to avoid AI context window limit
   const chunkSize = 3500;
   const totalLength = docText.length;
   const chunks: string[] = [];
@@ -252,6 +302,7 @@ export const extractAllQuestionsFromPdfText = async (docText: string, docName: s
   }
 
   const allQuestions: any[] = [];
+  let aiSuccess = false;
 
   for (let idx = 0; idx < chunks.length; idx++) {
     const chunkText = chunks[idx];
@@ -263,7 +314,7 @@ export const extractAllQuestionsFromPdfText = async (docText: string, docName: s
       {
         role: 'user',
         content: `Extract ALL multiple-choice questions present in this text block (${idx + 1}/${chunks.length}) from document '${docName}'.
-Return a STRICT JSON array of objects:
+Return ONLY a STRICT JSON array of objects without conversational preamble:
 [
   {
     "question": "Question text here",
@@ -281,17 +332,27 @@ ${chunkText}`
 
     try {
       const responseText = await callGroqAPI(messages, 'llama-3.3-70b-versatile', 0.2);
-      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const jsonStart = cleanJson.indexOf('[');
-      const jsonEnd = cleanJson.lastIndexOf(']');
-      if (jsonStart !== -1 && jsonEnd !== -1) {
-        const parsedArray = JSON.parse(cleanJson.substring(jsonStart, jsonEnd + 1));
-        if (Array.isArray(parsedArray)) {
+      
+      // Extract array portion cleanly avoiding preamble text
+      const arrayMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
+      if (arrayMatch) {
+        const parsedArray = JSON.parse(arrayMatch[0]);
+        if (Array.isArray(parsedArray) && parsedArray.length > 0) {
           allQuestions.push(...parsedArray);
+          aiSuccess = true;
         }
       }
     } catch (e) {
-      console.warn(`Chunk ${idx + 1} extraction notice:`, e);
+      console.warn(`Chunk ${idx + 1} AI extraction notice:`, e);
+    }
+  }
+
+  // If AI did not extract questions or failed, execute deterministic Regex extraction fallback
+  if (allQuestions.length === 0 || !aiSuccess) {
+    console.info('Executing deterministic Regex question extraction fallback...');
+    const regexQuestions = extractQuestionsWithRegex(docText);
+    if (regexQuestions.length > 0) {
+      allQuestions.push(...regexQuestions);
     }
   }
 

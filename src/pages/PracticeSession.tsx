@@ -10,6 +10,7 @@ import { checkAndAwardBadges } from '@/lib/gamification';
 import { withRetry } from '@/lib/apiWithRetry';
 import { toast } from 'sonner';
 import { callGroqAPI } from '@/services/aiService';
+import { getCustomQuestions } from '@/lib/offlineStore';
 
 const PracticeSession = () => {
   const { state } = useLocation();
@@ -82,14 +83,15 @@ const PracticeSession = () => {
       const count = state.questionCount || 20;
       const { data: qData } = await query.limit(count); 
       
-      if (qData && qData.length > 0) {
-        const parsed = qData.map(q => ({
+      const customQ = getCustomQuestions(state.subjectId !== 'all' ? state.subjectId : undefined);
+
+      let allCombined = [...(qData || []), ...customQ];
+      if (allCombined.length > 0) {
+        const parsed = allCombined.map(q => ({
           ...q,
           options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
         }));
-        // If Mistake Review, we would ideally filter by failed questions from session_answers here.
-        // For now, we simulate by shuffling.
-        setQuestions(parsed.sort(() => Math.random() - 0.5));
+        setQuestions(parsed.sort(() => Math.random() - 0.5).slice(0, count));
       } else {
         setQuestions([]);
       }
