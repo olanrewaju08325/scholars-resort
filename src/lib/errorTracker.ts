@@ -47,6 +47,8 @@ class ErrorTracker {
     const lower = message.toLowerCase();
     return (
       lower.includes('failed to connect to websocket') ||
+      lower.includes('placeholder.supabase.co') ||
+      lower.includes('err_name_not_resolved') ||
       lower.includes('vite') ||
       lower.includes('resizeobserver') ||
       lower.includes('chrome-extension') ||
