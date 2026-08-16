@@ -516,11 +516,11 @@ Scholars Resort Academic Team`
                         <FileDown className="w-4 h-4" /> Download PDF Report
                      </Button>
                      <Button 
-                        onClick={() => window.location.href = "mailto:support@scholarsresort.com"}
+                        onClick={() => window.location.href = "mailto:admitwise2@gmail.com"}
                         variant="secondary" 
-                        className="w-full justify-start gap-3 h-12 bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20"
+                        className="w-full justify-start gap-3 h-12 bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20 font-semibold"
                      >
-                        <MessageSquare className="w-4 h-4" /> Contact Admin / Support
+                        <MessageSquare className="w-4 h-4" /> Contact Admin / Support (admitwise2@gmail.com)
                      </Button>
                   </div>
 

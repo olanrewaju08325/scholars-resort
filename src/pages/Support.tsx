@@ -170,7 +170,12 @@ export default function Support() {
               <MessageSquare className="w-8 h-8 text-primary" />
               Help & Support
             </h1>
-            <p className="text-muted-foreground mt-2">Get assistance from the Scholars Resort team.</p>
+            <p className="text-muted-foreground mt-2">
+              Get direct assistance from the Scholars Resort team via support tickets or email at{' '}
+              <a href="mailto:admitwise2@gmail.com" className="text-primary font-bold hover:underline">
+                admitwise2@gmail.com
+              </a>.
+            </p>
           </div>
           <Link to="/dashboard">
             <Button variant="outline" className="gap-2">

@@ -24,7 +24,7 @@ async function getSmtpConfig(customConfig?: any) {
       port: Number(customConfig.port) || 587,
       user: customConfig.user || '',
       pass: customConfig.pass || '',
-      from: customConfig.fromEmail || customConfig.from || 'noreply@scholarsresort.com'
+      from: customConfig.fromEmail || customConfig.from || 'admitwise2@gmail.com'
     };
   }
 
@@ -42,7 +42,7 @@ async function getSmtpConfig(customConfig?: any) {
         port: Number(data.value.port) || 587,
         user: data.value.user || '',
         pass: data.value.pass || '',
-        from: data.value.from || 'noreply@scholarsresort.com'
+        from: data.value.from || 'admitwise2@gmail.com'
       };
     }
   } catch (err) {
@@ -55,7 +55,7 @@ async function getSmtpConfig(customConfig?: any) {
     port: Number(process.env.SMTP_PORT || 587),
     user: process.env.SMTP_USER || process.env.GMAIL_USER || '',
     pass: process.env.SMTP_PASS || process.env.GMAIL_PASS || '',
-    from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'noreply@scholarsresort.com'
+    from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'admitwise2@gmail.com'
   };
 }
 

@@ -1,121 +1,193 @@
+import { useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Search, Book, CreditCard, Laptop, ShieldCheck, Mail } from 'lucide-react';
+import { Search, Book, CreditCard, ShieldCheck, Mail, MessageSquare, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
+import { Link } from 'react-router-dom';
+
+const FAQS = [
+  {
+    category: 'exams',
+    question: 'How do I study offline?',
+    answer: 'Scholars Resort automatically caches your selected subjects when you start a practice session online. You can turn off your internet data and continue practicing. Once you reconnect to the internet, your scores and session data will automatically sync to our servers.'
+  },
+  {
+    category: 'billing',
+    question: 'How long does manual payment verification take?',
+    answer: 'After you upload your payment receipt via the Pricing page, our administrators review and activate your account within 5-15 minutes during operating hours. You will receive an in-app notice and an email confirmation at admitwise2@gmail.com.'
+  },
+  {
+    category: 'guardian',
+    question: 'How can my parents view my results?',
+    answer: 'Your parents or guardians can create a Guardian Account. From their portal, they click "Link Student" and enter your unique Scholar Email. Once linked, they can view your practice performance, subject strengths, and mock exam ranks.'
+  },
+  {
+    category: 'billing',
+    question: 'What are the payment terms and conditions?',
+    answer: 'Payment is a one-time ₦3,000 fee for lifetime full access to all subjects, CBT mocks, AI tutor, and novel breakdown. Ensure you use your registered email/name in the transfer narration to Moniepoint MCB (9032517376 - Olamide Olanrewaju Abdulmuiz). Fees are non-refundable once account access is granted.'
+  },
+  {
+    category: 'exams',
+    question: 'How does the JAMB 8-button calculator work?',
+    answer: 'Our CBT simulator replicates the exact 8-button calculator used in official UTME exams (+, -, *, /, C, ., =, sqrt). Keyboard shortcuts A, B, C, D are enabled for quick answer selection, N for Next, P for Previous, and S for Submit.'
+  }
+];
 
 export default function Help() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
+
+  const filteredFaqs = FAQS.filter(faq => {
+    const matchesCategory = !activeCategory || faq.category === activeCategory;
+    const matchesSearch = !searchQuery || 
+      faq.question.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      faq.answer.toLowerCase().includes(searchQuery.toLowerCase());
+    return matchesCategory && matchesSearch;
+  });
+
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 flex flex-col font-sans selection:bg-primary/30">
+    <div className="min-h-screen bg-background text-foreground flex flex-col font-sans selection:bg-primary/30">
       <Navbar />
       
       <main className="flex-grow pt-24 pb-16 px-6 relative z-10">
-        <div className="max-w-4xl mx-auto space-y-12">
+        <div className="max-w-4xl mx-auto space-y-10">
           
           <div className="text-center space-y-6">
-            <h1 className="text-4xl md:text-5xl font-display font-bold text-white tracking-tight">
+            <h1 className="text-4xl md:text-5xl font-display font-extrabold text-foreground tracking-tight">
               How can we help you?
             </h1>
-            <p className="text-lg text-slate-400 max-w-2xl mx-auto">
-              Search our knowledge base or browse categories below to find answers to common questions about Scholars Resort.
+            <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
+              Search our knowledge base or browse categories below to find instant answers regarding Scholars Resort.
             </p>
             <div className="relative max-w-xl mx-auto">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <Input 
                 type="text" 
-                placeholder="Search for answers..." 
-                className="pl-12 h-14 bg-slate-900 border-slate-800 text-lg rounded-full w-full"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search for answers (e.g. offline, payment, calculator)..." 
+                className="pl-12 h-14 bg-card border-border text-foreground text-base rounded-full w-full shadow-sm focus:ring-2 focus:ring-primary"
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            <Card className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
-              <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
-                <div className="w-12 h-12 rounded-full bg-blue-500/10 flex items-center justify-center">
-                  <Book className="w-6 h-6 text-blue-400" />
+          {/* Interactive Category Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Card 
+              onClick={() => setActiveCategory(activeCategory === 'exams' ? null : 'exams')}
+              className={`border transition-all cursor-pointer shadow-md ${
+                activeCategory === 'exams' 
+                  ? 'border-primary bg-primary/10 ring-2 ring-primary/30' 
+                  : 'bg-card text-card-foreground border-border hover:border-primary/50'
+              }`}
+            >
+              <CardContent className="p-6 flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-blue-500/10 flex items-center justify-center">
+                  <Book className="w-6 h-6 text-blue-500" />
                 </div>
-                <h3 className="font-semibold text-white">Exams & Practice</h3>
-                <p className="text-sm text-slate-400">Scores, mock exams, and offline sync</p>
+                <h3 className="font-bold text-foreground text-base">Exams & Practice</h3>
+                <p className="text-xs text-muted-foreground">CBT simulator, 8-button calculator, and offline sync</p>
               </CardContent>
             </Card>
-            <Card className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
-              <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
-                <div className="w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
-                  <CreditCard className="w-6 h-6 text-green-400" />
+
+            <Card 
+              onClick={() => setActiveCategory(activeCategory === 'billing' ? null : 'billing')}
+              className={`border transition-all cursor-pointer shadow-md ${
+                activeCategory === 'billing' 
+                  ? 'border-primary bg-primary/10 ring-2 ring-primary/30' 
+                  : 'bg-card text-card-foreground border-border hover:border-primary/50'
+              }`}
+            >
+              <CardContent className="p-6 flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-green-500/10 flex items-center justify-center">
+                  <CreditCard className="w-6 h-6 text-green-500" />
                 </div>
-                <h3 className="font-semibold text-white">Billing & Payments</h3>
-                <p className="text-sm text-slate-400">Receipts, approvals, and premium access</p>
+                <h3 className="font-bold text-foreground text-base">Billing & Payments</h3>
+                <p className="text-xs text-muted-foreground">Receipt uploads, terms, and account activation</p>
               </CardContent>
             </Card>
-            <Card className="bg-slate-900/50 border-slate-800 hover:border-slate-700 transition-colors cursor-pointer">
-              <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
-                <div className="w-12 h-12 rounded-full bg-purple-500/10 flex items-center justify-center">
-                  <ShieldCheck className="w-6 h-6 text-purple-400" />
+
+            <Card 
+              onClick={() => setActiveCategory(activeCategory === 'guardian' ? null : 'guardian')}
+              className={`border transition-all cursor-pointer shadow-md ${
+                activeCategory === 'guardian' 
+                  ? 'border-primary bg-primary/10 ring-2 ring-primary/30' 
+                  : 'bg-card text-card-foreground border-border hover:border-primary/50'
+              }`}
+            >
+              <CardContent className="p-6 flex flex-col items-center text-center space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
+                  <ShieldCheck className="w-6 h-6 text-purple-500" />
                 </div>
-                <h3 className="font-semibold text-white">Guardian Accounts</h3>
-                <p className="text-sm text-slate-400">Linking, tracking, and reports</p>
+                <h3 className="font-bold text-foreground text-base">Guardian Accounts</h3>
+                <p className="text-xs text-muted-foreground">Student linking, progress tracking, and report cards</p>
               </CardContent>
             </Card>
           </div>
 
-          <Card className="bg-slate-900 border-slate-800">
-            <CardHeader>
-              <CardTitle className="text-2xl text-white">Frequently Asked Questions</CardTitle>
-              <CardDescription className="text-slate-400">Quick answers to the most common issues.</CardDescription>
+          {/* FAQs List */}
+          <Card className="bg-card text-card-foreground border-border shadow-lg">
+            <CardHeader className="border-b border-border bg-muted/20 flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-2xl font-bold font-display text-foreground">Frequently Asked Questions</CardTitle>
+                <CardDescription className="text-muted-foreground">Click any question below to reveal detailed answer.</CardDescription>
+              </div>
+              {activeCategory && (
+                <button 
+                  onClick={() => setActiveCategory(null)}
+                  className="text-xs font-bold text-primary hover:underline bg-primary/10 px-3 py-1.5 rounded-lg"
+                >
+                  Show All FAQS
+                </button>
+              )}
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="w-full space-y-4">
-                <details className="border-b border-slate-800 pb-4 group">
-                  <summary className="cursor-pointer text-left font-medium hover:text-primary transition-colors text-lg list-none flex justify-between items-center">
-                    How do I study offline?
-                    <span className="text-slate-500 group-open:rotate-180 transition-transform">▼</span>
-                  </summary>
-                  <p className="text-slate-400 text-base leading-relaxed mt-4">
-                    Scholars Resort automatically caches your selected subjects when you start a practice session online. You can turn off your data and continue practicing. Once you reconnect to the internet, your scores and session data will automatically sync to our servers.
-                  </p>
-                </details>
-                <details className="border-b border-slate-800 pb-4 group">
-                  <summary className="cursor-pointer text-left font-medium hover:text-primary transition-colors text-lg list-none flex justify-between items-center">
-                    How long does manual payment verification take?
-                    <span className="text-slate-500 group-open:rotate-180 transition-transform">▼</span>
-                  </summary>
-                  <p className="text-slate-400 text-base leading-relaxed mt-4">
-                    After you upload your payment receipt via the Pricing page, our administrators will review it within 1-2 hours during business hours. You will receive an in-app notification once your premium access is activated.
-                  </p>
-                </details>
-                <details className="border-b border-slate-800 pb-4 group">
-                  <summary className="cursor-pointer text-left font-medium hover:text-primary transition-colors text-lg list-none flex justify-between items-center">
-                    How can my parents view my results?
-                    <span className="text-slate-500 group-open:rotate-180 transition-transform">▼</span>
-                  </summary>
-                  <p className="text-slate-400 text-base leading-relaxed mt-4">
-                    Your parents or guardians must create a Guardian Account. From their dashboard, they will click "Link Student" and enter your unique Scholar Email. Once linked, they can view your performance, streaks, and upcoming mock exams.
-                  </p>
-                </details>
-                <details className="border-b border-slate-800 pb-4 group">
-                  <summary className="cursor-pointer text-left font-medium hover:text-primary transition-colors text-lg list-none flex justify-between items-center">
-                    How do I reset my password?
-                    <span className="text-slate-500 group-open:rotate-180 transition-transform">▼</span>
-                  </summary>
-                  <p className="text-slate-400 text-base leading-relaxed mt-4">
-                    On the login screen, click "Forgot Password". Enter your registered email address, and we will send you a secure link to reset your password. If you don't receive the email, please check your spam folder or contact support.
-                  </p>
-                </details>
+                {filteredFaqs.length > 0 ? (
+                  filteredFaqs.map((faq, index) => (
+                    <details key={index} className="border-b border-border pb-4 group">
+                      <summary className="cursor-pointer text-left font-bold text-foreground hover:text-primary transition-colors text-base list-none flex justify-between items-center py-2">
+                        {faq.question}
+                        <span className="text-muted-foreground group-open:rotate-180 transition-transform">▼</span>
+                      </summary>
+                      <p className="text-muted-foreground text-sm leading-relaxed mt-2 p-4 rounded-xl bg-muted/30 border border-border">
+                        {faq.answer}
+                      </p>
+                    </details>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground space-y-2">
+                    <p className="font-bold text-foreground">No matching FAQ found for "{searchQuery}".</p>
+                    <p className="text-xs">Try searching for keywords like "payment", "offline", or "calculator".</p>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-primary/10 border-primary/20">
+          {/* Contact Support Banner */}
+          <Card className="bg-gradient-to-r from-primary/15 via-indigo-950/20 to-purple-950/15 border border-primary/30 shadow-xl">
             <CardContent className="p-8 text-center space-y-4">
-              <Mail className="w-10 h-10 text-primary mx-auto" />
-              <h3 className="text-xl font-semibold text-white">Still need help?</h3>
-              <p className="text-slate-400 max-w-md mx-auto">
-                If you couldn't find what you're looking for, our support team is available to assist you.
+              <div className="w-12 h-12 rounded-full bg-primary/20 text-primary flex items-center justify-center mx-auto">
+                <Mail className="w-6 h-6" />
+              </div>
+              <h3 className="text-2xl font-extrabold font-display text-foreground">Still need assistance?</h3>
+              <p className="text-muted-foreground max-w-md mx-auto text-sm">
+                Our team is ready to assist with account activation, technical questions, or payment verification.
               </p>
-              <div className="pt-2">
-                <a href="mailto:admitwise2@gmail.com" className="inline-flex items-center justify-center rounded-md text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 bg-primary text-primary-foreground shadow hover:bg-primary/90 h-10 px-8 py-2">
-                  Contact Support
+              <div className="flex justify-center gap-4 pt-2 flex-wrap">
+                <a 
+                  href="mailto:admitwise2@gmail.com" 
+                  className="inline-flex items-center gap-2 rounded-xl text-sm font-bold bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 h-11 px-6 transition-all"
+                >
+                  <Mail className="w-4 h-4" /> Email admitwise2@gmail.com
                 </a>
+                <Link 
+                  to="/support" 
+                  className="inline-flex items-center gap-2 rounded-xl text-sm font-bold border border-border bg-card text-foreground hover:bg-muted h-11 px-6 transition-all"
+                >
+                  <MessageSquare className="w-4 h-4 text-primary" /> Open Support Ticket <ArrowRight className="w-4 h-4" />
+                </Link>
               </div>
             </CardContent>
           </Card>

@@ -30,23 +30,27 @@ export const ContentCalendarTab = () => {
     // Fetch mock exams that have a start_time
     const { data: exams, error: examsError } = await supabase
       .from('mock_exams')
-      .select('id, title, start_time')
-      .not('start_time', 'is', null);
+      .select('id, title, start_time');
 
-    // Fetch announcements that have publish_at
+    // Fetch announcements
     const { data: anns, error: annsError } = await supabase
       .from('announcements')
-      .select('id, title, publish_at')
-      .not('publish_at', 'is', null);
+      .select('id, title, created_at, publish_at');
 
     let combined: any[] = [];
     
     if (exams && !examsError) {
-      combined = [...combined, ...exams.map(e => ({ id: e.id, title: e.title, date: new Date(e.start_time), type: 'exam', original: e }))];
+      combined = [...combined, ...exams
+        .filter(e => e.start_time)
+        .map(e => ({ id: e.id, title: e.title, date: new Date(e.start_time), type: 'exam', original: e }))
+      ];
     }
     
     if (anns && !annsError) {
-      combined = [...combined, ...anns.map(a => ({ id: a.id, title: a.title, date: new Date(a.publish_at), type: 'announcement', original: a }))];
+      combined = [...combined, ...anns
+        .filter(a => a.publish_at || a.created_at)
+        .map(a => ({ id: a.id, title: a.title, date: new Date(a.publish_at || a.created_at), type: 'announcement', original: a }))
+      ];
     }
 
     combined.sort((a, b) => a.date.getTime() - b.date.getTime());

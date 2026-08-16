@@ -41,10 +41,20 @@ export const Footer = () => {
             </ul>
           </div>
           
-          {/* Column 4: Legal & Policies */}
+          {/* Column 4: Contact & Legal */}
           <div>
-            <h4 className="font-bold mb-4 uppercase tracking-wider text-xs text-foreground font-display">Legal & Compliance</h4>
+            <h4 className="font-bold mb-4 uppercase tracking-wider text-xs text-foreground font-display">Contact & Legal</h4>
             <ul className="space-y-3 text-sm">
+              <li>
+                <a href="mailto:admitwise2@gmail.com" className="text-primary font-bold hover:underline flex items-center gap-1.5">
+                  admitwise2@gmail.com
+                </a>
+              </li>
+              <li>
+                <a href="https://wa.me/2349032517376" target="_blank" rel="noreferrer" className="text-emerald-600 dark:text-emerald-400 font-semibold hover:underline flex items-center gap-1.5">
+                  WhatsApp: +234 903 251 7376
+                </a>
+              </li>
               <li><Link to="/terms" className="text-foreground/90 hover:text-primary font-medium transition-colors">Terms of Service</Link></li>
               <li><Link to="/privacy" className="text-foreground/90 hover:text-primary font-medium transition-colors">Privacy Policy</Link></li>
               <li><Link to="/acceptable-use" className="text-foreground/90 hover:text-primary font-medium transition-colors">Acceptable Use Policy</Link></li>
