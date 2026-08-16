@@ -120,6 +120,79 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
+// API Route: Manual Payment Notification (Sends emails to Admin & Student)
+app.post('/api/payment-notification', async (req, res) => {
+  const { userId, userEmail, userName, amount, proofUrl, planId } = req.body;
+
+  try {
+    const config = await getSmtpConfig();
+    let transporter: nodemailer.Transporter;
+
+    if (config.host) {
+      transporter = nodemailer.createTransport({
+        host: config.host,
+        port: config.port,
+        secure: config.port === 465,
+        auth: config.user && config.pass ? { user: config.user, pass: config.pass } : undefined,
+        tls: { rejectUnauthorized: false }
+      });
+    } else {
+      transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: { user: 'admitwise2@gmail.com', pass: 'fliwopndlqxipara' }
+      });
+    }
+
+    const senderEmail = config.from || 'admitwise2@gmail.com';
+
+    // 1. Send Admin Notification Email
+    await transporter.sendMail({
+      from: `"Scholars Resort System" <${senderEmail}>`,
+      to: 'admitwise2@gmail.com',
+      subject: `New Manual Payment Upload - ₦${amount}`,
+      html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+               <h2 style="color: #4F46E5;">New Manual Payment Uploaded</h2>
+               <p><strong>Student Name:</strong> ${userName || 'Student'}</p>
+               <p><strong>Email:</strong> ${userEmail || 'N/A'}</p>
+               <p><strong>User ID:</strong> ${userId}</p>
+               <p><strong>Amount:</strong> ₦${amount}</p>
+               <p><strong>Plan:</strong> ${planId || 'Lifetime Access'}</p>
+               <p><a href="${proofUrl}" style="background: #4F46E5; color: white; padding: 10px 18px; text-decoration: none; border-radius: 6px; display: inline-block;">View Payment Receipt</a></p>
+             </div>`
+    });
+
+    // 2. Send Confirmation Email to Student
+    if (userEmail) {
+      await transporter.sendMail({
+        from: `"Scholars Resort" <${senderEmail}>`,
+        to: userEmail,
+        subject: 'Payment Receipt Received - Scholars Resort Access',
+        html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+                 <h2 style="color: #4F46E5;">Payment Upload Confirmation</h2>
+                 <p>Dear ${userName || 'Scholar'},</p>
+                 <p>We have received your proof of payment (<strong>₦${amount}</strong>) for <strong>Scholars Resort Full Exam Access</strong>.</p>
+                 <p>Our verification team is reviewing your transaction receipt. Your account access will be activated within 24 hours.</p>
+                 <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin: 16px 0;">
+                   <p style="margin: 0; font-size: 13px; color: #475569;">
+                     <strong>Amount Paid:</strong> ₦${amount}<br/>
+                     <strong>Status:</strong> Pending Admin Review<br/>
+                     <strong>Date:</strong> ${new Date().toLocaleString()}
+                   </p>
+                 </div>
+                 <p>Thank you for choosing Scholars Resort!</p>
+                 <br/>
+                 <p>Best regards,<br/><strong>Scholars Resort Team</strong></p>
+               </div>`
+      });
+    }
+
+    return res.json({ success: true, message: 'Payment notification dispatched successfully to admin and student.' });
+  } catch (err: any) {
+    console.error('Payment notification error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to dispatch payment notification emails.' });
+  }
+});
+
 // API Route: Test SMTP
 app.post('/api/test-smtp', async (req, res) => {
   const startTime = Date.now();

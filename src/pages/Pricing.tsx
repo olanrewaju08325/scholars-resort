@@ -110,19 +110,19 @@ const Pricing = () => {
 
       if (dbError) throw new Error(`Failed to save payment record: ${dbError.message}`);
 
-      // ── 6. Notify admin via email (non-blocking) ───────────────────────────
-      supabase.functions.invoke('communication-center', {
-        body: {
-          to: 'admitwise2@gmail.com',
-          templateName: 'payment_notification',
-          payload: {
-            userId: user.id,
-            amount: plans[selectedPlan].price,
-            proofUrl: urlData.publicUrl,
-            planId: selectedPlan,
-          },
-        },
-      }).catch(err => console.warn('Admin notification failed (non-critical):', err));
+      // ── 6. Notify admin & student via email API route ─────────────────────
+      fetch('/api/payment-notification', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userEmail: user.email,
+          userName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Scholar Student',
+          amount: plans[selectedPlan].price,
+          proofUrl: urlData.publicUrl,
+          planId: selectedPlan,
+        }),
+      }).catch(err => console.warn('Payment email dispatch warning:', err));
 
       setUploadSuccess(true);
       toast.success('Receipt uploaded! Your account will be activated within 24 hours.', {
