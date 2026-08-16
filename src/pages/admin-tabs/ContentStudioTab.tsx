@@ -6,7 +6,7 @@ import { UploadCloud, CheckCircle, AlertCircle, Loader2, Database, FileJson, Pla
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
-import { analyzeDocumentWithGroq } from '@/services/aiService';
+import { analyzeDocumentWithGroq, extractAllQuestionsFromPdfText } from '@/services/aiService';
 import { extractTextFromFile } from '@/lib/pdfExtractor';
 
 export const ContentStudioTab = () => {
@@ -35,7 +35,6 @@ export const ContentStudioTab = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch Subjects
       const { data: subData } = await supabase.from('subjects').select('id, name').order('name');
       const loadedSubjects = subData || [];
       setSubjects(loadedSubjects);
@@ -43,21 +42,18 @@ export const ContentStudioTab = () => {
         setSelectedSubjectId(loadedSubjects[0].id);
       }
 
-      // 2. Fetch Jobs
       const { data: jobsData } = await supabase
         .from('content_ingestion_jobs')
         .select('*')
         .order('created_at', { ascending: false });
       setJobs(jobsData || []);
 
-      // 3. Fetch Question Counts
       const { count: totalCount } = await supabase.from('questions').select('id', { count: 'exact', head: true });
       setTotalQuestionsCount(totalCount || 0);
 
       const { data: allQuestions } = await supabase.from('questions').select('subject_id');
       const counts: { [id: string]: { name: string; count: number } } = {};
       
-      // Initialize map for each subject
       loadedSubjects.forEach((s: any) => {
         counts[s.id] = { name: s.name, count: 0 };
       });
@@ -77,57 +73,85 @@ export const ContentStudioTab = () => {
     setLoading(false);
   };
 
-  const handleProcessRawText = async () => {
-    if (!rawText.trim()) {
-      toast.error('Please paste document or question text first.');
-      return;
+  const parseCSVQuestions = (text: string) => {
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].toLowerCase().split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+    const results = [];
+
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split(',').map(c => c.trim().replace(/^["']|["']$/g, ''));
+      if (cols.length < 2) continue;
+
+      const qText = cols[headers.indexOf('question')] || cols[0] || 'Sample Question';
+      const optA = cols[headers.indexOf('option_a')] || cols[1] || 'Option A';
+      const optB = cols[headers.indexOf('option_b')] || cols[2] || 'Option B';
+      const optC = cols[headers.indexOf('option_c')] || cols[3] || 'Option C';
+      const optD = cols[headers.indexOf('option_d')] || cols[4] || 'Option D';
+      const ans = cols[headers.indexOf('correct_answer')] || cols[5] || 'A';
+      const exp = cols[headers.indexOf('explanation')] || cols[6] || '';
+
+      results.push({
+        question: qText,
+        options: [optA, optB, optC, optD],
+        correct_answer: ans.toUpperCase().trim(),
+        explanation: exp
+      });
     }
+    return results;
+  };
 
-    setProcessingText(true);
-    try {
-      const result = await analyzeDocumentWithGroq(rawText, 'Direct Ingest Passage');
-
-      if (result?.questions && result.questions.length > 0) {
-        const targetSubId = selectedSubjectId || subjects[0]?.id || null;
-
-        const questionsToInsert = result.questions.map((q: any) => ({
-          subject_id: targetSubId,
-          question_text: q.question,
-          options: typeof q.options === 'string' ? q.options : JSON.stringify(q.options),
-          correct_answer: q.correct_answer || 'A',
-          explanation: q.explanation || '',
-          difficulty: q.difficulty || 'medium',
-          is_active: true,
-          quality_score: 95,
-        }));
-
-        const { error: insertErr } = await supabase.from('questions').insert(questionsToInsert);
-        if (insertErr) throw insertErr;
-
-        toast.success(`Groq extracted & saved ${result.questions.length} questions to database!`);
-        setRawText('');
-        fetchInitialData();
-      } else {
-        toast.info('Document analyzed. Topics found: ' + (result?.topics?.join(', ') || 'General'));
-      }
-    } catch (err: any) {
-      toast.error(`Ingestion error: ${err.message}`);
+  const batchInsertQuestions = async (questionsToInsert: any[]) => {
+    const batchSize = 100;
+    for (let i = 0; i < questionsToInsert.length; i += batchSize) {
+      const batch = questionsToInsert.slice(i, i + batchSize);
+      const { error } = await supabase.from('questions').insert(batch);
+      if (error) console.warn('Batch insert warning:', error);
     }
-    setProcessingText(false);
   };
 
   const handleUpload = async () => {
     if (!selectedFile) return;
     setUploading(true);
     try {
-      // Clean text extraction from PDF or file
+      const targetSubId = selectedSubjectId || subjects[0]?.id || null;
+
+      if (selectedFile.name.endsWith('.csv')) {
+        const textContent = await selectedFile.text();
+        const csvQuestions = parseCSVQuestions(textContent);
+
+        if (csvQuestions.length > 0) {
+          const questionsToInsert = csvQuestions.map((q: any) => ({
+            subject_id: targetSubId,
+            question_text: q.question,
+            options: JSON.stringify(q.options),
+            correct_answer: q.correct_answer || 'A',
+            explanation: q.explanation || '',
+            difficulty: 'medium',
+            is_active: true,
+            quality_score: 95,
+          }));
+
+          await batchInsertQuestions(questionsToInsert);
+
+          const subName = subjects.find(s => s.id === targetSubId)?.name || 'Subject';
+          toast.success(`Successfully imported all ${csvQuestions.length} CSV questions into database for ${subName}!`);
+          setSelectedFile(null);
+          fetchInitialData();
+          setUploading(false);
+          return;
+        }
+      }
+
+      // PDF or general document processing with Groq AI (Extracting ALL questions across whole document)
       const textContent = await extractTextFromFile(selectedFile);
-      const result = await analyzeDocumentWithGroq(textContent, selectedFile.name);
+      toast.info('Extracting all questions from PDF document using Groq AI...');
+      
+      const extractedQuestions = await extractAllQuestionsFromPdfText(textContent, selectedFile.name);
 
-      if (result?.questions && result.questions.length > 0) {
-        const targetSubId = selectedSubjectId || subjects[0]?.id || null;
-
-        const questionsToInsert = result.questions.map((q: any) => ({
+      if (extractedQuestions.length > 0) {
+        const questionsToInsert = extractedQuestions.map((q: any) => ({
           subject_id: targetSubId,
           question_text: q.question,
           options: typeof q.options === 'string' ? q.options : JSON.stringify(q.options),
@@ -138,30 +162,63 @@ export const ContentStudioTab = () => {
           quality_score: 95,
         }));
 
-        await supabase.from('questions').insert(questionsToInsert);
+        await batchInsertQuestions(questionsToInsert);
 
-        // Save ingestion job record
         await supabase.from('content_ingestion_jobs').insert({
           admin_id: profile?.id,
           file_name: selectedFile.name,
           file_type: selectedFile.type,
           status: 'completed',
-          total_questions_found: result.questions.length,
-          extracted_data: result.questions,
+          total_questions_found: extractedQuestions.length,
+          extracted_data: extractedQuestions,
           created_at: new Date().toISOString()
         });
 
         const subName = subjects.find(s => s.id === targetSubId)?.name || 'Subject';
-        toast.success(`Extracted & saved ${result.questions.length} questions for ${subName}!`);
+        toast.success(`Extracted & saved ALL ${extractedQuestions.length} questions into database for ${subName}!`);
         setSelectedFile(null);
         fetchInitialData();
       } else {
-        toast.info(`Document processed. Found topics: ${result.topics?.join(', ')}`);
+        toast.error('No questions could be extracted from this file format.');
       }
     } catch (err: any) {
       toast.error(`File processing failed: ${err.message}`);
     }
     setUploading(false);
+  };
+
+  const handleProcessRawText = async () => {
+    if (!rawText.trim()) return;
+    setProcessingText(true);
+    try {
+      const targetSubId = selectedSubjectId || subjects[0]?.id || null;
+      const extractedQuestions = await extractAllQuestionsFromPdfText(rawText, 'Direct Passage / Raw Text');
+
+      if (extractedQuestions.length > 0) {
+        const questionsToInsert = extractedQuestions.map((q: any) => ({
+          subject_id: targetSubId,
+          question_text: q.question,
+          options: typeof q.options === 'string' ? q.options : JSON.stringify(q.options),
+          correct_answer: q.correct_answer || 'A',
+          explanation: q.explanation || '',
+          difficulty: q.difficulty || 'medium',
+          is_active: true,
+          quality_score: 95,
+        }));
+
+        await batchInsertQuestions(questionsToInsert);
+
+        const subName = subjects.find(s => s.id === targetSubId)?.name || 'Subject';
+        toast.success(`Extracted & inserted ${extractedQuestions.length} questions into ${subName}!`);
+        setRawText('');
+        fetchInitialData();
+      } else {
+        toast.error('Could not parse questions from the provided text.');
+      }
+    } catch (err: any) {
+      toast.error('Failed to process text: ' + err.message);
+    }
+    setProcessingText(false);
   };
 
   const handleImport = async () => {

@@ -179,24 +179,35 @@ const Pricing = () => {
 
           {/* Auth status banner */}
           {isAuthReady && !isLoggedIn && (
-            <div className="mt-6 p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 flex items-start gap-3">
-              <LogIn className="w-5 h-5 text-amber-500 mt-0.5 shrink-0" />
-              <div>
-                <p className="font-semibold text-amber-400 text-sm">Login required to pay</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  You need an account to upload your receipt.{' '}
-                  <Link to="/login?from=/pricing" className="text-primary font-semibold hover:underline">Log in</Link>
-                  {' '}or{' '}
-                  <Link to="/signup" className="text-primary font-semibold hover:underline">create one for free</Link>.
-                </p>
+            <div className="mt-6 p-5 rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 flex flex-col gap-3">
+              <div className="flex items-center gap-2">
+                <LogIn className="w-6 h-6 text-amber-500 shrink-0" />
+                <p className="font-extrabold text-amber-400 text-base">⚠️ Login Required Before Making Payment</p>
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Please log in or register a free account first so our payment activation system can link your receipt directly to your profile.
+              </p>
+              <div className="flex gap-3 pt-1">
+                <Link 
+                  to={`/login?from=${encodeURIComponent(studentId ? `/pricing?student_id=${studentId}` : '/pricing')}`} 
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-lg inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <LogIn className="w-3.5 h-3.5" /> Log In Now
+                </Link>
+                <Link 
+                  to="/signup" 
+                  className="px-4 py-2 border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 font-bold text-xs rounded-lg inline-flex items-center gap-1.5 transition-colors"
+                >
+                  <UserPlus className="w-3.5 h-3.5" /> Register Free
+                </Link>
               </div>
             </div>
           )}
           {isAuthReady && isLoggedIn && (
-            <div className="mt-4 p-3 rounded-xl border border-green-500/30 bg-green-500/10 flex items-center gap-3">
+            <div className="mt-4 p-4 rounded-xl border border-green-500/40 bg-green-500/10 flex items-center gap-3">
               <CheckCircle2 className="w-5 h-5 text-green-500 shrink-0" />
               <p className="text-sm text-green-400 font-medium">
-                Logged in as <strong>{profile?.full_name || user?.email}</strong>. You can now upload your receipt.
+                Logged in as <strong className="text-white">{profile?.full_name || user?.email}</strong>. You are ready to make payment and upload your receipt!
               </p>
             </div>
           )}

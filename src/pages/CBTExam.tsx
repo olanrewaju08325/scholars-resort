@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
+import { JambCalculator } from '@/components/cbt/JambCalculator';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -449,19 +450,8 @@ const CBTExam = () => {
       </header>
       
       {showCalculator && (
-        <div className="fixed top-24 right-10 z-50 bg-slate-800 text-white p-4 rounded-xl shadow-2xl w-64 border border-slate-700 animate-in slide-in-from-top-4">
-          <div className="flex justify-between items-center mb-4">
-            <span className="font-bold">Calculator</span>
-            <button onClick={() => setShowCalculator(false)} className="text-slate-400 hover:text-white">✕</button>
-          </div>
-          <div className="bg-slate-900 rounded p-3 text-right font-mono text-2xl mb-4 h-12 flex items-center justify-end overflow-hidden">
-            0
-          </div>
-          <div className="grid grid-cols-4 gap-2">
-            {['7','8','9','/','4','5','6','*','1','2','3','-','C','0','=','+'].map(btn => (
-              <button key={btn} className="bg-slate-700 hover:bg-slate-600 rounded p-2 font-bold text-lg">{btn}</button>
-            ))}
-          </div>
+        <div className="fixed top-24 right-10 z-50 animate-in slide-in-from-top-4">
+          <JambCalculator onClose={() => setShowCalculator(false)} />
         </div>
       )}
 

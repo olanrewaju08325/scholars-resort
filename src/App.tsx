@@ -41,6 +41,9 @@ const Support = lazy(() => import('./pages/Support'));
 const Tournaments = lazy(() => import('./pages/Tournaments'));
 const TournamentArena = lazy(() => import('./pages/TournamentArena'));
 const Onboarding = lazy(() => import('./pages/Onboarding'));
+const JambNovelHub = lazy(() => import('./pages/JambNovelHub').then(m => ({ default: m.JambNovelHub })));
+const CourseEligibilityChecker = lazy(() => import('./pages/CourseEligibilityChecker').then(m => ({ default: m.CourseEligibilityChecker })));
+const OfflinePackManager = lazy(() => import('./pages/OfflinePackManager').then(m => ({ default: m.OfflinePackManager })));
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { WhatsAppWidget } from './components/WhatsAppWidget';
@@ -94,6 +97,9 @@ function AppContent() {
               <Route path="/career-guide" element={<CareerGuide />} />
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/library" element={<Library />} />
+              <Route path="/novel-hub" element={<JambNovelHub />} />
+              <Route path="/eligibility-checker" element={<CourseEligibilityChecker />} />
+              <Route path="/offline-packs" element={<OfflinePackManager />} />
               <Route path="/mocks" element={<WeeklyMocks />} />
               <Route path="/weakness" element={<WeaknessDrill />} />
               <Route path="/leaderboard" element={<Leaderboard />} />

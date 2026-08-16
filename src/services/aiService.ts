@@ -239,7 +239,64 @@ ${docText.substring(0, 4000)}`
   }
 };
 
-// Generate AI Study Plan
+export const extractAllQuestionsFromPdfText = async (docText: string, docName: string): Promise<any[]> => {
+  if (!docText || docText.trim().length === 0) return [];
+
+  // Chunk text into ~3500 character blocks to avoid AI context window limit while extracting maximum questions
+  const chunkSize = 3500;
+  const totalLength = docText.length;
+  const chunks: string[] = [];
+
+  for (let i = 0; i < totalLength; i += chunkSize) {
+    chunks.push(docText.substring(i, i + chunkSize));
+  }
+
+  const allQuestions: any[] = [];
+
+  for (let idx = 0; idx < chunks.length; idx++) {
+    const chunkText = chunks[idx];
+    const messages = [
+      {
+        role: 'system',
+        content: 'You are an AI Question Bank Extraction Engine for Nigerian JAMB/UTME exams. Extract EVERY SINGLE multiple-choice question from the text provided.'
+      },
+      {
+        role: 'user',
+        content: `Extract ALL multiple-choice questions present in this text block (${idx + 1}/${chunks.length}) from document '${docName}'.
+Return a STRICT JSON array of objects:
+[
+  {
+    "question": "Question text here",
+    "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+    "correct_answer": "A",
+    "explanation": "Brief solution/explanation",
+    "difficulty": "medium"
+  }
+]
+
+Text block:
+${chunkText}`
+      }
+    ];
+
+    try {
+      const responseText = await callGroqAPI(messages, 'llama-3.3-70b-versatile', 0.2);
+      const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const jsonStart = cleanJson.indexOf('[');
+      const jsonEnd = cleanJson.lastIndexOf(']');
+      if (jsonStart !== -1 && jsonEnd !== -1) {
+        const parsedArray = JSON.parse(cleanJson.substring(jsonStart, jsonEnd + 1));
+        if (Array.isArray(parsedArray)) {
+          allQuestions.push(...parsedArray);
+        }
+      }
+    } catch (e) {
+      console.warn(`Chunk ${idx + 1} extraction notice:`, e);
+    }
+  }
+
+  return allQuestions;
+};
 export const generateAIStudyPlan = async (subjects: string[], targetScore: number, targetUni: string, weakTopics: string[]): Promise<any> => {
   const prompt = `You are a top Nigerian UTME/JAMB admissions counselor and study planner.
 Generate a comprehensive, highly structured 7-day personalized study schedule for a student aiming for a ${targetScore}/400 in JAMB for admission to ${targetUni}.

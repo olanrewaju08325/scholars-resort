@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer } from 'lucide-react';
+import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommandPalette } from '@/components/CommandPalette';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -49,6 +49,9 @@ export const AppLayout = () => {
     { label: 'Dashboard', icon: Home, path: '/dashboard' },
     { label: 'Study Plan', icon: CalendarDays, path: '/plan' },
     { label: 'CBT Center', icon: Timer, path: '/cbt' },
+    { label: 'JAMB Novel Hub', icon: BookOpen, path: '/novel-hub' },
+    { label: 'Course Eligibility', icon: GraduationCap, path: '/eligibility-checker' },
+    { label: 'Offline Packs', icon: HardDrive, path: '/offline-packs' },
     { label: 'Practice', icon: PlayCircle, path: '/practice' },
     { label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
     { label: 'Library', icon: BookOpen, path: '/library' }
