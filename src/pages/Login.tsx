@@ -58,7 +58,11 @@ const Login = () => {
     });
 
     if (error) {
-      setError(error.message);
+      if (error.message.includes('Failed to fetch')) {
+        setError("Connection error: If hosted on Netlify, please set 'VITE_SUPABASE_URL' and 'VITE_SUPABASE_ANON_KEY' in your Netlify Site Settings -> Environment variables.");
+      } else {
+        setError(error.message);
+      }
     } else {
       const pendingCode = localStorage.getItem('pending_guardian_code');
       if (pendingCode) {

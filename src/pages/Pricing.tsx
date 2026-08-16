@@ -42,8 +42,7 @@ const Pricing = () => {
   }, [profile, navigate]);
 
   const plans = {
-    lifetime: { name: 'Lifetime Access', price: 3000, desc: 'Single Device Lock', badge: 'Most Popular' },
-    yearly: { name: '1-Year Access', price: 2000, desc: 'Multi-Device Support', badge: null },
+    lifetime: { name: 'One-Time Full Access', price: 3000, desc: 'Lifetime Full Exam Access', badge: 'Single ₦3,000 Payment' },
   };
 
   const handleManualUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -210,25 +209,17 @@ const Pricing = () => {
           <Card className="border-border shadow-2xl bg-card relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600" />
             <CardHeader className="text-center pt-8">
-              <CardTitle className="text-3xl font-display">Select Plan</CardTitle>
-              <CardDescription className="text-base mt-2">Choose your activation method</CardDescription>
+              <CardTitle className="text-3xl font-display">One-Time Activation</CardTitle>
+              <CardDescription className="text-base mt-2">Pay once for lifetime access to all UTME/JAMB subjects & CBT mocks</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4">
-                {(Object.keys(plans) as Array<keyof typeof plans>).map((key) => (
-                  <button
-                    key={key}
-                    onClick={() => setSelectedPlan(key)}
-                    className={`p-4 border-2 rounded-xl text-left transition-all ${selectedPlan === key ? 'border-primary bg-primary/5 ring-4 ring-primary/10' : 'border-border hover:border-muted-foreground/30'}`}
-                  >
-                    {plans[key].badge && (
-                      <div className="text-xs text-primary font-semibold mb-2">{plans[key].badge}</div>
-                    )}
-                    <div className="font-bold text-lg">{plans[key].name}</div>
-                    <div className="text-2xl font-bold font-display text-primary mt-1">₦{plans[key].price.toLocaleString()}</div>
-                    <div className="text-xs text-muted-foreground mt-2 font-medium bg-muted px-2 py-1 rounded inline-block">{plans[key].desc}</div>
-                  </button>
-                ))}
+              <div className="p-6 border-2 border-primary bg-primary/5 rounded-2xl text-center space-y-2">
+                <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-primary text-primary-foreground mb-2">
+                  ₦3,000 One-Time Lifetime Fee
+                </div>
+                <div className="text-4xl font-extrabold font-display text-primary">₦3,000</div>
+                <p className="text-sm font-semibold text-foreground">Full Unlimited UTME/JAMB Access</p>
+                <p className="text-xs text-muted-foreground">No recurring fees, no hidden charges. Pay ₦3,000 once and practice indefinitely.</p>
               </div>
             </CardContent>
             <CardFooter className="border-t border-border pt-4">

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Swords, Plus, Trash2, Users, CheckCircle, XCircle, Sparkles, RefreshCw, Calendar } from 'lucide-react';
+import { Swords, Plus, Trash2, CheckCircle, XCircle, Sparkles, RefreshCw, Calendar, Clock, Database, ShieldAlert } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI } from '@/services/aiService';
 
@@ -15,10 +15,13 @@ export const WeeklyChallengesAdminTab = () => {
   const [loading, setLoading] = useState(true);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [generatingAI, setGeneratingAI] = useState(false);
+  const [loadingFromDB, setLoadingFromDB] = useState(false);
   const { confirmAction, ConfirmElement } = useConfirm();
 
   // Form State
   const [selectedSubject, setSelectedSubject] = useState('Physics');
+  const [durationMinutes, setDurationMinutes] = useState(15);
+  const [difficultyFilter, setDifficultyFilter] = useState('hard');
   const [weekStart, setWeekStart] = useState(() => {
     const d = new Date();
     d.setDate(d.getDate() - d.getDay() + 1); // Monday
@@ -47,24 +50,80 @@ export const WeeklyChallengesAdminTab = () => {
     setLoading(false);
   };
 
+  // Pull real question from database matching subject and difficulty
+  const fetchQuestionFromDatabase = async () => {
+    setLoadingFromDB(true);
+    try {
+      // Find matching subject
+      const { data: subData } = await supabase
+        .from('subjects')
+        .select('id')
+        .ilike('name', `%${selectedSubject}%`)
+        .maybeSingle();
+
+      let query = supabase.from('questions').select('*');
+      if (subData?.id) {
+        query = query.eq('subject_id', subData.id);
+      }
+      if (difficultyFilter !== 'all') {
+        query = query.eq('difficulty', difficultyFilter);
+      }
+
+      const { data: dbQuestions, error } = await query.limit(10);
+
+      if (error || !dbQuestions || dbQuestions.length === 0) {
+        toast.info(`No existing ${difficultyFilter} questions found in database for ${selectedSubject}. Try switching difficulty to 'All' or use AI generation.`);
+        setLoadingFromDB(false);
+        return;
+      }
+
+      // Pick a random question from pool
+      const randomQ = dbQuestions[Math.floor(Math.random() * dbQuestions.length)];
+      let optionsArray = [];
+      try {
+        optionsArray = typeof randomQ.options === 'string' ? JSON.parse(randomQ.options) : randomQ.options;
+      } catch {
+        optionsArray = [randomQ.options];
+      }
+
+      const formattedData = {
+        question: randomQ.question_text,
+        options: optionsArray,
+        correct_answer: randomQ.correct_answer || 'A',
+        explanation: randomQ.explanation || 'Official UTME past question solution.',
+        duration_minutes: durationMinutes,
+        source: 'Real Past Question Database'
+      };
+
+      setQuestionJSON(JSON.stringify(formattedData, null, 2));
+      if (!title) setTitle(`Weekly ${selectedSubject} Challenge (${durationMinutes} mins)`);
+      toast.success(`Loaded real past question from ${selectedSubject} database!`);
+    } catch (err: any) {
+      toast.error('Could not pull from database: ' + err.message);
+    }
+    setLoadingFromDB(false);
+  };
+
   const generateWithAI = async () => {
     setGeneratingAI(true);
     try {
-      const prompt = `Generate a single challenging JAMB UTME multiple-choice question for ${selectedSubject}.
+      const prompt = `Generate a single challenging JAMB UTME multiple-choice question for ${selectedSubject}. Difficulty: ${difficultyFilter}.
 Return STRICT JSON format:
 {
   "question": "Question text here",
   "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
   "correct_answer": "A",
-  "explanation": "Detailed step-by-step solution"
+  "explanation": "Detailed step-by-step solution",
+  "duration_minutes": ${durationMinutes}
 }`;
 
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
+        parsed.duration_minutes = durationMinutes;
         setQuestionJSON(JSON.stringify(parsed, null, 2));
-        if (!title) setTitle(`Weekly ${selectedSubject} Challenge`);
+        if (!title) setTitle(`Weekly ${selectedSubject} AI Challenge`);
         toast.success('Question generated via Groq AI! Review and save.');
       } else {
         toast.error('AI response format unexpected. Review and edit manually.');
@@ -84,6 +143,8 @@ Return STRICT JSON format:
 
     try {
       const parsedQuestion = JSON.parse(questionJSON);
+      parsedQuestion.duration_minutes = durationMinutes;
+
       const { error } = await supabase.from('weekly_challenges').insert({
         title,
         subject: selectedSubject,
@@ -94,14 +155,14 @@ Return STRICT JSON format:
       });
 
       if (error) throw error;
-      toast.success('Weekly challenge created!');
+      toast.success('Weekly challenge created successfully!');
       setIsFormOpen(false);
       setTitle('');
       setQuestionJSON('');
       fetchChallenges();
     } catch (err: any) {
       if (err instanceof SyntaxError) {
-        toast.error('Invalid JSON. Check the question format.');
+        toast.error('Invalid JSON format. Check your question structure.');
       } else {
         toast.error(`Failed to create challenge: ${err.message}`);
       }
@@ -117,7 +178,7 @@ Return STRICT JSON format:
   };
 
   const handleDelete = (id: string) => {
-    confirmAction('Delete Challenge', 'Delete this weekly challenge and all submissions?', async () => {
+    confirmAction('Delete Challenge', 'Delete this weekly challenge and all student submissions?', async () => {
       const { error } = await supabase.from('weekly_challenges').delete().eq('id', id);
       if (!error) {
         toast.success('Challenge deleted.');
@@ -129,76 +190,98 @@ Return STRICT JSON format:
   return (
     <div className="space-y-6">
       {ConfirmElement}
-      <div className="flex justify-between items-center">
+      <div className="flex justify-between items-center flex-wrap gap-4">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Swords className="w-6 h-6 text-primary" /> Weekly Challenges
+          <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
+            <Swords className="w-6 h-6 text-primary" /> Weekly Challenges Manager
           </h2>
-          <p className="text-slate-400">Create and manage weekly student challenges with XP rewards.</p>
+          <p className="text-muted-foreground text-sm">Configure timed weekly student competitions using real past questions or Groq AI.</p>
         </div>
-        <Button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-primary hover:bg-primary/90">
-          <Plus className="w-4 h-4 mr-2" /> New Challenge
+        <Button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-primary hover:bg-primary/90 font-bold">
+          <Plus className="w-4 h-4 mr-2" /> New Weekly Challenge
         </Button>
       </div>
 
       {/* Create Form */}
       {isFormOpen && (
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="bg-card border-border text-card-foreground shadow-lg">
           <CardHeader>
-            <CardTitle>Create Weekly Challenge</CardTitle>
-            <CardDescription className="text-slate-400">Use AI to generate a question or paste your own JSON.</CardDescription>
+            <CardTitle>Create New Timed Challenge</CardTitle>
+            <CardDescription>Pull real questions directly from your database or generate with AI.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Title</label>
-                  <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Physics Week" className="bg-slate-950 border-slate-800" required />
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-2 md:col-span-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Challenge Title</label>
+                  <Input value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. Physics Weekly Hard Challenge" className="bg-background border-border" required />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Subject</label>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Subject</label>
                   <select value={selectedSubject} onChange={e => setSelectedSubject(e.target.value)}
-                    className="w-full h-10 bg-slate-950 border border-slate-800 rounded-md px-3 text-sm outline-none focus:ring-1 focus:ring-primary">
+                    className="w-full h-10 bg-background border border-border rounded-md px-3 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground">
                     {SUBJECTS.map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium invisible">Generate</label>
-                  <Button type="button" onClick={generateWithAI} disabled={generatingAI} className="w-full bg-purple-600 hover:bg-purple-700 h-10">
-                    {generatingAI ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
-                    {generatingAI ? 'Generating...' : 'AI Generate'}
-                  </Button>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Timer / Duration</label>
+                  <select value={durationMinutes} onChange={e => setDurationMinutes(Number(e.target.value))}
+                    className="w-full h-10 bg-background border border-border rounded-md px-3 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground font-semibold">
+                    <option value={5}>5 Minutes</option>
+                    <option value={10}>10 Minutes</option>
+                    <option value={15}>15 Minutes</option>
+                    <option value={20}>20 Minutes</option>
+                    <option value={30}>30 Minutes</option>
+                  </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Week Start</label>
-                  <Input type="date" value={weekStart} onChange={e => setWeekStart(e.target.value)} className="bg-slate-950 border-slate-800" required />
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Difficulty Filter</label>
+                  <select value={difficultyFilter} onChange={e => setDifficultyFilter(e.target.value)}
+                    className="w-full h-10 bg-background border border-border rounded-md px-3 text-sm outline-none focus:ring-2 focus:ring-primary text-foreground">
+                    <option value="hard">Hard Questions Only</option>
+                    <option value="medium">Medium Questions</option>
+                    <option value="all">All Difficulties</option>
+                  </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Week End</label>
-                  <Input type="date" value={weekEnd} onChange={e => setWeekEnd(e.target.value)} className="bg-slate-950 border-slate-800" required />
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Week Start</label>
+                  <Input type="date" value={weekStart} onChange={e => setWeekStart(e.target.value)} className="bg-background border-border" required />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Week End</label>
+                  <Input type="date" value={weekEnd} onChange={e => setWeekEnd(e.target.value)} className="bg-background border-border" required />
+                </div>
+              </div>
+
+              {/* Data Loaders */}
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <Button type="button" onClick={fetchQuestionFromDatabase} disabled={loadingFromDB} variant="outline" className="flex-1 font-bold gap-2">
+                  {loadingFromDB ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4 text-primary" />}
+                  {loadingFromDB ? 'Loading...' : 'Pull Real Past Question from Database'}
+                </Button>
+                <Button type="button" onClick={generateWithAI} disabled={generatingAI} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2">
+                  {generatingAI ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                  {generatingAI ? 'Generating...' : 'AI Generate Hard Question'}
+                </Button>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Question JSON</label>
-                <div className="text-xs text-slate-500 mb-1">
-                  Format: <code className="bg-slate-800 px-1 rounded">{"{ \"question\": \"...\", \"options\": [\"A) ...\", \"B) ...\", \"C) ...\", \"D) ...\"], \"answer\": \"A\", \"explanation\": \"...\" }"}</code>
-                </div>
+                <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Question Data (JSON Format)</label>
                 <textarea
                   value={questionJSON}
                   onChange={e => setQuestionJSON(e.target.value)}
-                  className="w-full h-40 bg-slate-950 border border-slate-800 rounded-md p-3 text-sm font-mono focus:ring-1 focus:ring-primary outline-none"
-                  placeholder='{"question": "...", "options": ["A) ...", "B) ..."], "answer": "A", "explanation": "..."}'
+                  className="w-full h-40 bg-background border border-border rounded-md p-3 text-sm font-mono focus:ring-2 focus:ring-primary outline-none text-foreground"
+                  placeholder='{"question": "...", "options": ["A) ...", "B) ..."], "correct_answer": "A", "explanation": "..."}'
                   required
                 />
               </div>
 
               <div className="flex justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)} className="border-slate-700 hover:bg-slate-800">Cancel</Button>
-                <Button type="submit" className="bg-primary hover:bg-primary/90">Create Challenge</Button>
+                <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>Cancel</Button>
+                <Button type="submit" className="bg-primary hover:bg-primary/90 font-bold">Publish Challenge</Button>
               </div>
             </form>
           </CardContent>
@@ -208,41 +291,46 @@ Return STRICT JSON format:
       {/* Challenges List */}
       <div className="space-y-4">
         {loading ? (
-          <div className="text-center py-8 text-slate-500">Loading challenges...</div>
+          <div className="text-center py-8 text-muted-foreground">Loading weekly challenges...</div>
         ) : challenges.length === 0 ? (
-          <Card className="bg-slate-900 border-slate-800">
-            <CardContent className="py-16 text-center text-slate-500">
-              <Swords className="w-12 h-12 mx-auto mb-4 opacity-20" />
-              <p>No weekly challenges created yet.</p>
+          <Card className="bg-card border-border">
+            <CardContent className="py-16 text-center text-muted-foreground">
+              <Swords className="w-12 h-12 mx-auto mb-4 opacity-30 text-primary" />
+              <p className="font-semibold">No active or past weekly challenges.</p>
+              <p className="text-xs mt-1">Click "New Weekly Challenge" above to configure your first competition.</p>
             </CardContent>
           </Card>
         ) : challenges.map(challenge => {
           const q = challenge.question_data;
+          const duration = q?.duration_minutes || 15;
           return (
-            <Card key={challenge.id} className={`bg-slate-900 border-slate-800 text-slate-100 transition-all ${!challenge.is_active ? 'opacity-50' : ''}`}>
+            <Card key={challenge.id} className={`bg-card border-border text-card-foreground transition-all shadow-sm ${!challenge.is_active ? 'opacity-60' : ''}`}>
               <CardContent className="p-5">
-                <div className="flex justify-between items-start gap-4">
+                <div className="flex justify-between items-start gap-4 flex-wrap">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      <h3 className="font-bold text-lg">{challenge.title}</h3>
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-blue-500/20 text-blue-400">{challenge.subject}</span>
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${challenge.is_active ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
+                      <h3 className="font-bold text-lg text-foreground">{challenge.title}</h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-primary/10 text-primary">{challenge.subject}</span>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-amber-500/10 text-amber-500 flex items-center gap-1">
+                        <Clock className="w-3 h-3" /> {duration} Mins
+                      </span>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${challenge.is_active ? 'bg-green-500/10 text-green-500' : 'bg-muted text-muted-foreground'}`}>
                         {challenge.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-300 line-clamp-2 mb-3">{q?.question}</p>
-                    <div className="flex items-center gap-4 text-xs text-slate-500">
-                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {challenge.week_start} → {challenge.week_end}</span>
+                    <p className="text-sm text-muted-foreground line-clamp-2 mb-3">{q?.question}</p>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> {challenge.week_start} → {challenge.week_end}</span>
                     </div>
                   </div>
-                  <div className="flex flex-col gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0">
                     <Button size="sm" variant="outline" onClick={() => toggleActive(challenge.id, challenge.is_active)}
-                      className={`h-8 text-xs ${challenge.is_active ? 'border-slate-700 text-slate-300 hover:bg-slate-800' : 'border-green-800/40 text-green-400 hover:bg-green-950'}`}>
-                      {challenge.is_active ? <XCircle className="w-3 h-3 mr-1" /> : <CheckCircle className="w-3 h-3 mr-1" />}
+                      className="h-8 text-xs font-semibold">
+                      {challenge.is_active ? <XCircle className="w-3.5 h-3.5 mr-1" /> : <CheckCircle className="w-3.5 h-3.5 mr-1" />}
                       {challenge.is_active ? 'Deactivate' : 'Activate'}
                     </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleDelete(challenge.id)} className="h-8 text-red-400 hover:text-red-300 hover:bg-red-950">
-                      <Trash2 className="w-3 h-3 mr-1" /> Delete
+                    <Button size="sm" variant="ghost" onClick={() => handleDelete(challenge.id)} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-500/10">
+                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
                     </Button>
                   </div>
                 </div>

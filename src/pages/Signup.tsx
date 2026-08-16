@@ -38,22 +38,34 @@ const Signup = () => {
     setLoading(true);
     setError('');
     
-    const { error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          phone_number: phone,
-          role: roleParam,
+    try {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+            phone_number: phone,
+            role: roleParam,
+          }
         }
-      }
-    });
+      });
 
-    if (signUpError) {
-      setError(signUpError.message);
-    } else {
-      navigate('/login?verify=true');
+      if (signUpError) {
+        if (signUpError.message.includes('Failed to fetch')) {
+          setError("Connection failed. If you hosted on Netlify, please ensure 'VITE_SUPABASE_URL' and 'VITE_SUPABASE_ANON_KEY' environment variables are set in your Netlify Site Settings.");
+        } else {
+          setError(signUpError.message);
+        }
+      } else {
+        navigate('/login?verify=true');
+      }
+    } catch (err: any) {
+      if (err.message?.includes('Failed to fetch')) {
+        setError("Network error: Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in Netlify Site Settings.");
+      } else {
+        setError(err.message || "Failed to create account. Please try again.");
+      }
     }
     setLoading(false);
   };
