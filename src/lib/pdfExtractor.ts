@@ -2,7 +2,9 @@ import * as pdfjsLib from 'pdfjs-dist';
 
 // Configure pdfjs worker safely
 try {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+  if (typeof window !== 'undefined' && 'Worker' in window) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+  }
 } catch (e) {
   console.warn('Could not set workerSrc for pdfjs:', e);
 }

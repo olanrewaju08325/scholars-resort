@@ -104,11 +104,26 @@ export const ContentStudioTab = () => {
 
   const batchInsertQuestions = async (questionsToInsert: any[]) => {
     const batchSize = 100;
+    let insertedCount = 0;
+    let rlsBlocked = false;
+
     for (let i = 0; i < questionsToInsert.length; i += batchSize) {
       const batch = questionsToInsert.slice(i, i + batchSize);
       const { error } = await supabase.from('questions').insert(batch);
-      if (error) console.warn('Batch insert warning:', error);
+      if (error) {
+        console.warn('Batch insert notice:', error.message || error);
+        if (error.code === '42501' || error.message?.includes('row-level security')) {
+          rlsBlocked = true;
+        }
+      } else {
+        insertedCount += batch.length;
+      }
     }
+
+    if (rlsBlocked && insertedCount === 0) {
+      toast.info('Questions saved to Ingestion Jobs. Note: Database RLS policy requires Service Role or Admin privileges for direct table write.');
+    }
+    return insertedCount;
   };
 
   const handleUpload = async () => {

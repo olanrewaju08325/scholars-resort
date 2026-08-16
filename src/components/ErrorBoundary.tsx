@@ -1,6 +1,6 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home, Bug, Copy } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { AlertTriangle, RefreshCw, Home, Bug, Copy, WifiOff, Database, HardDrive } from 'lucide-react';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -27,25 +27,99 @@ export class ErrorBoundary extends React.Component<
     this.setState({ errorInfo: info, errorId });
     console.error('[ErrorBoundary] Caught error:', error, info.componentStack);
 
-    // Log to Supabase platform_error_logs
-    supabase.from('platform_error_logs').insert({
-      error_type: 'react_boundary',
-      error_message: error.message,
-      error_context: {
-        error_id: errorId,
-        stack: error.stack?.substring(0, 500),
-        component_stack: info.componentStack?.substring(0, 500),
-        url: window.location.pathname,
-        user_agent: navigator.userAgent,
-      }
-    }).then(({ error: dbErr }) => {
-      if (dbErr) console.warn('Error log DB write failed:', dbErr);
-    });
+    // Try logging to Supabase platform_error_logs safely
+    try {
+      supabase.from('platform_error_logs').insert({
+        error_type: 'react_boundary',
+        error_message: error.message,
+        error_context: {
+          error_id: errorId,
+          stack: error.stack?.substring(0, 500),
+          component_stack: info.componentStack?.substring(0, 500),
+          url: window.location.pathname,
+          user_agent: navigator.userAgent,
+        }
+      }).then(({ error: dbErr }) => {
+        if (dbErr) console.warn('Error log DB write failed:', dbErr);
+      }).catch(() => {});
+    } catch {
+      // Ignore DB write error during connectivity failure
+    }
   }
 
   render() {
     if (this.state.hasError) {
       if (this.props.fallback) return this.props.fallback;
+
+      const errorMsg = this.state.error?.message?.toLowerCase() || '';
+      const isConnectivityError = 
+        !navigator.onLine || 
+        !isSupabaseConfigured ||
+        errorMsg.includes('fetch') || 
+        errorMsg.includes('network') || 
+        errorMsg.includes('supabase') || 
+        errorMsg.includes('offline');
+
+      if (isConnectivityError) {
+        return (
+          <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 text-center">
+            <div className="max-w-lg w-full bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="relative inline-flex mb-6">
+                <div className="w-20 h-20 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center">
+                  <WifiOff className="w-10 h-10 text-amber-500" />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-background border-2 border-border flex items-center justify-center">
+                  <Database className="w-4 h-4 text-amber-500" />
+                </div>
+              </div>
+
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/30 mb-3 uppercase tracking-wider">
+                Database Connectivity Notice
+              </span>
+
+              <h1 className="text-2xl font-display font-bold mb-3">Connection Interrupted</h1>
+              <p className="text-muted-foreground mb-6 text-sm leading-relaxed">
+                {!isSupabaseConfigured 
+                  ? 'Supabase environment variables (VITE_SUPABASE_URL) are not configured yet. Please configure them in your server environment.'
+                  : 'Unable to connect to the Scholars Resort cloud database. You can continue practicing completely offline using your downloaded question packs.'}
+              </p>
+
+              {this.state.error && (
+                <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-3 mb-6 text-left">
+                  <p className="text-xs font-mono text-amber-400/90 break-all">
+                    {this.state.error.message}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    this.setState({ hasError: false, error: null, errorInfo: null, errorId: null });
+                    window.location.reload();
+                  }}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-bold text-sm rounded-xl hover:bg-primary/90 transition-colors shadow-lg"
+                >
+                  <RefreshCw className="w-4 h-4" /> Retry Connection
+                </button>
+                <a
+                  href="/offline-packs"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-sm rounded-xl transition-colors shadow-lg"
+                >
+                  <HardDrive className="w-4 h-4" /> Offline Question Packs
+                </a>
+                <a
+                  href="/"
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-border rounded-xl font-bold text-sm hover:bg-muted transition-colors"
+                >
+                  <Home className="w-4 h-4" /> Home
+                </a>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 text-center">
           <div className="max-w-md w-full">
@@ -108,3 +182,4 @@ export class ErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
+

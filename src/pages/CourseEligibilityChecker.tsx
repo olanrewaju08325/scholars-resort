@@ -77,6 +77,55 @@ const COURSE_DATABASE: CourseData[] = [
       { name: "University of Ilorin (UNILORIN)", cutoff: 235 },
     ],
     advice: "Mathematics and Economics are strictly mandatory in JAMB for Accounting."
+  },
+  {
+    course: "Mechanical Engineering",
+    category: "Engineering & Environmental",
+    jambSubjects: ["Use of English", "Mathematics", "Physics", "Chemistry"],
+    olevelCredits: ["English Language", "Mathematics", "Physics", "Chemistry", "Further Mathematics or Technical Drawing"],
+    universities: [
+      { name: "Federal University of Technology Akure (FUTA)", cutoff: 255 },
+      { name: "University of Lagos (UNILAG)", cutoff: 270 },
+      { name: "Ahmadu Bello University (ABU)", cutoff: 240 },
+      { name: "University of Nigeria Nsukka (UNN)", cutoff: 250 }
+    ],
+    advice: "Physics, Chemistry, and Mathematics are compulsory for all Engineering disciplines."
+  },
+  {
+    course: "Pharmacy (Pharm.D)",
+    category: "Medical & Health Sciences",
+    jambSubjects: ["Use of English", "Biology", "Chemistry", "Physics"],
+    olevelCredits: ["English Language", "Mathematics", "Biology", "Chemistry", "Physics"],
+    universities: [
+      { name: "University of Ibadan (UI)", cutoff: 275 },
+      { name: "Obafemi Awolowo University (OAU)", cutoff: 270 },
+      { name: "University of Lagos (UNILAG)", cutoff: 272 }
+    ],
+    advice: "Biology, Chemistry, and Physics are mandatory in UTME."
+  },
+  {
+    course: "Mass Communication",
+    category: "Social Sciences & Arts",
+    jambSubjects: ["Use of English", "Literature in English", "Economics or Government", "Any Arts/Social Science subject"],
+    olevelCredits: ["English Language", "Mathematics", "Literature in English", "Government/CRS", "One Social Science subject"],
+    universities: [
+      { name: "University of Lagos (UNILAG)", cutoff: 255 },
+      { name: "University of Nigeria Nsukka (UNN)", cutoff: 248 },
+      { name: "Lagos State University (LASU)", cutoff: 240 }
+    ],
+    advice: "Literature in English is compulsory for Mass Communication at UNILAG, UNN, and most premier universities."
+  },
+  {
+    course: "Economics",
+    category: "Social Sciences",
+    jambSubjects: ["Use of English", "Mathematics", "Economics", "Government or Geography"],
+    olevelCredits: ["English Language", "Mathematics", "Economics", "Government/History", "One Social Science subject"],
+    universities: [
+      { name: "University of Ibadan (UI)", cutoff: 250 },
+      { name: "University of Lagos (UNILAG)", cutoff: 258 },
+      { name: "University of Ilorin (UNILORIN)", cutoff: 238 }
+    ],
+    advice: "Mathematics credit is mandatory for Economics in WAEC/NECO and UTME."
   }
 ];
 

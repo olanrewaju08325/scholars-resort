@@ -259,10 +259,16 @@ app.post('/api/test-smtp', async (req, res) => {
   } catch (err: any) {
     const latency = Date.now() - startTime;
     console.error('[SMTP TEST ERROR]', err);
-    return res.status(500).json({
+
+    let errorHint = err.message || 'Authentication or network timeout';
+    if (targetHost.includes('gmail') && (err.message?.includes('530') || err.message?.includes('535') || err.message?.includes('Authentication'))) {
+      errorHint += ' -> Helpful Hint: Gmail requires a 16-character App Password generated at https://myaccount.google.com/apppasswords (2FA must be active). Regular Google account passwords are blocked by Gmail.';
+    }
+
+    return res.status(200).json({
       success: false,
       latency,
-      message: `SMTP Connection Failed: ${err.message || 'Authentication or network timeout'}`,
+      message: `SMTP Connection Failed: ${errorHint}`,
       error: err.message,
       code: err.code
     });

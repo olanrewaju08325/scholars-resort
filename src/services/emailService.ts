@@ -50,7 +50,11 @@ export const testSMTPEmail = async (
     try {
       data = JSON.parse(text);
     } catch {
-      throw new Error(`SMTP API route returned non-JSON response (${response.status}). Please check server logs.`);
+      return {
+        success: false,
+        latency: Date.now() - startTime,
+        message: `Server returned non-JSON response (${response.status}). Please verify server.ts is running.`
+      };
     }
 
     const latency = Date.now() - startTime;
