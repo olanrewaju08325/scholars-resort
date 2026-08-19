@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
-import { Users, Download, ShieldCheck, Search, Filter, ArrowUpDown, MoreVertical, Flag, ChevronLeft, ChevronRight, Flame } from 'lucide-react';
+import { Users, Download, ShieldCheck, Search, Filter, ArrowUpDown, MoreVertical, Flag, ChevronLeft, ChevronRight, Flame, Smartphone, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 
@@ -187,6 +187,23 @@ export const StudentsTab = () => {
     }
   };
 
+  const handleResetDevice = async (studentId: string, studentName: string) => {
+    confirmAction(
+      "Reset Device Lock",
+      `Are you sure you want to reset the registered device for ${studentName}? This will allow them to authorize and bind a new device on their next login.`,
+      async () => {
+        try {
+          const { error } = await supabase.from('profiles').update({ device_uuid: null }).eq('id', studentId);
+          if (error) throw error;
+          toast.success(`Device lock reset for ${studentName}. They can now link their new device.`);
+          fetchStudents();
+        } catch (err: any) {
+          toast.error(`Failed to reset device: ${err.message}`);
+        }
+      }
+    );
+  };
+
   const exportToCSV = () => {
     if (processedStudents.length === 0) return;
     const headers = ['Name,Email,Status,Streak,Score (XP),Joined Date'];
@@ -327,6 +344,9 @@ export const StudentsTab = () => {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-950" onClick={() => handleResetDevice(student.id, student.full_name)} title="Reset Authorized Device Lock">
+                          <Smartphone className="w-4 h-4" />
+                        </Button>
                         {!student.has_paid && (
                           <Button size="icon" variant="ghost" className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-950" onClick={() => handleGiftAccess(student.id, student.full_name)} title="Gift Premium Access">
                             <ShieldCheck className="w-4 h-4" />

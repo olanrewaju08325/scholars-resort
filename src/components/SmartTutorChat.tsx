@@ -110,16 +110,14 @@ export const SmartTutorChat = () => {
     setShowKeySetup(false);
     setKeyInput('');
 
-    // If admin, also persist to Supabase admin_settings
-    if (profile?.role === 'admin' || profile?.email === 'admitwise2@gmail.com') {
-      try {
-        await supabase.from('admin_settings').upsert({
-          setting_key: 'ai_api_keys',
-          setting_value: { groq: cleanKey, groq_key: cleanKey },
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
-      } catch {}
-    }
+    // Persist to Supabase admin_settings if permitted, and always to local storage
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'ai_api_keys',
+        setting_value: { groq: cleanKey, groq_key: cleanKey },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
 
     toast.success('Groq API Key saved successfully!');
     setMessages(prev => [

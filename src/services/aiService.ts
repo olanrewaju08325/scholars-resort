@@ -15,22 +15,28 @@ export const setLocalGroqApiKey = (key: string) => {
 
 export const getGroqApiKey = async (): Promise<string> => {
   // 1. Check local environment or localStorage
-  const envKey = import.meta.env.VITE_GROQ_API_KEY || localStorage.getItem('groq_api_key') || localStorage.getItem('groq_key');
-  if (envKey && envKey.trim().length > 10) return envKey.trim();
+  const envKey = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GROQ_API_KEY || import.meta.env?.GROQ_API_KEY)) || 
+                 (typeof process !== 'undefined' && (process.env?.GROQ_API_KEY || process.env?.VITE_GROQ_API_KEY)) ||
+                 localStorage.getItem('groq_api_key') || 
+                 localStorage.getItem('groq_key');
+                 
+  if (envKey && envKey.trim().length > 10 && !envKey.includes('placeholder')) {
+    return envKey.trim();
+  }
 
   if (cachedGroqKey) return cachedGroqKey;
 
   try {
-    // 2. Query admin_settings in Supabase
+    // 2. Query admin_settings in Supabase for any saved Groq key
     const { data } = await supabase
       .from('admin_settings')
       .select('setting_key, setting_value')
-      .in('setting_key', ['ai_api_keys', 'api_keys', 'groq_api_key', 'ai_config']);
+      .in('setting_key', ['ai_api_keys', 'api_keys', 'groq_api_key', 'ai_config', 'global_config']);
 
     if (data) {
       for (const row of data) {
         const val = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key || (typeof row.setting_value === 'string' ? row.setting_value : '');
-        if (typeof val === 'string' && val.trim().length > 10) {
+        if (typeof val === 'string' && val.trim().length > 10 && !val.includes('placeholder')) {
           cachedGroqKey = val.trim();
           localStorage.setItem('groq_api_key', cachedGroqKey);
           return cachedGroqKey;
@@ -59,8 +65,8 @@ export const getGroqApiKey = async (): Promise<string> => {
     }
   } catch {}
 
-  // Fallback default development key or placeholder
-  return import.meta.env.VITE_GROQ_API_KEY || '';
+  // Fallback
+  return (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GROQ_API_KEY || import.meta.env?.GROQ_API_KEY)) || '';
 };
 
 // Check Token Limit

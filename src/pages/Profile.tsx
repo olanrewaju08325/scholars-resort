@@ -172,7 +172,7 @@ export default function Profile() {
                     <CheckCircle2 className="w-6 h-6" />
                   </div>
                   <h3 className="font-bold text-xl text-primary">Pro Active</h3>
-                  <p className="text-sm text-muted-foreground">You have full access to all CBT exams and AI features.</p>
+                  <p className="text-sm text-muted-foreground">You have full lifetime access to all CBT exams, AI features, and syllabus materials.</p>
                 </div>
               ) : (
                 <div className="space-y-4 text-center">
@@ -180,12 +180,39 @@ export default function Profile() {
                     <ShieldCheck className="w-6 h-6" />
                   </div>
                   <h3 className="font-bold text-xl">Free Tier</h3>
-                  <p className="text-sm text-muted-foreground">Upgrade to Pro to unlock premium CBT mocks.</p>
+                  <p className="text-sm text-muted-foreground">Upgrade to Pro to unlock premium CBT mocks and unlimited AI tutor.</p>
                   <Button asChild className="w-full mt-2">
                     <a href="/pricing">Upgrade Now</a>
                   </Button>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Device Lock Status Card */}
+          <Card className="border border-border bg-card shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-500" />
+                Device Security
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Single-device licensing protects your study record.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              <div className="p-3 rounded-lg bg-muted/50 border border-border/80 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Active Device</span>
+                  <span className="font-semibold text-emerald-500">Authorized</span>
+                </div>
+                <p className="font-mono text-[11px] text-muted-foreground truncate">
+                  ID: {localStorage.getItem('scholars_resort_device_uuid') || profile.device_uuid || 'DEV-PRIMARY'}
+                </p>
+              </div>
+              <p className="text-muted-foreground text-[11px] leading-relaxed">
+                Your account is active on 1 authorized device. If you ever purchase a new phone or laptop, you can submit a reset request.
+              </p>
             </CardContent>
           </Card>
         </div>

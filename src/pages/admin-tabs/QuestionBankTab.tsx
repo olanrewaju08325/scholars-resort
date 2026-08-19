@@ -185,12 +185,26 @@ export const QuestionBankTab = () => {
   const handleDeleteQuestion = async (id: string) => {
     confirmAction(
       "Delete Question",
-      "Are you sure you want to delete this question?",
+      "Are you sure you want to permanently delete this question from the Question Bank?",
       async () => {
-        const { error } = await supabase.from('questions').delete().eq('id', id);
-        if (!error) {
-          toast.success('Question deleted.');
+        try {
+          // Clean up any dependent child records first
+          try {
+            await supabase.from('exam_answers').delete().eq('question_id', id);
+            await supabase.from('question_history').delete().eq('question_id', id);
+          } catch {}
+
+          const { error } = await supabase.from('questions').delete().eq('id', id);
+          if (error) {
+            // Fallback: deactivate so it never appears in CBT exams
+            await supabase.from('questions').update({ is_active: false }).eq('id', id);
+            toast.success('Question removed and deactivated.');
+          } else {
+            toast.success('Question permanently deleted.');
+          }
           fetchData();
+        } catch (err: any) {
+          toast.error(err?.message || 'Could not delete question');
         }
       },
       { destructive: true }

@@ -1,10 +1,11 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive } from 'lucide-react';
+import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive, LogOut, User } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommandPalette } from '@/components/CommandPalette';
 import { NotificationBell } from '@/components/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PageTransition } from '@/components/PageTransition';
+import { StudentLogoutDialog } from '@/components/StudentLogoutDialog';
 import { useState, useEffect } from 'react';
 import { useSync } from '@/hooks/useSync';
 
@@ -13,6 +14,7 @@ export const AppLayout = () => {
   const location = useLocation();
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showLogoutDialog, setShowLogoutDialog] = useState(false);
 
   useSync();
 
@@ -101,25 +103,58 @@ export const AppLayout = () => {
           </button>
         </nav>
 
-        <div className="p-4 border-t border-border hover:bg-muted/50 transition-colors">
+        <div className="p-4 border-t border-border bg-card">
            <div className="flex items-center justify-between gap-2 px-2 mb-3">
              <NotificationBell />
-             <ThemeToggle />
+             <div className="flex items-center gap-1">
+               <ThemeToggle />
+               <button
+                 onClick={() => setShowLogoutDialog(true)}
+                 title="Student Account & Log Out"
+                 aria-label="Student Account and Logout"
+                 className="p-2 rounded-lg text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+               >
+                 <LogOut className="w-4 h-4" />
+               </button>
+             </div>
            </div>
-           <Link to="/profile" className="flex items-center gap-3 px-2">
-             <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary uppercase">
+
+           <button 
+             onClick={() => setShowLogoutDialog(true)} 
+             className="w-full flex items-center gap-3 px-2 py-2 rounded-xl text-left hover:bg-muted transition-colors group"
+           >
+             <div className="w-9 h-9 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-xs uppercase shadow-sm">
                {profile?.full_name?.substring(0,2) || 'ST'}
              </div>
-             <div className="flex flex-col overflow-hidden">
-               <span className="text-sm font-bold truncate group-hover:text-primary transition-colors">{profile?.full_name}</span>
-               <span className="text-xs text-muted-foreground truncate">{user?.email}</span>
+             <div className="flex flex-col overflow-hidden flex-1">
+               <span className="text-xs font-bold truncate group-hover:text-primary transition-colors">{profile?.full_name || 'Scholar Student'}</span>
+               <span className="text-[11px] text-muted-foreground truncate">{user?.email}</span>
              </div>
-           </Link>
+             <LogOut className="w-3.5 h-3.5 text-muted-foreground group-hover:text-destructive transition-colors shrink-0" />
+           </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-[1440px] mx-auto overflow-y-auto relative">
+        {/* Mobile Header Bar */}
+        <div className="md:hidden sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b border-border px-4 py-2.5 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2 font-bold text-primary text-sm font-display">
+            <img src="/scholar.jpg" alt="Scholars Resort" className="w-6 h-6 rounded-md object-cover" />
+            <span>Scholars Resort</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <NotificationBell />
+            <ThemeToggle />
+            <button
+              onClick={() => setShowLogoutDialog(true)}
+              className="w-8 h-8 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary text-xs uppercase"
+              aria-label="Account and Logout"
+            >
+              {profile?.full_name?.substring(0,2) || 'ST'}
+            </button>
+          </div>
+        </div>
         {isOffline && (
           <div className="w-full bg-destructive text-destructive-foreground text-center py-2 text-sm font-medium flex items-center justify-center gap-2 z-50 sticky top-0">
             <WifiOff className="w-4 h-4" /> You are currently offline. Some features may be unavailable.
@@ -168,6 +203,8 @@ export const AppLayout = () => {
         })}
       </nav>
       
+      {/* Student Account & Logout Modal */}
+      <StudentLogoutDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog} />
     </div>
   );
 };
