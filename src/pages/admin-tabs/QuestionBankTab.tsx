@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
-import { Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, ShieldCheck, History, Search } from 'lucide-react';
+import { Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, ShieldCheck, History, Search, Download, FileSpreadsheet } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -322,112 +322,270 @@ export const QuestionBankTab = () => {
     }
   };
 
+  const [csvPublishImmediately, setCsvPublishImmediately] = useState(true);
+  const [csvStatusSummary, setCsvStatusSummary] = useState<string | null>(null);
+
+  const downloadSampleCsv = () => {
+    const sampleHeaders = "subject,topic,question,option_a,option_b,option_c,option_d,correct_answer,explanation,difficulty\n";
+    const sampleRows = [
+      'Principles of Accounts,Accounting Period,"The term \'accounting period\' is used to refer to the",time span during which taxes are paid to the Inland Revenue Board,"Budget period, usually one year, relied on by the accountant","time span, usually one year covered by financial statement",period within which debtors are expected to settle accounts,C,"Financial statements cover a specific time frame, typically one calendar or fiscal year.",medium',
+      'Principles of Accounts,Accounting Concepts,Assigning revenues to the accounting period in which goods were sold or services rendered and expenses incurred is known as,passing of entries,consistency convention,matching concept,adjusting for revenue,C,"The matching concept dictates that revenues and associated expenses must be recognized in the same period.",medium',
+      'Principles of Accounts,Accounting Conventions,"The accounting convention which states that \'profit must not be recognized until realized while all losses should be adequately provided for\' is termed",materiality,objectivity,consistency,conservatism,D,"Conservatism requires anticipating no profit and providing for all possible losses.",medium'
+    ].join('\n');
+
+    const blob = new Blob([sampleHeaders + sampleRows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'scholars_resort_questions_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success('Sample CSV template downloaded!');
+  };
+
   const handleCsvUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setCsvLoading(true);
+    setCsvStatusSummary(null);
+
     try {
       const text = await file.text();
       
       Papa.parse(text, {
         header: true,
-        skipEmptyLines: true,
+        skipEmptyLines: 'greedy',
         complete: async (results) => {
           const rows = results.data as any[];
+          if (!rows || rows.length === 0) {
+            toast.error('No rows found in the uploaded CSV file.');
+            setCsvLoading(false);
+            return;
+          }
+
           setImportTotal(rows.length);
           setImportProgress(0);
           
           let successCount = 0;
           let failCount = 0;
-          
-          // Batch process in chunks of 10
-          const batchSize = 10;
-          for (let i = 0; i < rows.length; i += batchSize) {
-            const batch = rows.slice(i, i + batchSize);
-            
-            // Validate batch with AI edge function
-            let validatedBatch = batch;
+          const failureReasons: string[] = [];
+
+          // Pre-fetch latest subjects from DB to ensure fresh cache
+          const { data: latestSubjects } = await supabase.from('subjects').select('*');
+          const subjectsCache = new Map<string, any>();
+          (latestSubjects || []).forEach(s => {
+            subjectsCache.set(s.name.trim().toLowerCase(), s);
+          });
+
+          // Topics cache: "subjectId:topicName" -> topic object
+          const topicsCache = new Map<string, any>();
+
+          const preparedPayloads: any[] = [];
+
+          for (let index = 0; index < rows.length; index++) {
+            const row = rows[index];
+            const rowNum = index + 2; // Accounting for 1-based index and header
+
             try {
-              const { data: aiValidation, error: aiError } = await supabase.functions.invoke('ai-gateway', {
-                 body: { action: 'validate_batch', payload: { questions: batch } }
-              });
+              // Expected headers variations
+              const subjectName = (row.subject || row.Subject || row['Subject Name'] || row.SUBJECT || '').trim();
+              const topicName = (row.topic || row.Topic || row['Topic Name'] || row.TOPIC || '').trim();
+              const questionText = (row.question || row.Question || row.question_text || row['Question Text'] || '').trim();
               
-              if (!aiError && aiValidation && Array.isArray(aiValidation.questions)) {
-                validatedBatch = aiValidation.questions;
-              }
-            } catch (e) {
-              console.warn("AI Validation failed for batch, falling back to raw data.", e);
-            }
+              const optA = (row.option_a || row.Option_A || row.optionA || row['Option A'] || row.a || row.A || '').trim();
+              const optB = (row.option_b || row.Option_B || row.optionB || row['Option B'] || row.b || row.B || '').trim();
+              const optC = (row.option_c || row.Option_C || row.optionC || row['Option C'] || row.c || row.C || '').trim();
+              const optD = (row.option_d || row.Option_D || row.optionD || row['Option D'] || row.d || row.D || '').trim();
 
-            for (const row of validatedBatch) {
-              try {
-                // Expected headers: subject, topic, question, option_a, option_b, option_c, option_d, correct_answer, explanation, difficulty
-                const subjectName = row.subject || row.Subject;
-                const topicName = row.topic || row.Topic;
-                const questionText = row.question || row.Question;
-                const options = [
-                  row.option_a || row.Option_A || row.optionA, 
-                  row.option_b || row.Option_B || row.optionB, 
-                  row.option_c || row.Option_C || row.optionC, 
-                  row.option_d || row.Option_D || row.optionD
-                ];
-                const correctAnswer = row.correct_answer || row.Correct_Answer || row.correctAnswer;
-                const explanationText = row.explanation || row.Explanation || '';
-                const diff = row.difficulty || row.Difficulty || 'medium';
+              const rawCorrect = (row.correct_answer || row.Correct_Answer || row.correctAnswer || row['Correct Answer'] || row.answer || row.Answer || '').trim();
+              const explanationText = (row.explanation || row.Explanation || row['Explanation'] || '').trim();
+              const diff = (row.difficulty || row.Difficulty || 'medium').trim().toLowerCase();
 
-                if (!subjectName || !questionText || options.filter(Boolean).length < 2 || !correctAnswer) {
-                  failCount++;
-                  continue;
-                }
-
-                // Find subject
-                const subj = subjects.find(s => s.name.toLowerCase() === subjectName.trim().toLowerCase());
-                if (!subj) { failCount++; continue; }
-
-                let topId = null;
-                if (topicName) {
-                  const { data: foundTopic } = await supabase.from('topics').select('id').eq('name', topicName.trim()).eq('subject_id', subj.id).single();
-                  if (foundTopic) topId = foundTopic.id;
-                }
-
-                const payload = {
-                  subject_id: subj.id,
-                  topic_id: topId,
-                  question_text: questionText,
-                  options,
-                  correct_answer: correctAnswer,
-                  explanation: explanationText,
-                  difficulty: diff.toLowerCase(),
-                  is_active: false // bulk import goes to draft
-                };
-
-                const { error } = await supabase.from('questions').insert(payload);
-                if (error) throw error;
-                
-                successCount++;
-              } catch(e) {
+              if (!subjectName) {
                 failCount++;
+                failureReasons.push(`Row ${rowNum}: Missing subject name`);
+                continue;
               }
+
+              if (!questionText) {
+                failCount++;
+                failureReasons.push(`Row ${rowNum}: Missing question text`);
+                continue;
+              }
+
+              const options = [optA, optB, optC, optD];
+              const validOptions = options.filter(Boolean);
+              if (validOptions.length < 2) {
+                failCount++;
+                failureReasons.push(`Row ${rowNum}: At least 2 options are required`);
+                continue;
+              }
+
+              if (!rawCorrect) {
+                failCount++;
+                failureReasons.push(`Row ${rowNum}: Missing correct_answer`);
+                continue;
+              }
+
+              // 1. Resolve or Auto-Create Subject
+              const subKey = subjectName.toLowerCase();
+              let subj = subjectsCache.get(subKey);
+
+              if (!subj) {
+                // Check if already in database via query
+                const { data: foundSubj } = await supabase
+                  .from('subjects')
+                  .select('*')
+                  .ilike('name', subjectName)
+                  .maybeSingle();
+
+                if (foundSubj) {
+                  subj = foundSubj;
+                  subjectsCache.set(subKey, foundSubj);
+                } else {
+                  // Auto-create subject in database
+                  const subCode = subjectName.replace(/[^A-Za-z]/g, '').substring(0, 4).toUpperCase() || 'SUBJ';
+                  const subSlug = subjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+                  const { data: newSubj, error: subCreateErr } = await supabase
+                    .from('subjects')
+                    .insert({
+                      name: subjectName,
+                      code: subCode,
+                      slug: subSlug,
+                      is_active: true
+                    })
+                    .select()
+                    .single();
+
+                  if (subCreateErr || !newSubj) {
+                    failCount++;
+                    failureReasons.push(`Row ${rowNum}: Could not create subject '${subjectName}'`);
+                    continue;
+                  }
+                  subj = newSubj;
+                  subjectsCache.set(subKey, newSubj);
+                }
+              }
+
+              // 2. Resolve or Auto-Create Topic if provided
+              let topId: string | null = null;
+              if (topicName && subj?.id) {
+                const topicKey = `${subj.id}:${topicName.toLowerCase()}`;
+                let topicObj = topicsCache.get(topicKey);
+
+                if (!topicObj) {
+                  const { data: foundTopic } = await supabase
+                    .from('topics')
+                    .select('*')
+                    .eq('subject_id', subj.id)
+                    .ilike('name', topicName)
+                    .maybeSingle();
+
+                  if (foundTopic) {
+                    topicObj = foundTopic;
+                    topicsCache.set(topicKey, foundTopic);
+                  } else {
+                    // Create topic under subject
+                    const { data: newTopic } = await supabase
+                      .from('topics')
+                      .insert({
+                        subject_id: subj.id,
+                        name: topicName,
+                        description: `UTME Syllabus for ${topicName}`
+                      })
+                      .select()
+                      .single();
+
+                    if (newTopic) {
+                      topicObj = newTopic;
+                      topicsCache.set(topicKey, newTopic);
+                    }
+                  }
+                }
+                if (topicObj) topId = topicObj.id;
+              }
+
+              // 3. Resolve Correct Answer text from A/B/C/D or direct text
+              let resolvedCorrect = rawCorrect;
+              const upperRaw = rawCorrect.toUpperCase();
+
+              if (upperRaw === 'A' || upperRaw === 'OPTION A' || upperRaw === 'OPTION_A' || upperRaw === '1') {
+                resolvedCorrect = optA || options[0];
+              } else if (upperRaw === 'B' || upperRaw === 'OPTION B' || upperRaw === 'OPTION_B' || upperRaw === '2') {
+                resolvedCorrect = optB || options[1];
+              } else if (upperRaw === 'C' || upperRaw === 'OPTION C' || upperRaw === 'OPTION_C' || upperRaw === '3') {
+                resolvedCorrect = optC || options[2];
+              } else if (upperRaw === 'D' || upperRaw === 'OPTION D' || upperRaw === 'OPTION_D' || upperRaw === '4') {
+                resolvedCorrect = optD || options[3];
+              } else {
+                // If it's already full text, ensure it matches one of the options
+                const exactMatch = options.find(o => o.toLowerCase() === rawCorrect.toLowerCase());
+                if (exactMatch) {
+                  resolvedCorrect = exactMatch;
+                }
+              }
+
+              preparedPayloads.push({
+                subject_id: subj.id,
+                topic_id: topId,
+                question_text: questionText,
+                options,
+                correct_answer: resolvedCorrect,
+                explanation: explanationText,
+                difficulty: ['easy', 'medium', 'hard'].includes(diff) ? diff : 'medium',
+                is_active: csvPublishImmediately
+              });
+
+            } catch (rowErr: any) {
+              failCount++;
+              failureReasons.push(`Row ${rowNum}: ${rowErr.message || 'Formatting error'}`);
             }
-            
-            setImportProgress(prev => prev + batch.length);
           }
-          
-          toast.success(`CSV Import Complete! ${successCount} imported as Drafts. ${failCount} failed.`);
+
+          // Batch insert in chunks of 50 for high performance
+          const chunkSize = 50;
+          for (let i = 0; i < preparedPayloads.length; i += chunkSize) {
+            const chunk = preparedPayloads.slice(i, i + chunkSize);
+            const { error: insertError } = await supabase.from('questions').insert(chunk);
+
+            if (insertError) {
+              // Fallback to inserting one by one to isolate any single bad row
+              for (const singleItem of chunk) {
+                const { error: singleErr } = await supabase.from('questions').insert(singleItem);
+                if (singleErr) {
+                  failCount++;
+                  failureReasons.push(`Question error: ${singleErr.message}`);
+                } else {
+                  successCount++;
+                }
+              }
+            } else {
+              successCount += chunk.length;
+            }
+
+            setImportProgress(Math.min(rows.length, (i + chunkSize)));
+          }
+
+          const statusText = `Imported ${successCount} questions successfully (${csvPublishImmediately ? 'Published / Active' : 'Draft mode'}). ${failCount > 0 ? `${failCount} skipped/failed.` : ''}`;
+          setCsvStatusSummary(statusText);
+
+          if (successCount > 0) {
+            toast.success(`CSV Import Complete: ${successCount} questions saved!`);
+          } else {
+            toast.error(`CSV Import Failed: 0 questions imported. ${failureReasons[0] || 'Please check file headers.'}`);
+          }
+
           fetchData();
           setCsvLoading(false);
-          setImportTotal(0);
-          setImportProgress(0);
         },
         error: (error: any) => {
           toast.error('CSV Parse Error: ' + error.message);
           setCsvLoading(false);
-          setImportTotal(0);
-          setImportProgress(0);
         }
       });
-    } catch(err:any) {
+    } catch(err: any) {
       toast.error('File Read Error: ' + err.message);
       setCsvLoading(false);
     } 
@@ -547,34 +705,88 @@ export const QuestionBankTab = () => {
           </CardContent>
         </Card>
 
-        {/* AI Generator Panel */}
-            <Card className="bg-slate-900 border-slate-800 text-slate-100 lg:col-span-3">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-blue-400" />
-                  Bulk Import (CSV) with AI Validator
-                </CardTitle>
-                <CardDescription className="text-slate-400">
-                  Upload a CSV file with questions. The AI will validate grammar and formatting in batches of 10. Headers must include: subject, question, option_a, option_b, option_c, option_d, correct_answer.
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-4">
-                  <Input type="file" accept=".csv" onChange={handleCsvUpload} disabled={csvLoading} className="bg-slate-950 border-slate-800" />
-                  {csvLoading && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex justify-between text-xs text-slate-400">
-                        <span>Processing & Validating...</span>
-                        <span>{importProgress} / {importTotal}</span>
-                      </div>
-                      <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
-                        <div className="bg-blue-500 h-full transition-all duration-300" style={{ width: `${importTotal > 0 ? (importProgress / importTotal) * 100 : 0}%` }}></div>
-                      </div>
-                    </div>
-                  )}
+        {/* Bulk Import Panel */}
+        <Card className="bg-slate-900 border-slate-800 text-slate-100 lg:col-span-3">
+          <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileSpreadsheet className="w-5 h-5 text-blue-400" />
+                Bulk Question Importer (CSV)
+              </CardTitle>
+              <CardDescription className="text-slate-400">
+                Upload CSV files with questions. Subjects and topics not yet in the system are automatically created on the fly.
+              </CardDescription>
+            </div>
+            <Button 
+              type="button" 
+              variant="outline" 
+              size="sm" 
+              onClick={downloadSampleCsv}
+              className="border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold gap-1.5 shrink-0"
+            >
+              <Download className="w-3.5 h-3.5" />
+              Download Sample CSV
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+              <div className="flex items-center gap-2">
+                <input 
+                  type="checkbox" 
+                  id="csvPublishImmediately" 
+                  checked={csvPublishImmediately} 
+                  onChange={e => setCsvPublishImmediately(e.target.checked)} 
+                  className="w-4 h-4 rounded accent-primary cursor-pointer" 
+                />
+                <label htmlFor="csvPublishImmediately" className="text-xs sm:text-sm font-medium text-slate-200 cursor-pointer">
+                  Publish Immediately as Active (Live for Students & CBT)
+                </label>
+              </div>
+              <span className="text-[11px] text-slate-400 font-mono">
+                Accepted: .csv (A/B/C/D or text answers)
+              </span>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              <Input 
+                type="file" 
+                accept=".csv,text/csv" 
+                onChange={handleCsvUpload} 
+                disabled={csvLoading} 
+                className="bg-slate-950 border-slate-800 file:bg-primary file:text-primary-foreground file:font-semibold file:border-0 file:rounded-md file:px-3 file:py-1 hover:file:opacity-90 cursor-pointer" 
+              />
+              
+              {csvLoading && (
+                <div className="flex flex-col gap-2 p-3 bg-slate-950/80 rounded-xl border border-blue-900/40">
+                  <div className="flex justify-between text-xs text-blue-400 font-semibold">
+                    <span className="flex items-center gap-1.5">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing & Saving Questions...
+                    </span>
+                    <span>{importProgress} / {importTotal}</span>
+                  </div>
+                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                    <div 
+                      className="bg-blue-500 h-full transition-all duration-300" 
+                      style={{ width: `${importTotal > 0 ? Math.min(100, (importProgress / importTotal) * 100) : 0}%` }}
+                    ></div>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
+              )}
+
+              {csvStatusSummary && (
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 flex items-center justify-between">
+                  <span>{csvStatusSummary}</span>
+                  <button 
+                    onClick={() => setCsvStatusSummary(null)} 
+                    className="text-slate-400 hover:text-slate-200 text-xs px-2"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* AI Generator Panel */}
         <Card className="bg-slate-900 border-slate-800 text-slate-100 border-t-4 border-t-purple-500 h-fit">
