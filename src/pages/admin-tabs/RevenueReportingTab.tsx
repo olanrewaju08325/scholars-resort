@@ -17,25 +17,7 @@ export const RevenueReportingTab = () => {
   const [arps, setArps] = useState(0); // Average revenue per student
   const [planBreakdown, setPlanBreakdown] = useState({ lifetime: 0, yearly: 0, unknown: 0 });
 
-  useEffect(() => {
-    fetchPayments();
-  }, []);
-
-  const fetchPayments = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('manual_payments')
-      .select('*, profiles(full_name, email)')
-      .order('created_at', { ascending: false });
-
-    if (!error && data) {
-      setPayments(data);
-      calculateStats(data);
-    }
-    setLoading(false);
-  };
-
-  const calculateStats = (data: any[]) => {
+  const calculateStats = useCallback((data: any[]) => {
     let rev = 0;
     let pending = 0;
     let lifetime = 0;
@@ -79,7 +61,25 @@ export const RevenueReportingTab = () => {
       Revenue: monthlyMap[m]
     }));
     setMonthlyData(chartData);
-  };
+  }, []);
+
+  const fetchPayments = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('manual_payments')
+      .select('*, profiles(full_name, email)')
+      .order('created_at', { ascending: false });
+
+    if (!error && data) {
+      setPayments(data);
+      calculateStats(data);
+    }
+    setLoading(false);
+  }, [calculateStats]);
+
+  useEffect(() => {
+    fetchPayments();
+  }, [fetchPayments]);
 
   const formatNaira = (amount: number) => {
     return new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);

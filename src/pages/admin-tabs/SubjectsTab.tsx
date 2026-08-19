@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,7 +14,7 @@ export const SubjectsTab = () => {
   const [newSubjectIcon, setNewSubjectIcon] = useState('');
   const [adding, setAdding] = useState(false);
 
-  const fetchSubjects = async () => {
+  const fetchSubjects = useCallback(async () => {
     setLoading(true);
     try {
       const { data: subData } = await supabase.from('subjects').select('*').order('name');
@@ -43,11 +43,11 @@ export const SubjectsTab = () => {
       console.warn('Error loading subjects:', err);
     }
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     fetchSubjects();
-  }, []);
+  }, [fetchSubjects]);
 
   const handleAddSubject = async (e: React.FormEvent) => {
     e.preventDefault();

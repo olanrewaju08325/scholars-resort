@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Key, ShieldCheck, RefreshCw, Zap, Server, Activity, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { Key, ShieldCheck, RefreshCw, Zap, Activity, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 
 export const AIKeysTab = () => {
   const [loading, setLoading] = useState(true);
@@ -22,11 +22,7 @@ export const AIKeysTab = () => {
     totalCalls: 0
   });
 
-  useEffect(() => {
-    fetchKeysAndUsage();
-  }, []);
-
-  const fetchKeysAndUsage = async () => {
+  const fetchKeysAndUsage = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Fetch Keys from admin_settings
@@ -85,7 +81,12 @@ export const AIKeysTab = () => {
       console.error(err);
     }
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchKeysAndUsage();
+  }, [fetchKeysAndUsage]);
+
 
   const handleSaveKeys = async () => {
     setSaving(true);

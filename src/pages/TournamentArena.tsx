@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trophy, Clock, Zap, Users, Loader2, ChevronRight, CheckCircle2 } from 'lucide-react';
+import { Trophy, Clock, Zap, Users, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -69,7 +69,7 @@ export default function TournamentArena() {
         }
         setLeaderboard(newLeaderboard);
       })
-      .on('presence', { event: 'join' }, ({ key, newPresences }) => {
+      .on('presence', { event: 'join' }, ({ newPresences }) => {
         toast.info(`${newPresences[0].name} joined the arena!`);
       })
       .subscribe(async (status) => {

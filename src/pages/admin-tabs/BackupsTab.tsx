@@ -10,11 +10,7 @@ export const BackupsTab = () => {
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
-  useEffect(() => {
-    fetchBackups();
-  }, []);
-
-  const fetchBackups = async () => {
+  const fetchBackups = useCallback(async () => {
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -37,7 +33,11 @@ export const BackupsTab = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchBackups();
+  }, [fetchBackups]);
 
   const handleManualBackup = async (type: 'questions' | 'settings' | 'users') => {
     try {

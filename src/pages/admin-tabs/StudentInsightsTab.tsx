@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Search, UserCircle, Activity, Award, AlertTriangle, BookOpen, Clock, Gift, MessageSquare } from 'lucide-react';
+import { Search, UserCircle, Activity, Award, AlertTriangle, BookOpen, Gift, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const StudentInsightsTab = () => {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BookOpen, Sparkles, CheckCircle2, HelpCircle, UserCheck, Bookmark, ArrowRight, ArrowLeft, RefreshCw, Trophy } from 'lucide-react';
+import { BookOpen, Sparkles, CheckCircle2, HelpCircle, UserCheck, Bookmark, ArrowRight, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface NovelChapter {
