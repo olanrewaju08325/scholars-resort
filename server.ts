@@ -275,6 +275,44 @@ app.post('/api/test-smtp', async (req, res) => {
   }
 });
 
+// API Route: Groq AI Chat Proxy
+app.post('/api/groq-chat', async (req, res) => {
+  const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
+  const apiKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+
+  if (!apiKey) {
+    return res.status(400).json({ 
+      error: 'Groq API Key is not configured on server. Please set GROQ_API_KEY in environment variables or Admin AI Keys panel.' 
+    });
+  }
+
+  try {
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature,
+        max_tokens: 2048
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return res.status(response.status).json({ error: errorText });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Groq server communication failed.' });
+  }
+});
+
 // Vite middleware for development vs static for production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

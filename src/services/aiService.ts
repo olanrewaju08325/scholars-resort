@@ -4,9 +4,18 @@ import { errorTracker } from '../lib/errorTracker';
 // Cached API Key
 let cachedGroqKey: string | null = null;
 
+export const setLocalGroqApiKey = (key: string) => {
+  if (key && key.trim()) {
+    cachedGroqKey = key.trim();
+    localStorage.setItem('groq_api_key', key.trim());
+    return true;
+  }
+  return false;
+};
+
 export const getGroqApiKey = async (): Promise<string> => {
   // 1. Check local environment or localStorage
-  const envKey = import.meta.env.VITE_GROQ_API_KEY || localStorage.getItem('groq_api_key');
+  const envKey = import.meta.env.VITE_GROQ_API_KEY || localStorage.getItem('groq_api_key') || localStorage.getItem('groq_key');
   if (envKey && envKey.trim().length > 10) return envKey.trim();
 
   if (cachedGroqKey) return cachedGroqKey;
@@ -16,11 +25,11 @@ export const getGroqApiKey = async (): Promise<string> => {
     const { data } = await supabase
       .from('admin_settings')
       .select('setting_key, setting_value')
-      .in('setting_key', ['ai_api_keys', 'api_keys']);
+      .in('setting_key', ['ai_api_keys', 'api_keys', 'groq_api_key', 'ai_config']);
 
     if (data) {
       for (const row of data) {
-        const val = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key;
+        const val = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key || (typeof row.setting_value === 'string' ? row.setting_value : '');
         if (typeof val === 'string' && val.trim().length > 10) {
           cachedGroqKey = val.trim();
           localStorage.setItem('groq_api_key', cachedGroqKey);
@@ -31,6 +40,24 @@ export const getGroqApiKey = async (): Promise<string> => {
   } catch (err) {
     console.warn('Could not fetch Groq key from admin_settings:', err);
   }
+
+  try {
+    // 3. Check platform_config in Supabase
+    const { data: pConfig } = await supabase
+      .from('platform_config')
+      .select('value')
+      .eq('key', 'ai_settings')
+      .maybeSingle();
+
+    if (pConfig?.value?.groq_api_key || pConfig?.value?.groq) {
+      const val = pConfig.value.groq_api_key || pConfig.value.groq;
+      if (typeof val === 'string' && val.trim().length > 10) {
+        cachedGroqKey = val.trim();
+        localStorage.setItem('groq_api_key', cachedGroqKey);
+        return cachedGroqKey;
+      }
+    }
+  } catch {}
 
   // Fallback default development key or placeholder
   return import.meta.env.VITE_GROQ_API_KEY || '';
@@ -69,7 +96,7 @@ export const checkAITokenLimit = async (): Promise<{ allowed: boolean; remaining
   }
 };
 
-// Direct Groq API Execution with fallback to Supabase Edge Function
+// Direct Groq API Execution with fallback to Backend Proxy & Supabase Edge Function
 export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'llama-3.3-70b-versatile', temperature = 0.7): Promise<string> => {
   const apiKey = await getGroqApiKey();
 
@@ -79,6 +106,7 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     throw new Error(limitCheck.warning);
   }
 
+  // 1. If client has API key, call Groq directly
   if (apiKey) {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -95,58 +123,63 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
         })
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Groq API error (${response.status}): ${errorText}`);
+      if (response.ok) {
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+
+        if (content) {
+          // Log usage asynchronously
+          const promptTokens = data?.usage?.prompt_tokens || 100;
+          const completionTokens = data?.usage?.completion_tokens || 200;
+
+          try {
+            supabase.from('ai_usage').insert({
+              provider: 'groq',
+              feature: 'groq_inference',
+              prompt_tokens: promptTokens,
+              completion_tokens: completionTokens,
+              total_tokens: promptTokens + completionTokens,
+              created_at: new Date().toISOString()
+            }).then(() => {}, () => {});
+          } catch {}
+
+          return content;
+        }
       }
-
-      const data = await response.json();
-      const content = data?.choices?.[0]?.message?.content;
-
-      if (!content) throw new Error('Empty response from Groq API');
-
-      // Log usage to Supabase ai_usage table
-      const promptTokens = data?.usage?.prompt_tokens || 100;
-      const completionTokens = data?.usage?.completion_tokens || 200;
-
-      try {
-        supabase.from('ai_usage').insert({
-          provider: 'groq',
-          feature: 'groq_inference',
-          prompt_tokens: promptTokens,
-          completion_tokens: completionTokens,
-          total_tokens: promptTokens + completionTokens,
-          created_at: new Date().toISOString()
-        }).then(() => {}, () => {});
-      } catch {}
-
-      return content;
     } catch (err: any) {
-      console.warn('Direct Groq call failed, attempting Supabase Edge Function fallback:', err.message);
-      errorTracker.logError({
-        type: 'ai_error',
-        message: err.message,
-        component: 'callGroqAPI'
-      });
+      console.warn('Direct Groq call failed, trying server proxy...', err?.message);
     }
   }
 
-  // Fallback to Supabase Edge Function
+  // 2. Fallback to Server Proxy /api/groq-chat
+  try {
+    const proxyRes = await fetch('/api/groq-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, model, temperature })
+    });
+
+    if (proxyRes.ok) {
+      const proxyData = await proxyRes.json();
+      const proxyContent = proxyData?.choices?.[0]?.message?.content;
+      if (proxyContent) return proxyContent;
+    }
+  } catch (proxyErr) {
+    console.warn('Server proxy failed, trying edge function fallback:', proxyErr);
+  }
+
+  // 3. Fallback to Supabase Edge Function
   try {
     const { data, error } = await supabase.functions.invoke('ai-gateway', {
       body: { action: 'chat', payload: { messages } }
     });
 
-    if (error) throw error;
-    return data?.choices?.[0]?.message?.content || 'No AI response generated.';
-  } catch (edgeError: any) {
-    errorTracker.logError({
-      type: 'ai_error',
-      message: edgeError.message,
-      component: 'callGroqAPI (Edge Fallback)'
-    });
-    throw new Error(`AI Generation Error: Please set a valid Groq API Key in the Admin Panel (${edgeError.message})`);
+    if (!error && data?.text) return data.text;
+  } catch (edgeErr) {
+    console.warn('Edge function fallback failed:', edgeErr);
   }
+
+  throw new Error('Groq API Key is not configured. Please enter your Groq API key in Admin -> AI Provider Keys or set VITE_GROQ_API_KEY in your Netlify environment variables.');
 };
 
 export const generateAIQuestion = async (topic: string, difficulty: string): Promise<string> => {

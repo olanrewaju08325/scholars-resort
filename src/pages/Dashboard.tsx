@@ -22,6 +22,8 @@ import { PomodoroTimer } from '@/components/dashboard/PomodoroTimer';
 import { PerformanceTrendChart } from '@/components/dashboard/PerformanceTrendChart';
 import { SubjectMasteryRadarChart } from '@/components/SubjectMasteryRadarChart';
 import { JambScorePredictorCard } from '@/components/dashboard/JambScorePredictorCard';
+import { DailyStudyTip } from '@/components/dashboard/DailyStudyTip';
+import { StudyStreakCalendar } from '@/components/dashboard/StudyStreakCalendar';
 import { Badges } from '@/components/Badges';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Loader2 } from 'lucide-react';
@@ -65,8 +67,13 @@ export default function Dashboard() {
           <WelcomeHero profile={profile} stats={stats} />
         </motion.div>
 
+        {/* Daily High-Yield Study Tip Widget */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.04 }}>
+          <DailyStudyTip />
+        </motion.div>
+
         {/* JAMB Score Predictor */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.05 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }}>
           <JambScorePredictorCard history={stats.history} />
         </motion.div>
 
@@ -82,6 +89,11 @@ export default function Dashboard() {
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
               <QuickActions />
+            </motion.div>
+
+            {/* Visual Study Streak Calendar Component */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.18 }}>
+              <StudyStreakCalendar />
             </motion.div>
             
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>

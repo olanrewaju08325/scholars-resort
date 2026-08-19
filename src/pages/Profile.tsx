@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { User, Mail, Phone, CheckCircle2, ShieldCheck, Crown, BookOpen } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { Badges } from '@/components/Badges';
 
 export default function Profile() {
   const { profile, user } = useAuth();
@@ -189,6 +190,11 @@ export default function Profile() {
           </Card>
         </div>
 
+      </div>
+
+      {/* Badges & Achievements Section */}
+      <div className="pt-4">
+        <Badges />
       </div>
     </div>
   );

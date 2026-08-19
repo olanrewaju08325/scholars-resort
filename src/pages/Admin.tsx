@@ -39,6 +39,7 @@ import { WeeklyChallengesAdminTab } from './admin-tabs/WeeklyChallengesAdminTab'
 import { ContentStudioTab } from './admin-tabs/ContentStudioTab';
 import { PlatformHealthTab } from './admin-tabs/PlatformHealthTab';
 import { AIKeysTab } from './admin-tabs/AIKeysTab';
+import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
 
 export default function Admin() {
   const { profile, signOut } = useAuth();
@@ -89,6 +90,7 @@ export default function Admin() {
     { id: 'analytics', label: 'Analytics', icon: BarChart },
     { id: 'security', label: 'Security', icon: ShieldAlert },
     { id: 'students', label: 'Users & Guardians', icon: Users },
+    { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
     { id: 'subjects', label: 'Subjects & Topics', icon: BookOpen },
     { id: 'content-studio', label: 'Content Studio', icon: FileQuestion },
     { id: 'questions', label: 'Question Bank', icon: FileQuestion },
@@ -121,6 +123,7 @@ export default function Admin() {
       case 'analytics': return <AnalyticsTab />;
       case 'security': return <SecurityTab />;
       case 'students': return <StudentsTab />;
+      case 'literature': return <AdminLiteratureTab />;
       case 'subjects': return <SubjectsTab />;
       case 'content-studio': return <ContentStudioTab />;
       case 'questions': return <QuestionBankTab />;
