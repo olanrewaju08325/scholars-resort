@@ -36,30 +36,40 @@ export const SmartTutorChat = () => {
 
     const loadPerformanceAndData = async () => {
       try {
-        // Fetch recent exam scores
-        const { data: exams } = await supabase
-          .from('exam_sessions')
-          .select('score, total_questions, subject, created_at')
-          .eq('user_id', profile.id)
-          .order('created_at', { ascending: false })
-          .limit(10);
+        // Fetch recent exam scores with valid schema columns
+        let exams: any[] = [];
+        try {
+          const { data } = await supabase
+            .from('exam_sessions')
+            .select('score, total_questions, submitted_at, status')
+            .eq('user_id', profile.id)
+            .order('submitted_at', { ascending: false })
+            .limit(10);
+          if (data) exams = data;
+        } catch {}
 
         // Fetch user stats / weak areas if any
-        const { data: stats } = await supabase
-          .from('user_stats')
-          .select('*')
-          .eq('user_id', profile.id)
-          .maybeSingle();
+        let stats: any = null;
+        try {
+          const { data } = await supabase
+            .from('user_stats')
+            .select('*')
+            .eq('user_id', profile.id)
+            .maybeSingle();
+          stats = data;
+        } catch {}
 
-        // Fetch ingested study materials
-        const { data: materials } = await supabase
-          .from('content_ingestion_jobs')
-          .select('title, topics, summary')
-          .eq('user_id', profile.id)
-          .eq('status', 'completed')
-          .limit(5);
+        // Fetch ingested study materials if table exists
+        try {
+          const { data: materials } = await supabase
+            .from('content_ingestion_jobs')
+            .select('title, topics, summary')
+            .eq('user_id', profile.id)
+            .eq('status', 'completed')
+            .limit(5);
 
-        if (materials) setUploadedMaterials(materials);
+          if (materials) setUploadedMaterials(materials);
+        } catch {}
 
         const totalAttempts = exams?.length || 0;
         const avgScore = (totalAttempts > 0 && exams)

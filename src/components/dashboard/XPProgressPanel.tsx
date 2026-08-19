@@ -15,13 +15,15 @@ export const XPProgressPanel = () => {
 
   const fetchTransactions = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('xp_transactions')
-      .select('*')
-      .eq('user_id', profile!.id)
-      .order('created_at', { ascending: false })
-      .limit(5);
-    if (data) setTransactions(data);
+    try {
+      const { data, error } = await supabase
+        .from('xp_transactions')
+        .select('*')
+        .eq('user_id', profile!.id)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      if (!error && data) setTransactions(data);
+    } catch {}
     setLoading(false);
   };
 
