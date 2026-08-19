@@ -112,63 +112,72 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     throw new Error(limitCheck.warning);
   }
 
-  // 1. If client has API key, call Groq directly
+  const candidateModels = [model, 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama3-8b-8192', 'llama-3.3-70b-versatile', 'gemma2-9b-it'].filter((m, i, arr) => arr.indexOf(m) === i);
+
+  // 1. If client has API key, call Groq directly (with fallback models if 404)
   if (apiKey) {
-    try {
-      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-          model,
-          messages,
-          temperature,
-          max_tokens: 2048
-        })
-      });
+    for (const currentModel of candidateModels) {
+      try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey.trim()}`
+          },
+          body: JSON.stringify({
+            model: currentModel,
+            messages,
+            temperature,
+            max_tokens: 2048
+          })
+        });
 
-      if (response.ok) {
-        const data = await response.json();
-        const content = data?.choices?.[0]?.message?.content;
+        if (response.ok) {
+          const data = await response.json();
+          const content = data?.choices?.[0]?.message?.content;
 
-        if (content) {
-          // Log usage asynchronously
-          const promptTokens = data?.usage?.prompt_tokens || 100;
-          const completionTokens = data?.usage?.completion_tokens || 200;
+          if (content) {
+            // Log usage asynchronously
+            const promptTokens = data?.usage?.prompt_tokens || 100;
+            const completionTokens = data?.usage?.completion_tokens || 200;
 
-          try {
-            supabase.from('ai_usage').insert({
-              provider: 'groq',
-              feature: 'groq_inference',
-              prompt_tokens: promptTokens,
-              completion_tokens: completionTokens,
-              total_tokens: promptTokens + completionTokens,
-              created_at: new Date().toISOString()
-            }).then(() => {}, () => {});
-          } catch {}
+            try {
+              supabase.from('ai_usage').insert({
+                provider: 'groq',
+                feature: 'groq_inference',
+                prompt_tokens: promptTokens,
+                completion_tokens: completionTokens,
+                total_tokens: promptTokens + completionTokens,
+                created_at: new Date().toISOString()
+              }).then(() => {}, () => {});
+            } catch {}
 
-          return content;
+            return content;
+          }
+        } else if (response.status === 404) {
+          // Model not found on this key, continue to next candidate model
+          continue;
         }
+      } catch (err: any) {
+        console.warn(`Direct Groq call failed on ${currentModel}:`, err?.message);
       }
-    } catch (err: any) {
-      console.warn('Direct Groq call failed, trying server proxy...', err?.message);
     }
   }
 
-  // 2. Fallback to Server Proxy /api/groq-chat
+  // 2. Fallback to Server Proxy /api/groq-chat or /.netlify/functions/groq-chat
   try {
-    const proxyRes = await fetch('/api/groq-chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, model, temperature })
-    });
+    for (const proxyUrl of ['/api/groq-chat', '/.netlify/functions/groq-chat']) {
+      const proxyRes = await fetch(proxyUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages, model, temperature })
+      }).catch(() => null);
 
-    if (proxyRes.ok) {
-      const proxyData = await proxyRes.json();
-      const proxyContent = proxyData?.choices?.[0]?.message?.content;
-      if (proxyContent) return proxyContent;
+      if (proxyRes && proxyRes.ok) {
+        const proxyData = await proxyRes.json();
+        const proxyContent = proxyData?.choices?.[0]?.message?.content;
+        if (proxyContent) return proxyContent;
+      }
     }
   } catch (proxyErr) {
     console.warn('Server proxy failed, trying edge function fallback:', proxyErr);
@@ -179,13 +188,12 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     const { data, error } = await supabase.functions.invoke('ai-gateway', {
       body: { action: 'chat', payload: { messages } }
     });
-
-    if (!error && data?.text) return data.text;
+    if (!error && (data?.content || data?.text)) return data?.content || data?.text;
   } catch (edgeErr) {
     console.warn('Edge function fallback failed:', edgeErr);
   }
 
-  throw new Error('Groq API Key is not configured. Please enter your Groq API key in Admin -> AI Provider Keys or set VITE_GROQ_API_KEY in your Netlify environment variables.');
+  throw new Error('All Groq AI services and fallbacks are currently unreachable. Please verify your Groq API key in Admin -> AI Keys or set VITE_GROQ_API_KEY.');
 };
 
 export const generateAIQuestion = async (topic: string, difficulty: string): Promise<string> => {

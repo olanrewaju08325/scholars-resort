@@ -3,11 +3,21 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
-import { Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, ShieldCheck, History, Search, Download, FileSpreadsheet } from 'lucide-react';
+import { 
+  Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, 
+  ShieldCheck, History, Search, Download, FileSpreadsheet, AlertTriangle, 
+  Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info
+} from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
-import Papa from 'papaparse';
+import { 
+  parseQuestionsCsv, 
+  importQuestionsToDatabase, 
+  checkQuestionsWithAI, 
+  type ParsedQuestionItem, 
+  type CsvParseResult 
+} from '@/lib/csvQuestionParser';
 
 export const QuestionBankTab = () => {
   const [questions, setQuestions] = useState<any[]>([]);
@@ -324,6 +334,18 @@ export const QuestionBankTab = () => {
 
   const [csvPublishImmediately, setCsvPublishImmediately] = useState(true);
   const [csvStatusSummary, setCsvStatusSummary] = useState<string | null>(null);
+  
+  // Advanced CSV Import & Duplicate Inspection State
+  const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [parsedCsvResult, setParsedCsvResult] = useState<CsvParseResult | null>(null);
+  const [duplicateMode, setDuplicateMode] = useState<'skip' | 'allow'>('skip');
+  const [activePreviewTab, setActivePreviewTab] = useState<'valid' | 'duplicates' | 'errors'>('valid');
+  const [aiCheckingDuplicates, setAiCheckingDuplicates] = useState(false);
+  const [aiAnalysisResults, setAiAnalysisResults] = useState<{
+    flaggedDuplicates: Array<{ rowNumber: number; reason: string; similarityToRow?: number }>;
+    qualitySuggestions: Array<{ rowNumber: number; suggestion: string }>;
+  } | null>(null);
+  const [importStatusDetail, setImportStatusDetail] = useState<string>('');
 
   const downloadSampleCsv = () => {
     const sampleHeaders = "subject,topic,question,option_a,option_b,option_c,option_d,correct_answer,explanation,difficulty\n";
@@ -350,247 +372,109 @@ export const QuestionBankTab = () => {
 
     setCsvLoading(true);
     setCsvStatusSummary(null);
+    setAiAnalysisResults(null);
 
     try {
       const text = await file.text();
+      const result = await parseQuestionsCsv(text, { checkDbDuplicates: true });
+
+      if (result.totalRows === 0) {
+        toast.error('The uploaded CSV file contains no data rows.');
+        setCsvLoading(false);
+        return;
+      }
+
+      setParsedCsvResult(result);
+      setCsvModalOpen(true);
       
-      Papa.parse(text, {
-        header: true,
-        skipEmptyLines: 'greedy',
-        complete: async (results) => {
-          const rows = results.data as any[];
-          if (!rows || rows.length === 0) {
-            toast.error('No rows found in the uploaded CSV file.');
-            setCsvLoading(false);
-            return;
-          }
+      const totalDuplicates = result.duplicateQuestionsInFile.length + result.duplicateQuestionsInDb.length;
+      if (totalDuplicates > 0) {
+        toast.info(`CSV parsed: ${result.validQuestions.length} unique questions, ${totalDuplicates} duplicates identified.`);
+      } else {
+        toast.success(`CSV parsed: ${result.validQuestions.length} valid questions ready for import.`);
+      }
+    } catch (err: any) {
+      toast.error('CSV Parsing Error: ' + err.message);
+    } finally {
+      setCsvLoading(false);
+      e.target.value = '';
+    }
+  };
 
-          setImportTotal(rows.length);
-          setImportProgress(0);
-          
-          let successCount = 0;
-          let failCount = 0;
-          const failureReasons: string[] = [];
+  const handleRunAiDuplicateCheck = async () => {
+    if (!parsedCsvResult || parsedCsvResult.validQuestions.length === 0) return;
+    setAiCheckingDuplicates(true);
+    try {
+      const aiResults = await checkQuestionsWithAI(parsedCsvResult.validQuestions);
+      setAiAnalysisResults(aiResults);
+      if (aiResults.flaggedDuplicates.length > 0) {
+        toast.warning(`AI detected ${aiResults.flaggedDuplicates.length} potential duplicate or ambiguous question(s)!`);
+      } else {
+        toast.success('AI Question Quality & Duplicate Scan Passed! No semantic duplicates detected.');
+      }
+    } catch (err: any) {
+      toast.error('AI check notice: ' + err.message);
+    } finally {
+      setAiCheckingDuplicates(false);
+    }
+  };
 
-          // Pre-fetch latest subjects from DB to ensure fresh cache
-          const { data: latestSubjects } = await supabase.from('subjects').select('*');
-          const subjectsCache = new Map<string, any>();
-          (latestSubjects || []).forEach(s => {
-            subjectsCache.set(s.name.trim().toLowerCase(), s);
-          });
+  const handleConfirmAndImport = async () => {
+    if (!parsedCsvResult) return;
 
-          // Topics cache: "subjectId:topicName" -> topic object
-          const topicsCache = new Map<string, any>();
+    // Decide which questions to import based on duplicateMode
+    let questionsToIngest = [...parsedCsvResult.validQuestions];
+    if (duplicateMode === 'allow') {
+      questionsToIngest = [
+        ...parsedCsvResult.validQuestions,
+        ...parsedCsvResult.duplicateQuestionsInFile,
+        ...parsedCsvResult.duplicateQuestionsInDb
+      ];
+    }
 
-          const preparedPayloads: any[] = [];
+    if (questionsToIngest.length === 0) {
+      toast.error('No questions selected for import.');
+      return;
+    }
 
-          for (let index = 0; index < rows.length; index++) {
-            const row = rows[index];
-            const rowNum = index + 2; // Accounting for 1-based index and header
+    setCsvLoading(true);
+    setImportTotal(questionsToIngest.length);
+    setImportProgress(0);
+    setImportStatusDetail('Starting import...');
 
-            try {
-              // Expected headers variations
-              const subjectName = (row.subject || row.Subject || row['Subject Name'] || row.SUBJECT || '').trim();
-              const topicName = (row.topic || row.Topic || row['Topic Name'] || row.TOPIC || '').trim();
-              const questionText = (row.question || row.Question || row.question_text || row['Question Text'] || '').trim();
-              
-              const optA = (row.option_a || row.Option_A || row.optionA || row['Option A'] || row.a || row.A || '').trim();
-              const optB = (row.option_b || row.Option_B || row.optionB || row['Option B'] || row.b || row.B || '').trim();
-              const optC = (row.option_c || row.Option_C || row.optionC || row['Option C'] || row.c || row.C || '').trim();
-              const optD = (row.option_d || row.Option_D || row.optionD || row['Option D'] || row.d || row.D || '').trim();
-
-              const rawCorrect = (row.correct_answer || row.Correct_Answer || row.correctAnswer || row['Correct Answer'] || row.answer || row.Answer || '').trim();
-              const explanationText = (row.explanation || row.Explanation || row['Explanation'] || '').trim();
-              const diff = (row.difficulty || row.Difficulty || 'medium').trim().toLowerCase();
-
-              if (!subjectName) {
-                failCount++;
-                failureReasons.push(`Row ${rowNum}: Missing subject name`);
-                continue;
-              }
-
-              if (!questionText) {
-                failCount++;
-                failureReasons.push(`Row ${rowNum}: Missing question text`);
-                continue;
-              }
-
-              const options = [optA, optB, optC, optD];
-              const validOptions = options.filter(Boolean);
-              if (validOptions.length < 2) {
-                failCount++;
-                failureReasons.push(`Row ${rowNum}: At least 2 options are required`);
-                continue;
-              }
-
-              if (!rawCorrect) {
-                failCount++;
-                failureReasons.push(`Row ${rowNum}: Missing correct_answer`);
-                continue;
-              }
-
-              // 1. Resolve or Auto-Create Subject
-              const subKey = subjectName.toLowerCase();
-              let subj = subjectsCache.get(subKey);
-
-              if (!subj) {
-                // Check if already in database via query
-                const { data: foundSubj } = await supabase
-                  .from('subjects')
-                  .select('*')
-                  .ilike('name', subjectName)
-                  .maybeSingle();
-
-                if (foundSubj) {
-                  subj = foundSubj;
-                  subjectsCache.set(subKey, foundSubj);
-                } else {
-                  // Auto-create subject in database
-                  const subCode = subjectName.replace(/[^A-Za-z]/g, '').substring(0, 4).toUpperCase() || 'SUBJ';
-                  const subSlug = subjectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-                  const { data: newSubj, error: subCreateErr } = await supabase
-                    .from('subjects')
-                    .insert({
-                      name: subjectName,
-                      code: subCode,
-                      slug: subSlug,
-                      is_active: true
-                    })
-                    .select()
-                    .single();
-
-                  if (subCreateErr || !newSubj) {
-                    failCount++;
-                    failureReasons.push(`Row ${rowNum}: Could not create subject '${subjectName}'`);
-                    continue;
-                  }
-                  subj = newSubj;
-                  subjectsCache.set(subKey, newSubj);
-                }
-              }
-
-              // 2. Resolve or Auto-Create Topic if provided
-              let topId: string | null = null;
-              if (topicName && subj?.id) {
-                const topicKey = `${subj.id}:${topicName.toLowerCase()}`;
-                let topicObj = topicsCache.get(topicKey);
-
-                if (!topicObj) {
-                  const { data: foundTopic } = await supabase
-                    .from('topics')
-                    .select('*')
-                    .eq('subject_id', subj.id)
-                    .ilike('name', topicName)
-                    .maybeSingle();
-
-                  if (foundTopic) {
-                    topicObj = foundTopic;
-                    topicsCache.set(topicKey, foundTopic);
-                  } else {
-                    // Create topic under subject
-                    const { data: newTopic } = await supabase
-                      .from('topics')
-                      .insert({
-                        subject_id: subj.id,
-                        name: topicName,
-                        description: `UTME Syllabus for ${topicName}`
-                      })
-                      .select()
-                      .single();
-
-                    if (newTopic) {
-                      topicObj = newTopic;
-                      topicsCache.set(topicKey, newTopic);
-                    }
-                  }
-                }
-                if (topicObj) topId = topicObj.id;
-              }
-
-              // 3. Resolve Correct Answer text from A/B/C/D or direct text
-              let resolvedCorrect = rawCorrect;
-              const upperRaw = rawCorrect.toUpperCase();
-
-              if (upperRaw === 'A' || upperRaw === 'OPTION A' || upperRaw === 'OPTION_A' || upperRaw === '1') {
-                resolvedCorrect = optA || options[0];
-              } else if (upperRaw === 'B' || upperRaw === 'OPTION B' || upperRaw === 'OPTION_B' || upperRaw === '2') {
-                resolvedCorrect = optB || options[1];
-              } else if (upperRaw === 'C' || upperRaw === 'OPTION C' || upperRaw === 'OPTION_C' || upperRaw === '3') {
-                resolvedCorrect = optC || options[2];
-              } else if (upperRaw === 'D' || upperRaw === 'OPTION D' || upperRaw === 'OPTION_D' || upperRaw === '4') {
-                resolvedCorrect = optD || options[3];
-              } else {
-                // If it's already full text, ensure it matches one of the options
-                const exactMatch = options.find(o => o.toLowerCase() === rawCorrect.toLowerCase());
-                if (exactMatch) {
-                  resolvedCorrect = exactMatch;
-                }
-              }
-
-              preparedPayloads.push({
-                subject_id: subj.id,
-                topic_id: topId,
-                question_text: questionText,
-                options,
-                correct_answer: resolvedCorrect,
-                explanation: explanationText,
-                difficulty: ['easy', 'medium', 'hard'].includes(diff) ? diff : 'medium',
-                is_active: csvPublishImmediately
-              });
-
-            } catch (rowErr: any) {
-              failCount++;
-              failureReasons.push(`Row ${rowNum}: ${rowErr.message || 'Formatting error'}`);
-            }
-          }
-
-          // Batch insert in chunks of 50 for high performance
-          const chunkSize = 50;
-          for (let i = 0; i < preparedPayloads.length; i += chunkSize) {
-            const chunk = preparedPayloads.slice(i, i + chunkSize);
-            const { error: insertError } = await supabase.from('questions').insert(chunk);
-
-            if (insertError) {
-              // Fallback to inserting one by one to isolate any single bad row
-              for (const singleItem of chunk) {
-                const { error: singleErr } = await supabase.from('questions').insert(singleItem);
-                if (singleErr) {
-                  failCount++;
-                  failureReasons.push(`Question error: ${singleErr.message}`);
-                } else {
-                  successCount++;
-                }
-              }
-            } else {
-              successCount += chunk.length;
-            }
-
-            setImportProgress(Math.min(rows.length, (i + chunkSize)));
-          }
-
-          const statusText = `Imported ${successCount} questions successfully (${csvPublishImmediately ? 'Published / Active' : 'Draft mode'}). ${failCount > 0 ? `${failCount} skipped/failed.` : ''}`;
-          setCsvStatusSummary(statusText);
-
-          if (successCount > 0) {
-            toast.success(`CSV Import Complete: ${successCount} questions saved!`);
-          } else {
-            toast.error(`CSV Import Failed: 0 questions imported. ${failureReasons[0] || 'Please check file headers.'}`);
-          }
-
-          fetchData();
-          setCsvLoading(false);
-        },
-        error: (error: any) => {
-          toast.error('CSV Parse Error: ' + error.message);
-          setCsvLoading(false);
+    try {
+      const res = await importQuestionsToDatabase(questionsToIngest, {
+        publishImmediately: csvPublishImmediately,
+        duplicateHandling: duplicateMode,
+        onProgress: (processed, total, status) => {
+          setImportProgress(processed);
+          setImportStatusDetail(status);
         }
       });
-    } catch(err: any) {
-      toast.error('File Read Error: ' + err.message);
+
+      const skippedDuplicates = duplicateMode === 'skip' 
+        ? (parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length)
+        : 0;
+
+      const summary = `Successfully imported ${res.successCount} questions (${csvPublishImmediately ? 'Published / Live' : 'Drafts'}). ${
+        res.createdSubjects.length > 0 ? `Created subjects: ${res.createdSubjects.join(', ')}. ` : ''
+      }${skippedDuplicates > 0 ? `Safely skipped ${skippedDuplicates} duplicate(s). ` : ''}${
+        res.failedCount > 0 ? `${res.failedCount} rows failed.` : ''
+      }`;
+
+      setCsvStatusSummary(summary);
+      toast.success(`Import complete! ${res.successCount} questions saved to database.`);
+
+      setCsvModalOpen(false);
+      setParsedCsvResult(null);
+      await fetchData();
+    } catch (err: any) {
+      toast.error('Import Failed: ' + err.message);
+    } finally {
       setCsvLoading(false);
-    } 
-    
-    e.target.value = '';
+      setImportProgress(0);
+      setImportTotal(0);
+    }
   };
 
   return (
@@ -711,10 +595,10 @@ export const QuestionBankTab = () => {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <FileSpreadsheet className="w-5 h-5 text-blue-400" />
-                Bulk Question Importer (CSV)
+                Bulk Question Importer & AI Duplicate Detector (CSV)
               </CardTitle>
               <CardDescription className="text-slate-400">
-                Upload CSV files with questions. Subjects and topics not yet in the system are automatically created on the fly.
+                Upload CSV files with questions. Automatic subject/topic auto-registration, flexible column mapping, and AI duplicate detection.
               </CardDescription>
             </div>
             <Button 
@@ -739,11 +623,11 @@ export const QuestionBankTab = () => {
                   className="w-4 h-4 rounded accent-primary cursor-pointer" 
                 />
                 <label htmlFor="csvPublishImmediately" className="text-xs sm:text-sm font-medium text-slate-200 cursor-pointer">
-                  Publish Immediately as Active (Live for Students & CBT)
+                  Publish Immediately as Active (Live for Students & CBT Exams)
                 </label>
               </div>
               <span className="text-[11px] text-slate-400 font-mono">
-                Accepted: .csv (A/B/C/D or text answers)
+                Auto-matches: A/B/C/D, direct text, multi-case headers
               </span>
             </div>
 
@@ -760,7 +644,7 @@ export const QuestionBankTab = () => {
                 <div className="flex flex-col gap-2 p-3 bg-slate-950/80 rounded-xl border border-blue-900/40">
                   <div className="flex justify-between text-xs text-blue-400 font-semibold">
                     <span className="flex items-center gap-1.5">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Processing & Saving Questions...
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> {importStatusDetail || 'Processing questions...'}
                     </span>
                     <span>{importProgress} / {importTotal}</span>
                   </div>
@@ -892,6 +776,325 @@ export const QuestionBankTab = () => {
            </div>
         </CardContent>
       </Card>
+
+      {/* CSV Review & Duplicate Inspection Modal */}
+      {csvModalOpen && parsedCsvResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto">
+          <Card className="w-full max-w-4xl bg-slate-900 border-slate-800 text-slate-100 max-h-[90vh] flex flex-col shadow-2xl rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <CardHeader className="border-b border-slate-800 flex flex-row items-center justify-between sticky top-0 bg-slate-900 z-10 p-5">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400">
+                  <FileSpreadsheet className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg">CSV Review & Duplicate Intelligence</CardTitle>
+                  <CardDescription className="text-slate-400 text-xs">
+                    Sanitized mapping, duplicate inspection, and auto-registration engine.
+                  </CardDescription>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" onClick={() => setCsvModalOpen(false)} className="text-slate-400 hover:text-slate-100">
+                <XCircle className="w-5 h-5" />
+              </Button>
+            </CardHeader>
+
+            <CardContent className="overflow-y-auto p-5 space-y-5 flex-1">
+              {/* Summary Stats Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3 bg-slate-950/80 border border-slate-800 rounded-xl">
+                  <div className="text-[11px] text-slate-400 uppercase font-semibold">Total Parsed</div>
+                  <div className="text-xl font-bold text-slate-100 mt-0.5">{parsedCsvResult.totalRows}</div>
+                  <div className="text-[10px] text-slate-500">Rows in CSV</div>
+                </div>
+
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl">
+                  <div className="text-[11px] text-emerald-400 uppercase font-semibold flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Unique Valid
+                  </div>
+                  <div className="text-xl font-bold text-emerald-400 mt-0.5">
+                    {parsedCsvResult.validQuestions.length}
+                  </div>
+                  <div className="text-[10px] text-emerald-500/80">Ready for ingest</div>
+                </div>
+
+                <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                  <div className="text-[11px] text-amber-400 uppercase font-semibold flex items-center gap-1">
+                    <Copy className="w-3 h-3" /> Duplicates
+                  </div>
+                  <div className="text-xl font-bold text-amber-400 mt-0.5">
+                    {parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length}
+                  </div>
+                  <div className="text-[10px] text-amber-500/80">
+                    {parsedCsvResult.duplicateQuestionsInFile.length} file / {parsedCsvResult.duplicateQuestionsInDb.length} DB
+                  </div>
+                </div>
+
+                <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                  <div className="text-[11px] text-rose-400 uppercase font-semibold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" /> Errors / Skipped
+                  </div>
+                  <div className="text-xl font-bold text-rose-400 mt-0.5">
+                    {parsedCsvResult.failedRows.length}
+                  </div>
+                  <div className="text-[10px] text-rose-500/80">Malformed rows</div>
+                </div>
+              </div>
+
+              {/* Detected Subjects & Auto Registration Alert */}
+              <div className="p-3 bg-blue-950/30 border border-blue-800/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <Info className="w-4 h-4 text-blue-400 shrink-0" />
+                  <div>
+                    <span className="text-slate-300 font-medium">Subjects Detected: </span>
+                    <span className="text-blue-300 font-semibold">{parsedCsvResult.detectedSubjects.join(', ')}</span>
+                    <p className="text-slate-400 text-[11px]">Unregistered subjects and topics will be automatically provisioned in database schema.</p>
+                  </div>
+                </div>
+
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  variant="outline" 
+                  disabled={aiCheckingDuplicates || parsedCsvResult.validQuestions.length === 0} 
+                  onClick={handleRunAiDuplicateCheck}
+                  className="bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border-purple-800/60 text-xs shrink-0 gap-1.5 h-8"
+                >
+                  {aiCheckingDuplicates ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                  )}
+                  AI Duplicate Deep Scan
+                </Button>
+              </div>
+
+              {/* AI Deep Scan Feedback */}
+              {aiAnalysisResults && (
+                <div className="p-3.5 bg-purple-950/30 border border-purple-800/50 rounded-xl space-y-2 text-xs animate-in fade-in">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-purple-300 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" /> AI Semantic Analysis Results
+                    </span>
+                    <span className="text-[11px] text-purple-400/80 font-mono">
+                      {aiAnalysisResults.flaggedDuplicates.length} potential duplicate stems flagged
+                    </span>
+                  </div>
+                  {aiAnalysisResults.flaggedDuplicates.length === 0 ? (
+                    <p className="text-emerald-400 text-xs">✓ No semantic duplicates found. All question stems appear distinct.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {aiAnalysisResults.flaggedDuplicates.map((flag, idx) => (
+                        <div key={idx} className="p-2 bg-purple-900/20 rounded border border-purple-800/30 text-purple-200 text-xs flex items-center justify-between">
+                          <span>Row {flag.rowNumber}: {flag.reason}</span>
+                          {flag.similarityToRow && <span className="text-[10px] text-purple-400">Similar to Row {flag.similarityToRow}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Import Options & Duplicate Mode */}
+              <div className="p-3.5 bg-slate-950/70 border border-slate-800 rounded-xl space-y-3">
+                <div className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Ingestion Preferences</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                  <div>
+                    <label className="text-slate-400 block mb-1 font-medium">Duplicate Handling Policy</label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDuplicateMode('skip')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
+                          duplicateMode === 'skip'
+                            ? 'bg-primary/20 border-primary text-primary-foreground'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Skip Duplicates (Recommended)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDuplicateMode('allow')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
+                          duplicateMode === 'allow'
+                            ? 'bg-amber-500/20 border-amber-500 text-amber-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Import All (Allow Duplicates)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-4 sm:pt-0">
+                    <input
+                      type="checkbox"
+                      id="modalPublishImm"
+                      checked={csvPublishImmediately}
+                      onChange={e => setCsvPublishImmediately(e.target.checked)}
+                      className="w-4 h-4 rounded accent-primary cursor-pointer"
+                    />
+                    <label htmlFor="modalPublishImm" className="text-xs text-slate-200 cursor-pointer">
+                      Publish immediately as Active (Live for students in CBT mocks)
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Interactive Tabs for Preview */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setActivePreviewTab('valid')}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                        activePreviewTab === 'valid'
+                          ? 'bg-slate-800 text-emerald-400 font-semibold'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Valid Questions ({parsedCsvResult.validQuestions.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActivePreviewTab('duplicates')}
+                      className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                        activePreviewTab === 'duplicates'
+                          ? 'bg-slate-800 text-amber-400 font-semibold'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      Duplicates ({parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length})
+                    </button>
+                    {parsedCsvResult.failedRows.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setActivePreviewTab('errors')}
+                        className={`text-xs font-medium px-3 py-1.5 rounded-md transition-all ${
+                          activePreviewTab === 'errors'
+                            ? 'bg-slate-800 text-rose-400 font-semibold'
+                            : 'text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Errors ({parsedCsvResult.failedRows.length})
+                      </button>
+                    )}
+                  </div>
+                  <span className="text-[11px] text-slate-500 font-mono">
+                    Showing first 50 rows
+                  </span>
+                </div>
+
+                {/* Tab: Valid Questions */}
+                {activePreviewTab === 'valid' && (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {parsedCsvResult.validQuestions.length === 0 ? (
+                      <div className="text-center py-6 text-slate-500 text-xs">No unique valid questions in file.</div>
+                    ) : (
+                      parsedCsvResult.validQuestions.slice(0, 50).map((q, idx) => (
+                        <div key={idx} className="p-3 bg-slate-950/60 rounded-lg border border-slate-800/80 text-xs space-y-1.5 hover:border-slate-700 transition-colors">
+                          <div className="flex items-center justify-between text-slate-400 text-[11px]">
+                            <span className="font-semibold text-blue-400">{q.subjectName} {q.topicName ? `• ${q.topicName}` : ''}</span>
+                            <span className="px-1.5 py-0.5 rounded bg-slate-800 font-mono text-[10px] uppercase">{q.difficulty}</span>
+                          </div>
+                          <p className="text-slate-200 font-medium">{q.questionText}</p>
+                          <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-400 pt-1">
+                            {q.options.map((opt, oIdx) => (
+                              <div key={oIdx} className={`px-2 py-1 rounded ${opt === q.correctAnswer ? 'bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20' : 'bg-slate-900/70'}`}>
+                                {String.fromCharCode(65 + oIdx)}) {opt}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Tab: Duplicates */}
+                {activePreviewTab === 'duplicates' && (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {[...parsedCsvResult.duplicateQuestionsInFile, ...parsedCsvResult.duplicateQuestionsInDb].length === 0 ? (
+                      <div className="text-center py-6 text-emerald-400 text-xs">✓ Zero duplicates found. All questions are unique!</div>
+                    ) : (
+                      [...parsedCsvResult.duplicateQuestionsInFile, ...parsedCsvResult.duplicateQuestionsInDb].slice(0, 50).map((q, idx) => (
+                        <div key={idx} className="p-3 bg-amber-950/20 rounded-lg border border-amber-800/40 text-xs space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span className="text-amber-400 font-semibold text-[11px]">
+                              {q.isDuplicateInFile ? '⚠️ Duplicate in File' : '⚠️ Already Exists in Database'}
+                            </span>
+                            <span className="text-slate-400 text-[11px]">Row {q.rowNumber}</span>
+                          </div>
+                          <p className="text-slate-300 font-medium">{q.questionText}</p>
+                          <div className="text-[11px] text-slate-400">
+                            Answer: <span className="text-emerald-400">{q.correctAnswer}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                )}
+
+                {/* Tab: Errors */}
+                {activePreviewTab === 'errors' && (
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {parsedCsvResult.failedRows.map((err, idx) => (
+                      <div key={idx} className="p-3 bg-rose-950/20 rounded-lg border border-rose-800/40 text-xs space-y-1 text-rose-300">
+                        <div className="font-semibold">Row {err.rowNumber}: {err.reason}</div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          Raw: {JSON.stringify(err.raw)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+
+            <div className="border-t border-slate-800 p-4 bg-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="text-xs text-slate-400">
+                {duplicateMode === 'skip' ? (
+                  <span>Will ingest <strong className="text-emerald-400">{parsedCsvResult.validQuestions.length}</strong> unique questions.</span>
+                ) : (
+                  <span>Will ingest <strong className="text-amber-400">{parsedCsvResult.validQuestions.length + parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length}</strong> questions (all).</span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                <Button 
+                  type="button" 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setCsvModalOpen(false)}
+                  disabled={csvLoading}
+                  className="text-slate-400 hover:text-slate-100 flex-1 sm:flex-none"
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  type="button" 
+                  size="sm" 
+                  onClick={handleConfirmAndImport} 
+                  disabled={csvLoading || (duplicateMode === 'skip' && parsedCsvResult.validQuestions.length === 0)}
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex-1 sm:flex-none gap-2"
+                >
+                  {csvLoading ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Ingesting ({importProgress}/{importTotal})...
+                    </>
+                  ) : (
+                    <>
+                      <CheckCheck className="w-4 h-4" /> 
+                      Confirm & Ingest ({duplicateMode === 'skip' ? parsedCsvResult.validQuestions.length : (parsedCsvResult.validQuestions.length + parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length)})
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+      )}
 
       {historyModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">

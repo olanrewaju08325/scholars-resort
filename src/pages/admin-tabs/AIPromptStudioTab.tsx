@@ -136,31 +136,44 @@ export const AIPromptStudioTab = () => {
       const key = await getGroqApiKey();
       if (!key) throw new Error("No Groq API Key found. Please save your Groq key in the AI Keys tab.");
 
-      const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${key}`
-        },
-        body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
-          messages: [{ role: 'user', content: 'Respond with "Groq Engine Online"' }],
-          max_tokens: 15
-        })
-      });
+      const trimmedKey = key.trim();
+      const testModels = [modelType, 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama-3.3-70b-versatile', 'llama3-8b-8192'].filter((m, i, arr) => arr.indexOf(m) === i);
+      let content = '';
+      let activeModel = '';
+
+      for (const m of testModels) {
+        try {
+          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${trimmedKey}`
+            },
+            body: JSON.stringify({
+              model: m,
+              messages: [{ role: 'user', content: 'Respond with "Groq Engine Online"' }],
+              max_tokens: 15
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            content = data?.choices?.[0]?.message?.content || 'Groq Active';
+            activeModel = m;
+            break;
+          }
+        } catch {}
+      }
 
       const latency = Date.now() - startTime;
-      if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
-
-      const data = await res.json();
-      const content = data?.choices?.[0]?.message?.content || 'Groq Active';
+      if (!content) throw new Error('Groq key test failed across all candidate models.');
       
       setGroqStatus({
         ok: true,
         latency,
-        msg: content
+        msg: `${content} (${activeModel})`
       });
-      toast.success(`Groq API key verified! Reply: "${content}" (${latency}ms)`);
+      toast.success(`Groq API verified via ${activeModel}! Reply: "${content}" (${latency}ms)`);
     } catch (err: any) {
       setGroqStatus({ ok: false, msg: err.message });
       toast.error(`Groq Key Test Failed: ${err.message}`);
@@ -344,8 +357,11 @@ export const AIPromptStudioTab = () => {
                       onChange={(e) => setModelType(e.target.value)} 
                       className="w-full h-10 bg-slate-950 border border-slate-800 rounded-md px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
                     >
-                      <option value="llama-3.3-70b-versatile">Groq Llama 3.3 70B (Recommended)</option>
-                      <option value="llama-3.1-8b-instant">Groq Llama 3.1 8B (Fastest)</option>
+                      <option value="llama-3.1-8b-instant">Groq Llama 3.1 8B Instant (Ultra-Fast & Reliable)</option>
+                      <option value="llama-3.3-70b-versatile">Groq Llama 3.3 70B Versatile</option>
+                      <option value="llama3-70b-8192">Groq Llama 3 70B (8k)</option>
+                      <option value="llama3-8b-8192">Groq Llama 3 8B (8k)</option>
+                      <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill Llama 70B</option>
                       <option value="mixtral-8x7b-32768">Groq Mixtral 8x7B</option>
                       <option value="gemma2-9b-it">Groq Gemma 2 9B</option>
                     </select>

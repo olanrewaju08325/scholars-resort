@@ -32,71 +32,71 @@ export const testSMTPEmail = async (
       throw new Error('SMTP Host and Port are required.');
     }
 
-    const response = await fetch('/api/test-smtp', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        host: config.host,
-        port: config.port,
-        user: config.user,
-        pass: config.pass,
-        fromEmail: config.fromEmail || 'admitwise2@gmail.com',
-        testRecipient: recipientEmail
-      })
-    }).catch(() => null);
+    const payload = {
+      host: config.host,
+      port: config.port,
+      user: config.user,
+      pass: config.pass,
+      fromEmail: config.fromEmail || config.user || 'admitwise2@gmail.com',
+      testRecipient: recipientEmail,
+      subject: 'Scholars Resort - SMTP Diagnostic Verification Test',
+      html: `<div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 24px; border: 1px solid #4f46e5; border-radius: 12px; background: #ffffff;">
+        <h2 style="color: #4f46e5; margin-top: 0;">SMTP Verification Successful!</h2>
+        <p style="color: #334155; line-height: 1.5;">Your SMTP configuration for <strong>${config.host}:${config.port}</strong> was verified and delivered this live test email to <strong>${recipientEmail}</strong>.</p>
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #475569; margin-top: 16px;">
+          Timestamp: ${new Date().toLocaleString()}<br/>
+          From: ${config.fromEmail || config.user}<br/>
+          Host: ${config.host}:${config.port}
+        </div>
+      </div>`
+    };
 
-    if (!response) {
-      // Network fetch error or static hosting offline
-      const isValidHost = config.host.includes('.') && !config.host.endsWith('.cc');
-      return {
-        success: isValidHost,
-        latency: Date.now() - startTime,
-        message: isValidHost 
-          ? `SMTP Settings Validated (${config.host}:${config.port}). Direct email dispatch ready!` 
-          : `Invalid SMTP host format: ${config.host}`
-      };
-    }
+    // Try endpoints: /api/test-smtp, /api/send-email, /.netlify/functions/send-email
+    const endpoints = ['/api/test-smtp', '/.netlify/functions/send-email', '/api/send-email'];
+    let lastError = '';
 
-    const text = await response.text();
-    let data: any = {};
-    try {
-      data = JSON.parse(text);
-    } catch {
-      // Handle HTML 404 response on static deployments (e.g. Netlify/Vite static host)
-      const hostClean = config.host.trim().toLowerCase();
-      const isKnownProvider = hostClean.includes('gmail') || hostClean.includes('smtp') || hostClean.includes('mail');
-      const isValidPort = ['465', '587', '25', '2525'].includes(String(config.port).trim());
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      if (isKnownProvider && isValidPort) {
-        return {
-          success: true,
-          latency: Date.now() - startTime,
-          message: `SMTP Credentials verified for ${config.fromEmail || 'admitwise2@gmail.com'} (${config.host}:${config.port})!`
-        };
-      } else {
-        return {
-          success: false,
-          latency: Date.now() - startTime,
-          message: `Please check host (${config.host}) or port (${config.port}). Standard ports: 465 (SSL) or 587 (TLS).`
-        };
+        if (response.ok) {
+          const data = await response.json();
+          const latency = Date.now() - startTime;
+          if (data.success) {
+            return {
+              success: true,
+              latency: data.latency || latency,
+              message: data.message || `SMTP Connection Verified! Test email delivered to ${recipientEmail} (${latency}ms).`
+            };
+          } else {
+            lastError = data.message || data.error || 'SMTP delivery rejected by host';
+          }
+        } else {
+          const errData = await response.json().catch(() => null);
+          if (errData?.error || errData?.message) {
+            lastError = errData.error || errData.message;
+          }
+        }
+      } catch (endpointErr: any) {
+        lastError = endpointErr?.message || 'Connection error';
       }
     }
 
-    const latency = Date.now() - startTime;
-
-    if (response.ok && data.success) {
-      return {
-        success: true,
-        latency: data.latency || latency,
-        message: data.message || `SMTP Connection Verified!`
-      };
-    } else {
-      return {
-        success: false,
-        latency,
-        message: data.message || data.error || 'SMTP Connection Failed'
-      };
+    // Diagnostic hint for Gmail
+    let finalMsg = lastError || 'SMTP connection failed';
+    if (config.host.includes('gmail') && (finalMsg.toLowerCase().includes('password') || finalMsg.toLowerCase().includes('auth') || finalMsg.includes('535') || finalMsg.includes('534'))) {
+      finalMsg += ' (Note: Gmail requires a 16-character App Password from Google Account > Security > 2-Step Verification > App Passwords)';
     }
+
+    return {
+      success: false,
+      latency: Date.now() - startTime,
+      message: finalMsg
+    };
   } catch (err: any) {
     const latency = Date.now() - startTime;
     return {

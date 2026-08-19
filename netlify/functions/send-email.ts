@@ -37,6 +37,9 @@ export const handler = async (event: any) => {
       auth: {
         user: smtpUser,
         pass: smtpPass
+      },
+      tls: {
+        rejectUnauthorized: false
       }
     });
 

@@ -38,19 +38,31 @@ export const NotificationBell = () => {
     if (!user) return;
     fetchNotifications();
 
-    const channel = supabase.channel(`notif_${user.id}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'activity_logs',
-        filter: `user_id=eq.${user.id}`
-      }, (payload) => {
-        setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20));
-        setUnreadCount(c => c + 1);
-      })
-      .subscribe();
+    let channel: any = null;
+    try {
+      const channelId = `notif_${user.id}_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
+      channel = supabase.channel(channelId)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'activity_logs',
+          filter: `user_id=eq.${user.id}`
+        }, (payload) => {
+          setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20));
+          setUnreadCount(c => c + 1);
+        })
+        .subscribe();
+    } catch (err) {
+      console.warn('Realtime notifications notice:', err);
+    }
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { 
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {}
+      }
+    };
   }, [user]);
 
   // Close on outside click

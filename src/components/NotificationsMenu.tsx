@@ -29,15 +29,26 @@ export function NotificationsMenu() {
     if (profile?.id) {
       fetchNotifications();
       
-      // Subscribe to real-time notifications
-      const sub = supabase
-        .channel('notifications_channel')
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` }, () => {
-          fetchNotifications();
-        })
-        .subscribe();
+      let sub: any = null;
+      try {
+        const chanId = `notifications_${profile.id}_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
+        sub = supabase
+          .channel(chanId)
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${profile.id}` }, () => {
+            fetchNotifications();
+          })
+          .subscribe();
+      } catch (err) {
+        console.warn('Realtime notifications notice:', err);
+      }
 
-      return () => { supabase.removeChannel(sub); };
+      return () => { 
+        if (sub) {
+          try {
+            supabase.removeChannel(sub);
+          } catch {}
+        }
+      };
     }
   }, [profile, fetchNotifications]);
 
