@@ -197,8 +197,12 @@ export const QuestionBankTab = () => {
       "Delete Question",
       "Are you sure you want to permanently delete this question from the Question Bank?",
       async () => {
+        // Optimistic UI update
+        const prevQuestions = [...questions];
+        setQuestions(prev => prev.filter(q => q.id !== id));
+
         try {
-          // Clean up any dependent child records first
+          // Attempt cascade deletion of related records
           try {
             await supabase.from('exam_answers').delete().eq('question_id', id);
             await supabase.from('question_history').delete().eq('question_id', id);
@@ -206,14 +210,21 @@ export const QuestionBankTab = () => {
 
           const { error } = await supabase.from('questions').delete().eq('id', id);
           if (error) {
-            // Fallback: deactivate so it never appears in CBT exams
-            await supabase.from('questions').update({ is_active: false }).eq('id', id);
-            toast.success('Question removed and deactivated.');
+            console.warn('[QuestionBank] Hard delete restricted by foreign key or RLS, falling back to deactivation:', error);
+            // Fallback: deactivate so it never appears anywhere in CBT exams or practice
+            const { error: updateErr } = await supabase.from('questions').update({ is_active: false }).eq('id', id);
+            if (updateErr) {
+              setQuestions(prevQuestions);
+              toast.error('Failed to delete question: ' + (error.message || updateErr.message));
+              return;
+            }
+            toast.success('Question removed from active pool.');
           } else {
             toast.success('Question permanently deleted.');
           }
-          fetchData();
+          await fetchData();
         } catch (err: any) {
+          setQuestions(prevQuestions);
           toast.error(err?.message || 'Could not delete question');
         }
       },
@@ -222,8 +233,24 @@ export const QuestionBankTab = () => {
   };
 
   const toggleStatus = async (id: string, currentStatus: boolean) => {
-    await supabase.from('questions').update({ is_active: !currentStatus }).eq('id', id);
-    fetchData();
+    const nextStatus = !currentStatus;
+    // Optimistic UI update
+    setQuestions(prev => prev.map(q => q.id === id ? { ...q, is_active: nextStatus } : q));
+
+    try {
+      const { error } = await supabase.from('questions').update({ is_active: nextStatus }).eq('id', id);
+      if (error) {
+        // Rollback
+        setQuestions(prev => prev.map(q => q.id === id ? { ...q, is_active: currentStatus } : q));
+        toast.error('Failed to update question status: ' + error.message);
+        return;
+      }
+      toast.success(nextStatus ? 'Question published (Live in CBT)!' : 'Question unpublished (Draft mode).');
+      await fetchData();
+    } catch (err: any) {
+      setQuestions(prev => prev.map(q => q.id === id ? { ...q, is_active: currentStatus } : q));
+      toast.error('Error toggling status: ' + err.message);
+    }
   };
 
   const handleValidateQuality = async (q: any) => {

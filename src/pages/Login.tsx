@@ -52,7 +52,7 @@ const Login = () => {
       console.warn('Maintenance pre-check notice:', mErr);
     }
     
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: authData, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
@@ -68,9 +68,38 @@ const Login = () => {
       if (pendingCode) {
         navigate(`/guardian-connect?code=${pendingCode}`);
       } else {
-        // Support ?from= redirect — used by Pricing page when user is not logged in
+        // Fetch user profile role to route directly to designated dashboard
+        let targetRoute = '/dashboard';
+        const userMetaRole = authData?.user?.user_metadata?.role;
+        const isAdminEmail = cleanEmail === 'olanrewajuhamilot@gmail.com' || cleanEmail === 'admitwise2@gmail.com';
+
+        if (isAdminEmail) {
+          targetRoute = '/scholarresortadmin@benedict';
+        } else if (userMetaRole === 'guardian' || userMetaRole === 'parent') {
+          targetRoute = '/guardian';
+        } else {
+          try {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('role, onboarding_completed')
+              .eq('id', authData.user.id)
+              .maybeSingle();
+            
+            if (prof?.role === 'admin') {
+              targetRoute = '/scholarresortadmin@benedict';
+            } else if (prof?.role === 'guardian') {
+              targetRoute = '/guardian';
+            } else if (prof?.role === 'student' && prof?.onboarding_completed === false) {
+              targetRoute = '/onboarding';
+            }
+          } catch {
+            // fallback to default
+          }
+        }
+
+        // Support ?from= redirect if specified
         const fromPath = searchParams.get('from');
-        navigate(fromPath || '/dashboard');
+        navigate(fromPath || targetRoute);
       }
     }
     setLoading(false);
