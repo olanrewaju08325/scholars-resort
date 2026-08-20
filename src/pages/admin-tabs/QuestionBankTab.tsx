@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { 
   Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, 
   ShieldCheck, History, Search, Download, FileSpreadsheet, AlertTriangle, 
-  Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info
+  Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info, BookOpen, Send
 } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { toast } from 'sonner';
@@ -562,14 +562,14 @@ export const QuestionBankTab = () => {
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0 w-full">
         
         {/* Editor Form */}
-        <Card className="lg:col-span-2 bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="lg:col-span-2 bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle>{isEditing ? 'Edit Question' : 'Create Question'}</CardTitle>
-              <CardDescription className="text-slate-400">Add manual questions to the bank.</CardDescription>
+              <CardDescription className="text-muted-foreground">Add manual questions to the bank.</CardDescription>
             </div>
             {isEditing && (
                <Button variant="ghost" size="sm" onClick={resetForm}>Cancel Edit</Button>
@@ -578,81 +578,81 @@ export const QuestionBankTab = () => {
           <CardContent>
             {statusMsg && (
               <div className={`p-3 rounded mb-4 text-sm flex items-center gap-2 ${statusMsg.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-destructive/20 text-destructive'}`}>
-                {statusMsg.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                {statusMsg.type === 'success' ? <CheckCircle className="w-4 h-4 shrink-0" /> : <XCircle className="w-4 h-4 shrink-0" />}
                 {statusMsg.text}
               </div>
             )}
-            <form onSubmit={handleSave} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+            <form onSubmit={handleSave} className="space-y-4 min-w-0 w-full">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Subject</label>
-                  <select value={subjectId} onChange={e => setSubjectId(e.target.value)} required className="w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-sm text-slate-200">
-                    {subjects.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  <label className="text-sm font-medium text-foreground">Subject</label>
+                  <select value={subjectId} onChange={e => setSubjectId(e.target.value)} required className="w-full bg-muted/30 border border-border rounded-md p-2 text-sm text-foreground">
+                    {subjects.map(s => <option key={s.id} value={s.id} className="bg-popover text-popover-foreground">{s.name}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Topic (Optional)</label>
-                  <select value={topicId} onChange={e => setTopicId(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-sm text-slate-200">
-                    <option value="">None</option>
-                    {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  <label className="text-sm font-medium text-foreground">Topic (Optional)</label>
+                  <select value={topicId} onChange={e => setTopicId(e.target.value)} className="w-full bg-muted/30 border border-border rounded-md p-2 text-sm text-foreground">
+                    <option value="" className="bg-popover text-popover-foreground">None</option>
+                    {topics.map(t => <option key={t.id} value={t.id} className="bg-popover text-popover-foreground">{t.name}</option>)}
                   </select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Question Text</label>
+                <label className="text-sm font-medium text-foreground">Question Text</label>
                 <textarea 
                   required
                   value={qText} onChange={e => setQText(e.target.value)}
-                  className="w-full h-24 bg-slate-950 border border-slate-800 rounded-md p-3 text-sm text-slate-200 resize-none" 
+                  className="w-full h-24 bg-muted/30 border border-border rounded-md p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary" 
                   placeholder="Enter the question..."
                 ></textarea>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Option A</label>
-                  <Input required value={optA} onChange={e => setOptA(e.target.value)} className="bg-slate-950 border-slate-800" />
+                  <label className="text-xs text-muted-foreground">Option A</label>
+                  <Input required value={optA} onChange={e => setOptA(e.target.value)} className="bg-muted/30 border-border" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Option B</label>
-                  <Input required value={optB} onChange={e => setOptB(e.target.value)} className="bg-slate-950 border-slate-800" />
+                  <label className="text-xs text-muted-foreground">Option B</label>
+                  <Input required value={optB} onChange={e => setOptB(e.target.value)} className="bg-muted/30 border-border" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Option C</label>
-                  <Input required value={optC} onChange={e => setOptC(e.target.value)} className="bg-slate-950 border-slate-800" />
+                  <label className="text-xs text-muted-foreground">Option C</label>
+                  <Input required value={optC} onChange={e => setOptC(e.target.value)} className="bg-muted/30 border-border" />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-xs text-slate-400">Option D</label>
-                  <Input required value={optD} onChange={e => setOptD(e.target.value)} className="bg-slate-950 border-slate-800" />
+                  <label className="text-xs text-muted-foreground">Option D</label>
+                  <Input required value={optD} onChange={e => setOptD(e.target.value)} className="bg-muted/30 border-border" />
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 items-end">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                  <div className="space-y-2">
-                  <label className="text-sm font-medium text-green-400">Correct Answer</label>
-                  <select value={correctOption} onChange={e => setCorrectOption(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-sm text-slate-200">
-                    <option value="A">Option A</option>
-                    <option value="B">Option B</option>
-                    <option value="C">Option C</option>
-                    <option value="D">Option D</option>
+                  <label className="text-sm font-medium text-green-500">Correct Answer</label>
+                  <select value={correctOption} onChange={e => setCorrectOption(e.target.value)} className="w-full bg-muted/30 border border-border rounded-md p-2 text-sm text-foreground">
+                    <option value="A" className="bg-popover text-popover-foreground">Option A</option>
+                    <option value="B" className="bg-popover text-popover-foreground">Option B</option>
+                    <option value="C" className="bg-popover text-popover-foreground">Option C</option>
+                    <option value="D" className="bg-popover text-popover-foreground">Option D</option>
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Difficulty</label>
-                  <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-sm text-slate-200">
-                    <option value="easy">Easy</option>
-                    <option value="medium">Medium</option>
-                    <option value="hard">Hard</option>
+                  <label className="text-sm font-medium text-foreground">Difficulty</label>
+                  <select value={difficulty} onChange={e => setDifficulty(e.target.value)} className="w-full bg-muted/30 border border-border rounded-md p-2 text-sm text-foreground">
+                    <option value="easy" className="bg-popover text-popover-foreground">Easy</option>
+                    <option value="medium" className="bg-popover text-popover-foreground">Medium</option>
+                    <option value="hard" className="bg-popover text-popover-foreground">Hard</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Explanation (Optional)</label>
+                <label className="text-sm font-medium text-foreground">Explanation (Optional)</label>
                 <textarea 
                   value={explanation} onChange={e => setExplanation(e.target.value)}
-                  className="w-full h-16 bg-slate-950 border border-slate-800 rounded-md p-3 text-sm text-slate-200 resize-none" 
+                  className="w-full h-16 bg-muted/30 border border-border rounded-md p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary" 
                   placeholder="Explain why this answer is correct..."
                 ></textarea>
               </div>
@@ -660,11 +660,11 @@ export const QuestionBankTab = () => {
               <div className="flex items-center gap-4 pt-2">
                  <label className="flex items-center gap-2 cursor-pointer">
                    <input type="checkbox" checked={isActive} onChange={e => setIsActive(e.target.checked)} className="w-4 h-4 accent-primary" />
-                   <span className="text-sm">Publish Immediately (Active)</span>
+                   <span className="text-sm font-medium text-foreground">Publish Immediately (Active)</span>
                  </label>
               </div>
 
-              <Button type="submit" disabled={loading} className="w-full">
+              <Button type="submit" disabled={loading} className="w-full font-bold">
                 {loading ? 'Saving...' : (isEditing ? 'Update Question' : 'Save Question')}
               </Button>
             </form>
@@ -672,14 +672,14 @@ export const QuestionBankTab = () => {
         </Card>
 
         {/* Bulk Import Panel */}
-        <Card className="bg-slate-900 border-slate-800 text-slate-100 lg:col-span-3">
+        <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden lg:col-span-3">
           <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <FileSpreadsheet className="w-5 h-5 text-blue-400" />
+                <FileSpreadsheet className="w-5 h-5 text-blue-500 shrink-0" />
                 Bulk Question Importer & AI Duplicate Detector (CSV)
               </CardTitle>
-              <CardDescription className="text-slate-400">
+              <CardDescription className="text-muted-foreground">
                 Upload CSV files with questions. Automatic subject/topic auto-registration, flexible column mapping, and AI duplicate detection.
               </CardDescription>
             </div>
@@ -688,14 +688,14 @@ export const QuestionBankTab = () => {
               variant="outline" 
               size="sm" 
               onClick={downloadSampleCsv}
-              className="border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold gap-1.5 shrink-0"
+              className="text-xs font-semibold gap-1.5 shrink-0"
             >
               <Download className="w-3.5 h-3.5" />
               Download Sample CSV
             </Button>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 bg-slate-950/60 rounded-xl border border-slate-800">
+          <CardContent className="space-y-4 min-w-0 w-full">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 bg-muted/30 rounded-xl border border-border">
               <div className="flex items-center gap-2">
                 <input 
                   type="checkbox" 
@@ -704,11 +704,11 @@ export const QuestionBankTab = () => {
                   onChange={e => setCsvPublishImmediately(e.target.checked)} 
                   className="w-4 h-4 rounded accent-primary cursor-pointer" 
                 />
-                <label htmlFor="csvPublishImmediately" className="text-xs sm:text-sm font-medium text-slate-200 cursor-pointer">
+                <label htmlFor="csvPublishImmediately" className="text-xs sm:text-sm font-medium text-foreground cursor-pointer">
                   Publish Immediately as Active (Live for Students & CBT Exams)
                 </label>
               </div>
-              <span className="text-[11px] text-slate-400 font-mono">
+              <span className="text-[11px] text-muted-foreground font-mono">
                 Auto-matches: A/B/C/D, direct text, multi-case headers
               </span>
             </div>
@@ -719,18 +719,18 @@ export const QuestionBankTab = () => {
                 accept=".csv,text/csv" 
                 onChange={handleCsvUpload} 
                 disabled={csvLoading} 
-                className="bg-slate-950 border-slate-800 file:bg-primary file:text-primary-foreground file:font-semibold file:border-0 file:rounded-md file:px-3 file:py-1 hover:file:opacity-90 cursor-pointer" 
+                className="bg-muted/30 border-border file:bg-primary file:text-primary-foreground file:font-semibold file:border-0 file:rounded-md file:px-3 file:py-1 hover:file:opacity-90 cursor-pointer" 
               />
               
               {csvLoading && (
-                <div className="flex flex-col gap-2 p-3 bg-slate-950/80 rounded-xl border border-blue-900/40">
-                  <div className="flex justify-between text-xs text-blue-400 font-semibold">
+                <div className="flex flex-col gap-2 p-3 bg-blue-500/10 rounded-xl border border-blue-500/20">
+                  <div className="flex justify-between text-xs text-blue-500 font-semibold">
                     <span className="flex items-center gap-1.5">
                       <Loader2 className="w-3.5 h-3.5 animate-spin" /> {importStatusDetail || 'Processing questions...'}
                     </span>
                     <span>{importProgress} / {importTotal}</span>
                   </div>
-                  <div className="w-full bg-slate-800 h-2 rounded-full overflow-hidden">
+                  <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
                     <div 
                       className="bg-blue-500 h-full transition-all duration-300" 
                       style={{ width: `${importTotal > 0 ? Math.min(100, (importProgress / importTotal) * 100) : 0}%` }}
@@ -740,11 +740,11 @@ export const QuestionBankTab = () => {
               )}
 
               {csvStatusSummary && (
-                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-400 flex items-center justify-between">
+                <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-xs text-emerald-500 flex items-center justify-between">
                   <span>{csvStatusSummary}</span>
                   <button 
                     onClick={() => setCsvStatusSummary(null)} 
-                    className="text-slate-400 hover:text-slate-200 text-xs px-2"
+                    className="text-muted-foreground hover:text-foreground text-xs px-2"
                   >
                     Dismiss
                   </button>
@@ -755,31 +755,31 @@ export const QuestionBankTab = () => {
         </Card>
 
         {/* AI Generator Panel */}
-        <Card className="bg-slate-900 border-slate-800 text-slate-100 border-t-4 border-t-purple-500 h-fit">
+        <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden border-t-4 border-t-purple-500 h-fit">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-purple-400" /> AI Generator
+              <Sparkles className="w-5 h-5 text-purple-500 shrink-0" /> AI Generator
             </CardTitle>
-            <CardDescription className="text-slate-400">Generate draft questions instantly.</CardDescription>
+            <CardDescription className="text-muted-foreground">Generate draft questions instantly.</CardDescription>
           </CardHeader>
           <CardContent>
              <div className="space-y-4">
-               <div className="text-xs text-amber-400 bg-amber-500/10 p-2 rounded">
+               <div className="text-xs text-amber-500 bg-amber-500/10 p-2 rounded">
                  Note: AI questions are automatically placed into "Draft" mode for your review. They are not published automatically.
                </div>
                <div className="space-y-2">
-                <label className="text-sm font-medium">Topic / Concept</label>
-                <Input value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="e.g. Newton's Laws" className="bg-slate-950 border-slate-800" />
+                <label className="text-sm font-medium text-foreground">Topic / Concept</label>
+                <Input value={aiTopic} onChange={e => setAiTopic(e.target.value)} placeholder="e.g. Newton's Laws" className="bg-muted/30 border-border" />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Difficulty</label>
-                <select value={aiDifficulty} onChange={e => setAiDifficulty(e.target.value)} className="w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-sm text-slate-200">
-                  <option value="easy">Easy</option>
-                  <option value="medium">Medium</option>
-                  <option value="hard">Hard</option>
+                <label className="text-sm font-medium text-foreground">Difficulty</label>
+                <select value={aiDifficulty} onChange={e => setAiDifficulty(e.target.value)} className="w-full bg-muted/30 border border-border rounded-md p-2 text-sm text-foreground">
+                  <option value="easy" className="bg-popover text-popover-foreground">Easy</option>
+                  <option value="medium" className="bg-popover text-popover-foreground">Medium</option>
+                  <option value="hard" className="bg-popover text-popover-foreground">Hard</option>
                 </select>
               </div>
-              <Button onClick={handleAIGenerate} disabled={aiLoading || !aiTopic} className="w-full bg-purple-600 hover:bg-purple-700 text-white gap-2">
+              <Button onClick={handleAIGenerate} disabled={aiLoading || !aiTopic} className="w-full bg-purple-600 hover:bg-purple-700 text-white gap-2 font-bold">
                 {aiLoading ? 'Generating...' : <><Sparkles className="w-4 h-4" /> Draft Question</>}
               </Button>
              </div>
@@ -788,20 +788,20 @@ export const QuestionBankTab = () => {
       </div>
 
       {/* Questions List */}
-      <Card className="bg-slate-900 border-slate-800 text-slate-100">
-        <CardHeader className="flex flex-row items-center justify-between">
+      <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden">
+        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
            <div>
              <CardTitle>Question Bank Directory</CardTitle>
-             <CardDescription className="text-slate-400">Total Questions: {questions.length}</CardDescription>
+             <CardDescription className="text-muted-foreground">Total Questions: {questions.length}</CardDescription>
            </div>
-           <Button onClick={handlePublishAllDrafts} disabled={loading} className="bg-green-600 hover:bg-green-700">
+           <Button onClick={handlePublishAllDrafts} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white">
              <CheckCircle className="w-4 h-4 mr-2" /> Approve All Drafts
            </Button>
         </CardHeader>
-        <CardContent>
-           <div className="overflow-x-auto rounded-md border border-slate-800">
+        <CardContent className="min-w-0 w-full overflow-hidden">
+           <div className="overflow-x-auto rounded-md border border-border w-full">
              <table className="w-full text-sm text-left">
-              <thead className="bg-slate-800 text-slate-300">
+              <thead className="bg-muted text-muted-foreground font-medium">
                 <tr>
                   <th className="px-4 py-3 font-medium">Subject</th>
                   <th className="px-4 py-3 font-medium w-1/3">Question Preview</th>
@@ -811,34 +811,34 @@ export const QuestionBankTab = () => {
                   <th className="px-4 py-3 font-medium text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y divide-border">
                 {questions.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">No questions found.</td></tr>
+                  <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No questions found.</td></tr>
                 ) : questions.map(q => (
-                  <tr key={q.id} className="hover:bg-slate-800/50">
+                  <tr key={q.id} className="hover:bg-muted/50 transition-colors">
                     <td className="px-4 py-3">{q.subjects?.name}</td>
                     <td className="px-4 py-3 truncate max-w-[250px]" title={q.question_text}>{q.question_text}</td>
                     <td className="px-4 py-3">
                       {q.quality_score ? (
                         <div className="flex items-center gap-2">
-                          <span className={`font-mono ${q.quality_score >= 90 ? 'text-green-400' : 'text-amber-400'}`}>{q.quality_score}</span>
-                          {q.quality_score >= 90 && <ShieldCheck className="w-4 h-4 text-green-400" />}
+                          <span className={`font-mono ${q.quality_score >= 90 ? 'text-green-500' : 'text-amber-500'}`}>{q.quality_score}</span>
+                          {q.quality_score >= 90 && <ShieldCheck className="w-4 h-4 text-green-500" />}
                         </div>
                       ) : (
-                        <span className="text-slate-500 text-xs">Unrated</span>
+                        <span className="text-muted-foreground text-xs">Unrated</span>
                       )}
                     </td>
-                    <td className="px-4 py-3 font-mono text-slate-400">v{q.version_number || 1}</td>
+                    <td className="px-4 py-3 font-mono text-muted-foreground">v{q.version_number || 1}</td>
                     <td className="px-4 py-3">
-                       <span className={`px-2 py-1 text-xs rounded-full ${q.is_active ? 'bg-green-500/20 text-green-400' : 'bg-slate-600 text-slate-300'}`}>
+                       <span className={`px-2 py-1 text-xs rounded-full ${q.is_active ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
                          {q.is_active ? 'Published' : 'Draft'}
                        </span>
                     </td>
-                    <td className="px-4 py-3 text-right space-x-2">
-                      <Button size="icon" variant="ghost" className="text-purple-400 hover:text-purple-300 hover:bg-purple-400/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id} title="AI Validate Quality">
+                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                      <Button size="icon" variant="ghost" className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id} title="AI Validate Quality">
                         {validatingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
                       </Button>
-                      <Button size="icon" variant="ghost" className="text-blue-400 hover:text-blue-300 hover:bg-blue-400/10" onClick={() => viewHistory(q.id)} title="View History">
+                      <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)} title="View History">
                         <History className="w-4 h-4" />
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => toggleStatus(q.id, q.is_active)}>

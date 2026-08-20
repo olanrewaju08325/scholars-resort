@@ -212,61 +212,66 @@ export const aiCircuitBreaker = new AICircuitBreaker();
 
 // System prompt enforcing structured response formatting for student guidance
 const STRUCTURED_STUDENT_RESPONSE_SYSTEM_PROMPT = `You are a top Nigerian UTME/JAMB admissions counselor and expert academic tutor powered by Scholars Resort AI.
+
+CRITICAL RULE:
+1. DO NOT use any emojis (e.g. 👋, 🚀, 📊, 1️⃣, 2️⃣, 3️⃣, 📅, 🙌, etc.) under ANY circumstances. Use clean text, numbered lists (1., 2., 3.), bullet points, Markdown tables, and professional formatting only.
+2. Always keep responses professional, academic, clear, and structured.
+
 When responding to student performance data, study inquiries, or progress reviews, you MUST strictly structure your output with bold section headings, Markdown tables, and structured action items as shown below:
 
-**[Student Name], let’s look at the picture together and see what’s possible.**
+**[Student Name], let us review your academic standing and structured study pathway.**
 
 ---
 
-## 1️⃣ Where you stand today
+## 1. Where You Stand Today
 
-| Metric | Current value | What it tells us |
-|--------|---------------|------------------|
-| **Target score** | **[Target Score] / 400** | [Brief assessment] |
-| **Streak** | **[Streak] days** | [Motivation note] |
-| **Practice accuracy** | **[Accuracy]%** | [Performance evaluation] |
-| **Weak areas** | • [Weakness 1]<br>• [Weakness 2] | [Impact note] |
+| Metric | Current Value | Assessment |
+|--------|---------------|------------|
+| **Target Score** | **[Target Score] / 400** | [Brief assessment] |
+| **Study Streak** | **[Streak] days** | [Motivation note] |
+| **Practice Accuracy** | **[Accuracy]%** | [Performance evaluation] |
+| **Weak Areas** | [Weakness 1], [Weakness 2] | [Impact note] |
 
 ---
 
-## 2️⃣ What a [Target Score]-point score can realistically get you
+## 2. Realistic University Admission Targets
 
-| University (Public) | Typical JAMB Cut-off | Remarks |
-|----------------------|----------------------|---------|
+| University (Public) | Typical JAMB Cut-off | Admission Remarks |
+|----------------------|----------------------|-------------------|
 | **[University 1]** | [Cut-off range] | [Remark] |
 | **[University 2]** | [Cut-off range] | [Remark] |
 
 ---
 
-## 3️⃣ A step-by-step action plan to bridge the gap
+## 3. Step-by-Step Action Plan
 
-### 📅 Phase 1 – Foundations (Weeks 1-3)
-| Day | Activity | Time | Goal |
-|-----|----------|------|------|
-| 1-2 | Speed audit & diagnostic drill | 30 min | Identify exact seconds lost per question |
-| 3-5 | Core formula & rules sheet | 20 min | Reduce search time during exam |
-
----
-
-## 4️⃣ Speed-Boost Techniques
-
-| Technique | How to apply (30-second tip) |
-|-----------|------------------------------|
-| **"Read-Answer-Mark"** | Scan the question once and select immediately |
-| **Use the "5-second rule"** | Move on if stuck for over 5 seconds |
+### Phase 1: Core Foundations
+| Timeline | Activity | Time Allocation | Primary Goal |
+|----------|----------|-----------------|--------------|
+| Days 1-2 | Speed Audit & Diagnostic Drill | 30 minutes | Identify time lost per question |
+| Days 3-5 | Core Formula & Rules Review | 20 minutes | Reduce search time during exams |
 
 ---
 
-## 5️⃣ Monitoring Progress
+## 4. Speed-Boost Exam Techniques
 
-| Metric | How to track | Target |
-|--------|--------------|--------|
-| **Overall accuracy** | (Correct / Total) x 100 | **>= 60%** |
+| Technique | Application Method |
+|-----------|--------------------|
+| **Read-Answer-Mark** | Scan the question once and select the answer immediately. |
+| **The 5-Second Rule** | Skip and bookmark questions taking over 5 seconds on first pass. |
 
 ---
 
-## 6️⃣ Bottom-line encouragement
-- Clear, encouraging summary bullet points.
+## 5. Performance Tracking Metrics
+
+| Metric | Calculation Method | Benchmark Target |
+|--------|--------------------|------------------|
+| **Overall Accuracy** | (Correct Questions / Total Questions) x 100 | **>= 60%** |
+
+---
+
+## 6. Actionable Summary
+- Clear, encouraging summary bullet points without emojis.
 `;
 
 // Direct Groq API Execution using configured Groq API Key, Server Proxy, Supabase Edge Function, and Smart Local Heuristics
@@ -449,66 +454,66 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
   }
 
   // Admin-manual structured conversational reasoning output
-  return `**Learner, let’s look at the picture together and see what’s possible.**
+  return `**Learner, let us review your academic standing and structured study pathway.**
 
 ---
 
-## 1️⃣ Where you stand today
+## 1. Where You Stand Today
 
-| Metric | Current value | What it tells us |
-|--------|---------------|------------------|
-| **Target score** | **300 / 400** | This is a solid "good" band – opens doors to major federal & state universities paired with strong WAEC/NECO. |
-| **Streak** | **Active habit** | Consistency is the single biggest driver of score improvement in UTME. |
-| **Practice accuracy** | **Needs improvement** | Target lifting accuracy from current baseline to at least **55-60%** (220-240 correct answers). |
-| **Weak areas** | • General exam speed<br>• Complex calculations | Addressing these two areas converts missed easy marks into high-yield points. |
-
----
-
-## 2️⃣ What a 300-point score can realistically get you
-
-| University (Public) | Typical JAMB Cut-off | Remarks |
-|----------------------|----------------------|---------|
-| **Federal University of Tech, Akure (FUTA)** | 260-300 | Your target sits right at the top band; strong O-Level grades seal admission. |
-| **University of Ilorin / UNILAG** | 250-300 | Strong chance with 300+ and solid O-Level combination. |
-| **University of Benin (UNIBEN)** | 260-300 | Highly competitive engineering/sciences; 300 places you safely. |
+| Metric | Current Value | Assessment |
+|--------|---------------|------------|
+| **Target Score** | **300 / 400** | Competitive range for major public universities when paired with strong O-Level results. |
+| **Study Streak** | **Active habit** | Consistency is the primary factor driving score improvement in UTME. |
+| **Practice Accuracy** | **Needs Improvement** | Focus on increasing accuracy from current baseline to at least **55-60%** (220-240 correct questions). |
+| **Weak Areas** | General Exam Speed, Complex Calculations | Addressing speed and calculations secures high-yield points. |
 
 ---
 
-## 3️⃣ A step-by-step action plan to bridge the gap
+## 2. Realistic University Admission Targets
 
-### 📅 Phase 1 – Foundations (Weeks 1-3)
-| Day | Activity | Time | Goal |
-|-----|----------|------|------|
-| 1-2 | **Speed audit** – timed 30-question mixed set | 30 min | Identify exact seconds lost per question. |
-| 3-5 | **Core formula sheet** – write 1-page summaries per subject | 20 min | Reduce search time during exam. |
-| 6-7 | **Targeted drills** – calculation-heavy topics | 45 min | Build conceptual certainty first. |
-
----
-
-## 4️⃣ Speed-Boost Techniques (quick wins)
-
-| Technique | How to apply (30-second tip) |
-|-----------|------------------------------|
-| **"Read-Answer-Mark"** | Scan question once, select answer immediately, and log choice before re-reading. |
-| **Use the "5-second rule"** | If a question feels stuck, move on after 5 seconds and return during second pass. |
-| **Chunk calculations** | Write final equation first, then plug numbers in a single concise line. |
+| University (Public) | Typical JAMB Cut-off | Admission Remarks |
+|----------------------|----------------------|-------------------|
+| **Federal University of Tech, Akure (FUTA)** | 260-300 | Target score places you in top band; strong O-Level grades seal admission. |
+| **University of Ilorin / UNILAG** | 250-300 | Competitive standing with 300+ and solid O-Level combination. |
+| **University of Benin (UNIBEN)** | 260-300 | Highly competitive engineering and sciences; 300 provides safe margin. |
 
 ---
 
-## 5️⃣ Monitoring Progress
+## 3. Step-by-Step Action Plan
 
-| Metric | How to track | Target by Week 8 |
-|--------|--------------|-------------------|
-| **Overall accuracy** | (Correct ÷ Total) × 100 after each mock | **≥ 55%** (≈ 220/400) |
-| **Speed** | Average seconds per question | **≤ 60 sec** per question |
-| **Streak** | Daily CBT study calendar | **≥ 5-day** streak |
+### Phase 1: Core Foundations
+| Timeline | Activity | Time Allocation | Primary Goal |
+|----------|----------|-----------------|--------------|
+| Days 1-2 | **Speed Audit** - Timed 30-question mixed set | 30 minutes | Identify time lost per question. |
+| Days 3-5 | **Core Formula Sheet** - Summary per subject | 20 minutes | Reduce search time during exams. |
+| Days 6-7 | **Targeted Drills** - Calculation topics | 45 minutes | Build conceptual certainty first. |
 
 ---
 
-## 6️⃣ Bottom-line encouragement
-- **You have a clear target (300) and a realistic, structured pathway.**
+## 4. Speed-Boost Exam Techniques
+
+| Technique | Application Method |
+|-----------|--------------------|
+| **Read-Answer-Mark** | Scan question once, select answer immediately, and log choice before re-reading. |
+| **The 5-Second Rule** | If a question feels stuck, move on after 5 seconds and return during second pass. |
+| **Chunk Calculations** | Write final equation first, then plug numbers in a single concise line. |
+
+---
+
+## 5. Performance Tracking Metrics
+
+| Metric | Calculation Method | Benchmark Target |
+|--------|--------------------|------------------|
+| **Overall Accuracy** | (Correct Questions / Total Questions) x 100 | **>= 55%** (220/400) |
+| **Solving Speed** | Average seconds per question | **<= 60 seconds** |
+| **Study Streak** | Daily CBT study calendar | **>= 5-day streak** |
+
+---
+
+## 6. Actionable Summary
+- You have a clear target (300) and a realistic, structured pathway.
 - Speed and calculation errors are fixable skills that double with timed CBT drills.
-- Every focused drill brings you closer to your target university admission!`;
+- Every focused drill brings you closer to your target university admission.`;
 };
 
 export const generateAIQuestion = async (topic: string, difficulty: string): Promise<string> => {

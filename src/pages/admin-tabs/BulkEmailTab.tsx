@@ -112,25 +112,25 @@ export const BulkEmailTab = () => {
       </div>
 
       {activeTab === 'compose' ? (
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden">
           <CardHeader>
             <CardTitle>Compose Email</CardTitle>
-            <CardDescription className="text-slate-400">Emails will be dispatched via SMTP and published to student dashboards.</CardDescription>
+            <CardDescription className="text-muted-foreground">Emails will be dispatched via SMTP and published to student dashboards.</CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleSend} className="space-y-4">
+            <form onSubmit={handleSend} className="space-y-4 min-w-0 w-full">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Target Audience</label>
-                <div className="flex items-center gap-2 text-slate-400 bg-slate-950 border border-slate-800 rounded-md p-1 w-fit">
-                   <Users className="w-4 h-4 ml-2" />
+                <div className="flex items-center gap-2 text-muted-foreground bg-muted/50 border border-border rounded-md p-1 w-fit max-w-full">
+                   <Users className="w-4 h-4 ml-2 shrink-0" />
                    <select 
                       value={target} 
                       onChange={(e) => setTarget(e.target.value)} 
-                      className="bg-transparent border-none text-sm focus:ring-0 outline-none pr-4 text-slate-200"
+                      className="bg-transparent border-none text-sm focus:ring-0 outline-none pr-4 text-foreground cursor-pointer"
                     >
-                      <option value="all">All Registered Students</option>
-                      <option value="paid">Premium Students Only (Paid)</option>
-                      <option value="unpaid">Free Students Only (Unpaid)</option>
+                      <option value="all" className="bg-popover text-popover-foreground">All Registered Students</option>
+                      <option value="paid" className="bg-popover text-popover-foreground">Premium Students Only (Paid)</option>
+                      <option value="unpaid" className="bg-popover text-popover-foreground">Free Students Only (Unpaid)</option>
                     </select>
                 </div>
               </div>
@@ -140,7 +140,7 @@ export const BulkEmailTab = () => {
                   value={subject} 
                   onChange={(e) => setSubject(e.target.value)} 
                   placeholder="e.g. New Mock Exams Now Available!" 
-                  className="bg-slate-950 border-slate-800"
+                  className="bg-muted/30 border-border"
                   required
                 />
               </div>
@@ -150,7 +150,7 @@ export const BulkEmailTab = () => {
                   value={body} 
                   onChange={(e) => setBody(e.target.value)} 
                   placeholder="Dear Student,&#10;&#10;We are excited to announce our new UTME JAMB mock exams..." 
-                  className="w-full h-64 bg-slate-950 border border-slate-800 rounded-md p-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+                  className="w-full h-64 bg-muted/30 border border-border rounded-md p-3 text-sm focus:ring-1 focus:ring-primary outline-none text-foreground"
                   required
                 />
               </div>
@@ -164,29 +164,29 @@ export const BulkEmailTab = () => {
           </CardContent>
         </Card>
       ) : (
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden">
           <CardHeader>
             <CardTitle className="flex items-center gap-2"><History className="w-5 h-5 text-primary" /> Dispatch History</CardTitle>
-            <CardDescription className="text-slate-400">Log of all previously sent bulk communications.</CardDescription>
+            <CardDescription className="text-muted-foreground">Log of all previously sent bulk communications.</CardDescription>
           </CardHeader>
           <CardContent>
             {logs.length === 0 ? (
-               <div className="text-center py-8 text-slate-500">No email history found.</div>
+               <div className="text-center py-8 text-muted-foreground">No email history found.</div>
             ) : (
-              <div className="space-y-3">
+              <div className="space-y-3 min-w-0 w-full">
                 {logs.map(log => (
-                  <div key={log.id} className="p-4 bg-slate-950 border border-slate-800 rounded-lg flex flex-col md:flex-row justify-between gap-4">
-                     <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <CheckCircle className="w-4 h-4 text-green-500" />
-                          <span className="font-bold">{log.subject}</span>
-                          <span className="text-xs bg-slate-800 text-slate-300 px-2 py-0.5 rounded uppercase">Target: {log.target}</span>
+                  <div key={log.id} className="p-4 bg-muted/30 border border-border rounded-lg flex flex-col md:flex-row justify-between gap-4 min-w-0 w-full">
+                     <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
+                          <CheckCircle className="w-4 h-4 text-green-500 shrink-0" />
+                          <span className="font-bold text-foreground truncate">{log.subject}</span>
+                          <span className="text-xs bg-muted text-muted-foreground px-2 py-0.5 rounded uppercase font-medium">Target: {log.target}</span>
                         </div>
-                        <p className="text-sm text-slate-400 line-clamp-1">{log.message}</p>
+                        <p className="text-sm text-muted-foreground line-clamp-1">{log.message}</p>
                      </div>
                      <div className="text-right shrink-0">
-                       <div className="text-sm font-bold text-primary">{log.recipient_count || 1} Recipients</div>
-                       <div className="text-xs text-slate-500">{new Date(log.created_at).toLocaleString()}</div>
+                        <div className="text-sm font-bold text-primary">{log.recipient_count || 1} Recipients</div>
+                        <div className="text-xs text-muted-foreground">{new Date(log.created_at).toLocaleString()}</div>
                      </div>
                   </div>
                 ))}

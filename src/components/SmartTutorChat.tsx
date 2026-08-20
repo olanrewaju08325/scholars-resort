@@ -161,9 +161,10 @@ STUDENT PROFILE & DATA:
 ${uploadedMaterials.length > 0 ? `- Ingested Study Materials: ${uploadedMaterials.map(m => m.title + ' (' + (m.topics?.join(', ') || '') + ')').join('; ')}` : ''}
 
 INSTRUCTIONS:
-1. Always keep responses focused on Nigerian UTME/JAMB syllabus standards.
-2. Incorporate the student's performance data, weak topics, and target score into your explanations.
-3. Be clear, concise, and structured. Use step-by-step breakdowns for calculations or complex concepts.`
+1. CRITICAL RULE: DO NOT use any emojis (e.g. 👋, 🚀, 📊, 1️⃣, 2️⃣, 3️⃣, 📅, 🙌, etc.) under ANY circumstances. Use clean text, numbered lists (1., 2., 3.), bullet points, Markdown tables, and professional formatting only.
+2. Always keep responses professional, academic, clear, and focused on Nigerian UTME/JAMB syllabus standards.
+3. Incorporate the student's performance data, weak topics, and target score into your explanations.
+4. Use step-by-step breakdowns for calculations or complex concepts.`
       };
 
       const fullConversation = [systemContext, ...updatedMessages];

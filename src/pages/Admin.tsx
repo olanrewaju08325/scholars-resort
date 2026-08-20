@@ -7,7 +7,7 @@ import {
   Search, Bell, Plus, MessageSquare, Menu, Sparkles, Trophy,
   BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 
 // Sub-modules
@@ -237,9 +237,7 @@ export default function Admin() {
           </div>
           
           <div className="flex items-center gap-3 shrink-0">
-            <Button variant="outline" size="sm" className="hidden lg:flex gap-2">
-              <Plus className="w-4 h-4" /> Quick Action
-            </Button>
+            <ThemeToggle />
             <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
               <Bell className="w-5 h-5" />
               <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>

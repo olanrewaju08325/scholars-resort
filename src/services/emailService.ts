@@ -169,14 +169,18 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
 
     // Log in audit_logs
     if (user) {
-      await supabase.from('audit_logs').insert({
-        user_id: user.id,
-        action: `Sent Broadcast: ${payload.subject}`,
-        entity_type: 'communication',
-        entity_id: 'broadcast',
-        status: 'success',
-        created_at: new Date().toISOString()
-      }).catch(() => {});
+      try {
+        await supabase.from('audit_logs').insert({
+          user_id: user.id,
+          action: `Sent Broadcast: ${payload.subject}`,
+          entity_type: 'communication',
+          entity_id: 'broadcast',
+          status: 'success',
+          created_at: new Date().toISOString()
+        });
+      } catch (auditErr) {
+        console.warn('Audit log insert failed:', auditErr);
+      }
     }
 
     return {
