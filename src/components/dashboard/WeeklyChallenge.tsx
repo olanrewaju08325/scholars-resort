@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Swords, Trophy, CheckCircle, XCircle, Clock, Users, Sparkles } from 'lucide-react';
+import { callGroqAPI } from '@/services/aiService';
 
 export const WeeklyChallenge = () => {
   const { profile } = useAuth();
@@ -16,9 +17,145 @@ export const WeeklyChallenge = () => {
   const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState('');
 
+  const fetchChallenge = useCallback(async () => {
+    setLoading(true);
+    const now = new Date().toISOString().split('T')[0];
+    let userSubj = 'Use of English';
+
+    if (profile?.id) {
+      try {
+        const { data: userSubjs } = await supabase
+          .from('student_subjects')
+          .select('subjects(name)')
+          .eq('student_id', profile.id);
+
+        if (userSubjs && userSubjs.length > 0) {
+          const names = userSubjs.map((s: any) => s.subjects?.name).filter(Boolean);
+          if (names.length > 0) {
+            userSubj = names[Math.floor(Math.random() * names.length)];
+          }
+        }
+      } catch {}
+    }
+
+    try {
+      const { data: challenges } = await supabase
+        .from('weekly_challenges')
+        .select('*')
+        .eq('is_active', true)
+        .lte('week_start', now)
+        .gte('week_end', now)
+        .limit(1);
+
+      if (challenges && challenges.length > 0) {
+        const c = challenges[0];
+        setChallenge(c);
+
+        if (profile?.id) {
+          const { data: sub } = await supabase
+            .from('weekly_challenge_submissions')
+            .select('*')
+            .eq('challenge_id', c.id)
+            .eq('user_id', profile.id)
+            .maybeSingle();
+          if (sub) setSubmission(sub);
+        }
+
+        const { count } = await supabase
+          .from('weekly_challenge_submissions')
+          .select('*', { count: 'exact', head: true })
+          .eq('challenge_id', c.id);
+        setParticipantCount(count || 0);
+        setLoading(false);
+        return;
+      }
+
+      const prompt = `Generate 1 challenging JAMB UTME examination question for subject "${userSubj}". 
+Return strictly JSON object format without markdown block backticks:
+{
+  "question": "Clear, high-yield question string",
+  "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+  "answer": "A",
+  "explanation": "Detailed step-by-step reasoning."
+}`;
+
+      const aiResponse = await callGroqAPI([
+        { role: 'system', content: 'You are an expert JAMB UTME test writer.' },
+        { role: 'user', content: prompt }
+      ]);
+
+      if (aiResponse) {
+        try {
+          const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
+          const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : aiResponse);
+
+          if (parsed.question && Array.isArray(parsed.options) && parsed.answer) {
+            const nextSunday = new Date();
+            nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()));
+
+            setChallenge({
+              id: `ai_challenge_${userSubj.toLowerCase().replace(/\s+/g, '_')}_${now}`,
+              title: `AI Weekly High-Yield Challenge: ${userSubj}`,
+              subject: userSubj,
+              xp_reward: 100,
+              week_start: now,
+              week_end: nextSunday.toISOString().split('T')[0],
+              question_data: {
+                question: parsed.question,
+                options: parsed.options,
+                answer: String(parsed.answer).replace(/[^A-D]/g, '') || 'A',
+                explanation: parsed.explanation || 'Step-by-step solution based on JAMB UTME syllabus.'
+              }
+            });
+            setParticipantCount(18);
+            setLoading(false);
+            return;
+          }
+        } catch {}
+      }
+
+      const { data: qData } = await supabase
+        .from('questions')
+        .select('*, subjects(name)')
+        .eq('is_active', true)
+        .limit(10);
+
+      if (qData && qData.length > 0) {
+        const dbQ = qData[Math.floor(Math.random() * qData.length)];
+        const opts = typeof dbQ.options === 'string' ? JSON.parse(dbQ.options) : dbQ.options;
+        const nextSunday = new Date();
+        nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()));
+
+        setChallenge({
+          id: `db_challenge_${dbQ.id}`,
+          title: `UTME Master Challenge: ${dbQ.subjects?.name || userSubj}`,
+          subject: dbQ.subjects?.name || userSubj,
+          xp_reward: 100,
+          week_start: now,
+          week_end: nextSunday.toISOString().split('T')[0],
+          question_data: {
+            question: dbQ.question_text,
+            options: Array.isArray(opts) ? opts : ['A) Option 1', 'B) Option 2', 'C) Option 3', 'D) Option 4'],
+            answer: dbQ.correct_answer?.substring(0, 1)?.toUpperCase() || 'A',
+            explanation: dbQ.explanation || 'Detailed solution from question bank.'
+          }
+        });
+        setParticipantCount(25);
+        setLoading(false);
+        return;
+      }
+
+      setChallenge(null);
+    } catch {
+      setChallenge(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [profile?.id]);
+
   useEffect(() => {
     fetchChallenge();
-  }, []);
+  }, [fetchChallenge]);
 
   useEffect(() => {
     if (!challenge) return;
@@ -38,85 +175,6 @@ export const WeeklyChallenge = () => {
     }, 1000);
     return () => clearInterval(timer);
   }, [challenge]);
-
-  const fetchChallenge = async () => {
-    setLoading(true);
-    const now = new Date().toISOString().split('T')[0];
-    
-    try {
-      // Get active challenge
-      const { data: challenges, error } = await supabase
-        .from('weekly_challenges')
-        .select('*')
-        .eq('is_active', true)
-        .lte('week_start', now)
-        .gte('week_end', now)
-        .limit(1);
-
-      if (!error && challenges && challenges.length > 0) {
-        const c = challenges[0];
-        setChallenge(c);
-
-        // Get user submission
-        if (profile?.id) {
-          const { data: sub } = await supabase
-            .from('weekly_challenge_submissions')
-            .select('*')
-            .eq('challenge_id', c.id)
-            .eq('user_id', profile.id)
-            .maybeSingle();
-          
-          if (sub) setSubmission(sub);
-        }
-
-        // Get participant count
-        const { count } = await supabase
-          .from('weekly_challenge_submissions')
-          .select('*', { count: 'exact', head: true })
-          .eq('challenge_id', c.id);
-        
-        setParticipantCount(count || 0);
-      } else {
-        // Safe default fallback challenge
-        const nextSunday = new Date();
-        nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()));
-        setChallenge({
-          id: 'default_weekly_challenge',
-          title: 'JAMB Speed Master Challenge',
-          subject: 'Use of English',
-          xp_reward: 100,
-          week_start: now,
-          week_end: nextSunday.toISOString().split('T')[0],
-          question_data: {
-            question: 'Choose the option opposite in meaning to the italicized word: The manager made a *conciliatory* statement after the meeting.',
-            options: ['A) Antagonistic', 'B) Friendly', 'C) Peaceful', 'D) Helpful'],
-            answer: 'A',
-            explanation: 'Conciliatory means intended to placate or pacify. Antagonistic is the opposite.'
-          }
-        });
-        setParticipantCount(42);
-      }
-    } catch {
-      // Fallback
-      setChallenge({
-        id: 'default_weekly_challenge',
-        title: 'JAMB Speed Master Challenge',
-        subject: 'Use of English',
-        xp_reward: 100,
-        week_start: now,
-        week_end: new Date(Date.now() + 6 * 86400000).toISOString().split('T')[0],
-        question_data: {
-          question: 'Choose the option opposite in meaning to the italicized word: The manager made a *conciliatory* statement after the meeting.',
-          options: ['A) Antagonistic', 'B) Friendly', 'C) Peaceful', 'D) Helpful'],
-          answer: 'A',
-          explanation: 'Conciliatory means intended to placate or pacify. Antagonistic is the opposite.'
-        }
-      });
-      setParticipantCount(42);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleSubmit = async () => {
     if (!selectedAnswer || !challenge || !profile?.id) return;

@@ -221,11 +221,11 @@ export default function Admin() {
       )}
 
       {/* Main Content Area */}
-      <main className="flex-1 flex flex-col h-screen overflow-hidden bg-muted/20">
+      <main className="flex-1 flex flex-col h-screen overflow-hidden min-w-0 bg-muted/20">
         
         {/* Top Navbar */}
-        <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-background">
-          <div className="flex items-center gap-4 flex-1">
+        <header className="h-16 flex items-center justify-between px-6 border-b border-border bg-background min-w-0">
+          <div className="flex items-center gap-4 flex-1 min-w-0">
             <div className="relative w-full max-w-md hidden sm:block">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input 
@@ -236,7 +236,7 @@ export default function Admin() {
             </div>
           </div>
           
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 shrink-0">
             <Button variant="outline" size="sm" className="hidden lg:flex gap-2">
               <Plus className="w-4 h-4" /> Quick Action
             </Button>
@@ -251,7 +251,7 @@ export default function Admin() {
         </header>
         
         {/* Module Content */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto overflow-x-auto min-w-0 w-full p-4 md:p-8">
           {/* Breadcrumbs */}
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-6">
             <span>Admin</span>
@@ -259,7 +259,7 @@ export default function Admin() {
             <span className="text-foreground font-medium capitalize">{activeModule.replace('-', ' ')}</span>
           </div>
           
-          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-w-0 w-full">
             {renderModule()}
           </div>
         </div>

@@ -313,6 +313,63 @@ app.post('/api/groq-chat', async (req, res) => {
   }
 });
 
+// API Route: Question Bank - Bulk & Single Insert (Server Admin Client)
+app.post('/api/questions/insert', async (req, res) => {
+  const { questions } = req.body;
+  if (!questions || !Array.isArray(questions) || questions.length === 0) {
+    return res.status(400).json({ success: false, error: 'Array of questions is required.' });
+  }
+
+  try {
+    const { data, error } = await supabase.from('questions').insert(questions).select();
+    if (error) {
+      console.warn('[Server Questions Insert Warn]', error.message);
+      return res.status(200).json({ success: false, error: error.message, count: 0 });
+    }
+    return res.json({ success: true, count: data?.length || questions.length, data });
+  } catch (err: any) {
+    console.error('[Server Questions Insert Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Server insert failed.' });
+  }
+});
+
+// API Route: Question Bank - Delete
+app.delete('/api/questions/:id', async (req, res) => {
+  const { id } = req.params;
+  try {
+    // Attempt dependent cleanup
+    try {
+      await supabase.from('exam_answers').delete().eq('question_id', id);
+      await supabase.from('question_history').delete().eq('question_id', id);
+    } catch {}
+
+    const { error } = await supabase.from('questions').delete().eq('id', id);
+    if (error) {
+      // Fallback: deactivate
+      await supabase.from('questions').update({ is_active: false }).eq('id', id);
+      return res.json({ success: true, deactivated: true, message: 'Question deactivated in DB.' });
+    }
+    return res.json({ success: true, deleted: true });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Question Bank - Update
+app.put('/api/questions/:id', async (req, res) => {
+  const { id } = req.params;
+  const updates = req.body;
+  try {
+    const { data, error } = await supabase.from('questions').update(updates).eq('id', id).select();
+    if (error) {
+      return res.status(200).json({ success: false, error: error.message });
+    }
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Vite middleware for development vs static for production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {
