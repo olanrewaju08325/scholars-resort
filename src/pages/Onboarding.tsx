@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Target, BookOpen, Clock, ChevronRight, CheckCircle2, 
@@ -34,6 +34,19 @@ const Onboarding = () => {
   const navigate = useNavigate();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+
+  // Immediate role redirection - guardians and admins should never see student onboarding
+  useEffect(() => {
+    if (profile) {
+      if (profile.role === 'guardian') {
+        navigate('/guardian', { replace: true });
+      } else if (profile.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (profile.onboarding_completed) {
+        navigate('/dashboard', { replace: true });
+      }
+    }
+  }, [profile, navigate]);
   
   const [targetScore, setTargetScore] = useState('270');
   const [targetUni, setTargetUni] = useState('');

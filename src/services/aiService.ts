@@ -115,7 +115,7 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     }
   } catch {}
 
-  const candidateModels = [model, 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama-3.3-70b-versatile', 'llama3-8b-8192', 'gemma2-9b-it'].filter((m, i, arr) => arr.indexOf(m) === i);
+  const candidateModels = [model, 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'llama-3.2-3b-preview', 'llama-3.2-1b-preview'].filter((m, i, arr) => arr.indexOf(m) === i);
 
   // 1. If client has API key, call Groq directly
   if (apiKey && apiKey.length > 10) {

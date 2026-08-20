@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Power, ShieldAlert, Key, Mail, RefreshCw, Save, Send, CheckCircle2, AlertCircle, Zap, ShieldCheck } from 'lucide-react';
 import { testSMTPEmail } from '@/services/emailService';
+import { SMTPHealthCheck } from '@/components/admin/SMTPHealthCheck';
 
 export const SettingsTab = () => {
   const [maintenanceMode, setMaintenanceMode] = useState(false);
@@ -25,14 +26,11 @@ export const SettingsTab = () => {
   const [stripeKey, setStripeKey] = useState('');
   
   // SMTP Configuration
-  const [smtpHost, setSmtpHost] = useState('smtp.mailgun.org');
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
   const [smtpPort, setSmtpPort] = useState('587');
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPass, setSmtpPass] = useState('');
-  const [smtpFrom, setSmtpFrom] = useState('noreply@scholarsresort.com');
-  const [testRecipient, setTestRecipient] = useState('');
-  const [testingSmtp, setTestingSmtp] = useState(false);
-  const [smtpStatus, setSmtpStatus] = useState<{ ok?: boolean; latency?: number; msg?: string }>({});
+  const [smtpUser, setSmtpUser] = useState('admitwise2@gmail.com');
+  const [smtpPass, setSmtpPass] = useState('fliwopndlqxipara');
+  const [smtpFrom, setSmtpFrom] = useState('Scholars Resort <admitwise2@gmail.com>');
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -72,11 +70,11 @@ export const SettingsTab = () => {
       if (keys) {
         setPaystackKey(keys.paystack || '');
         setStripeKey(keys.stripe || '');
-        setSmtpHost(keys.smtp_host || 'smtp.mailgun.org');
-        setSmtpPort(keys.smtp_port || '587');
-        setSmtpUser(keys.smtp_user || '');
-        setSmtpPass(keys.smtp_pass || '');
-        setSmtpFrom(keys.smtp_from || 'noreply@scholarsresort.com');
+        if (keys.smtp_host) setSmtpHost(keys.smtp_host);
+        if (keys.smtp_port) setSmtpPort(keys.smtp_port);
+        if (keys.smtp_user) setSmtpUser(keys.smtp_user);
+        if (keys.smtp_pass) setSmtpPass(keys.smtp_pass);
+        if (keys.smtp_from) setSmtpFrom(keys.smtp_from);
       }
     }
     setLoading(false);
@@ -127,41 +125,12 @@ export const SettingsTab = () => {
     setSaving(false);
   };
 
-  const handleTestSMTP = async () => {
-    if (!smtpHost || !smtpPort) {
-      toast.error("Please provide SMTP Host and Port first.");
-      return;
-    }
-
-    setTestingSmtp(true);
-    setSmtpStatus({});
-    
-    try {
-      const recipient = testRecipient.trim() || 'test-admin@scholarsresort.com';
-      const result = await testSMTPEmail({
-        host: smtpHost,
-        port: smtpPort,
-        user: smtpUser,
-        pass: smtpPass,
-        fromEmail: smtpFrom
-      }, recipient);
-
-      setSmtpStatus({
-        ok: result.success,
-        latency: result.latency,
-        msg: result.message
-      });
-
-      if (result.success) {
-        toast.success(`SMTP Dispatch Verified! (${result.latency}ms)`);
-      } else {
-        toast.error(`SMTP Verification Failed: ${result.message}`);
-      }
-    } catch (err: any) {
-      setSmtpStatus({ ok: false, msg: err.message });
-      toast.error(`SMTP Test Error: ${err.message}`);
-    }
-    setTestingSmtp(false);
+  const handleApplyGmailPreset = () => {
+    setSmtpHost('smtp.gmail.com');
+    setSmtpPort('587');
+    if (!smtpUser) setSmtpUser('admitwise2@gmail.com');
+    if (!smtpFrom) setSmtpFrom('Scholars Resort <admitwise2@gmail.com>');
+    toast.info("Applied Google Gmail SMTP presets (smtp.gmail.com:587). Please ensure you enter your 16-character App Password.");
   };
 
   if (loading) return <div className="p-8 flex justify-center items-center h-64"><RefreshCw className="w-8 h-8 animate-spin text-primary" /></div>;
@@ -324,61 +293,27 @@ export const SettingsTab = () => {
         </div>
 
         <div className="space-y-6">
-          {/* SMTP Live Test Section */}
+          {/* SMTP Live Diagnostic Section */}
+          <SMTPHealthCheck 
+            currentConfig={{
+              host: smtpHost,
+              port: smtpPort,
+              user: smtpUser,
+              pass: smtpPass,
+              fromEmail: smtpFrom
+            }}
+            onApplyGmailPreset={handleApplyGmailPreset}
+          />
+
+          {/* SMTP Credentials & Server Settings */}
           <Card className="bg-slate-900 border-slate-800 text-slate-100">
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <div>
-                  <CardTitle className="flex items-center gap-2 text-amber-400">
-                    <Mail className="w-5 h-5" /> SMTP Mail Server & Dispatch Verification
-                  </CardTitle>
-                  <CardDescription className="text-slate-400">Configure Gmail SMTP or custom transactional email service.</CardDescription>
-                </div>
-                {smtpStatus.ok !== undefined && (
-                  <span className={`flex items-center gap-1 text-xs font-bold px-2 py-0.5 rounded ${smtpStatus.ok ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                    {smtpStatus.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
-                    {smtpStatus.ok ? `Online (${smtpStatus.latency}ms)` : 'Failed'}
-                  </span>
-                )}
-              </div>
+              <CardTitle className="flex items-center gap-2 text-amber-400">
+                <Mail className="w-5 h-5" /> SMTP Server & Authentication Credentials
+              </CardTitle>
+              <CardDescription className="text-slate-400">Configure Gmail SMTP or custom transactional email host credentials.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Quick Presets */}
-              <div className="flex items-center justify-between p-3 bg-slate-950/80 border border-slate-800 rounded-lg text-xs">
-                <div className="space-y-0.5">
-                  <span className="font-semibold text-slate-300">Quick Configuration Presets:</span>
-                  <p className="text-slate-500">Auto-fill verified SMTP host and ports</p>
-                </div>
-                <div className="flex gap-2">
-                  <Button 
-                    type="button"
-                    variant="outline" 
-                    size="sm"
-                    className="h-7 text-xs border-amber-500/40 hover:bg-amber-500/10 text-amber-300"
-                    onClick={() => {
-                      setSmtpHost('smtp.gmail.com');
-                      setSmtpPort('587');
-                      toast.info("Filled Gmail SMTP presets (smtp.gmail.com:587). Please provide your Gmail and App Password.");
-                    }}
-                  >
-                    Gmail (TLS 587)
-                  </Button>
-                  <Button 
-                    type="button"
-                    variant="outline" 
-                    size="sm"
-                    className="h-7 text-xs border-blue-500/40 hover:bg-blue-500/10 text-blue-300"
-                    onClick={() => {
-                      setSmtpHost('smtp.gmail.com');
-                      setSmtpPort('465');
-                      toast.info("Filled Gmail SSL presets (smtp.gmail.com:465).");
-                    }}
-                  >
-                    Gmail (SSL 465)
-                  </Button>
-                </div>
-              </div>
-
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">SMTP Host</label>
@@ -432,44 +367,15 @@ export const SettingsTab = () => {
                 />
               </div>
 
-              {/* Helpful Gmail Note */}
-              <div className="p-3 bg-amber-950/20 border border-amber-800/40 rounded-lg text-xs text-amber-300 space-y-1">
-                <p className="font-semibold flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-400" /> Gmail SMTP Requirement:
-                </p>
-                <p className="text-slate-400">
-                  Google accounts require a dedicated <strong>16-letter App Password</strong>. Generate it in Google Account → Security → 2-Step Verification → App Passwords (select "Mail" / "Other"). Regular account passwords will be blocked with code 535.
-                </p>
-              </div>
-
-              {/* Direct SMTP Test Trigger */}
-              <div className="p-4 bg-slate-950 border border-slate-800 rounded-xl space-y-3">
-                <label className="text-xs font-bold uppercase text-slate-400 flex items-center gap-1.5">
-                  <Send className="w-3.5 h-3.5 text-amber-400" /> Test Live Mail Delivery
-                </label>
-                <div className="flex gap-2">
-                  <Input 
-                    value={testRecipient}
-                    onChange={e => setTestRecipient(e.target.value)}
-                    placeholder="Enter email to receive test message..."
-                    className="bg-slate-900 border-slate-800 text-xs" 
-                  />
-                  <Button 
-                    onClick={handleTestSMTP} 
-                    disabled={testingSmtp} 
-                    size="sm"
-                    className="bg-amber-600 hover:bg-amber-700 text-white font-bold shrink-0"
-                  >
-                    {testingSmtp ? <RefreshCw className="w-4 h-4 animate-spin mr-1.5" /> : <Send className="w-4 h-4 mr-1.5" />}
-                    {testingSmtp ? 'Sending Test...' : 'Test SMTP Now'}
-                  </Button>
-                </div>
-                {smtpStatus.msg && (
-                  <div className={`p-2.5 rounded-md text-xs border ${smtpStatus.ok ? 'bg-green-950/30 border-green-800/40 text-green-300' : 'bg-red-950/30 border-red-800/40 text-red-300'}`}>
-                    <span className="font-semibold">{smtpStatus.ok ? '✓ Success: ' : '✕ Diagnostic: '}</span>
-                    {smtpStatus.msg}
-                  </div>
-                )}
+              <div className="pt-2">
+                <Button 
+                  onClick={saveSettings} 
+                  disabled={saving} 
+                  className="w-full bg-amber-600 hover:bg-amber-700 font-bold text-white shadow"
+                >
+                  {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                  Save SMTP Credentials
+                </Button>
               </div>
             </CardContent>
           </Card>

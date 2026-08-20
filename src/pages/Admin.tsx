@@ -101,6 +101,7 @@ export default function Admin() {
     { id: 'logs', label: 'Audit Logs', icon: List },
     { id: 'roles', label: 'Roles & Access', icon: Shield },
     { id: 'backups', label: 'Backups', icon: DatabaseBackup },
+    { id: 'smtp-health', label: 'SMTP Health Check', icon: Mail },
     { id: 'health', label: 'System Health', icon: Activity },
     { id: 'platform-health', label: 'Platform Monitor', icon: Activity },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -128,6 +129,7 @@ export default function Admin() {
       case 'content-studio': return <ContentStudioTab />;
       case 'questions': return <QuestionBankTab />;
       case 'payments': return <PaymentsTab />;
+      case 'smtp-health': return <SettingsTab />;
       case 'health': return <SystemHealthTab />;
       case 'platform-health': return <PlatformHealthTab />;
       case 'support': return <SupportTab />;

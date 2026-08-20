@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive, LogOut, User } from 'lucide-react';
+import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive, LogOut, User, Users } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommandPalette } from '@/components/CommandPalette';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -47,7 +47,7 @@ export const AppLayout = () => {
     }
   };
 
-  const navItems = [
+  const studentNavItems = [
     { label: 'Dashboard', icon: Home, path: '/dashboard' },
     { label: 'Study Plan', icon: CalendarDays, path: '/plan' },
     { label: 'CBT Center', icon: Timer, path: '/cbt' },
@@ -58,6 +58,17 @@ export const AppLayout = () => {
     { label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
     { label: 'Library', icon: BookOpen, path: '/library' }
   ];
+
+  const guardianNavItems = [
+    { label: 'Guardian Portal', icon: Users, path: '/guardian' },
+    { label: 'JAMB Novel Hub', icon: BookOpen, path: '/novel-hub' },
+    { label: 'Course Eligibility', icon: GraduationCap, path: '/eligibility-checker' },
+    { label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
+    { label: 'Library', icon: BookOpen, path: '/library' }
+  ];
+
+  const navItems = profile?.role === 'guardian' ? guardianNavItems : studentNavItems;
+  const mobileNavItems = profile?.role === 'guardian' ? guardianNavItems : studentNavItems.slice(0, 5);
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -180,7 +191,7 @@ export const AppLayout = () => {
 
       {/* Mobile Bottom Navigation Bar */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 h-[72px] bg-card border-t border-border z-50 flex items-center justify-around px-2 pb-safe shadow-[0_-4px_24px_rgba(0,0,0,0.05)] dark:shadow-[0_-4px_24px_rgba(0,0,0,0.4)]">
-        {navItems.map((item) => {
+        {mobileNavItems.map((item) => {
           const active = isActive(item.path);
           return (
             <Link 

@@ -100,26 +100,40 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Profile row does not exist yet. Auto-create in DB to ensure foreign key constraints pass
         console.warn(`[AuthContext] No profile record found for user ${userId}. Creating default profile...`);
         const isAdminEmail = user?.email === 'admitwise2@gmail.com' || user?.email === 'olanrewajuhamilot@gmail.com';
+        const metaRole = user?.user_metadata?.role;
+        const pendingInvite = localStorage.getItem('pending_guardian_code');
+        const assignedRole: Profile['role'] = isAdminEmail 
+          ? 'admin' 
+          : (metaRole === 'guardian' || metaRole === 'parent' || !!pendingInvite ? 'guardian' : 'student');
+        const isGuardian = assignedRole === 'guardian';
+
         const newProfile: Partial<Profile> = {
           id: userId,
-          role: isAdminEmail ? 'admin' : 'student',
-          full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Scholar Student',
+          role: assignedRole,
+          full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
           email: user?.email || '',
-          has_paid: isAdminEmail ? true : false,
+          has_paid: isAdminEmail || isGuardian ? true : false,
           streak_days: 0,
           xp: 0,
           coins: 0,
         };
 
-        const { data: upsertData } = await supabase
-          .from('profiles')
-          .upsert(newProfile)
-          .select('*')
-          .maybeSingle();
+        try {
+          const { data: upsertData } = await supabase
+            .from('profiles')
+            .upsert(newProfile, { onConflict: 'id' })
+            .select('*')
+            .maybeSingle();
 
-        if (isMounted.current) {
-          setProfile((upsertData as Profile) || (newProfile as Profile));
-          setLoading(false);
+          if (isMounted.current) {
+            setProfile((upsertData as Profile) || (newProfile as Profile));
+            setLoading(false);
+          }
+        } catch {
+          if (isMounted.current) {
+            setProfile(newProfile as Profile);
+            setLoading(false);
+          }
         }
       } else if (error && attempt < MAX_ATTEMPTS) {
         // Retry on transient errors (connection closed, network blip)
@@ -130,12 +144,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.warn('[AuthContext] Profile fetch failed, using fallback profile:', error);
         if (isMounted.current) {
           const isAdminEmail = user?.email === 'admitwise2@gmail.com' || user?.email === 'olanrewajuhamilot@gmail.com';
+          const metaRole = user?.user_metadata?.role;
+          const pendingInvite = localStorage.getItem('pending_guardian_code');
+          const fallbackRole: Profile['role'] = isAdminEmail 
+            ? 'admin' 
+            : (metaRole === 'guardian' || metaRole === 'parent' || !!pendingInvite ? 'guardian' : 'student');
+          const isGuardian = fallbackRole === 'guardian';
+
           setProfile({
             id: userId,
-            role: isAdminEmail ? 'admin' : 'student',
-            full_name: user?.user_metadata?.full_name || 'Scholar Student',
+            role: fallbackRole,
+            full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
             email: user?.email || '',
-            has_paid: isAdminEmail ? true : false,
+            has_paid: isAdminEmail || isGuardian ? true : false,
             xp: 0,
             coins: 0,
           });
@@ -151,12 +172,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       console.warn('[AuthContext] Profile fetch threw error, using fallback profile:', err);
       if (isMounted.current) {
+        const isAdminEmail = user?.email === 'admitwise2@gmail.com' || user?.email === 'olanrewajuhamilot@gmail.com';
+        const metaRole = user?.user_metadata?.role;
+        const fallbackRole: Profile['role'] = isAdminEmail 
+          ? 'admin' 
+          : (metaRole === 'guardian' || metaRole === 'parent' ? 'guardian' : 'student');
+        const isGuardian = fallbackRole === 'guardian';
+
         setProfile({
           id: userId,
-          role: 'student',
-          full_name: user?.user_metadata?.full_name || 'Scholar Student',
+          role: fallbackRole,
+          full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
           email: user?.email || '',
-          has_paid: false,
+          has_paid: isAdminEmail || isGuardian ? true : false,
           xp: 0,
           coins: 0,
         });

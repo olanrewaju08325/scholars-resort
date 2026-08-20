@@ -17,14 +17,37 @@ export const GuardianConnections = () => {
   const fetchLinks = useCallback(async () => {
     if (!profile) return;
     setLoading(true);
-      const { data } = await supabase
+    try {
+      const { data, error } = await supabase
         .from('guardian_links')
-        .select('*, guardian:profiles!guardian_id(full_name)')
+        .select('*')
         .eq('student_id', profile.id)
-      .order('created_at', { ascending: false });
-    
-    if (data) setLinks(data);
-    setLoading(false);
+        .order('created_at', { ascending: false });
+      
+      if (!error && data) {
+        // Enrich guardian profiles safely if guardian_id exists
+        const enriched = await Promise.all(data.map(async (link) => {
+          if (link.guardian_id) {
+            try {
+              const { data: gProfile } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', link.guardian_id)
+                .maybeSingle();
+              return { ...link, guardian: gProfile || { full_name: 'Guardian' } };
+            } catch {
+              return { ...link, guardian: { full_name: 'Guardian' } };
+            }
+          }
+          return link;
+        }));
+        setLinks(enriched);
+      }
+    } catch (err) {
+      console.warn('[GuardianConnections] Failed to fetch links:', err);
+    } finally {
+      setLoading(false);
+    }
   }, [profile]);
 
   useEffect(() => {

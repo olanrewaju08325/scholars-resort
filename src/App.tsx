@@ -78,6 +78,7 @@ function AppContent() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/guardian-info" element={<GuardianLanding />} />
           <Route path="/guardian-connect" element={<GuardianConnect />} />
+          <Route path="/guardian/connect" element={<GuardianConnect />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/features" element={<Features />} />

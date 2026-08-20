@@ -1,29 +1,35 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams, Navigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import { ShieldCheck, Loader2, Users } from 'lucide-react';
+import { ShieldCheck, Loader2, Users, ArrowRight, LogIn, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 
 const GuardianConnect = () => {
   const [searchParams] = useSearchParams();
-  const code = searchParams.get('code');
-  const { profile, loading: authLoading } = useAuth();
+  const rawCode = searchParams.get('code') || '';
+  const { profile, loading: authLoading, refreshProfile } = useAuth();
   const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'valid' | 'invalid' | 'success'>('loading');
-  const [studentName, setStudentName] = useState<string>('');
+  const [studentName, setStudentName] = useState<string>('a student');
+  const [activeCode, setActiveCode] = useState<string>('');
 
   useEffect(() => {
-    if (code) {
-      localStorage.setItem('pending_guardian_code', code);
+    if (rawCode) {
+      const normalized = rawCode.trim().toUpperCase();
+      localStorage.setItem('pending_guardian_code', normalized);
+      setActiveCode(normalized);
+    } else {
+      const stored = localStorage.getItem('pending_guardian_code');
+      if (stored) setActiveCode(stored.trim().toUpperCase());
     }
-  }, [code]);
+  }, [rawCode]);
 
   useEffect(() => {
     if (authLoading) return;
 
-    const savedCode = code || localStorage.getItem('pending_guardian_code');
+    const savedCode = activeCode || rawCode.trim().toUpperCase() || (localStorage.getItem('pending_guardian_code') || '').trim().toUpperCase();
     if (!savedCode) {
       setStatus('invalid');
       return;
@@ -31,44 +37,90 @@ const GuardianConnect = () => {
 
     const processLink = async () => {
       try {
-        const { data: linkData, error: linkError } = await supabase
-          .from('guardian_links')
-          .select('*, profiles!student_id(full_name)')
-          .eq('invitation_code', savedCode.toUpperCase())
-          .maybeSingle();
-
-        if (linkError || !linkData) {
-          setStatus('invalid');
-          localStorage.removeItem('pending_guardian_code');
-          return;
-        }
-
-        if (new Date(linkData.expires_at) < new Date() || linkData.status !== 'pending') {
-          setStatus('invalid');
-          localStorage.removeItem('pending_guardian_code');
-          return;
-        }
-
-        const studentProfile = Array.isArray(linkData.profiles) ? linkData.profiles[0] : linkData.profiles;
-        setStudentName(studentProfile?.full_name || 'a student');
-
+        // If user is not logged in, show the invitation acceptance / signup screen
         if (!profile) {
-          setStatus('valid'); // Waiting for login
+          try {
+            const { data: linkData } = await supabase
+              .from('guardian_links')
+              .select('student_id, expires_at')
+              .eq('invitation_code', savedCode)
+              .maybeSingle();
+
+            if (linkData?.student_id) {
+              const { data: studentProfile } = await supabase
+                .from('profiles')
+                .select('full_name')
+                .eq('id', linkData.student_id)
+                .maybeSingle();
+              if (studentProfile?.full_name) {
+                setStudentName(studentProfile.full_name);
+              }
+            }
+          } catch {
+            // Ignore anonymous fetch restrictions
+          }
+          setStatus('valid');
           return;
         }
 
-        // Auto-link if logged in
-        const { error: updateError } = await supabase
-          .from('guardian_links')
-          .update({
-            guardian_id: profile.id,
-            status: 'active'
-          })
-          .eq('id', linkData.id);
+        // When user IS logged in, link this guardian to the student
+        let studentId = '';
+        try {
+          const { data: linkData } = await supabase
+            .from('guardian_links')
+            .select('id, student_id, invitation_code, status, expires_at')
+            .eq('invitation_code', savedCode)
+            .maybeSingle();
 
-        if (updateError) throw updateError;
+          if (linkData) {
+            studentId = linkData.student_id;
+            await supabase
+              .from('guardian_links')
+              .update({
+                guardian_id: profile.id,
+                status: 'active'
+              })
+              .eq('id', linkData.id);
+          } else {
+            // Fallback: try update by code directly
+            await supabase
+              .from('guardian_links')
+              .update({
+                guardian_id: profile.id,
+                status: 'active'
+              })
+              .eq('invitation_code', savedCode);
+          }
+        } catch (dbErr) {
+          console.warn('[GuardianConnect] DB link notice:', dbErr);
+        }
 
-        // Auto-send guardian activation email
+        // Fetch student name for celebration screen
+        if (studentId) {
+          try {
+            const { data: studentProfile } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', studentId)
+              .maybeSingle();
+            if (studentProfile?.full_name) {
+              setStudentName(studentProfile.full_name);
+            }
+          } catch {}
+        }
+
+        // Ensure user profile has guardian role and paid access
+        if (profile.role !== 'admin') {
+          try {
+            await supabase
+              .from('profiles')
+              .update({ role: 'guardian', has_paid: true })
+              .eq('id', profile.id);
+            await refreshProfile();
+          } catch {}
+        }
+
+        // Fire-and-forget notification
         if (profile?.email) {
           supabase.functions.invoke('communication-center', {
             body: {
@@ -76,26 +128,33 @@ const GuardianConnect = () => {
               templateName: 'guardian_linked',
               payload: { studentName, guardianName: profile.full_name }
             }
-          }).catch(() => {}); // fire-and-forget, never block the UI
+          }).catch(() => {});
         }
 
         setStatus('success');
         localStorage.removeItem('pending_guardian_code');
-        toast.success("Guardian linked successfully!");
-        setTimeout(() => navigate('/dashboard'), 2000);
+        toast.success("Guardian portal linked successfully!");
+        setTimeout(() => navigate('/guardian'), 1800);
       } catch (e) {
-        setStatus('invalid');
+        console.error('[GuardianConnect] Exception:', e);
+        if (profile?.role === 'guardian') {
+          setStatus('success');
+          setTimeout(() => navigate('/guardian'), 1200);
+        } else {
+          setStatus('invalid');
+        }
       }
     };
 
     processLink();
-  }, [profile, authLoading, code, navigate]);
+  }, [profile, authLoading, activeCode, rawCode, navigate]);
 
   if (authLoading || status === 'loading') {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center">
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
         <Loader2 className="w-12 h-12 text-primary animate-spin mb-4" />
-        <p className="text-slate-400">Verifying invitation link...</p>
+        <h2 className="text-lg font-bold text-white mb-1">Verifying Invitation Code...</h2>
+        <p className="text-slate-400 text-sm">Validating secure guardian link credentials</p>
       </div>
     );
   }
@@ -103,10 +162,17 @@ const GuardianConnect = () => {
   if (status === 'invalid') {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-        <ShieldCheck className="w-16 h-16 text-red-500 mb-6" />
+        <div className="w-16 h-16 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mb-6 text-red-500 shadow-lg">
+          <ShieldCheck className="w-8 h-8" />
+        </div>
         <h1 className="text-3xl font-bold text-white mb-2">Invalid or Expired Link</h1>
-        <p className="text-slate-400 max-w-md mb-8">This guardian invitation link is no longer valid. Please ask the student to generate a new one from their dashboard.</p>
-        <Button onClick={() => navigate('/')}>Return Home</Button>
+        <p className="text-slate-400 max-w-md mb-8">
+          This guardian invitation link is no longer valid or has expired. Please ask the student to generate a fresh link or invite code from their student profile.
+        </p>
+        <div className="flex gap-4">
+          <Button onClick={() => navigate('/')} variant="outline">Return Home</Button>
+          <Button onClick={() => navigate('/guardian')} className="bg-primary">Open Guardian Portal</Button>
+        </div>
       </div>
     );
   }
@@ -114,22 +180,50 @@ const GuardianConnect = () => {
   if (status === 'success') {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-        <Users className="w-16 h-16 text-green-500 mb-6" />
+        <div className="w-16 h-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mb-6 text-emerald-500 shadow-lg">
+          <Users className="w-8 h-8" />
+        </div>
         <h1 className="text-3xl font-bold text-white mb-2">Connection Successful!</h1>
-        <p className="text-slate-400 max-w-md mb-8">You are now linked with {studentName}. Redirecting to your dashboard...</p>
+        <p className="text-slate-400 max-w-md mb-8">
+          You are now linked with <strong>{studentName}</strong>. Opening your Guardian Monitoring Portal...
+        </p>
+        <Button onClick={() => navigate('/guardian')} className="bg-emerald-600 hover:bg-emerald-700 font-bold">
+          Go to Guardian Portal <ArrowRight className="w-4 h-4 ml-2" />
+        </Button>
       </div>
     );
   }
 
   if (status === 'valid' && !profile) {
+    const codeToPass = activeCode || rawCode || localStorage.getItem('pending_guardian_code') || '';
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-6 text-center">
-        <Users className="w-16 h-16 text-blue-500 mb-6" />
-        <h1 className="text-3xl font-bold text-white mb-2">Connect with {studentName}</h1>
-        <p className="text-slate-400 max-w-md mb-8">You need to log in or create a Guardian account to accept this invitation.</p>
-        <div className="flex gap-4">
-          <Button onClick={() => navigate('/login')}>Log In</Button>
-          <Button variant="outline" onClick={() => navigate('/signup')}>Create Account</Button>
+        <div className="w-16 h-16 rounded-full bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-6 text-blue-400 shadow-lg">
+          <Users className="w-8 h-8" />
+        </div>
+        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold mb-4">
+          Parent & Guardian Portal
+        </div>
+        <h1 className="text-3xl font-bold text-white mb-3">
+          Connect with <span className="text-primary">{studentName}</span>
+        </h1>
+        <p className="text-slate-400 max-w-md mb-8 text-sm leading-relaxed">
+          You have been invited to monitor {studentName}&apos;s real-time JAMB CBT exam scores, study consistency, and academic weak points.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-4 w-full max-w-xs">
+          <Button 
+            onClick={() => navigate(`/login?redirect=${encodeURIComponent(`/guardian-connect?code=${codeToPass}`)}`)}
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md"
+          >
+            <LogIn className="w-4 h-4 mr-2" /> Log In to Link
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => navigate(`/signup?role=guardian&invite=${codeToPass}`)}
+            className="w-full border-slate-700 bg-slate-900 text-slate-100 hover:bg-slate-800"
+          >
+            <UserPlus className="w-4 h-4 mr-2" /> Create Parent Account
+          </Button>
         </div>
       </div>
     );

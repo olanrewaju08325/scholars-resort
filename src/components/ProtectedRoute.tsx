@@ -76,8 +76,8 @@ const ProtectedRoute = () => {
     return <Navigate to="/onboarding" replace />;
   }
 
-  // 2. Once onboarded, if they haven't paid, hit the paywall.
-  if (!profile?.has_paid && profile?.role !== 'admin') {
+  // 2. Once onboarded, if student hasn't paid, hit the paywall. (Admins & Guardians are exempt)
+  if (!profile?.has_paid && profile?.role !== 'admin' && profile?.role !== 'guardian') {
     return <Navigate to="/pricing" replace />;
   }
 
