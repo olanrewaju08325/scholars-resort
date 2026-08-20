@@ -4,6 +4,7 @@ import path from 'path';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from '@google/genai';
 
 const app = express();
 const PORT = 3000;
@@ -261,7 +262,9 @@ app.post('/api/test-smtp', async (req, res) => {
     console.error('[SMTP TEST ERROR]', err);
 
     let errorHint = err.message || 'Authentication or network timeout';
-    if (targetHost.includes('gmail') && (err.message?.includes('530') || err.message?.includes('535') || err.message?.includes('Authentication'))) {
+    if (targetUser?.toLowerCase().includes('@gmail.com') && !targetHost.toLowerCase().includes('gmail')) {
+      errorHint += ` -> Helpful Hint: You entered a Gmail user ('${targetUser}') but host is set to '${targetHost}'. If sending via Gmail, change host to 'smtp.gmail.com' and port to '465' (or '587').`;
+    } else if (targetHost.toLowerCase().includes('gmail') && (err.message?.includes('530') || err.message?.includes('535') || err.message?.includes('Authentication'))) {
       errorHint += ' -> Helpful Hint: Gmail requires a 16-character App Password generated at https://myaccount.google.com/apppasswords (2FA must be active). Regular Google account passwords are blocked by Gmail.';
     }
 
@@ -275,42 +278,60 @@ app.post('/api/test-smtp', async (req, res) => {
   }
 });
 
-// API Route: Groq AI Chat Proxy
+// API Route: Groq & Gemini AI Chat Proxy
 app.post('/api/groq-chat', async (req, res) => {
   const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
-  const apiKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+  const groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+  const geminiKey = process.env.GEMINI_API_KEY;
 
-  if (!apiKey) {
-    return res.status(400).json({ 
-      error: 'Groq API Key is not configured on server. Please set GROQ_API_KEY in environment variables or Admin AI Keys panel.' 
-    });
-  }
+  // 1. Try Groq if key exists
+  if (groqKey) {
+    try {
+      const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${groqKey}`
+        },
+        body: JSON.stringify({
+          model,
+          messages,
+          temperature,
+          max_tokens: 2048
+        })
+      });
 
-  try {
-    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature,
-        max_tokens: 2048
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return res.status(response.status).json({ error: errorText });
+      if (response.ok) {
+        const data = await response.json();
+        return res.json(data);
+      }
+    } catch (groqErr) {
+      console.warn('Groq API call on server failed, trying Gemini fallback:', groqErr);
     }
-
-    const data = await response.json();
-    return res.json(data);
-  } catch (err: any) {
-    return res.status(500).json({ error: err.message || 'Groq server communication failed.' });
   }
+
+  // 2. Try Gemini fallback if key exists
+  if (geminiKey) {
+    try {
+      const ai = new GoogleGenAI({ apiKey: geminiKey });
+      const prompt = messages.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: prompt
+      });
+      const text = response.text || '';
+      return res.json({
+        choices: [{ message: { role: 'assistant', content: text } }],
+        content: text
+      });
+    } catch (geminiErr: any) {
+      console.warn('Gemini fallback failed:', geminiErr?.message);
+    }
+  }
+
+  return res.status(400).json({
+    error: 'AI Proxy requires an active GROQ_API_KEY or GEMINI_API_KEY on the server.'
+  });
 });
 
 // API Route: Question Bank - Bulk & Single Insert (Server Admin Client)

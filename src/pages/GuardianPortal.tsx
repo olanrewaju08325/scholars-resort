@@ -495,7 +495,11 @@ Scholars Resort Academic Team`
                         <div>
                            <h4 className="font-bold text-purple-600 dark:text-purple-400 mb-1">AI Guardian Suggestion</h4>
                            <p className="text-sm text-foreground/80 leading-relaxed">
-                              {activeStudentData.name} is struggling with Physics, particularly Mechanics. I recommend locking them into a 30-minute Flashcard session on Physics before their next full mock exam to boost retention.
+                              {activeStudentData.weakSubjects && activeStudentData.weakSubjects[0] !== 'No data yet' ? (
+                                `${activeStudentData.name} needs additional focus on ${activeStudentData.weakSubjects.join(', ')}. We recommend assigning a targeted practice session.`
+                              ) : (
+                                `${activeStudentData.name}'s performance data will update here automatically as they take practice drills and CBT mock exams.`
+                              )}
                            </p>
                         </div>
                      </CardContent>

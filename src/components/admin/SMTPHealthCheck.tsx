@@ -98,8 +98,13 @@ export const SMTPHealthCheck = ({ currentConfig, onApplyGmailPreset }: SMTPHealt
     addLog('info', `Starting SMTP Diagnostic probe to: ${targetRecipient}`);
     addLog('handshake', `Connecting to TCP socket ${currentConfig.host}:${currentConfig.port}...`);
     
-    const isGmail = currentConfig.host.toLowerCase().includes('gmail');
-    if (isGmail) {
+    const isGmailHost = currentConfig.host.toLowerCase().includes('gmail');
+    const isGmailUser = currentConfig.user?.toLowerCase().includes('@gmail.com');
+
+    if (isGmailUser && !isGmailHost) {
+      addLog('warn', `Host Mismatch Warning: Username "${currentConfig.user}" is a Gmail account, but SMTP host is "${currentConfig.host}". Mailgun/custom hosts will reject Gmail credentials.`);
+      addLog('warn', 'To fix: Click "Apply Gmail Settings Preset" below or set host to smtp.gmail.com with a 16-character App Password.');
+    } else if (isGmailHost) {
       addLog('info', 'Detected Google Gmail SMTP endpoint (STARTTLS port 587 or SSL 465).');
       if (currentConfig.pass && currentConfig.pass.replace(/\s+/g, '').length !== 16) {
         addLog('warn', 'Security notice: Gmail App Passwords must be exactly 16 characters. Standard Google account passwords will be rejected with code 535/534.');

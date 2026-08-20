@@ -107,7 +107,7 @@ Return strictly JSON object format without markdown block backticks:
                 explanation: parsed.explanation || 'Step-by-step solution based on JAMB UTME syllabus.'
               }
             });
-            setParticipantCount(18);
+            setParticipantCount(1);
             setLoading(false);
             return;
           }
@@ -140,7 +140,7 @@ Return strictly JSON object format without markdown block backticks:
             explanation: dbQ.explanation || 'Detailed solution from question bank.'
           }
         });
-        setParticipantCount(25);
+        setParticipantCount(0);
         setLoading(false);
         return;
       }
