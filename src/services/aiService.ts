@@ -69,6 +69,77 @@ export const getGroqApiKey = async (): Promise<string> => {
   return (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GROQ_API_KEY || import.meta.env?.GROQ_API_KEY)) || '';
 };
 
+let cachedGeminiKey: string | null = null;
+
+export const getGeminiApiKey = async (): Promise<string> => {
+  const envKey = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.GEMINI_API_KEY)) || 
+                 (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY)) ||
+                 localStorage.getItem('gemini_api_key');
+                 
+  if (envKey && envKey.trim().length > 10 && !envKey.includes('placeholder')) {
+    return envKey.trim();
+  }
+
+  if (cachedGeminiKey) return cachedGeminiKey;
+
+  try {
+    const { data } = await supabase
+      .from('admin_settings')
+      .select('setting_key, setting_value')
+      .in('setting_key', ['ai_api_keys', 'api_keys', 'gemini_api_key', 'ai_config']);
+
+    if (data) {
+      for (const row of data) {
+        const val = row.setting_value?.gemini || row.setting_value?.gemini_key || row.setting_value?.gemini_api_key || (typeof row.setting_value === 'string' ? row.setting_value : '');
+        if (typeof val === 'string' && val.trim().length > 10 && !val.includes('placeholder')) {
+          cachedGeminiKey = val.trim();
+          localStorage.setItem('gemini_api_key', cachedGeminiKey);
+          return cachedGeminiKey;
+        }
+      }
+    }
+  } catch {}
+
+  return (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.GEMINI_API_KEY)) || '';
+};
+
+export const callGeminiAPI = async (messages: Array<{ role: string; content: string }>): Promise<string | null> => {
+  const key = await getGeminiApiKey();
+  if (!key || key.length < 10) return null;
+
+  try {
+    const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }]
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
+      if (text) {
+        try {
+          supabase.from('ai_usage').insert({
+            provider: 'gemini',
+            feature: 'gemini_inference',
+            prompt_tokens: 150,
+            completion_tokens: 250,
+            total_tokens: 400,
+            created_at: new Date().toISOString()
+          }).then(() => {}, () => {});
+        } catch {}
+        return text;
+      }
+    }
+  } catch (err) {
+    console.warn('Direct Gemini API call notice:', err);
+  }
+  return null;
+};
+
 // Check Token Limit
 export const checkAITokenLimit = async (): Promise<{ allowed: boolean; remaining: number; warning?: string }> => {
   try {
@@ -102,7 +173,7 @@ export const checkAITokenLimit = async (): Promise<{ allowed: boolean; remaining
   }
 };
 
-// Direct Groq API Execution with fallback to Backend Proxy, Supabase Edge Function, and Smart Local Heuristics
+// Direct Groq API Execution with fallback to Gemini API, Backend Proxy, Supabase Edge Function, and Smart Local Heuristics
 export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'llama-3.1-8b-instant', temperature = 0.7): Promise<string> => {
   const rawKey = await getGroqApiKey();
   const apiKey = (rawKey || '').trim().replace(/^["']|["']$/g, '').trim();
@@ -121,7 +192,7 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
   ].filter((m, i, arr) => arr.indexOf(m) === i);
 
   // 1. If client has API key, call Groq directly
-  if (apiKey && apiKey.length > 10) {
+  if (apiKey && apiKey.length > 15 && !apiKey.includes('placeholder')) {
     for (const currentModel of candidateModels) {
       try {
         const sanitizedMessages = messages.map(m => ({
@@ -148,7 +219,6 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
           const content = data?.choices?.[0]?.message?.content;
 
           if (content) {
-            // Log usage asynchronously
             const promptTokens = data?.usage?.prompt_tokens || 100;
             const completionTokens = data?.usage?.completion_tokens || 200;
 
@@ -166,37 +236,35 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
             return content;
           }
         } else {
-          const errData = await response.json().catch(() => null);
-          console.warn(`Groq (${currentModel}) HTTP ${response.status}:`, errData?.error?.message || response.statusText);
-          if (response.status === 401 || response.status === 403) {
-            // Invalid key; break loop early
+          if (response.status === 404 || response.status === 401 || response.status === 403) {
+            // Invalid key or model forbidden; break loop immediately to prevent duplicate console 404 errors
             break;
           }
         }
       } catch (err: any) {
-        console.warn(`Direct Groq call failed on ${currentModel}:`, err?.message);
+        break;
       }
     }
   }
 
-  // 2. Fallback to Server Proxy /api/groq-chat or /.netlify/functions/groq-chat
+  // 2. Try Gemini API directly
+  const geminiContent = await callGeminiAPI(messages);
+  if (geminiContent) return geminiContent;
+
+  // 3. Fallback to Server Proxy /api/groq-chat
   try {
-    for (const proxyUrl of ['/api/groq-chat', '/.netlify/functions/groq-chat']) {
-      const proxyRes = await fetch(proxyUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages, model, temperature })
-      }).catch(() => null);
+    const proxyRes = await fetch('/api/groq-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages, model, temperature })
+    }).catch(() => null);
 
-      if (proxyRes && proxyRes.ok) {
-        const proxyData = await proxyRes.json().catch(() => null);
-        const proxyContent = proxyData?.choices?.[0]?.message?.content || proxyData?.content;
-        if (proxyContent) return proxyContent;
-      }
+    if (proxyRes && proxyRes.ok) {
+      const proxyData = await proxyRes.json().catch(() => null);
+      const proxyContent = proxyData?.choices?.[0]?.message?.content || proxyData?.content;
+      if (proxyContent) return proxyContent;
     }
-  } catch (proxyErr) {
-    console.warn('Server proxy fallback notice:', proxyErr);
-  }
+  } catch {}
 
   // 3. Fallback to Supabase Edge Function
   try {

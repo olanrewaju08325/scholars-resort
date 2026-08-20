@@ -316,7 +316,7 @@ app.post('/api/groq-chat', async (req, res) => {
       const ai = new GoogleGenAI({ apiKey: geminiKey });
       const prompt = messages.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
       const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
+        model: 'gemini-3.6-flash',
         contents: prompt
       });
       const text = response.text || '';
