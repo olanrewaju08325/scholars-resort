@@ -223,14 +223,14 @@ export const AIPromptStudioTab = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
-        <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Brain className="w-6 h-6 text-primary" /> AI Feature Studio & Model Playground
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap min-w-0 w-full">
+        <div className="min-w-0">
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <Brain className="w-6 h-6 text-primary shrink-0" /> AI Feature Studio & Model Playground
           </h2>
-          <p className="text-slate-400">Configure Groq system prompts, test model outputs live, and track token metrics.</p>
+          <p className="text-slate-400 text-xs sm:text-sm">Configure Groq system prompts, test model outputs live, and track token metrics.</p>
         </div>
-        <Button onClick={createNewPrompt} className="bg-primary hover:bg-primary/90 shrink-0">
+        <Button onClick={createNewPrompt} className="bg-primary hover:bg-primary/90 shrink-0 text-xs sm:text-sm">
           <Command className="w-4 h-4 mr-2" /> Register AI Feature
         </Button>
       </div>

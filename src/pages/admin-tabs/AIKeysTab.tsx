@@ -303,7 +303,7 @@ export const AIKeysTab = () => {
               </div>
               <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg">
                 <div className="text-xs text-muted-foreground mb-1">Active AI Model</div>
-                <div className="text-xs font-mono font-bold text-green-400">Llama 3.3 70B</div>
+                <div className="text-xs font-mono font-bold text-green-400">Qwen 3.6 27B / GPT-OSS 120B</div>
               </div>
             </div>
 

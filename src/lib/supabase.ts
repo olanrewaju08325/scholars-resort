@@ -1,8 +1,11 @@
 import { createClient } from '@supabase/supabase-js';
 
-// Load from environment variables
-const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const rawSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+// Load from environment variables or production defaults
+const DEFAULT_SUPABASE_URL = 'https://syoodykedvqaoeplmamd.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5b29keWtlZHZxYW9lcGxtYW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNjEyMTIsImV4cCI6MjEwMDkzNzIxMn0.GV7jgq04Qha6W1JENvc-ntVt9zSOLDx7vTaTxZlOTq4';
+
+const rawSupabaseUrl = import.meta.env.VITE_SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const rawSupabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 
 export const isSupabaseConfigured = Boolean(
   rawSupabaseUrl && 
@@ -12,15 +15,8 @@ export const isSupabaseConfigured = Boolean(
   !rawSupabaseAnonKey.includes('placeholder')
 );
 
-if (!isSupabaseConfigured) {
-  console.warn(
-    '⚠️ Supabase environment variables missing or using placeholder values! ' +
-    'Please set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your environment configuration.'
-  );
-}
-
-const supabaseUrl = isSupabaseConfigured ? rawSupabaseUrl : 'https://placeholder.supabase.co';
-const supabaseAnonKey = isSupabaseConfigured ? rawSupabaseAnonKey : 'placeholder_key';
+const supabaseUrl = isSupabaseConfigured ? rawSupabaseUrl : DEFAULT_SUPABASE_URL;
+const supabaseAnonKey = isSupabaseConfigured ? rawSupabaseAnonKey : DEFAULT_SUPABASE_ANON_KEY;
 
 // Create Supabase client with custom fetch wrapper to catch network and placeholder errors gracefully
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
