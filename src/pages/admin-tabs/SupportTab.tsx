@@ -154,10 +154,10 @@ export const SupportTab = () => {
 
   return (
     <div className="space-y-6 h-[700px] flex flex-col">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap shrink-0">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">Support & Help Desk</h2>
-          <p className="text-slate-400">Manage student tickets and guardian communications.</p>
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">Support & Help Desk</h2>
+          <p className="text-slate-400 text-xs sm:text-sm">Manage student tickets and guardian communications.</p>
         </div>
         <div className="flex bg-slate-900 border border-slate-800 rounded-lg p-1">
           <button 

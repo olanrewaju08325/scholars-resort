@@ -137,7 +137,7 @@ export const AIPromptStudioTab = () => {
       if (!key) throw new Error("No Groq API Key found. Please save your Groq key in the AI Keys tab.");
 
       const trimmedKey = key.trim();
-      const testModels = [modelType, 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama-3.3-70b-versatile', 'llama3-8b-8192'].filter((m, i, arr) => arr.indexOf(m) === i);
+      const testModels = [modelType, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'groq/compound-mini', 'qwen/qwen3.6-27b'].filter((m, i, arr) => arr.indexOf(m) === i);
       let content = '';
       let activeModel = '';
 
@@ -209,7 +209,7 @@ export const AIPromptStudioTab = () => {
     const { error } = await supabase.from('admin_ai_prompts').insert({
       feature_name: formattedName,
       system_prompt: "You are an expert AI tutor for Nigerian JAMB students...",
-      model: "llama-3.3-70b-versatile",
+      model: "openai/gpt-oss-120b",
       temperature: 0.7
     });
 
@@ -251,11 +251,11 @@ export const AIPromptStudioTab = () => {
         <Card className="bg-slate-900 border-slate-800 text-slate-100">
           <CardContent className="p-5">
             <div className="flex justify-between items-start mb-2">
-              <span className="text-xs text-slate-400 font-bold uppercase">Groq Llama Tokens</span>
+              <span className="text-xs text-slate-400 font-bold uppercase">Groq Tokens Used</span>
               <Zap className="w-5 h-5 text-amber-400" />
             </div>
             <div className="text-2xl font-bold text-amber-400 font-mono">{groqTokens.toLocaleString()}</div>
-            <p className="text-xs text-slate-500 mt-1">Ultra-fast Groq Llama 3.3 70B</p>
+            <p className="text-xs text-slate-500 mt-1">High-speed Groq GPT OSS 120B / 20B</p>
           </CardContent>
         </Card>
 
@@ -326,7 +326,7 @@ export const AIPromptStudioTab = () => {
                 }`}
               >
                 <div className="capitalize">{p.feature_name.replace(/_/g, ' ')}</div>
-                <div className="text-[10px] opacity-70 font-mono mt-0.5">{p.model || 'llama-3.3-70b-versatile'}</div>
+                <div className="text-[10px] opacity-70 font-mono mt-0.5">{p.model || 'openai/gpt-oss-120b'}</div>
               </button>
             ))}
           </div>

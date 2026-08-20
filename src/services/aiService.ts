@@ -518,7 +518,7 @@ ${chunkText}`
     ];
 
     try {
-      const responseText = await callGroqAPI(messages, 'llama-3.3-70b-versatile', 0.2);
+      const responseText = await callGroqAPI(messages, 'openai/gpt-oss-120b', 0.2);
       
       // Extract array portion cleanly avoiding preamble text
       const arrayMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);

@@ -153,12 +153,12 @@ export const ScholarshipTab = () => {
   return (
     <div className="space-y-6">
       {ConfirmElement}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Gift className="w-6 h-6 text-primary" /> Scholarships & Discounts
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <Gift className="w-6 h-6 text-primary shrink-0" /> Scholarships & Discounts
           </h2>
-          <p className="text-slate-400">Manage promotional codes and direct scholarship grants.</p>
+          <p className="text-slate-400 text-xs sm:text-sm">Manage promotional codes and direct scholarship grants.</p>
         </div>
       </div>
 

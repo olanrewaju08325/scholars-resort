@@ -114,33 +114,35 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
   try {
     const { data: { user } } = await supabase.auth.getUser();
 
-    // 1. Try edge function
+    // 1. Primary: Call backend /api/send-bulk-email
     try {
-      const { data, error } = await supabase.functions.invoke('communication-center', {
-        body: {
-          action: 'bulk_email',
-          payload: {
-            subject: payload.subject,
-            body: payload.body,
-            target: payload.target || 'all',
-            admin_id: user?.id,
-            to: payload.to
-          }
-        }
+      const response = await fetch('/api/send-bulk-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          target: payload.target || 'all',
+          subject: payload.subject,
+          body: payload.body,
+          recipients: Array.isArray(payload.to) ? payload.to : undefined,
+          adminId: user?.id
+        })
       });
 
-      if (!error && data?.recipientCount !== undefined) {
-        return {
-          success: true,
-          count: data.recipientCount,
-          message: `Dispatched to ${data.recipientCount} recipients via communication center.`
-        };
+      if (response.ok) {
+        const resData = await response.json();
+        if (resData.success) {
+          return {
+            success: true,
+            count: resData.count || 1,
+            message: resData.message || `Dispatched to ${resData.count || 1} recipients!`
+          };
+        }
       }
-    } catch (edgeErr) {
-      console.warn('Edge function invoke failed, fallback to direct database queuing:', edgeErr);
+    } catch (apiErr) {
+      console.warn('Backend send-bulk-email call notice:', apiErr);
     }
 
-    // 2. Fetch recipients from Supabase profiles
+    // 2. Direct fallback: Fetch recipients & publish to announcements
     let profilesQuery = supabase.from('profiles').select('id, email, full_name');
     if (payload.target === 'paid') {
       profilesQuery = profilesQuery.eq('is_paid', true);
@@ -151,7 +153,7 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
     const { data: recipients } = await profilesQuery;
     const count = recipients?.length || (Array.isArray(payload.to) ? payload.to.length : 1);
 
-    // 3. Store in announcements / notifications table for in-app delivery
+    // Store in announcements / notifications table for in-app delivery
     try {
       await supabase.from('announcements').insert({
         title: payload.subject,
@@ -159,13 +161,13 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
         content: payload.body,
         target: payload.target || 'all',
         created_by: user?.id,
-        is_pinned: false
+        is_pinned: true
       });
     } catch (annErr) {
       console.warn('Announcement fallback error:', annErr);
     }
 
-    // 4. Log in audit_logs
+    // Log in audit_logs
     if (user) {
       await supabase.from('audit_logs').insert({
         user_id: user.id,
@@ -174,13 +176,13 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
         entity_id: 'broadcast',
         status: 'success',
         created_at: new Date().toISOString()
-      });
+      }).catch(() => {});
     }
 
     return {
       success: true,
       count,
-      message: `Email broadcast queued for ${count} students and published to in-app announcement center!`
+      message: `Email broadcast published to in-app announcement center for ${count} students!`
     };
   } catch (err: any) {
     errorTracker.logError({

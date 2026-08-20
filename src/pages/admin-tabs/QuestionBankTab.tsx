@@ -546,6 +546,22 @@ export const QuestionBankTab = () => {
   return (
     <div className="space-y-6">
       {ConfirmElement}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <BookOpen className="w-6 h-6 text-primary shrink-0" /> Question Bank & Curriculum Repository
+          </h2>
+          <p className="text-slate-400 text-xs sm:text-sm">Manage CBT examination questions, bulk CSV imports, and AI drafts.</p>
+        </div>
+        <div className="flex gap-2 flex-wrap shrink-0">
+          <Button onClick={() => setCsvModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
+            <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-400" /> Bulk CSV Import
+          </Button>
+          <Button onClick={handlePublishAllDrafts} disabled={publishing} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
+            <Send className="w-4 h-4 mr-2 text-blue-400" /> Publish All Drafts
+          </Button>
+        </div>
+      </div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Editor Form */}

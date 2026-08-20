@@ -21,7 +21,12 @@ export const WhatsAppWidget = () => {
     fetchSettings();
   }, []);
 
-  if (hiddenPaths.includes(location.pathname) || location.pathname.startsWith('/admin')) return null;
+  if (
+    hiddenPaths.includes(location.pathname) || 
+    location.pathname.startsWith('/admin') || 
+    location.pathname.includes('scholarresortadmin') ||
+    location.pathname.includes('admin')
+  ) return null;
 
   return (
     <div className="fixed bottom-24 right-4 md:bottom-24 md:right-6 z-[80] flex items-end justify-end group pb-[72px] md:pb-0">

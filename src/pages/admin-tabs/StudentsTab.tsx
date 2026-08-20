@@ -223,18 +223,18 @@ export const StudentsTab = () => {
   return (
     <div className="space-y-6">
       {ConfirmElement}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2"><Users className="w-6 h-6 text-primary" /> Student Management</h2>
-          <p className="text-slate-400">View and manage the complete student directory.</p>
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2"><Users className="w-6 h-6 text-primary shrink-0" /> Student Management</h2>
+          <p className="text-slate-400 text-xs sm:text-sm">View and manage the complete student directory.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap shrink-0">
           {selectedIds.size > 0 && (
-            <Button onClick={handleBulkGiftAccess} className="bg-purple-600 hover:bg-purple-700">
+            <Button onClick={handleBulkGiftAccess} className="bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm">
               Bulk Grant Access ({selectedIds.size})
             </Button>
           )}
-          <Button onClick={exportToCSV} variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 gap-2">
+          <Button onClick={exportToCSV} variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 gap-2 text-xs sm:text-sm">
             <Download className="w-4 h-4" /> Export CSV
           </Button>
         </div>

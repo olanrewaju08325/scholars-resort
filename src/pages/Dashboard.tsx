@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useStudentStats } from '@/hooks/useStudentStats';
 import { WelcomeHero } from '@/components/dashboard/WelcomeHero';
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { DailyMission } from '@/components/dashboard/DailyMission';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { AIRecommendations } from '@/components/AIRecommendations';
@@ -61,6 +62,9 @@ export default function Dashboard() {
       </header>
 
       <div className="container max-w-7xl mx-auto p-4 space-y-6 mt-4">
+        
+        {/* Real-time Platform Announcements Banner */}
+        <AnnouncementBanner />
         
         {/* Hero Section */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>

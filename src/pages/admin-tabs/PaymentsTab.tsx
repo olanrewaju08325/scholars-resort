@@ -156,10 +156,10 @@ export const PaymentsTab = () => {
     <div className="space-y-6">
       {ConfirmElement}
       
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2"><CreditCard className="w-6 h-6 text-primary" /> Payment Operations</h2>
-          <p className="text-slate-400">Manage manual transfers and payment gateway webhooks.</p>
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2"><CreditCard className="w-6 h-6 text-primary shrink-0" /> Payment Operations & Manual Transfers</h2>
+          <p className="text-slate-400 text-xs sm:text-sm">Manage manual transfers, bank receipts, and payment gateway logs.</p>
         </div>
       </div>
 

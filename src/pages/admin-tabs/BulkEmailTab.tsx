@@ -86,14 +86,14 @@ export const BulkEmailTab = () => {
   return (
     <div className="space-y-6">
       {ConfirmElement}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Mail className="w-6 h-6 text-primary" /> Bulk Email & Broadcast Center
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+            <Mail className="w-6 h-6 text-primary shrink-0" /> Bulk Email & Broadcast Center
           </h2>
-          <p className="text-slate-400">Dispatch mass emails and notifications to students.</p>
+          <p className="text-slate-400 text-xs sm:text-sm">Dispatch mass emails and notifications to students.</p>
         </div>
-        <div className="flex gap-2 bg-slate-900 border border-slate-800 p-1 rounded-md">
+        <div className="flex gap-2 bg-slate-900 border border-slate-800 p-1 rounded-md shrink-0">
           <Button 
             variant={activeTab === 'compose' ? 'default' : 'ghost'} 
             onClick={() => setActiveTab('compose')}

@@ -11,17 +11,33 @@ export function NotificationsMenu() {
   const [unreadCount, setUnreadCount] = useState(0);
 
   const fetchNotifications = useCallback(async () => {
-    if (!profile?.id) return;
-    const { data } = await supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', profile.id)
-      .order('created_at', { ascending: false })
-      .limit(10);
-      
-    if (data) {
-      setNotifications(data);
-      setUnreadCount(data.filter(n => !n.is_read).length);
+    try {
+      const userNotifsQuery = profile?.id 
+        ? supabase.from('notifications').select('*').eq('user_id', profile.id).order('created_at', { ascending: false }).limit(10)
+        : null;
+
+      const annQuery = supabase.from('announcements').select('*').order('created_at', { ascending: false }).limit(5);
+
+      const [notifsRes, annRes] = await Promise.all([
+        userNotifsQuery,
+        annQuery
+      ]);
+
+      const notifs = notifsRes?.data || [];
+      const anns = (annRes?.data || []).map(a => ({
+        id: a.id,
+        title: `📢 ${a.title}`,
+        message: a.body || a.content || '',
+        created_at: a.created_at,
+        is_read: false,
+        type: 'announcement'
+      }));
+
+      const merged = [...anns, ...notifs].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setNotifications(merged);
+      setUnreadCount(merged.filter(n => !n.is_read).length);
+    } catch (e) {
+      console.warn('Notifications fetch notice:', e);
     }
   }, [profile?.id]);
 
