@@ -539,7 +539,7 @@ Return ONLY valid JSON format:
 }`;
 
   try {
-    const responseText = await callGroqAPI([{ role: 'user', content: prompt }], 'llama-3.3-70b-versatile', 0.1);
+    const responseText = await callGroqAPI([{ role: 'user', content: prompt }], 'openai/gpt-oss-120b', 0.1);
     const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
     const start = cleanJson.indexOf('{');
     const end = cleanJson.lastIndexOf('}');

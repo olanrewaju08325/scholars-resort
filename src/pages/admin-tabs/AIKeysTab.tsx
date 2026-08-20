@@ -126,7 +126,7 @@ export const AIKeysTab = () => {
     setTestingGroq(true);
     try {
       const trimmedKey = groqKey.trim();
-      let workingModel = 'llama-3.1-8b-instant';
+      let workingModel = 'openai/gpt-oss-120b';
 
       // 1. First probe available models on this key
       try {
@@ -136,16 +136,16 @@ export const AIKeysTab = () => {
         if (modelsRes.ok) {
           const modelsData = await modelsRes.json();
           const ids: string[] = (modelsData?.data || []).map((m: any) => m.id);
-          if (ids.includes('llama-3.3-70b-versatile')) workingModel = 'llama-3.3-70b-versatile';
-          else if (ids.includes('llama-3.1-8b-instant')) workingModel = 'llama-3.1-8b-instant';
-          else if (ids.includes('llama3-70b-8192')) workingModel = 'llama3-70b-8192';
-          else if (ids.includes('llama3-8b-8192')) workingModel = 'llama3-8b-8192';
+          if (ids.includes('openai/gpt-oss-120b')) workingModel = 'openai/gpt-oss-120b';
+          else if (ids.includes('openai/gpt-oss-20b')) workingModel = 'openai/gpt-oss-20b';
+          else if (ids.includes('groq/compound')) workingModel = 'groq/compound';
+          else if (ids.includes('groq/compound-mini')) workingModel = 'groq/compound-mini';
           else if (ids.length > 0) workingModel = ids[0];
         }
       } catch {}
 
       // 2. Perform test completion
-      const testModels = [workingModel, 'llama-3.1-8b-instant', 'llama3-70b-8192', 'llama-3.3-70b-versatile'].filter((m, i, arr) => arr.indexOf(m) === i);
+      const testModels = [workingModel, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'groq/compound-mini'].filter((m, i, arr) => arr.indexOf(m) === i);
       let reply = '';
       let successModel = '';
 

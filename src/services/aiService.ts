@@ -173,8 +173,8 @@ export const checkAITokenLimit = async (): Promise<{ allowed: boolean; remaining
   }
 };
 
-// Direct Groq API Execution with fallback to Gemini API, Backend Proxy, Supabase Edge Function, and Smart Local Heuristics
-export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'llama-3.1-8b-instant', temperature = 0.7): Promise<string> => {
+// Direct Groq API Execution using configured Groq API Key, Server Proxy, Supabase Edge Function, and Smart Local Heuristics
+export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'openai/gpt-oss-120b', temperature = 0.7): Promise<string> => {
   const rawKey = await getGroqApiKey();
   const apiKey = (rawKey || '').trim().replace(/^["']|["']$/g, '').trim();
 
@@ -187,9 +187,12 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
   } catch {}
 
   const candidateModels = [
-    'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant'
-  ].filter((m, i, arr) => arr.indexOf(m) === i);
+    model,
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'groq/compound',
+    'groq/compound-mini'
+  ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
   // 1. If client has API key, call Groq directly
   if (apiKey && apiKey.length > 15 && !apiKey.includes('placeholder')) {
@@ -235,23 +238,14 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
 
             return content;
           }
-        } else {
-          if (response.status === 404 || response.status === 401 || response.status === 403) {
-            // Invalid key or model forbidden; break loop immediately to prevent duplicate console 404 errors
-            break;
-          }
         }
       } catch (err: any) {
-        break;
+        // Continue to next model or server fallback
       }
     }
   }
 
-  // 2. Try Gemini API directly
-  const geminiContent = await callGeminiAPI(messages);
-  if (geminiContent) return geminiContent;
-
-  // 3. Fallback to Server Proxy /api/groq-chat
+  // 2. Fallback to Server Proxy /api/groq-chat
   try {
     const proxyRes = await fetch('/api/groq-chat', {
       method: 'POST',

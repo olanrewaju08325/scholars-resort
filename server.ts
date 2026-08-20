@@ -278,25 +278,35 @@ app.post('/api/test-smtp', async (req, res) => {
   }
 });
 
-// API Route: Groq & Gemini AI Chat Proxy
+// API Route: Groq AI Chat Proxy (Production Groq Key)
 app.post('/api/groq-chat', async (req, res) => {
-  const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
+  const { messages, model = 'openai/gpt-oss-120b', temperature = 0.7 } = req.body;
   const groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
-  const geminiKey = process.env.GEMINI_API_KEY;
 
-  // 1. Try Groq if key exists
-  if (groqKey) {
+  if (!groqKey || !groqKey.trim()) {
+    return res.status(400).json({ error: 'GROQ_API_KEY is not configured on the server.' });
+  }
+
+  const candidateModels = [
+    model,
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'groq/compound',
+    'groq/compound-mini'
+  ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
+
+  for (const m of candidateModels) {
     try {
       const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${groqKey}`
+          'Authorization': `Bearer ${groqKey.trim()}`
         },
         body: JSON.stringify({
-          model,
+          model: m,
           messages,
-          temperature,
+          temperature: Math.min(2.0, Math.max(0.0, Number(temperature) || 0.7)),
           max_tokens: 2048
         })
       });
@@ -306,31 +316,12 @@ app.post('/api/groq-chat', async (req, res) => {
         return res.json(data);
       }
     } catch (groqErr) {
-      console.warn('Groq API call on server failed, trying Gemini fallback:', groqErr);
+      console.warn(`Groq server call failed on model ${m}:`, groqErr);
     }
   }
 
-  // 2. Try Gemini fallback if key exists
-  if (geminiKey) {
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiKey });
-      const prompt = messages.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-      const response = await ai.models.generateContent({
-        model: 'gemini-3.6-flash',
-        contents: prompt
-      });
-      const text = response.text || '';
-      return res.json({
-        choices: [{ message: { role: 'assistant', content: text } }],
-        content: text
-      });
-    } catch (geminiErr: any) {
-      console.warn('Gemini fallback failed:', geminiErr?.message);
-    }
-  }
-
-  return res.status(400).json({
-    error: 'AI Proxy requires an active GROQ_API_KEY or GEMINI_API_KEY on the server.'
+  return res.status(502).json({
+    error: 'All Groq model completion attempts failed on the server.'
   });
 });
 

@@ -16,7 +16,7 @@ export const AIPromptStudioTab = () => {
   const [selectedPromptId, setSelectedPromptId] = useState<string | null>(null);
   const [featureName, setFeatureName] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [modelType, setModelType] = useState('llama-3.3-70b-versatile');
+  const [modelType, setModelType] = useState('openai/gpt-oss-120b');
   const [temperature, setTemperature] = useState(0.7);
 
   // Key Testing State
@@ -37,7 +37,7 @@ export const AIPromptStudioTab = () => {
     setSelectedPromptId(prompt.id);
     setFeatureName(prompt.feature_name);
     setSystemPrompt(prompt.system_prompt || '');
-    setModelType(prompt.model || 'llama-3.3-70b-versatile');
+    setModelType(prompt.model || 'openai/gpt-oss-120b');
     setTemperature(prompt.temperature || 0.7);
     setTestOutput('');
   }, []);
@@ -357,13 +357,10 @@ export const AIPromptStudioTab = () => {
                       onChange={(e) => setModelType(e.target.value)} 
                       className="w-full h-10 bg-slate-950 border border-slate-800 rounded-md px-3 text-sm focus:ring-1 focus:ring-primary outline-none"
                     >
-                      <option value="llama-3.1-8b-instant">Groq Llama 3.1 8B Instant (Ultra-Fast & Reliable)</option>
-                      <option value="llama-3.3-70b-versatile">Groq Llama 3.3 70B Versatile</option>
-                      <option value="llama3-70b-8192">Groq Llama 3 70B (8k)</option>
-                      <option value="llama3-8b-8192">Groq Llama 3 8B (8k)</option>
-                      <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 Distill Llama 70B</option>
-                      <option value="mixtral-8x7b-32768">Groq Mixtral 8x7B</option>
-                      <option value="gemma2-9b-it">Groq Gemma 2 9B</option>
+                      <option value="openai/gpt-oss-120b">Groq GPT OSS 120B (High Capacity & Reasoning)</option>
+                      <option value="openai/gpt-oss-20b">Groq GPT OSS 20B (Ultra-Fast)</option>
+                      <option value="groq/compound">Groq Compound (Multimodal / General)</option>
+                      <option value="groq/compound-mini">Groq Compound Mini (Lightning Speed)</option>
                     </select>
                   </div>
 
