@@ -22,10 +22,15 @@ export interface LiteratureBook {
   id: string;
   title: string;
   author: string;
-  genre: 'Compulsory UTME Novel' | 'Prose (African)' | 'Prose (Non-African)' | 'Drama (African)' | 'Drama (Non-African)' | 'Poetry';
+  genre: string;
   description: string;
   coverColor: string;
   chapters: NovelChapter[];
+  fileDataUrl?: string;
+  pdfUrl?: string;
+  category?: string;
+  subject_id?: string;
+  createdAt?: string;
 }
 
 export const DEFAULT_JAMB_BOOKS: LiteratureBook[] = [

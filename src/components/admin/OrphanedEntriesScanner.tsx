@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { fetchJambBooks, saveJambBooks } from '@/services/novelService';
 import { logAdminActivity } from '@/services/adminActivityService';
 import { toast } from 'sonner';
 
@@ -77,27 +78,24 @@ export function OrphanedEntriesScanner() {
 
       // 3. Scan Literature / Novel Bank questions or books
       try {
-        const { data: litBooks } = await supabase
-          .from('literature_books')
-          .select('id, title, subject_id, category, created_at')
-          .limit(100);
-
-        if (litBooks) {
+        const litBooks = await fetchJambBooks();
+        if (litBooks && Array.isArray(litBooks)) {
           for (const b of litBooks) {
-            if (!b.subject_id || !validSubjectIds.has(b.subject_id)) {
+            // Validate book category or subject association if present
+            if ((b as any).subject_id && !validSubjectIds.has((b as any).subject_id)) {
               foundOrphans.push({
                 id: b.id,
                 type: 'literature',
                 title: `[Book] ${b.title || 'Untitled Literary Entry'}`,
-                invalid_subject_id: b.subject_id || 'MISSING_SUBJECT_LINK',
-                created_at: b.created_at,
+                invalid_subject_id: (b as any).subject_id || 'MISSING_SUBJECT_LINK',
+                created_at: new Date().toISOString(),
                 raw_data: b
               });
             }
           }
         }
       } catch {
-        // literature_books table may be handled in JSON or state
+        // literature_books handled in local/admin_settings store
       }
 
       setOrphans(foundOrphans);
@@ -168,7 +166,9 @@ export function OrphanedEntriesScanner() {
         await supabase.from('questions').update({ subject_id: selectedSubjectId }).in('id', qIds);
       }
       if (litIds.length > 0) {
-        await supabase.from('literature_books').update({ subject_id: selectedSubjectId }).in('id', litIds);
+        const books = await fetchJambBooks();
+        const updatedBooks = books.map(b => litIds.includes(b.id) ? { ...b, subject_id: selectedSubjectId } : b);
+        await saveJambBooks(updatedBooks);
       }
 
       logAdminActivity('REPAIR_ORPHANS', `Linked ${idsToRepair.length} orphaned entries to subject ID ${selectedSubjectId}`, 'orphan_scanner', { count: idsToRepair.length });
@@ -200,7 +200,9 @@ export function OrphanedEntriesScanner() {
         await supabase.from('questions').delete().in('id', qIds);
       }
       if (litIds.length > 0) {
-        await supabase.from('literature_books').delete().in('id', litIds);
+        const books = await fetchJambBooks();
+        const updatedBooks = books.filter(b => !litIds.includes(b.id));
+        await saveJambBooks(updatedBooks);
       }
 
       logAdminActivity('DELETE_ORPHANS', `Deleted ${idsToDelete.length} orphaned entries`, 'orphan_scanner', { count: idsToDelete.length });

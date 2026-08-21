@@ -88,7 +88,7 @@ export function DashboardOverview() {
       // 2. Fetch Popular Exam Subjects
       const { data: examSessions } = await supabase
         .from('exam_sessions')
-        .select('subject_ids, title')
+        .select('subject_id, mode')
         .limit(200);
 
       const { data: subjectsList } = await supabase
@@ -104,25 +104,17 @@ export function DashboardOverview() {
       });
 
       if (examSessions && examSessions.length > 0) {
-        examSessions.forEach(session => {
-          if (Array.isArray(session.subject_ids)) {
+        examSessions.forEach((session: any) => {
+          if (session.subject_id) {
+            const name = subjectNameById[session.subject_id] || 'General Studies';
+            subjectCounts[name] = (subjectCounts[name] || 0) + 1;
+          } else if (Array.isArray(session.subject_ids)) {
             session.subject_ids.forEach((id: string) => {
               const name = subjectNameById[id] || 'General Studies';
               subjectCounts[name] = (subjectCounts[name] || 0) + 1;
             });
-          } else if (session.title) {
-            // infer subject from title
-            const lower = session.title.toLowerCase();
-            let matched = false;
-            (subjectsList || []).forEach(s => {
-              if (lower.includes(s.name.toLowerCase())) {
-                subjectCounts[s.name] = (subjectCounts[s.name] || 0) + 1;
-                matched = true;
-              }
-            });
-            if (!matched) {
-              subjectCounts['Use of English'] = (subjectCounts['Use of English'] || 0) + 1;
-            }
+          } else {
+            subjectCounts['Use of English'] = (subjectCounts['Use of English'] || 0) + 1;
           }
         });
       } else {

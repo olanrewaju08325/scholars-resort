@@ -15,6 +15,13 @@ interface PredictionResult {
   weak_areas: string[];
   improvements: string[];
   verdict: string;
+  completion_prediction?: {
+    daily_pace: number;
+    total_remaining_questions: number;
+    days_to_completion: number;
+    estimated_completion_date: string;
+    reasoning_steps: string[];
+  };
 }
 
 export const JAMBScorePredictor = () => {
@@ -34,17 +41,21 @@ export const JAMBScorePredictor = () => {
       // Fetch actual performance data
       const { data: sessions } = await supabase
         .from('exam_sessions')
-        .select('score, total_questions, submitted_at')
+        .select('score_percent, total_questions, created_at')
         .eq('user_id', profile.id)
         .eq('status', 'submitted')
-        .order('submitted_at', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(10);
 
-      const { data: answers } = await supabase
-        .from('session_answers')
-        .select('is_correct, questions!question_id(subjects!subject_id(name))')
-        .eq('user_id', profile.id)
-        .limit(200);
+      let answers: any[] = [];
+      try {
+        const { data: ansData } = await supabase
+          .from('session_answers')
+          .select('is_correct')
+          .eq('user_id', profile.id)
+          .limit(200);
+        if (ansData) answers = ansData;
+      } catch {}
 
       // Aggregate subject performance
       const subjectScores: Record<string, { correct: number; total: number }> = {};

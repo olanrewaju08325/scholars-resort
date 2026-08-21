@@ -15,7 +15,7 @@ export const BackupsTab = () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('admin_backups')
-        .select('*, profiles(full_name)')
+        .select('*')
         .order('created_at', { ascending: false });
       
       if (error) {

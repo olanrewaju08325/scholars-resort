@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   BookOpen, Sparkles, CheckCircle2, UserCheck, 
-  Bookmark, ArrowRight, ArrowLeft, Search, RefreshCw, Layers, Quote, BookA
+  Bookmark, ArrowRight, ArrowLeft, Search, RefreshCw, Layers, Quote, BookA,
+  FileText, Eye, Download, Maximize2
 } from 'lucide-react';
 import { fetchJambBooks } from '@/services/novelService';
 import type { LiteratureBook, NovelChapter } from '@/data/jambNovelsData';
@@ -15,6 +16,7 @@ export const JambNovelHub = () => {
   const [selectedBookId, setSelectedBookId] = useState<string>('the-life-changer');
   const [selectedChapter, setSelectedChapter] = useState<NovelChapter | null>(null);
   const [activeQuizMode, setActiveQuizMode] = useState(false);
+  const [viewingPdfMode, setViewingPdfMode] = useState(false);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [showExplanation, setShowExplanation] = useState(false);
@@ -231,28 +233,66 @@ export const JambNovelHub = () => {
                           {selectedChapter.title}
                         </CardTitle>
                       </div>
-                      <Button
-                        onClick={() => {
-                          setActiveQuizMode(true);
-                          resetQuiz();
-                        }}
-                        className="bg-primary hover:bg-primary/90 font-bold gap-2 text-xs h-9"
-                      >
-                        <Sparkles className="w-4 h-4" /> Practice Chapter Questions ({selectedChapter.sampleQuestions?.length || 0})
-                      </Button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {currentBook?.fileDataUrl && (
+                          <Button
+                            variant={viewingPdfMode ? "default" : "outline"}
+                            onClick={() => setViewingPdfMode(!viewingPdfMode)}
+                            className="text-xs h-9 font-bold gap-1.5 border-emerald-500/40 text-emerald-600 dark:text-emerald-400"
+                          >
+                            <FileText className="w-4 h-4 text-emerald-500" />
+                            {viewingPdfMode ? "View Chapter Notes" : "Read Full PDF Textbook"}
+                          </Button>
+                        )}
+                        <Button
+                          onClick={() => {
+                            setActiveQuizMode(true);
+                            setViewingPdfMode(false);
+                            resetQuiz();
+                          }}
+                          className="bg-primary hover:bg-primary/90 font-bold gap-2 text-xs h-9"
+                        >
+                          <Sparkles className="w-4 h-4" /> Practice Chapter Questions ({selectedChapter.sampleQuestions?.length || 0})
+                        </Button>
+                      </div>
                     </div>
                   </CardHeader>
 
                   <CardContent className="p-5 sm:p-6 space-y-6">
-                    {/* Plot Summary */}
-                    <div>
-                      <h4 className="text-xs font-extrabold text-primary uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                        <BookOpen className="w-3.5 h-3.5" /> Chapter Plot Summary & Key Events
-                      </h4>
-                      <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed bg-muted/30 p-4 rounded-xl border border-border whitespace-pre-wrap">
-                        {selectedChapter.summary}
-                      </p>
-                    </div>
+                    {/* Interactive PDF Reader or Chapter Plot Summary */}
+                    {viewingPdfMode && currentBook?.fileDataUrl ? (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between bg-emerald-500/10 p-3 rounded-lg border border-emerald-500/30">
+                          <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 flex items-center gap-2">
+                            <Eye className="w-4 h-4" /> Reading Full Document: {currentBook.title}
+                          </p>
+                          <a 
+                            href={currentBook.fileDataUrl} 
+                            download={`${currentBook.title.replace(/\s+/g, '_')}.pdf`}
+                            className="inline-flex items-center gap-1 text-xs font-bold text-primary hover:underline"
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download Document
+                          </a>
+                        </div>
+                        <div className="w-full h-[650px] rounded-xl overflow-hidden border border-border shadow-inner bg-slate-900">
+                          <iframe 
+                            src={currentBook.fileDataUrl} 
+                            className="w-full h-full border-none"
+                            title={`PDF Reader - ${currentBook.title}`}
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Plot Summary */}
+                        <div>
+                          <h4 className="text-xs font-extrabold text-primary uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                            <BookOpen className="w-3.5 h-3.5" /> Chapter Plot Summary & Key Events
+                          </h4>
+                          <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed bg-muted/30 p-4 rounded-xl border border-border whitespace-pre-wrap">
+                            {selectedChapter.summary}
+                          </p>
+                        </div>
 
                     {/* Characters & Themes */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -334,6 +374,8 @@ export const JambNovelHub = () => {
                         Start Practice Drill
                       </Button>
                     </div>
+                      </>
+                    )}
 
                   </CardContent>
                 </Card>

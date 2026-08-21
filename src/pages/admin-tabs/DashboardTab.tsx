@@ -122,7 +122,7 @@ export const DashboardTab = () => {
       setChartData(newChartData);
 
       // System Logs
-      const { data: logs } = await supabase.from('activity_logs').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(6);
+      const { data: logs } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(6);
       if (logs) setRecentLogs(logs);
 
     } catch(e) {

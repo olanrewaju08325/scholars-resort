@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -356,8 +357,10 @@ export const AdminAITab = () => {
                 <p className="text-sm text-slate-400">AI is generating content...</p>
               </div>
             ) : result ? (
-              <div className="bg-slate-950 rounded-lg p-4 border border-slate-800 max-h-96 overflow-y-auto">
-                <pre className="text-sm text-slate-200 whitespace-pre-wrap font-mono leading-relaxed">{result}</pre>
+              <div className="bg-slate-950 rounded-lg p-5 border border-slate-800 max-h-[500px] overflow-y-auto">
+                <div className="prose prose-invert max-w-none text-slate-200 text-sm space-y-3 leading-relaxed [&_table]:w-full [&_table]:border-collapse [&_table]:border [&_table]:border-slate-800 [&_th]:border [&_th]:border-slate-700 [&_th]:p-2 [&_th]:bg-slate-900 [&_td]:border [&_td]:border-slate-800 [&_td]:p-2 [&_h2]:text-lg [&_h2]:font-bold [&_h2]:text-purple-300 [&_h3]:text-base [&_h3]:font-semibold [&_h3]:text-slate-100">
+                  <ReactMarkdown>{result}</ReactMarkdown>
+                </div>
               </div>
             ) : (
               <div className="flex flex-col items-center justify-center py-16 gap-3 border-2 border-dashed border-slate-800 rounded-xl">

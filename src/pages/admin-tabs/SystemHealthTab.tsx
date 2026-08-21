@@ -66,7 +66,7 @@ export const SystemHealthTab = () => {
         // Fetch recent 5 audit logs
         const { data: logs } = await supabase
           .from('audit_logs')
-          .select('*, profiles(full_name)')
+          .select('*')
           .order('created_at', { ascending: false })
           .limit(5);
 

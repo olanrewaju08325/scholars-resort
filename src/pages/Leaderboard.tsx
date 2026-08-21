@@ -21,19 +21,25 @@ const Leaderboard = () => {
         // Fetch all submitted exams
         const { data: exams } = await supabase
           .from('exam_sessions')
-          .select('user_id, score, total_questions, profiles(full_name)')
+          .select('user_id, score_percent, total_questions')
           .eq('status', 'submitted');
           
-        if (exams) {
+        if (exams && exams.length > 0) {
+          const userIds = Array.from(new Set(exams.map(e => e.user_id).filter(Boolean)));
+          const { data: profiles } = userIds.length > 0 
+            ? await supabase.from('profiles').select('id, full_name').in('id', userIds)
+            : { data: [] };
+
+          const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
           const userBestScores = new Map();
           
           exams.forEach(exam => {
             const currentBest = userBestScores.get(exam.user_id)?.score || 0;
-            const scorePercentage = Math.round(((exam.score || 0) / (exam.total_questions || 1)) * 400); // Out of 400
+            const scorePercentage = Math.round((exam.score_percent || 0) * 4); // Convert % to out of 400
             
             if (scorePercentage > currentBest) {
-              // Anonymize name: "Olamide Olanrewaju" -> "Olamide O."
-              const nameParts = ((exam.profiles as any)?.full_name || 'Unknown Student').split(' ');
+              const fullName = profileMap.get(exam.user_id) || 'Scholar Student';
+              const nameParts = fullName.split(' ');
               const anonName = nameParts.length > 1 
                 ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
                 : nameParts[0];

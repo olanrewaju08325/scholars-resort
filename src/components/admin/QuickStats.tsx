@@ -56,17 +56,8 @@ export function QuickStats() {
         console.warn('Could not count literary entries:', err);
       }
 
-      // Also check Supabase literature_books if any
-      try {
-        const { count: litBooksCount } = await supabase
-          .from('literature_books')
-          .select('*', { count: 'exact', head: true });
-        if (litBooksCount && litBooksCount > literaryEntriesCount) {
-          literaryEntriesCount = litBooksCount;
-        }
-      } catch {
-        // optional table fallback
-      }
+      // Literary entries count calculated from local/database books
+      // (literature_books count is already included in literaryEntriesCount above)
 
       // 3. Fetch Registered Users & Active Students
       const [{ count: usersCount }, { count: studentsCount }] = await Promise.all([

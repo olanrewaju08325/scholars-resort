@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark, CheckSquare, Square, Search, Zap } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark, CheckSquare, Square, Search, Zap, Upload, FileUp, X } from 'lucide-react';
 import { fetchJambBooks, saveJambBooks } from '@/services/novelService';
 import type { LiteratureBook, NovelChapter, NovelQuestion } from '@/data/jambNovelsData';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
@@ -19,6 +19,15 @@ export const AdminLiteratureTab = () => {
   const [selectedChapterId, setSelectedChapterId] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // New Textbook / Book Upload Modal State
+  const [addBookModalOpen, setAddBookModalOpen] = useState(false);
+  const [newBookTitle, setNewBookTitle] = useState('');
+  const [newBookAuthor, setNewBookAuthor] = useState('');
+  const [newBookGenre, setNewBookGenre] = useState('Compulsory UTME Novel');
+  const [newBookDesc, setNewBookDesc] = useState('');
+  const [newBookPdfUrl, setNewBookPdfUrl] = useState('');
+  const [uploadingPdf, setUploadingPdf] = useState(false);
 
   // Form State for active chapter
   const [editingChapter, setEditingChapter] = useState<NovelChapter | null>(null);
@@ -377,6 +386,85 @@ export const AdminLiteratureTab = () => {
     toast.success('Question removed');
   };
 
+  const handlePdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('File size exceeds 25MB limit.');
+      return;
+    }
+    setUploadingPdf(true);
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target?.result as string;
+      setNewBookPdfUrl(dataUrl);
+      setUploadingPdf(false);
+      toast.success(`Attached ${file.name} successfully!`);
+    };
+    reader.onerror = () => {
+      setUploadingPdf(false);
+      toast.error('Failed to read file.');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleCreateBook = async () => {
+    if (!newBookTitle.trim()) {
+      toast.error('Please provide a textbook / novel title.');
+      return;
+    }
+
+    const newId = newBookTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `book-${Date.now()}`;
+    const colors = ['#3b82f6', '#8b5cf6', '#ec4899', '#10b981', '#f59e0b', '#6366f1'];
+    const randomColor = colors[Math.floor(Math.random() * colors.length)];
+
+    const newBook: LiteratureBook = {
+      id: newId,
+      title: newBookTitle.trim(),
+      author: newBookAuthor.trim() || 'Official JAMB Author',
+      genre: newBookGenre as any,
+      description: newBookDesc.trim() || 'Official UTME syllabus literature & textbook material.',
+      coverColor: randomColor,
+      fileDataUrl: newBookPdfUrl || undefined,
+      chapters: [
+        {
+          id: 1,
+          chapterNumber: 1,
+          title: 'Chapter 1: Introductory Overview',
+          summary: 'Detailed summary and syllabus plot overview for Chapter 1.',
+          keyThemes: ['Core Plot Theme', 'Character Conflict'],
+          charactersInvolved: ['Primary Protagonist', 'Supporting Character'],
+          sampleQuestions: [
+            {
+              question: 'Which theme is predominantly explored in Chapter 1?',
+              options: ['A) Courage & Integrity', 'B) Deception & Greed', 'C) Friendship & Loyalty', 'D) Academic Excellence'],
+              correct: 'A',
+              explanation: 'Official syllabus breakdown.'
+            }
+          ]
+        }
+      ]
+    };
+
+    const updatedBooks = [...books, newBook];
+    setBooks(updatedBooks);
+    setSelectedBookId(newBook.id);
+    setSelectedChapterId(1);
+    setEditingChapter(newBook.chapters[0]);
+
+    // Persist
+    await saveJambBooks(updatedBooks);
+    toast.success(`Successfully added textbook "${newBook.title}" to Literature & Textbook Hub!`);
+
+    // Reset Form
+    setNewBookTitle('');
+    setNewBookAuthor('');
+    setNewBookGenre('Compulsory UTME Novel');
+    setNewBookDesc('');
+    setNewBookPdfUrl('');
+    setAddBookModalOpen(false);
+  };
+
   if (loading) {
     return (
       <div className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
@@ -424,25 +512,34 @@ export const AdminLiteratureTab = () => {
         </div>
       </div>
 
-      {/* Book Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-        {books.map(bk => (
-          <button
-            key={bk.id}
-            onClick={() => handleSelectBook(bk.id)}
-            className={`px-4 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
-              selectedBookId === bk.id
-                ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                : 'bg-card text-muted-foreground hover:text-foreground border-border'
-            }`}
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            <span>{bk.title}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono">
-              {bk.chapters.length} Chs
-            </span>
-          </button>
-        ))}
+      {/* Book Tabs & Upload Button */}
+      <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <div className="flex gap-2 items-center">
+          {books.map(bk => (
+            <button
+              key={bk.id}
+              onClick={() => handleSelectBook(bk.id)}
+              className={`px-4 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
+                selectedBookId === bk.id
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                  : 'bg-card text-muted-foreground hover:text-foreground border-border'
+              }`}
+            >
+              <Bookmark className="w-3.5 h-3.5" />
+              <span>{bk.title}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono">
+                {bk.chapters.length} Chs
+              </span>
+            </button>
+          ))}
+        </div>
+
+        <Button 
+          onClick={() => setAddBookModalOpen(true)} 
+          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold gap-1.5 shrink-0 shadow-sm"
+        >
+          <Upload className="w-4 h-4" /> Add / Upload Textbook
+        </Button>
       </div>
 
       {/* Main Work Area */}
@@ -887,6 +984,99 @@ export const AdminLiteratureTab = () => {
         itemName={`${selectedQuestionIndices.length} Selected Questions`}
         isDeleting={bulkDeleteDialogConfig.isDeleting}
       />
+
+      {/* Upload New Textbook / Novel Modal */}
+      {addBookModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <Upload className="w-5 h-5 text-emerald-500" /> Add New Textbook / UTME Novel
+              </h3>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setAddBookModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-muted-foreground block mb-1">Book / Textbook Title *</label>
+                <Input 
+                  placeholder="e.g. UTME Senior Secondary Physics or The Life Changer" 
+                  value={newBookTitle} 
+                  onChange={(e) => setNewBookTitle(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground block mb-1">Author Name</label>
+                  <Input 
+                    placeholder="e.g. Khadija Abubakar Jalli" 
+                    value={newBookAuthor} 
+                    onChange={(e) => setNewBookAuthor(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground block mb-1">Category / Genre</label>
+                  <select 
+                    value={newBookGenre}
+                    onChange={(e) => setNewBookGenre(e.target.value)}
+                    className="w-full text-sm h-10 rounded-md border border-input bg-background px-3 font-medium"
+                  >
+                    <option value="Compulsory UTME Novel">Compulsory UTME Novel</option>
+                    <option value="Physics Textbook">Physics Textbook</option>
+                    <option value="Chemistry Textbook">Chemistry Textbook</option>
+                    <option value="Biology Textbook">Biology Textbook</option>
+                    <option value="Mathematics Textbook">Mathematics Textbook</option>
+                    <option value="Prose (African)">Prose (African)</option>
+                    <option value="Prose (Non-African)">Prose (Non-African)</option>
+                    <option value="Drama (African)">Drama (African)</option>
+                    <option value="Poetry">Poetry</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-muted-foreground block mb-1">Book Description / Plot Overview</label>
+                <textarea 
+                  rows={3} 
+                  placeholder="Brief summary or description of the textbook/novel for students..."
+                  value={newBookDesc}
+                  onChange={(e) => setNewBookDesc(e.target.value)}
+                  className="w-full text-xs rounded-md border border-input bg-background p-2.5 font-medium resize-none"
+                />
+              </div>
+
+              <div className="border border-dashed border-border rounded-lg p-4 bg-muted/20 space-y-2">
+                <label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <FileUp className="w-4 h-4 text-primary" /> Attach Textbook File (PDF, ePub, or Text)
+                </label>
+                <p className="text-[11px] text-muted-foreground">
+                  Upload full PDF textbook or electronic document to allow students to read directly inside the portal.
+                </p>
+                <Input 
+                  type="file" 
+                  accept=".pdf,.txt,.epub" 
+                  onChange={handlePdfFileChange} 
+                  className="text-xs cursor-pointer"
+                />
+                {uploadingPdf && <p className="text-xs text-primary animate-pulse">Reading and attaching file...</p>}
+                {newBookPdfUrl && <p className="text-xs font-bold text-emerald-500">File attached and ready for publish!</p>}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setAddBookModalOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleCreateBook} className="bg-emerald-600 hover:bg-emerald-500 font-bold text-white">
+                <Save className="w-4 h-4 mr-1.5" /> Publish to Library
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

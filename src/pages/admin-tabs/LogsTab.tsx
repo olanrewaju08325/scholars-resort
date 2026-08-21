@@ -35,7 +35,7 @@ export const LogsTab = () => {
       setLoading(true);
       let query = supabase
         .from('audit_logs')
-        .select('*, profiles(full_name)')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -49,7 +49,7 @@ export const LogsTab = () => {
       const { data, error } = await query;
       if (error && error.code !== 'PGRST116') {
         // Fallback to activity_logs if audit_logs fails
-        const { data: actData } = await supabase.from('activity_logs').select('*, profiles(full_name)').order('created_at', { ascending: false }).limit(50);
+        const { data: actData } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(50);
         setLogs(actData || []);
       } else {
         setLogs(data || []);
