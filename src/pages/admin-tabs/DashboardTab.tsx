@@ -4,6 +4,9 @@ import { Activity, Users, Zap, BookOpen, TrendingUp, Calendar, Trophy, ArrowUpRi
 import { supabase } from '@/lib/supabase';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { toast } from 'sonner';
+import { DashboardOverview } from '@/components/admin/DashboardOverview';
+import { OrphanedEntriesScanner } from '@/components/admin/OrphanedEntriesScanner';
+import { QuickStats } from '@/components/admin/QuickStats';
 
 export const DashboardTab = () => {
   const [stats, setStats] = useState({
@@ -132,18 +135,27 @@ export const DashboardTab = () => {
 
   return (
     <div className="space-y-6 pb-20">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
          <div>
-           <h2 className="text-3xl font-bold font-display text-slate-100">ScholarsOS Dashboard</h2>
-           <p className="text-slate-400">System Telemetry & Platform Overview</p>
+           <h2 className="text-3xl font-bold font-display text-foreground">ScholarsOS Dashboard</h2>
+           <p className="text-muted-foreground">System Telemetry & Platform Overview</p>
          </div>
-         <div className="flex items-center gap-3 bg-slate-900/50 p-2 rounded-lg border border-slate-800">
-           <div className="flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-400 rounded-md text-sm font-medium">
-             <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+         <div className="flex items-center gap-3 bg-card p-2 rounded-xl border border-border shadow-xs">
+           <div className="flex items-center gap-2 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-md text-sm font-medium border border-emerald-500/20">
+             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
              {liveUsers} Online Now
            </div>
          </div>
       </div>
+
+      {/* Real-time QuickStats Repository Counters */}
+      <QuickStats />
+
+      {/* Recharts Analytics Dashboard Overview */}
+      <DashboardOverview />
+
+      {/* Orphaned Entries Cleaner & Cron Audit */}
+      <OrphanedEntriesScanner />
 
       {/* Top Metrics Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

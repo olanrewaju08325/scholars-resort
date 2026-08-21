@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BookOpen, BarChart, Plus, CheckCircle, XCircle } from 'lucide-react';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
@@ -105,9 +106,14 @@ export const SubjectsTab = () => {
                 onChange={e => setNewSubjectIcon(e.target.value)}
                 className="bg-background border-border w-32"
               />
-              <Button type="submit" disabled={adding} className="font-bold">
-                <Plus className="w-4 h-4 mr-1" /> Add
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button type="submit" disabled={adding} className="font-bold">
+                    <Plus className="w-4 h-4 mr-1" /> Add
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Create a new subject entry in the UTME database</TooltipContent>
+              </Tooltip>
             </form>
 
             <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2">
@@ -122,9 +128,14 @@ export const SubjectsTab = () => {
                     {s.name}
                   </span>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" variant="outline" onClick={() => toggleStatus(s.id, s.is_active)} className={s.is_active ? "text-red-500 border-red-500/30" : "text-green-500 border-green-500/30"}>
-                      {s.is_active ? 'Deactivate' : 'Activate'}
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="outline" onClick={() => toggleStatus(s.id, s.is_active)} className={s.is_active ? "text-red-500 border-red-500/30" : "text-green-500 border-green-500/30"}>
+                          {s.is_active ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{s.is_active ? 'Hide this subject from student CBT test selection' : 'Enable this subject for active student CBT practice'}</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               ))}

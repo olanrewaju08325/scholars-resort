@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { Users, Download, ShieldCheck, Search, Filter, ArrowUpDown, MoreVertical, Flag, ChevronLeft, ChevronRight, Flame, Smartphone, RefreshCw } from 'lucide-react';
@@ -230,13 +231,23 @@ export const StudentsTab = () => {
         </div>
         <div className="flex gap-2 flex-wrap shrink-0">
           {selectedIds.size > 0 && (
-            <Button onClick={handleBulkGiftAccess} className="bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm">
-              Bulk Grant Access ({selectedIds.size})
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button onClick={handleBulkGiftAccess} className="bg-purple-600 hover:bg-purple-700 text-xs sm:text-sm">
+                  Bulk Grant Access ({selectedIds.size})
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Grant full premium access to all {selectedIds.size} selected students</TooltipContent>
+            </Tooltip>
           )}
-          <Button onClick={exportToCSV} variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 gap-2 text-xs sm:text-sm">
-            <Download className="w-4 h-4" /> Export CSV
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={exportToCSV} variant="outline" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 gap-2 text-xs sm:text-sm">
+                <Download className="w-4 h-4" /> Export CSV
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Download filtered student directory as a spreadsheet</TooltipContent>
+          </Tooltip>
         </div>
       </div>
 
@@ -344,17 +355,34 @@ export const StudentsTab = () => {
                     </td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-950" onClick={() => handleResetDevice(student.id, student.full_name)} title="Reset Authorized Device Lock">
-                          <Smartphone className="w-4 h-4" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-blue-400 hover:text-blue-300 hover:bg-blue-950" onClick={() => handleResetDevice(student.id, student.full_name)}>
+                              <Smartphone className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Reset Authorized Device Lock (Clear registered device MAC/hardware ID)</TooltipContent>
+                        </Tooltip>
+
                         {!student.has_paid && (
-                          <Button size="icon" variant="ghost" className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-950" onClick={() => handleGiftAccess(student.id, student.full_name)} title="Gift Premium Access">
-                            <ShieldCheck className="w-4 h-4" />
-                          </Button>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="h-8 w-8 text-green-400 hover:text-green-300 hover:bg-green-950" onClick={() => handleGiftAccess(student.id, student.full_name)}>
+                                <ShieldCheck className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Grant complimentary full premium access</TooltipContent>
+                          </Tooltip>
                         )}
-                        <Button size="icon" variant="ghost" className="h-8 w-8 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-950" onClick={() => flagForReview(student.id, student.full_name)} title="Flag for Review">
-                          <Flag className="w-4 h-4" />
-                        </Button>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="h-8 w-8 text-yellow-500 hover:text-yellow-400 hover:bg-yellow-950" onClick={() => flagForReview(student.id, student.full_name)}>
+                              <Flag className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Flag student account for administrator security audit</TooltipContent>
+                        </Tooltip>
                       </div>
                     </td>
                   </tr>

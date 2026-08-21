@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import { 
   Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, 
@@ -917,34 +918,65 @@ export const QuestionBankTab = () => {
              <CardDescription className="text-muted-foreground">Manage, review, bulk operations, and search questions across all subjects.</CardDescription>
            </div>
            <div className="flex items-center gap-2 flex-wrap">
-             <Button 
-               variant="outline"
-               size="sm"
-               onClick={() => exportQuestionsToCSV(filteredQuestions, `Question_Bank_${subjectFilter}_${Date.now()}.csv`)}
-               className="text-xs font-semibold gap-1.5 h-8"
-             >
-               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> Export CSV
-             </Button>
-             <Button 
-               variant="outline"
-               size="sm"
-               onClick={() => exportQuestionsToPDF(filteredQuestions, `Question_Bank_${subjectFilter}_${Date.now()}.pdf`)}
-               className="text-xs font-semibold gap-1.5 h-8"
-             >
-               <FileText className="w-3.5 h-3.5 text-red-500" /> Export PDF
-             </Button>
-             <Button 
-               variant={isVirtualView ? 'default' : 'outline'} 
-               size="sm" 
-               onClick={() => setIsVirtualView(!isVirtualView)}
-               className="text-xs font-semibold gap-1.5"
-             >
-               <Zap className="w-3.5 h-3.5" />
-               {isVirtualView ? 'Virtual Scroll Enabled' : 'Standard View'}
-             </Button>
-             <Button onClick={handlePublishAllDrafts} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs">
-               <CheckCircle className="w-4 h-4 mr-1.5" /> Approve All Drafts
-             </Button>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <Button 
+                   variant="outline"
+                   size="sm"
+                   onClick={() => exportQuestionsToCSV(filteredQuestions, `Question_Bank_${subjectFilter}_${Date.now()}.csv`)}
+                   className="text-xs font-semibold gap-1.5 h-8"
+                 >
+                   <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> Export CSV
+                 </Button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 Export current filtered questions list to a spreadsheet CSV file.
+               </TooltipContent>
+             </Tooltip>
+
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <Button 
+                   variant="outline"
+                   size="sm"
+                   onClick={() => exportQuestionsToPDF(filteredQuestions, `Question_Bank_${subjectFilter}_${Date.now()}.pdf`)}
+                   className="text-xs font-semibold gap-1.5 h-8"
+                 >
+                   <FileText className="w-3.5 h-3.5 text-red-500" /> Export PDF
+                 </Button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 Export formatted PDF document of filtered CBT questions.
+               </TooltipContent>
+             </Tooltip>
+
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <Button 
+                   variant={isVirtualView ? 'default' : 'outline'} 
+                   size="sm" 
+                   onClick={() => setIsVirtualView(!isVirtualView)}
+                   className="text-xs font-semibold gap-1.5"
+                 >
+                   <Zap className="w-3.5 h-3.5" />
+                   {isVirtualView ? 'Virtual Scroll Enabled' : 'Standard View'}
+                 </Button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 Toggle ultra-fast windowed virtual rendering for massive datasets.
+               </TooltipContent>
+             </Tooltip>
+
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <Button onClick={handlePublishAllDrafts} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs">
+                   <CheckCircle className="w-4 h-4 mr-1.5" /> Approve All Drafts
+                 </Button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 Publish all pending draft questions across the platform into live CBT practice.
+               </TooltipContent>
+             </Tooltip>
            </div>
         </CardHeader>
         <CardContent className="space-y-4 min-w-0 w-full overflow-hidden">
@@ -1083,21 +1115,50 @@ export const QuestionBankTab = () => {
                                 </span>
                               </div>
                               <div className="flex items-center justify-end gap-1 shrink-0 whitespace-nowrap">
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id} title="AI Validate Quality">
-                                  {validatingId === q.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
-                                </Button>
-                                <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)} title="View History">
-                                  <History className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" onClick={() => toggleStatus(q.id, q.is_active)}>
-                                  {q.is_active ? 'Unpublish' : 'Publish'}
-                                </Button>
-                                <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => handleEdit(q)}>
-                                  <Edit2 className="w-3.5 h-3.5" />
-                                </Button>
-                                <Button size="icon" variant="destructive" className="h-7 w-7" onClick={() => handleDeleteQuestion(q.id)}>
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </Button>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id}>
+                                      {validatingId === q.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Run AI quality audit & accuracy score check</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)}>
+                                      <History className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>View revision history & audit trail</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" onClick={() => toggleStatus(q.id, q.is_active)}>
+                                      {q.is_active ? 'Unpublish' : 'Publish'}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>{q.is_active ? 'Switch to Draft mode' : 'Make live in student CBT exams'}</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => handleEdit(q)}>
+                                      <Edit2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Edit question, options & explanation</TooltipContent>
+                                </Tooltip>
+
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button size="icon" variant="destructive" className="h-7 w-7" onClick={() => handleDeleteQuestion(q.id)}>
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>Delete question permanently</TooltipContent>
+                                </Tooltip>
                               </div>
                             </div>
                           );
@@ -1138,21 +1199,50 @@ export const QuestionBankTab = () => {
                          </span>
                       </td>
                       <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                        <Button size="icon" variant="ghost" className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id} title="AI Validate Quality">
-                          {validatingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                        </Button>
-                        <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)} title="View History">
-                          <History className="w-4 h-4" />
-                        </Button>
-                        <Button size="sm" variant="outline" onClick={() => toggleStatus(q.id, q.is_active)}>
-                          {q.is_active ? 'Unpublish' : 'Publish'}
-                        </Button>
-                        <Button size="icon" variant="secondary" onClick={() => handleEdit(q)}>
-                           <Edit2 className="w-4 h-4" />
-                        </Button>
-                        <Button size="icon" variant="destructive" onClick={() => handleDeleteQuestion(q.id)}>
-                           <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id}>
+                              {validatingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Run AI quality audit & accuracy score check</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)}>
+                              <History className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>View revision history & audit trail</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="outline" onClick={() => toggleStatus(q.id, q.is_active)}>
+                              {q.is_active ? 'Unpublish' : 'Publish'}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{q.is_active ? 'Switch to Draft mode' : 'Make live in student CBT exams'}</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="secondary" onClick={() => handleEdit(q)}>
+                              <Edit2 className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Edit question, options & explanation</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="icon" variant="destructive" onClick={() => handleDeleteQuestion(q.id)}>
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Delete question permanently</TooltipContent>
+                        </Tooltip>
                       </td>
                     </tr>
                   );

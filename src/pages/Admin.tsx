@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 
 // Sub-modules
 import { DashboardTab } from './admin-tabs/DashboardTab';
@@ -42,6 +43,10 @@ import { AIKeysTab } from './admin-tabs/AIKeysTab';
 import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 import { initAdminOfflineSync } from '@/services/offlineSyncService';
 import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
+import { TooltipProvider } from '@/components/ui/tooltip';
+import { AdminNotificationSystem } from '@/components/admin/AdminNotificationSystem';
+import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
+import { AdminSessionTimeout } from '@/components/admin/AdminSessionTimeout';
 
 export default function Admin() {
   const { profile, signOut } = useAuth();
@@ -151,7 +156,8 @@ export default function Admin() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col md:flex-row overflow-hidden">
+    <TooltipProvider delayDuration={200}>
+      <div className="min-h-screen bg-background flex flex-col md:flex-row overflow-hidden">
       
       {/* Sidebar - Desktop */}
       <aside className={`hidden md:flex flex-col border-r border-border bg-card transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-72'}`}>
@@ -244,11 +250,9 @@ export default function Admin() {
           </div>
           
           <div className="flex items-center gap-3 shrink-0">
-            <ThemeToggle />
-            <Button variant="ghost" size="icon" aria-label="Notifications" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-            </Button>
+            <AdminSessionTimeout timeoutMinutes={15} warningSeconds={60} />
+            <AdminThemeToggle />
+            <AdminNotificationSystem onNavigate={(module) => setActiveModule(module)} />
             <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center font-bold text-primary text-sm uppercase ml-2 border border-primary/30" aria-label="User Profile">
               {profile?.full_name?.substring(0,2) || 'AD'}
             </div>
@@ -272,5 +276,6 @@ export default function Admin() {
         </div>
       </main>
     </div>
+    </TooltipProvider>
   );
 }

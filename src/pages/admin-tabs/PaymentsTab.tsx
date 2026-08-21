@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { CheckCircle, XCircle, CreditCard, Activity, Link as LinkIcon, Download } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -244,12 +245,23 @@ export const PaymentsTab = () => {
                       <td className="px-4 py-3 font-mono text-xs">{payment.reference || 'No Ref'}</td>
                       <td className="px-4 py-3 capitalize">{payment.plan_type || 'Unknown'}</td>
                       <td className="px-4 py-3 flex gap-2 justify-end">
-                        <Button size="sm" variant="outline" onClick={() => handleReject(payment.id, payment.user_id)} className="h-8 text-red-400 border-red-900/30 hover:bg-red-950">
-                          <XCircle className="w-4 h-4 mr-1"/> Reject
-                        </Button>
-                        <Button size="sm" onClick={() => handleVerify(payment.id, payment.user_id, payment.amount, payment.plan_type)} className="h-8 bg-green-600 hover:bg-green-700">
-                          <CheckCircle className="w-4 h-4 mr-1"/> Verify
-                        </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" variant="outline" onClick={() => handleReject(payment.id, payment.user_id)} className="h-8 text-red-400 border-red-900/30 hover:bg-red-950">
+                              <XCircle className="w-4 h-4 mr-1"/> Reject
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Decline payment proof and issue email notification</TooltipContent>
+                        </Tooltip>
+
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button size="sm" onClick={() => handleVerify(payment.id, payment.user_id, payment.amount, payment.plan_type)} className="h-8 bg-green-600 hover:bg-green-700">
+                              <CheckCircle className="w-4 h-4 mr-1"/> Verify
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>Verify payment receipt, activate subscription plan, and notify student</TooltipContent>
+                        </Tooltip>
                       </td>
                     </tr>
                   ))

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Swords, Plus, Trash2, CheckCircle, XCircle, Sparkles, RefreshCw, Calendar, Clock, Database, ShieldAlert } from 'lucide-react';
@@ -258,14 +259,25 @@ Return STRICT JSON format:
 
               {/* Data Loaders */}
               <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <Button type="button" onClick={fetchQuestionFromDatabase} disabled={loadingFromDB} variant="outline" className="flex-1 font-bold gap-2">
-                  {loadingFromDB ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4 text-primary" />}
-                  {loadingFromDB ? 'Loading...' : 'Pull Real Past Question from Database'}
-                </Button>
-                <Button type="button" onClick={generateWithAI} disabled={generatingAI} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2">
-                  {generatingAI ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-                  {generatingAI ? 'Generating...' : 'AI Generate Hard Question'}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button type="button" onClick={fetchQuestionFromDatabase} disabled={loadingFromDB} variant="outline" className="flex-1 font-bold gap-2">
+                      {loadingFromDB ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Database className="w-4 h-4 text-primary" />}
+                      {loadingFromDB ? 'Loading...' : 'Pull Real Past Question from Database'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Fetch an authentic past JAMB question directly from storage</TooltipContent>
+                </Tooltip>
+
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button type="button" onClick={generateWithAI} disabled={generatingAI} className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold gap-2">
+                      {generatingAI ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                      {generatingAI ? 'Generating...' : 'AI Generate Hard Question'}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Synthesize a high-order reasoning challenge question with AI</TooltipContent>
+                </Tooltip>
               </div>
 
               <div className="space-y-2">
@@ -324,14 +336,25 @@ Return STRICT JSON format:
                     </div>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Button size="sm" variant="outline" onClick={() => toggleActive(challenge.id, challenge.is_active)}
-                      className="h-8 text-xs font-semibold">
-                      {challenge.is_active ? <XCircle className="w-3.5 h-3.5 mr-1" /> : <CheckCircle className="w-3.5 h-3.5 mr-1" />}
-                      {challenge.is_active ? 'Deactivate' : 'Activate'}
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleDelete(challenge.id)} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-500/10">
-                      <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="outline" onClick={() => toggleActive(challenge.id, challenge.is_active)}
+                          className="h-8 text-xs font-semibold">
+                          {challenge.is_active ? <XCircle className="w-3.5 h-3.5 mr-1" /> : <CheckCircle className="w-3.5 h-3.5 mr-1" />}
+                          {challenge.is_active ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>{challenge.is_active ? 'Unpublish challenge from student leaderboard' : 'Publish challenge for active student leaderboard'}</TooltipContent>
+                    </Tooltip>
+
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button size="sm" variant="ghost" onClick={() => handleDelete(challenge.id)} className="h-8 text-red-500 hover:text-red-600 hover:bg-red-500/10">
+                          <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Permanently delete this weekly competition</TooltipContent>
+                    </Tooltip>
                   </div>
                 </div>
               </CardContent>
