@@ -39,6 +39,8 @@ import { WeeklyChallengesAdminTab } from './admin-tabs/WeeklyChallengesAdminTab'
 import { ContentStudioTab } from './admin-tabs/ContentStudioTab';
 import { PlatformHealthTab } from './admin-tabs/PlatformHealthTab';
 import { AIKeysTab } from './admin-tabs/AIKeysTab';
+import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
+import { initAdminOfflineSync } from '@/services/offlineSyncService';
 import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
 
 export default function Admin() {
@@ -47,6 +49,11 @@ export default function Admin() {
   const [activeModule, setActiveModule] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Initialize offline sync queue listener
+  useEffect(() => {
+    initAdminOfflineSync();
+  }, []);
 
   // Command Palette Simulation
   useEffect(() => {
@@ -258,7 +265,9 @@ export default function Admin() {
           </div>
           
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 min-w-0 w-full">
-            {renderModule()}
+            <AdminErrorBoundary key={activeModule} fallbackTitle={`Error rendering ${activeModule.replace('-', ' ')} module`}>
+              {renderModule()}
+            </AdminErrorBoundary>
           </div>
         </div>
       </main>

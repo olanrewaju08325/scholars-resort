@@ -2,9 +2,15 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark } from 'lucide-react';
+import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark, CheckSquare, Square, Search, Zap } from 'lucide-react';
 import { fetchJambBooks, saveJambBooks } from '@/services/novelService';
 import type { LiteratureBook, NovelChapter, NovelQuestion } from '@/data/jambNovelsData';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { VirtualList } from '@/components/VirtualList';
+import { queueOfflineOperation } from '@/services/offlineSyncService';
+import { exportLiteratureToCSV, exportLiteratureToPDF } from '@/utils/exportUtils';
+import { logAdminActivity } from '@/services/adminActivityService';
+import { FileSpreadsheet, FileText, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const AdminLiteratureTab = () => {
@@ -21,6 +27,42 @@ export const AdminLiteratureTab = () => {
   
   // Question Form State
   const [editingQuestion, setEditingQuestion] = useState<NovelQuestion | null>(null);
+
+  // Bulk Selection & Virtualization State
+  const [selectedQuestionIndices, setSelectedQuestionIndices] = useState<number[]>([]);
+  const [selectedChapterIds, setSelectedChapterIds] = useState<number[]>([]);
+  const [isVirtualQuestionsView, setIsVirtualQuestionsView] = useState(true);
+
+  const [bulkDeleteDialogConfig, setBulkDeleteDialogConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    type: 'chapters' | 'questions';
+    isDeleting: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    type: 'questions',
+    isDeleting: false
+  });
+
+  // Delete Dialog State
+  const [deleteConfig, setDeleteConfig] = useState<{
+    isOpen: boolean;
+    title: string;
+    description: string;
+    itemName?: string;
+    type: 'chapter' | 'question' | null;
+    targetId?: number;
+    isDeleting: boolean;
+  }>({
+    isOpen: false,
+    title: '',
+    description: '',
+    type: null,
+    isDeleting: false
+  });
 
   useEffect(() => {
     loadBooks();
@@ -156,24 +198,154 @@ export const AdminLiteratureTab = () => {
     toast.success(`Created Chapter ${newId}`);
   };
 
-  const handleDeleteChapter = (chId: number) => {
-    if (!currentBook) return;
-    if (confirm('Are you sure you want to delete this chapter?')) {
-      const updatedChapters = currentBook.chapters.filter(c => c.id !== chId);
-      const updatedBooks = books.map(b => {
-        if (b.id === selectedBookId) {
-          return { ...b, chapters: updatedChapters };
+  const openDeleteChapterModal = (ch: NovelChapter) => {
+    setDeleteConfig({
+      isOpen: true,
+      title: 'Delete Chapter',
+      description: 'Are you sure you want to delete this chapter? All themes, character summaries, and practice questions inside this chapter will be permanently removed from Supabase.',
+      itemName: ch.title,
+      type: 'chapter',
+      targetId: ch.id,
+      isDeleting: false
+    });
+  };
+
+  const openDeleteQuestionModal = (qIdx: number, questionText: string) => {
+    setDeleteConfig({
+      isOpen: true,
+      title: 'Delete Literature Question',
+      description: 'Are you sure you want to delete this question? This change will be saved to the database immediately.',
+      itemName: questionText || `Question ${qIdx + 1}`,
+      type: 'question',
+      targetId: qIdx,
+      isDeleting: false
+    });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteConfig.type || deleteConfig.targetId === undefined || !currentBook) return;
+
+    setDeleteConfig(prev => ({ ...prev, isDeleting: true }));
+
+    try {
+      let updatedBooks = [...books];
+
+      if (deleteConfig.type === 'chapter') {
+        const chId = deleteConfig.targetId;
+        const updatedChapters = currentBook.chapters.filter(c => c.id !== chId);
+        updatedBooks = books.map(b => {
+          if (b.id === selectedBookId) {
+            return { ...b, chapters: updatedChapters };
+          }
+          return b;
+        });
+
+        // Save to Supabase and localStorage immediately
+        const res = await saveJambBooks(updatedBooks);
+        if (res.success) {
+          setBooks(updatedBooks);
+          if (updatedChapters.length > 0) {
+            setSelectedChapterId(updatedChapters[0].id);
+            setEditingChapter({ ...updatedChapters[0] });
+          } else {
+            setEditingChapter(null);
+          }
+          toast.success('Chapter deleted from database successfully.');
+        } else {
+          toast.error(`Deletion failed: ${res.error}`);
         }
-        return b;
-      });
-      setBooks(updatedBooks);
-      if (updatedChapters.length > 0) {
-        setSelectedChapterId(updatedChapters[0].id);
-        setEditingChapter(updatedChapters[0]);
-      } else {
-        setEditingChapter(null);
+      } else if (deleteConfig.type === 'question') {
+        if (!editingChapter) return;
+        const qIdx = deleteConfig.targetId;
+        const updatedQs = editingChapter.sampleQuestions.filter((_, i) => i !== qIdx);
+        
+        const updatedChapter = { ...editingChapter, sampleQuestions: updatedQs };
+
+        updatedBooks = books.map(b => {
+          if (b.id === selectedBookId) {
+            return {
+              ...b,
+              chapters: b.chapters.map(c => c.id === editingChapter.id ? updatedChapter : c)
+            };
+          }
+          return b;
+        });
+
+        // Save to Supabase and localStorage immediately
+        const res = await saveJambBooks(updatedBooks);
+        if (res.success) {
+          setEditingChapter(updatedChapter);
+          setBooks(updatedBooks);
+          toast.success('Question deleted from database successfully.');
+        } else {
+          toast.error(`Deletion failed: ${res.error}`);
+        }
       }
-      toast.success('Chapter removed');
+    } catch (err: any) {
+      toast.error(`Failed to delete: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setDeleteConfig(prev => ({ ...prev, isOpen: false, isDeleting: false }));
+    }
+  };
+
+  const handleToggleSelectAllQuestions = () => {
+    if (!editingChapter || !editingChapter.sampleQuestions) return;
+    if (selectedQuestionIndices.length >= editingChapter.sampleQuestions.length) {
+      setSelectedQuestionIndices([]);
+    } else {
+      setSelectedQuestionIndices(editingChapter.sampleQuestions.map((_, i) => i));
+    }
+  };
+
+  const handleToggleSelectQuestion = (idx: number) => {
+    setSelectedQuestionIndices(prev => 
+      prev.includes(idx) ? prev.filter(i => i !== idx) : [...prev, idx]
+    );
+  };
+
+  const handleOpenBulkDeleteQuestions = () => {
+    if (selectedQuestionIndices.length === 0) return;
+    setBulkDeleteDialogConfig({
+      isOpen: true,
+      title: 'Mass Delete Practice Questions',
+      description: `Are you sure you want to permanently delete all ${selectedQuestionIndices.length} selected question(s) from this chapter?`,
+      type: 'questions',
+      isDeleting: false
+    });
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    setBulkDeleteDialogConfig(prev => ({ ...prev, isDeleting: true }));
+
+    try {
+      if (bulkDeleteDialogConfig.type === 'questions' && editingChapter && currentBook) {
+        const remainingQuestions = editingChapter.sampleQuestions.filter((_, idx) => !selectedQuestionIndices.includes(idx));
+        const updatedChapter = { ...editingChapter, sampleQuestions: remainingQuestions };
+        const updatedChapters = currentBook.chapters.map(c => c.id === editingChapter.id ? updatedChapter : c);
+        const updatedBooks = books.map(b => b.id === currentBook.id ? { ...b, chapters: updatedChapters } : b);
+
+        if (navigator.onLine) {
+          const res = await saveJambBooks(updatedBooks);
+          if (res.success) {
+            setEditingChapter(updatedChapter);
+            setBooks(updatedBooks);
+            logAdminActivity('BULK_DELETE_QUESTIONS', `Deleted ${selectedQuestionIndices.length} questions from ${editingChapter.title}`, 'literature_bank', { count: selectedQuestionIndices.length });
+            toast.success(`Deleted ${selectedQuestionIndices.length} question(s) from chapter.`);
+          } else {
+            await queueOfflineOperation('literature_book', 'save_literature', { books: updatedBooks });
+            toast.info('Saved mass deletion to offline queue.');
+          }
+        } else {
+          await queueOfflineOperation('literature_book', 'save_literature', { books: updatedBooks });
+          setEditingChapter(updatedChapter);
+          setBooks(updatedBooks);
+        }
+        setSelectedQuestionIndices([]);
+      }
+    } catch (err: any) {
+      toast.error(`Mass delete failed: ${err?.message || 'Unknown error'}`);
+    } finally {
+      setBulkDeleteDialogConfig(prev => ({ ...prev, isOpen: false, isDeleting: false }));
     }
   };
 
@@ -226,7 +398,23 @@ export const AdminLiteratureTab = () => {
             Manage compulsory UTME novels (The Life Changer), African/Non-African prose, drama texts, chapter breakdown, themes, and past questions.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => exportLiteratureToCSV(books, `JAMB_Literature_Bank_${Date.now()}.csv`)}
+            className="text-xs font-semibold gap-1.5"
+          >
+            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> Export CSV
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => exportLiteratureToPDF(books, `JAMB_Literature_Bank_${Date.now()}.pdf`)}
+            className="text-xs font-semibold gap-1.5"
+          >
+            <FileText className="w-3.5 h-3.5 text-red-500" /> Export PDF
+          </Button>
           <Button variant="outline" size="sm" onClick={loadBooks} disabled={saving}>
             <RefreshCw className="w-4 h-4 mr-1.5" /> Refresh
           </Button>
@@ -293,7 +481,7 @@ export const AdminLiteratureTab = () => {
                     className="h-6 w-6 text-red-400 hover:text-red-600 hover:bg-red-500/10 shrink-0"
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleDeleteChapter(ch.id);
+                      openDeleteChapterModal(ch);
                     }}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -406,87 +594,263 @@ export const AdminLiteratureTab = () => {
 
                   {/* Chapter Practice Questions Section */}
                   <div className="space-y-4 pt-2 border-t border-border">
-                    <div className="flex items-center justify-between">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
                       <h4 className="text-xs font-extrabold text-primary uppercase tracking-wider flex items-center gap-1.5">
-                        <HelpCircle className="w-4 h-4" /> Practice Questions for this Chapter ({editingChapter.sampleQuestions?.length || 0})
+                        <HelpCircle className="w-4 h-4" /> Practice Questions ({editingChapter.sampleQuestions?.length || 0})
                       </h4>
-                      <Button size="sm" onClick={handleAddQuestion} className="h-7 text-xs font-bold gap-1 bg-primary">
-                        <Plus className="w-3.5 h-3.5" /> Add Question
-                      </Button>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={handleToggleSelectAllQuestions}
+                          className="h-7 text-xs font-bold gap-1"
+                        >
+                          {selectedQuestionIndices.length >= (editingChapter.sampleQuestions?.length || 0) && (editingChapter.sampleQuestions?.length || 0) > 0 ? (
+                            <><CheckSquare className="w-3.5 h-3.5 text-primary" /> Deselect All</>
+                          ) : (
+                            <><Square className="w-3.5 h-3.5" /> Select All</>
+                          )}
+                        </Button>
+                        <Button size="sm" onClick={handleAddQuestion} className="h-7 text-xs font-bold gap-1 bg-primary">
+                          <Plus className="w-3.5 h-3.5" /> Add Question
+                        </Button>
+                      </div>
                     </div>
 
-                    <div className="space-y-3">
-                      {editingChapter.sampleQuestions?.map((q, qIdx) => (
-                        <div key={qIdx} className="p-4 rounded-xl border border-border bg-muted/30 space-y-3">
-                          <div className="flex items-start justify-between gap-2">
-                            <span className="text-xs font-bold text-primary font-mono">Q{qIdx + 1}.</span>
-                            <Input
-                              value={q.question}
-                              onChange={(e) => {
-                                const updated = { ...q, question: e.target.value };
-                                handleSaveQuestion(qIdx, updated);
-                              }}
-                              className="text-xs font-bold bg-background h-8"
-                              placeholder="Enter JAMB style question..."
-                            />
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-500/10 shrink-0"
-                              onClick={() => handleDeleteQuestion(qIdx)}
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </div>
-
-                          {/* Options */}
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                            {['A', 'B', 'C', 'D'].map((letter, optIdx) => (
-                              <div key={letter} className="flex items-center gap-1.5">
-                                <span className={`w-5 text-center text-xs font-bold ${q.correct === letter ? 'text-green-500' : 'text-muted-foreground'}`}>
-                                  {letter})
-                                </span>
-                                <Input
-                                  value={q.options[optIdx] || ''}
-                                  onChange={(e) => {
-                                    const opts = [...q.options];
-                                    opts[optIdx] = e.target.value;
-                                    handleSaveQuestion(qIdx, { ...q, options: opts });
-                                  }}
-                                  className="text-xs h-7 bg-background"
-                                  placeholder={`Option ${letter}`}
-                                />
-                              </div>
-                            ))}
-                          </div>
-
-                          {/* Correct Answer & Explanation */}
-                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
-                            <div className="sm:col-span-1 space-y-1">
-                              <label className="text-[10px] font-bold text-muted-foreground">Correct Option</label>
-                              <select
-                                value={q.correct}
-                                onChange={(e) => handleSaveQuestion(qIdx, { ...q, correct: e.target.value })}
-                                className="w-full text-xs h-7 rounded border border-border bg-background px-2 font-bold text-green-500"
-                              >
-                                <option value="A">A</option>
-                                <option value="B">B</option>
-                                <option value="C">C</option>
-                                <option value="D">D</option>
-                              </select>
-                            </div>
-                            <div className="sm:col-span-3 space-y-1">
-                              <label className="text-[10px] font-bold text-muted-foreground">Explanation / Syllabus Reference</label>
-                              <Input
-                                value={q.explanation}
-                                onChange={(e) => handleSaveQuestion(qIdx, { ...q, explanation: e.target.value })}
-                                className="text-xs h-7 bg-background"
-                                placeholder="Why this option is correct based on the novel..."
-                              />
-                            </div>
-                          </div>
+                    {/* Questions Bulk Action Bar */}
+                    {selectedQuestionIndices.length > 0 && (
+                      <div className="p-3 bg-primary/10 border border-primary/30 rounded-xl flex items-center justify-between flex-wrap gap-2 animate-in fade-in">
+                        <span className="text-xs font-bold text-primary flex items-center gap-1.5">
+                          <CheckSquare className="w-4 h-4" /> {selectedQuestionIndices.length} Question(s) Selected
+                        </span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-7 text-xs font-semibold gap-1"
+                            onClick={() => {
+                              if (!editingChapter) return;
+                              const selectedQs = editingChapter.sampleQuestions.filter((_, idx) => selectedQuestionIndices.includes(idx));
+                              // Create mock book structure for selected questions export
+                              const exportPayload = [{
+                                id: currentBook?.id || 'book',
+                                title: currentBook?.title || 'Book',
+                                author: currentBook?.author || 'Author',
+                                category: currentBook?.category || 'General',
+                                chapters: [{ ...editingChapter, sampleQuestions: selectedQs }]
+                              }];
+                              exportLiteratureToCSV(exportPayload as LiteratureBook[], `Selected_Literature_Questions_${Date.now()}.csv`);
+                            }}
+                          >
+                            <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> Export CSV
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-7 text-xs font-semibold gap-1"
+                            onClick={() => {
+                              if (!editingChapter) return;
+                              const selectedQs = editingChapter.sampleQuestions.filter((_, idx) => selectedQuestionIndices.includes(idx));
+                              const exportPayload = [{
+                                id: currentBook?.id || 'book',
+                                title: currentBook?.title || 'Book',
+                                author: currentBook?.author || 'Author',
+                                category: currentBook?.category || 'General',
+                                chapters: [{ ...editingChapter, sampleQuestions: selectedQs }]
+                              }];
+                              exportLiteratureToPDF(exportPayload as LiteratureBook[], `Selected_Literature_Questions_${Date.now()}.pdf`);
+                            }}
+                          >
+                            <FileText className="w-3.5 h-3.5 text-red-500" /> Export PDF
+                          </Button>
+                          <Button size="sm" variant="destructive" className="h-7 text-xs font-bold gap-1" onClick={handleOpenBulkDeleteQuestions}>
+                            <Trash2 className="w-3.5 h-3.5" /> Delete Selected ({selectedQuestionIndices.length})
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setSelectedQuestionIndices([])}>
+                            Clear
+                          </Button>
                         </div>
-                      ))}
+                      </div>
+                    )}
+
+                    <div className="space-y-3">
+                      {editingChapter.sampleQuestions?.length === 0 ? (
+                        <div className="text-center py-6 text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+                          No practice questions added to this chapter yet. Click "Add Question" above.
+                        </div>
+                      ) : isVirtualQuestionsView && (editingChapter.sampleQuestions?.length || 0) > 5 ? (
+                        <VirtualList
+                          items={editingChapter.sampleQuestions || []}
+                          itemHeight={220}
+                          containerHeight={500}
+                          keyExtractor={(_, qIdx) => qIdx}
+                          renderItem={(q, qIdx) => {
+                            const isSelected = selectedQuestionIndices.includes(qIdx);
+                            return (
+                              <div className={`p-4 mb-3 rounded-xl border transition-colors space-y-3 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-muted/30'}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    <input
+                                      type="checkbox"
+                                      checked={isSelected}
+                                      onChange={() => handleToggleSelectQuestion(qIdx)}
+                                      className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                                    />
+                                    <span className="text-xs font-bold text-primary font-mono">Q{qIdx + 1}.</span>
+                                  </div>
+                                  <Input
+                                    value={q.question}
+                                    onChange={(e) => {
+                                      const updated = { ...q, question: e.target.value };
+                                      handleSaveQuestion(qIdx, updated);
+                                    }}
+                                    className="text-xs font-bold bg-background h-8"
+                                    placeholder="Enter JAMB style question..."
+                                  />
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-500/10 shrink-0"
+                                    onClick={() => openDeleteQuestionModal(qIdx, q.question)}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </Button>
+                                </div>
+
+                                {/* Options */}
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {['A', 'B', 'C', 'D'].map((letter, optIdx) => (
+                                    <div key={letter} className="flex items-center gap-1.5">
+                                      <span className={`w-5 text-center text-xs font-bold ${q.correct === letter ? 'text-green-500' : 'text-muted-foreground'}`}>
+                                        {letter})
+                                      </span>
+                                      <Input
+                                        value={q.options[optIdx] || ''}
+                                        onChange={(e) => {
+                                          const opts = [...q.options];
+                                          opts[optIdx] = e.target.value;
+                                          handleSaveQuestion(qIdx, { ...q, options: opts });
+                                        }}
+                                        className="text-xs h-7 bg-background"
+                                        placeholder={`Option ${letter}`}
+                                      />
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Correct Answer & Explanation */}
+                                <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
+                                  <div className="sm:col-span-1 space-y-1">
+                                    <label className="text-[10px] font-bold text-muted-foreground">Correct Option</label>
+                                    <select
+                                      value={q.correct}
+                                      onChange={(e) => handleSaveQuestion(qIdx, { ...q, correct: e.target.value })}
+                                      className="w-full text-xs h-7 rounded border border-border bg-background px-2 font-bold text-green-500"
+                                    >
+                                      <option value="A">A</option>
+                                      <option value="B">B</option>
+                                      <option value="C">C</option>
+                                      <option value="D">D</option>
+                                    </select>
+                                  </div>
+                                  <div className="sm:col-span-3 space-y-1">
+                                    <label className="text-[10px] font-bold text-muted-foreground">Explanation / Syllabus Reference</label>
+                                    <Input
+                                      value={q.explanation}
+                                      onChange={(e) => handleSaveQuestion(qIdx, { ...q, explanation: e.target.value })}
+                                      className="text-xs h-7 bg-background"
+                                      placeholder="Why this option is correct based on the novel..."
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          }}
+                        />
+                      ) : (
+                        editingChapter.sampleQuestions?.map((q, qIdx) => {
+                          const isSelected = selectedQuestionIndices.includes(qIdx);
+                          return (
+                            <div key={qIdx} className={`p-4 rounded-xl border transition-colors space-y-3 ${isSelected ? 'border-primary bg-primary/5 shadow-sm' : 'border-border bg-muted/30'}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="flex items-center gap-2 shrink-0">
+                                  <input
+                                    type="checkbox"
+                                    checked={isSelected}
+                                    onChange={() => handleToggleSelectQuestion(qIdx)}
+                                    className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                                  />
+                                  <span className="text-xs font-bold text-primary font-mono">Q{qIdx + 1}.</span>
+                                </div>
+                                <Input
+                                  value={q.question}
+                                  onChange={(e) => {
+                                    const updated = { ...q, question: e.target.value };
+                                    handleSaveQuestion(qIdx, updated);
+                                  }}
+                                  className="text-xs font-bold bg-background h-8"
+                                  placeholder="Enter JAMB style question..."
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-500/10 shrink-0"
+                                  onClick={() => openDeleteQuestionModal(qIdx, q.question)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+
+                              {/* Options */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                {['A', 'B', 'C', 'D'].map((letter, optIdx) => (
+                                  <div key={letter} className="flex items-center gap-1.5">
+                                    <span className={`w-5 text-center text-xs font-bold ${q.correct === letter ? 'text-green-500' : 'text-muted-foreground'}`}>
+                                      {letter})
+                                    </span>
+                                    <Input
+                                      value={q.options[optIdx] || ''}
+                                      onChange={(e) => {
+                                        const opts = [...q.options];
+                                        opts[optIdx] = e.target.value;
+                                        handleSaveQuestion(qIdx, { ...q, options: opts });
+                                      }}
+                                      className="text-xs h-7 bg-background"
+                                      placeholder={`Option ${letter}`}
+                                    />
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Correct Answer & Explanation */}
+                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1">
+                                <div className="sm:col-span-1 space-y-1">
+                                  <label className="text-[10px] font-bold text-muted-foreground">Correct Option</label>
+                                  <select
+                                    value={q.correct}
+                                    onChange={(e) => handleSaveQuestion(qIdx, { ...q, correct: e.target.value })}
+                                    className="w-full text-xs h-7 rounded border border-border bg-background px-2 font-bold text-green-500"
+                                  >
+                                    <option value="A">A</option>
+                                    <option value="B">B</option>
+                                    <option value="C">C</option>
+                                    <option value="D">D</option>
+                                  </select>
+                                </div>
+                                <div className="sm:col-span-3 space-y-1">
+                                  <label className="text-[10px] font-bold text-muted-foreground">Explanation / Syllabus Reference</label>
+                                  <Input
+                                    value={q.explanation}
+                                    onChange={(e) => handleSaveQuestion(qIdx, { ...q, explanation: e.target.value })}
+                                    className="text-xs h-7 bg-background"
+                                    placeholder="Why this option is correct based on the novel..."
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
                     </div>
                   </div>
 
@@ -501,6 +865,28 @@ export const AdminLiteratureTab = () => {
           </div>
         </div>
       )}
+
+      {/* Single Delete Confirmation Modal */}
+      <DeleteConfirmationDialog
+        isOpen={deleteConfig.isOpen}
+        onClose={() => setDeleteConfig(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmDelete}
+        title={deleteConfig.title}
+        description={deleteConfig.description}
+        itemName={deleteConfig.itemName}
+        isDeleting={deleteConfig.isDeleting}
+      />
+
+      {/* Mass Delete Confirmation Modal */}
+      <DeleteConfirmationDialog
+        isOpen={bulkDeleteDialogConfig.isOpen}
+        onClose={() => setBulkDeleteDialogConfig(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmBulkDelete}
+        title={bulkDeleteDialogConfig.title}
+        description={bulkDeleteDialogConfig.description}
+        itemName={`${selectedQuestionIndices.length} Selected Questions`}
+        isDeleting={bulkDeleteDialogConfig.isDeleting}
+      />
     </div>
   );
 };

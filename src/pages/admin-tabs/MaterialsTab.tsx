@@ -119,21 +119,21 @@ export const MaterialsTab = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 w-full min-w-0 overflow-hidden">
       {ConfirmElement}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full min-w-0">
         
         {/* Upload Form */}
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Upload className="w-5 h-5 text-blue-400" /> Upload New Material
+              <Upload className="w-5 h-5 text-primary" /> Upload New Material
             </CardTitle>
-            <CardDescription className="text-slate-400">Add textbooks or study notes for students.</CardDescription>
+            <CardDescription className="text-muted-foreground">Add textbooks or study notes for students.</CardDescription>
           </CardHeader>
           <CardContent>
             {uploadStatus && (
-              <div className={`p-3 rounded mb-4 text-sm flex items-center gap-2 ${uploadStatus.type === 'success' ? 'bg-green-500/20 text-green-400' : 'bg-destructive/20 text-destructive'}`}>
+              <div className={`p-3 rounded mb-4 text-sm flex items-center gap-2 ${uploadStatus.type === 'success' ? 'bg-green-500/20 text-green-500' : 'bg-destructive/20 text-destructive'}`}>
                 {uploadStatus.type === 'success' ? <CheckCircle className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                 {uploadStatus.message}
               </div>
@@ -141,12 +141,12 @@ export const MaterialsTab = () => {
             <form onSubmit={handleUpload} className="space-y-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">Title *</label>
-                <Input value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Essential Mathematics 2026" className="bg-slate-950 border-slate-800" />
+                <Input value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g. Essential Mathematics 2026" className="bg-background border-border" />
               </div>
               
               <div className="space-y-2">
                 <label className="text-sm font-medium">Subject *</label>
-                <select value={subjectId} onChange={e => setSubjectId(e.target.value)} required className="w-full bg-slate-950 border border-slate-800 rounded-md p-2 text-sm text-slate-200">
+                <select value={subjectId} onChange={e => setSubjectId(e.target.value)} required className="w-full bg-background border border-border rounded-md p-2 text-sm text-foreground">
                   {subjects.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
@@ -157,14 +157,14 @@ export const MaterialsTab = () => {
                 <label className="text-sm font-medium">Description</label>
                 <textarea 
                   value={description} onChange={e => setDescription(e.target.value)}
-                  className="w-full h-20 bg-slate-950 border border-slate-800 rounded-md p-3 text-sm text-slate-200 resize-none" 
+                  className="w-full h-20 bg-background border border-border rounded-md p-3 text-sm text-foreground resize-none" 
                   placeholder="Optional description..."
                 ></textarea>
               </div>
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">File (PDF) *</label>
-                <Input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} required className="bg-slate-950 border-slate-800" />
+                <Input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} required className="bg-background border-border" />
               </div>
 
               <div className="flex items-center gap-2">
@@ -180,34 +180,34 @@ export const MaterialsTab = () => {
         </Card>
 
         {/* Materials List */}
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Book className="w-5 h-5 text-green-400" /> Content Library
+              <Book className="w-5 h-5 text-primary" /> Content Library
             </CardTitle>
-            <CardDescription className="text-slate-400">Manage uploaded materials.</CardDescription>
+            <CardDescription className="text-muted-foreground">Manage uploaded materials.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2">
               {materials.length === 0 ? (
-                <div className="text-center text-slate-500 py-8">No materials uploaded yet.</div>
+                <div className="text-center text-muted-foreground py-8">No materials uploaded yet.</div>
               ) : materials.map(mat => (
-                <div key={mat.id} className="p-4 border border-slate-800 rounded-lg bg-slate-950/50 flex flex-col gap-2">
+                <div key={mat.id} className="p-4 border border-border rounded-lg bg-muted/20 flex flex-col gap-2">
                   <div className="flex justify-between items-start">
                     <div>
-                      <h4 className="font-bold flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-blue-400" /> {mat.title}
+                      <h4 className="font-bold flex items-center gap-2 text-foreground">
+                        <FileText className="w-4 h-4 text-primary" /> {mat.title}
                       </h4>
-                      <p className="text-xs text-slate-400 mt-1">{mat.subjects?.name} • {(mat.file_size_bytes / (1024*1024)).toFixed(2)} MB</p>
+                      <p className="text-xs text-muted-foreground mt-1">{mat.subjects?.name || 'General'} • {(mat.file_size_bytes / (1024*1024)).toFixed(2)} MB</p>
                     </div>
                     <div className="flex flex-col gap-2 items-end">
-                      <span className={`text-xs px-2 py-1 rounded-full ${mat.visibility ? 'bg-green-500/20 text-green-400' : 'bg-slate-800 text-slate-400'}`}>
+                      <span className={`text-xs px-2 py-1 rounded-full ${mat.visibility ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
                         {mat.visibility ? 'Published' : 'Draft'}
                       </span>
-                      {mat.is_premium && <span className="text-xs px-2 py-1 rounded-full bg-amber-500/20 text-amber-400">Premium</span>}
+                      {mat.is_premium && <span className="text-xs px-2 py-1 rounded-full bg-amber-500/20 text-amber-500 font-semibold">Premium</span>}
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-2 pt-2 border-t border-slate-800">
+                  <div className="flex gap-2 mt-2 pt-2 border-t border-border">
                     <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => toggleVisibility(mat.id, mat.visibility)}>
                       {mat.visibility ? 'Unpublish' : 'Publish'}
                     </Button>

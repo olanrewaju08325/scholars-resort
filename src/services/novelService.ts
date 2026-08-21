@@ -55,6 +55,10 @@ export const saveJambBooks = async (books: LiteratureBook[]): Promise<{ success:
         updated_at: new Date().toISOString()
       }, { onConflict: 'setting_key' });
 
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('literature_updated'));
+    }
+
     if (error) {
       console.warn('Failed to upsert novels to Supabase:', error.message);
       return { success: true, error: `Saved locally: ${error.message}` };

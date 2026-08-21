@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,11 +6,17 @@ import { supabase } from '@/lib/supabase';
 import { 
   Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, 
   ShieldCheck, History, Search, Download, FileSpreadsheet, AlertTriangle, 
-  Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info, BookOpen, Send
+  Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info, BookOpen, Send,
+  CheckSquare, Square, ListFilter, Zap
 } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
+import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
+import { VirtualList } from '@/components/VirtualList';
+import { queueOfflineOperation } from '@/services/offlineSyncService';
+import { exportQuestionsToCSV, exportQuestionsToPDF } from '@/utils/exportUtils';
+import { logAdminActivity } from '@/services/adminActivityService';
 import { 
   parseQuestionsCsv, 
   importQuestionsToDatabase, 
@@ -56,6 +62,22 @@ export const QuestionBankTab = () => {
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [questionHistory, setQuestionHistory] = useState<any[]>([]);
   const [validatingId, setValidatingId] = useState<string | null>(null);
+
+  // Bulk Selection & Virtualization State
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [searchFilter, setSearchFilter] = useState('');
+  const [subjectFilter, setSubjectFilter] = useState('all');
+  const [isVirtualView, setIsVirtualView] = useState(true);
+  const [bulkDeleteDialogConfig, setBulkDeleteDialogConfig] = useState({
+    isOpen: false,
+    isDeleting: false
+  });
+
+  useEffect(() => {
+    const handleQuestionsUpdated = () => fetchData();
+    window.addEventListener('questions_updated', handleQuestionsUpdated);
+    return () => window.removeEventListener('questions_updated', handleQuestionsUpdated);
+  }, []);
 
   const fetchData = async () => {
     let dbQuestions: any[] = [];
@@ -135,8 +157,19 @@ export const QuestionBankTab = () => {
     setTimeout(() => setTopicId(q.topic_id || ''), 100); 
     setQText(q.question_text);
     
-    // Parse options assuming ["Option A", "Option B", ...]
-    const opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+    // Safely parse options array
+    let opts: string[] = [];
+    try {
+      if (typeof q.options === 'string') {
+        opts = JSON.parse(q.options);
+      } else if (Array.isArray(q.options)) {
+        opts = q.options;
+      }
+    } catch {
+      opts = [];
+    }
+    if (!Array.isArray(opts)) opts = [];
+
     setOptA(opts[0] || '');
     setOptB(opts[1] || '');
     setOptC(opts[2] || '');
@@ -148,6 +181,7 @@ export const QuestionBankTab = () => {
     else if (correctIdx === 1) setCorrectOption('B');
     else if (correctIdx === 2) setCorrectOption('C');
     else if (correctIdx === 3) setCorrectOption('D');
+    else setCorrectOption('A');
     
     setExplanation(q.explanation || '');
     setDifficulty(q.difficulty);
@@ -289,6 +323,87 @@ export const QuestionBankTab = () => {
       toast.success(nextStatus ? 'Question published (Live in CBT)!' : 'Question unpublished (Draft mode).');
     } catch (err: any) {
       toast.success(nextStatus ? 'Question published!' : 'Question draft saved.');
+    }
+  };
+
+  const filteredQuestions = useMemo(() => {
+    return questions.filter(q => {
+      const matchSub = subjectFilter === 'all' || q.subject_id === subjectFilter;
+      const matchSearch = !searchFilter || q.question_text?.toLowerCase().includes(searchFilter.toLowerCase());
+      return matchSub && matchSearch;
+    });
+  }, [questions, subjectFilter, searchFilter]);
+
+  const handleSelectAllToggle = () => {
+    if (selectedIds.length >= filteredQuestions.length && filteredQuestions.length > 0) {
+      setSelectedIds([]);
+    } else {
+      setSelectedIds(filteredQuestions.map(q => q.id));
+    }
+  };
+
+  const handleSelectOneToggle = (id: string) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(prev => prev.filter(i => i !== id));
+    } else {
+      setSelectedIds(prev => [...prev, id]);
+    }
+  };
+
+  const handleOpenBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    setBulkDeleteDialogConfig({ isOpen: true, isDeleting: false });
+  };
+
+  const handleConfirmBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    setBulkDeleteDialogConfig(prev => ({ ...prev, isDeleting: true }));
+
+    const idsToDelete = [...selectedIds];
+
+    // Optimistic state update
+    setQuestions(prev => prev.filter(q => !idsToDelete.includes(q.id)));
+    setSelectedIds([]);
+
+    // Update local custom storage
+    try {
+      const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
+      const updated = local.filter((q: any) => !idsToDelete.includes(q.id));
+      localStorage.setItem('scholar_custom_questions', JSON.stringify(updated));
+    } catch {}
+
+    try {
+      if (navigator.onLine) {
+        const { error } = await supabase.from('questions').delete().in('id', idsToDelete);
+        if (error) {
+          await queueOfflineOperation('bulk_question', 'bulk_delete', { ids: idsToDelete });
+          toast.info('Database busy. Saved mass deletion to offline queue.');
+        } else {
+          logAdminActivity('BULK_DELETE_QUESTIONS', `Deleted ${idsToDelete.length} question(s) from Question Bank`, 'question_bank', { count: idsToDelete.length });
+          toast.success(`Successfully deleted ${idsToDelete.length} question(s) from database.`);
+        }
+      } else {
+        await queueOfflineOperation('bulk_question', 'bulk_delete', { ids: idsToDelete });
+      }
+    } catch (err: any) {
+      await queueOfflineOperation('bulk_question', 'bulk_delete', { ids: idsToDelete });
+    } finally {
+      setBulkDeleteDialogConfig({ isOpen: false, isDeleting: false });
+    }
+  };
+
+  const handleBulkStatusToggle = async (targetActive: boolean) => {
+    if (selectedIds.length === 0) return;
+    const idsToUpdate = [...selectedIds];
+
+    setQuestions(prev => prev.map(q => idsToUpdate.includes(q.id) ? { ...q, is_active: targetActive } : q));
+
+    try {
+      await supabase.from('questions').update({ is_active: targetActive }).in('id', idsToUpdate);
+      logAdminActivity('BATCH_STATUS_TOGGLE', `Set ${idsToUpdate.length} question(s) to ${targetActive ? 'Approved/Published' : 'Draft'}`, 'question_bank', { count: idsToUpdate.length, status: targetActive });
+      toast.success(`Updated ${idsToUpdate.length} question(s) to ${targetActive ? 'Approved/Published' : 'Draft'}.`);
+    } catch {
+      toast.info(`Status updated locally.`);
     }
   };
 
@@ -787,22 +902,133 @@ export const QuestionBankTab = () => {
         </Card>
       </div>
 
-      {/* Questions List */}
+      {/* Questions List Header & Actions */}
       <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-2">
+        <CardHeader className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
            <div>
-             <CardTitle>Question Bank Directory</CardTitle>
-             <CardDescription className="text-muted-foreground">Total Questions: {questions.length}</CardDescription>
+             <CardTitle className="flex items-center gap-2">
+               Question Bank Directory
+               {filteredQuestions.length !== questions.length && (
+                 <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary font-mono">
+                   {filteredQuestions.length} of {questions.length} filtered
+                 </span>
+               )}
+             </CardTitle>
+             <CardDescription className="text-muted-foreground">Manage, review, bulk operations, and search questions across all subjects.</CardDescription>
            </div>
-           <Button onClick={handlePublishAllDrafts} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white">
-             <CheckCircle className="w-4 h-4 mr-2" /> Approve All Drafts
-           </Button>
+           <div className="flex items-center gap-2 flex-wrap">
+             <Button 
+               variant="outline"
+               size="sm"
+               onClick={() => exportQuestionsToCSV(filteredQuestions, `Question_Bank_${subjectFilter}_${Date.now()}.csv`)}
+               className="text-xs font-semibold gap-1.5 h-8"
+             >
+               <FileSpreadsheet className="w-3.5 h-3.5 text-emerald-500" /> Export CSV
+             </Button>
+             <Button 
+               variant="outline"
+               size="sm"
+               onClick={() => exportQuestionsToPDF(filteredQuestions, `Question_Bank_${subjectFilter}_${Date.now()}.pdf`)}
+               className="text-xs font-semibold gap-1.5 h-8"
+             >
+               <FileText className="w-3.5 h-3.5 text-red-500" /> Export PDF
+             </Button>
+             <Button 
+               variant={isVirtualView ? 'default' : 'outline'} 
+               size="sm" 
+               onClick={() => setIsVirtualView(!isVirtualView)}
+               className="text-xs font-semibold gap-1.5"
+             >
+               <Zap className="w-3.5 h-3.5" />
+               {isVirtualView ? 'Virtual Scroll Enabled' : 'Standard View'}
+             </Button>
+             <Button onClick={handlePublishAllDrafts} disabled={loading} className="bg-green-600 hover:bg-green-700 text-white font-bold text-xs">
+               <CheckCircle className="w-4 h-4 mr-1.5" /> Approve All Drafts
+             </Button>
+           </div>
         </CardHeader>
-        <CardContent className="min-w-0 w-full overflow-hidden">
+        <CardContent className="space-y-4 min-w-0 w-full overflow-hidden">
+           {/* Filters & Search Toolbar */}
+           <div className="flex flex-col sm:flex-row gap-3 items-center justify-between p-3 bg-muted/30 border border-border rounded-xl">
+             <div className="flex items-center gap-3 w-full sm:w-auto flex-1">
+               <div className="relative flex-1 max-w-xs">
+                 <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                 <Input 
+                   value={searchFilter} 
+                   onChange={e => setSearchFilter(e.target.value)} 
+                   placeholder="Search question text..." 
+                   className="pl-9 h-9 text-xs bg-background"
+                 />
+               </div>
+               <div className="flex items-center gap-1.5 shrink-0">
+                 <ListFilter className="w-4 h-4 text-muted-foreground" />
+                 <select 
+                   value={subjectFilter} 
+                   onChange={e => setSubjectFilter(e.target.value)} 
+                   className="h-9 text-xs bg-background border border-border rounded-md px-2 text-foreground font-semibold"
+                 >
+                   <option value="all">All Subjects ({questions.length})</option>
+                   {subjects.map(s => (
+                     <option key={s.id} value={s.id}>{s.name}</option>
+                   ))}
+                 </select>
+               </div>
+             </div>
+
+             {/* Bulk Selection Trigger */}
+             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+               <Button 
+                 variant="outline" 
+                 size="sm" 
+                 onClick={handleSelectAllToggle}
+                 className="text-xs font-bold gap-1.5"
+               >
+                 {selectedIds.length >= filteredQuestions.length && filteredQuestions.length > 0 ? (
+                   <><CheckSquare className="w-4 h-4 text-primary" /> Deselect All</>
+                 ) : (
+                   <><Square className="w-4 h-4" /> Select All ({filteredQuestions.length})</>
+                 )}
+               </Button>
+             </div>
+           </div>
+
+           {/* Bulk Floating Action Bar */}
+           {selectedIds.length > 0 && (
+             <div className="p-3 bg-primary/10 border border-primary/30 rounded-xl flex items-center justify-between flex-wrap gap-3 animate-in fade-in slide-in-from-top-2">
+               <div className="flex items-center gap-2 text-xs font-bold text-primary">
+                 <CheckSquare className="w-4 h-4" />
+                 <span>{selectedIds.length} Question(s) Selected</span>
+               </div>
+               <div className="flex items-center gap-2 flex-wrap">
+                 <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handleBulkStatusToggle(true)}>
+                   <CheckCircle className="w-3.5 h-3.5 mr-1 text-green-500" /> Publish Selected
+                 </Button>
+                 <Button size="sm" variant="outline" className="text-xs h-8" onClick={() => handleBulkStatusToggle(false)}>
+                   <XCircle className="w-3.5 h-3.5 mr-1 text-amber-500" /> Draft Selected
+                 </Button>
+                 <Button size="sm" variant="destructive" className="text-xs h-8 font-bold gap-1" onClick={handleOpenBulkDelete}>
+                   <Trash2 className="w-3.5 h-3.5" /> Delete Selected ({selectedIds.length})
+                 </Button>
+                 <Button size="sm" variant="ghost" className="text-xs h-8" onClick={() => setSelectedIds([])}>
+                   Clear Selection
+                 </Button>
+               </div>
+             </div>
+           )}
+
+           {/* Virtualized Table or Standard Table */}
            <div className="overflow-x-auto rounded-md border border-border w-full">
              <table className="w-full text-sm text-left">
               <thead className="bg-muted text-muted-foreground font-medium">
                 <tr>
+                  <th className="px-3 py-3 w-10 text-center">
+                    <input 
+                      type="checkbox" 
+                      checked={selectedIds.length >= filteredQuestions.length && filteredQuestions.length > 0} 
+                      onChange={handleSelectAllToggle}
+                      className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                    />
+                  </th>
                   <th className="px-4 py-3 font-medium">Subject</th>
                   <th className="px-4 py-3 font-medium w-1/3">Question Preview</th>
                   <th className="px-4 py-3 font-medium">Quality</th>
@@ -812,47 +1038,125 @@ export const QuestionBankTab = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {questions.length === 0 ? (
-                  <tr><td colSpan={6} className="px-4 py-6 text-center text-muted-foreground">No questions found.</td></tr>
-                ) : questions.map(q => (
-                  <tr key={q.id} className="hover:bg-muted/50 transition-colors">
-                    <td className="px-4 py-3">{q.subjects?.name}</td>
-                    <td className="px-4 py-3 truncate max-w-[250px]" title={q.question_text}>{q.question_text}</td>
-                    <td className="px-4 py-3">
-                      {q.quality_score ? (
-                        <div className="flex items-center gap-2">
-                          <span className={`font-mono ${q.quality_score >= 90 ? 'text-green-500' : 'text-amber-500'}`}>{q.quality_score}</span>
-                          {q.quality_score >= 90 && <ShieldCheck className="w-4 h-4 text-green-500" />}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">Unrated</span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-mono text-muted-foreground">v{q.version_number || 1}</td>
-                    <td className="px-4 py-3">
-                       <span className={`px-2 py-1 text-xs rounded-full ${q.is_active ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
-                         {q.is_active ? 'Published' : 'Draft'}
-                       </span>
-                    </td>
-                    <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                      <Button size="icon" variant="ghost" className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id} title="AI Validate Quality">
-                        {validatingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                      </Button>
-                      <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)} title="View History">
-                        <History className="w-4 h-4" />
-                      </Button>
-                      <Button size="sm" variant="outline" onClick={() => toggleStatus(q.id, q.is_active)}>
-                        {q.is_active ? 'Unpublish' : 'Publish'}
-                      </Button>
-                      <Button size="icon" variant="secondary" onClick={() => handleEdit(q)}>
-                         <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button size="icon" variant="destructive" onClick={() => handleDeleteQuestion(q.id)}>
-                         <Trash2 className="w-4 h-4" />
-                      </Button>
+                {filteredQuestions.length === 0 ? (
+                  <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No questions found matching your filter criteria.</td></tr>
+                ) : isVirtualView ? (
+                  <tr>
+                    <td colSpan={7} className="p-0">
+                      <VirtualList
+                        items={filteredQuestions}
+                        itemHeight={58}
+                        containerHeight={500}
+                        keyExtractor={(q) => q.id}
+                        renderItem={(q) => {
+                          const isSelected = selectedIds.includes(q.id);
+                          return (
+                            <div className={`flex items-center justify-between px-4 py-2.5 border-b border-border text-xs transition-colors hover:bg-muted/50 h-[58px] ${isSelected ? 'bg-primary/10' : ''}`}>
+                              <div className="w-10 text-center shrink-0">
+                                <input 
+                                  type="checkbox" 
+                                  checked={isSelected}
+                                  onChange={() => handleSelectOneToggle(q.id)}
+                                  className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                                />
+                              </div>
+                              <div className="w-32 font-semibold text-foreground truncate shrink-0 px-2">
+                                {q.subjects?.name || q.subject_name || subjects.find(s => s.id === q.subject_id)?.name || 'General'}
+                              </div>
+                              <div className="flex-1 truncate max-w-[280px] font-medium text-foreground px-2" title={q.question_text}>
+                                {q.question_text}
+                              </div>
+                              <div className="w-24 shrink-0 px-2">
+                                {q.quality_score ? (
+                                  <div className="flex items-center gap-1">
+                                    <span className={`font-mono font-bold ${q.quality_score >= 90 ? 'text-green-500' : 'text-amber-500'}`}>{q.quality_score}</span>
+                                    {q.quality_score >= 90 && <ShieldCheck className="w-3.5 h-3.5 text-green-500" />}
+                                  </div>
+                                ) : (
+                                  <span className="text-muted-foreground text-[10px]">Unrated</span>
+                                )}
+                              </div>
+                              <div className="w-16 font-mono text-muted-foreground shrink-0 px-2 text-[10px]">v{q.version_number || 1}</div>
+                              <div className="w-24 shrink-0 px-2">
+                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded-full ${q.is_active ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+                                  {q.is_active ? 'Published' : 'Draft'}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-end gap-1 shrink-0 whitespace-nowrap">
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id} title="AI Validate Quality">
+                                  {validatingId === q.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                                </Button>
+                                <Button size="icon" variant="ghost" className="h-7 w-7 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)} title="View History">
+                                  <History className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button size="sm" variant="outline" className="h-7 text-[10px] px-2" onClick={() => toggleStatus(q.id, q.is_active)}>
+                                  {q.is_active ? 'Unpublish' : 'Publish'}
+                                </Button>
+                                <Button size="icon" variant="secondary" className="h-7 w-7" onClick={() => handleEdit(q)}>
+                                  <Edit2 className="w-3.5 h-3.5" />
+                                </Button>
+                                <Button size="icon" variant="destructive" className="h-7 w-7" onClick={() => handleDeleteQuestion(q.id)}>
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            </div>
+                          );
+                        }}
+                      />
                     </td>
                   </tr>
-                ))}
+                ) : filteredQuestions.map(q => {
+                  const isSelected = selectedIds.includes(q.id);
+                  return (
+                    <tr key={q.id} className={`hover:bg-muted/50 transition-colors ${isSelected ? 'bg-primary/10' : ''}`}>
+                      <td className="px-3 py-3 text-center">
+                        <input 
+                          type="checkbox" 
+                          checked={isSelected} 
+                          onChange={() => handleSelectOneToggle(q.id)}
+                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                        />
+                      </td>
+                      <td className="px-4 py-3 font-semibold text-foreground">
+                        {q.subjects?.name || q.subject_name || subjects.find(s => s.id === q.subject_id)?.name || 'General'}
+                      </td>
+                      <td className="px-4 py-3 truncate max-w-[250px]" title={q.question_text}>{q.question_text}</td>
+                      <td className="px-4 py-3">
+                        {q.quality_score ? (
+                          <div className="flex items-center gap-2">
+                            <span className={`font-mono ${q.quality_score >= 90 ? 'text-green-500' : 'text-amber-500'}`}>{q.quality_score}</span>
+                            {q.quality_score >= 90 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground text-xs">Unrated</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-muted-foreground">v{q.version_number || 1}</td>
+                      <td className="px-4 py-3">
+                         <span className={`px-2 py-1 text-xs rounded-full ${q.is_active ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+                           {q.is_active ? 'Published' : 'Draft'}
+                         </span>
+                      </td>
+                      <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                        <Button size="icon" variant="ghost" className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id} title="AI Validate Quality">
+                          {validatingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                        </Button>
+                        <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)} title="View History">
+                          <History className="w-4 h-4" />
+                        </Button>
+                        <Button size="sm" variant="outline" onClick={() => toggleStatus(q.id, q.is_active)}>
+                          {q.is_active ? 'Unpublish' : 'Publish'}
+                        </Button>
+                        <Button size="icon" variant="secondary" onClick={() => handleEdit(q)}>
+                           <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button size="icon" variant="destructive" onClick={() => handleDeleteQuestion(q.id)}>
+                           <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
              </table>
            </div>
@@ -1209,6 +1513,17 @@ export const QuestionBankTab = () => {
           </Card>
         </div>
       )}
+
+      {/* Mass Delete Operations Dialog */}
+      <DeleteConfirmationDialog
+        isOpen={bulkDeleteDialogConfig.isOpen}
+        onClose={() => setBulkDeleteDialogConfig(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={handleConfirmBulkDelete}
+        title="Mass Delete Questions"
+        description={`Are you sure you want to permanently delete all ${selectedIds.length} selected question(s)? This mass operation will remove them from the database.`}
+        itemName={`${selectedIds.length} Selected Questions`}
+        isDeleting={bulkDeleteDialogConfig.isDeleting}
+      />
     </div>
   );
 };

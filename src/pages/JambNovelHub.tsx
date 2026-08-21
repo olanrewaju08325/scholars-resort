@@ -42,6 +42,12 @@ export const JambNovelHub = () => {
       }
     };
     load();
+
+    const handleUpdate = () => {
+      load();
+    };
+    window.addEventListener('literature_updated', handleUpdate);
+    return () => window.removeEventListener('literature_updated', handleUpdate);
   }, []);
 
   const currentBook = books.find(b => b.id === selectedBookId) || books[0];

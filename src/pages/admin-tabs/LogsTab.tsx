@@ -6,6 +6,7 @@ import { Search, Download, Filter, RefreshCcw, AlertTriangle, Bug, Copy, Trash2,
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { errorTracker, type SystemErrorLog } from '@/lib/errorTracker';
+import { AdminActivityLog } from '@/components/AdminActivityLog';
 
 export const LogsTab = () => {
   const [activeTab, setActiveTab] = useState<'audit' | 'errors'>('errors');
@@ -188,85 +189,7 @@ export const LogsTab = () => {
           </Card>
         </div>
       ) : (
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
-          <CardHeader className="border-b border-slate-800 pb-4">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                <Input 
-                  placeholder="Search action logs..." 
-                  className="pl-9 bg-slate-950 border-slate-800"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-500" />
-                <select 
-                  className="bg-slate-950 border border-slate-800 rounded-md text-sm p-2 text-slate-300"
-                  value={filterType}
-                  onChange={(e) => setFilterType(e.target.value)}
-                >
-                  <option value="all">All Entities</option>
-                  <option value="auth">Auth</option>
-                  <option value="exam">Exams</option>
-                  <option value="payment">Payments</option>
-                  <option value="support">Support</option>
-                </select>
-                <Button onClick={fetchLogs} variant="outline" size="icon" className="border-slate-800 text-slate-300">
-                  <RefreshCcw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-left">
-                <thead className="text-xs text-slate-400 uppercase bg-slate-900/50 border-b border-slate-800">
-                  <tr>
-                    <th className="px-6 py-4 font-medium">Timestamp</th>
-                    <th className="px-6 py-4 font-medium">User</th>
-                    <th className="px-6 py-4 font-medium">Action</th>
-                    <th className="px-6 py-4 font-medium">Entity</th>
-                    <th className="px-6 py-4 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  {loading ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">Loading logs...</td></tr>
-                  ) : logs.length === 0 ? (
-                    <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">No logs found matching criteria.</td></tr>
-                  ) : (
-                    logs.map((log) => (
-                      <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="px-6 py-4 whitespace-nowrap text-slate-400 font-mono text-xs">
-                          {new Date(log.created_at).toLocaleString()}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-slate-300">
-                          {log.profiles?.full_name || 'System'}
-                        </td>
-                        <td className="px-6 py-4 text-slate-300">
-                          {log.action}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="px-2 py-1 rounded bg-slate-800 text-xs text-slate-300 capitalize">
-                            {log.entity_type || 'activity'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <span className="flex items-center gap-1.5 text-xs">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                            <span className="capitalize text-slate-400">{log.status || 'Success'}</span>
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
+        <AdminActivityLog />
       )}
     </div>
   );
