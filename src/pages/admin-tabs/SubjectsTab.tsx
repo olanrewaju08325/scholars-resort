@@ -2,15 +2,17 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BookOpen, BarChart, Plus, CheckCircle, XCircle } from 'lucide-react';
+import { BookOpen, BarChart, Plus, CheckCircle, XCircle, Sparkles, RefreshCw } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { ensureAllJambSubjectsInDatabase, normalizeSubjectName, unifyDatabaseSubjects } from '@/utils/subjectUtils';
 
 export const SubjectsTab = () => {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [subjectStats, setSubjectStats] = useState<Array<{ id: string; name: string; count: number; percentage: number }>>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectIcon, setNewSubjectIcon] = useState('');
   const [adding, setAdding] = useState(false);
@@ -18,6 +20,9 @@ export const SubjectsTab = () => {
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
     try {
+      // Auto seed missing subjects
+      await ensureAllJambSubjectsInDatabase();
+
       const { data: subData } = await supabase.from('subjects').select('*').order('name');
       const loadedSubjects = subData || [];
       setSubjects(loadedSubjects);
@@ -45,6 +50,23 @@ export const SubjectsTab = () => {
     }
     setLoading(false);
   }, []);
+
+  const handleSeedAllSubjects = async () => {
+    setSeeding(true);
+    try {
+      await ensureAllJambSubjectsInDatabase();
+      const res = await unifyDatabaseSubjects();
+      if (res.updatedCount > 0) {
+        toast.success(`Seeded JAMB subjects & standardized ${res.updatedCount} question records!`);
+      } else {
+        toast.success('Successfully seeded and verified all official UTME JAMB subjects!');
+      }
+      await fetchSubjects();
+    } catch {
+      toast.error('Failed to seed subjects.');
+    }
+    setSeeding(false);
+  };
 
   useEffect(() => {
     fetchSubjects();
@@ -84,11 +106,23 @@ export const SubjectsTab = () => {
         
         {/* Subject List & Management */}
         <Card className="bg-card border-border text-foreground md:col-span-1 shadow-sm">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-primary" /> Platform Subjects
-            </CardTitle>
-            <CardDescription>Manage available subjects on the platform.</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="w-5 h-5 text-primary" /> Platform Subjects
+              </CardTitle>
+              <CardDescription>Manage official JAMB UTME subjects on the platform.</CardDescription>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={handleSeedAllSubjects}
+              disabled={seeding}
+              className="text-xs font-bold border-emerald-500/30 text-emerald-600 dark:text-emerald-400 gap-1.5"
+            >
+              {seeding ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+              Seed Official JAMB Subjects
+            </Button>
           </CardHeader>
           <CardContent className="space-y-4">
             

@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { recordStudyAction } from '@/lib/streakService';
+import { fetchJambBooks } from '@/services/novelService';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const getFileIcon = (url: string) => {
@@ -30,20 +31,146 @@ const Library = () => {
   useEffect(() => {
     const fetchMaterials = async () => {
       setLoading(true);
-      const { data } = await supabase
-        .from('library_materials')
-        .select('*, subjects(name)')
-        .eq('is_active', true)
-        .order('created_at', { ascending: false });
       
-      if (data) {
-        setMaterials(data);
-        const uniqueSubjects = Array.from(new Set(data.map(m => m.subjects?.name).filter(Boolean))) as string[];
-        setSubjects(['All', ...uniqueSubjects]);
-      }
+      let libData: any[] = [];
+      let matData: any[] = [];
+      let jambNovels: any[] = [];
+
+      try {
+        const { data } = await supabase
+          .from('library_materials')
+          .select('*, subjects(name)')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false });
+        if (data) libData = data;
+      } catch {}
+
+      try {
+        const { data } = await supabase
+          .from('materials')
+          .select('*, subjects(name)')
+          .eq('visibility', true)
+          .order('created_at', { ascending: false });
+        if (data) matData = data;
+      } catch {}
+
+      try {
+        jambNovels = await fetchJambBooks();
+      } catch {}
+
+      const combined: any[] = [];
+      const seenTitles = new Set<string>();
+
+      libData.forEach(item => {
+        if (item.title && !seenTitles.has(item.title.toLowerCase().trim())) {
+          seenTitles.add(item.title.toLowerCase().trim());
+          combined.push({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            file_url: item.file_url || item.file_path,
+            is_premium: item.is_premium,
+            subjects: item.subjects,
+            created_at: item.created_at
+          });
+        }
+      });
+
+      matData.forEach(item => {
+        if (item.title && !seenTitles.has(item.title.toLowerCase().trim())) {
+          seenTitles.add(item.title.toLowerCase().trim());
+          const publicUrl = item.file_path?.startsWith('http')
+            ? item.file_path
+            : supabase.storage.from('materials').getPublicUrl(item.file_path || '').data.publicUrl;
+
+          combined.push({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            file_url: publicUrl,
+            is_premium: item.is_premium,
+            subjects: item.subjects,
+            created_at: item.created_at
+          });
+        }
+      });
+
+      jambNovels.forEach(book => {
+        if (book.title && !seenTitles.has(book.title.toLowerCase().trim())) {
+          seenTitles.add(book.title.toLowerCase().trim());
+          combined.push({
+            id: book.id,
+            title: book.title,
+            description: `${book.author} - Prescribed UTME Text (${book.year})`,
+            file_url: book.pdf_url || '',
+            is_premium: false,
+            subjects: { name: 'Use of English' },
+            created_at: new Date().toISOString()
+          });
+        }
+      });
+
+      setMaterials(combined);
+      const uniqueSubjects = Array.from(new Set(combined.map(m => m.subjects?.name).filter(Boolean))) as string[];
+      setSubjects(['All', ...uniqueSubjects]);
       setLoading(false);
     };
+
     fetchMaterials();
+
+    const handleUpdated = (e?: any) => {
+      console.log('[Library Sync] Mandatory Cache Invalidation & Refetch Triggered:', e?.detail || e || 'event');
+      toast.info("Library content updated — loading fresh materials...", { duration: 1500 });
+      fetchMaterials();
+    };
+
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'library_last_updated') {
+        console.log('[Library Storage Sync] Cross-tab update detected');
+        handleUpdated();
+      }
+    };
+
+    window.addEventListener('library_materials_updated', handleUpdated);
+    window.addEventListener('supabase_library_revalidate', handleUpdated);
+    window.addEventListener('storage', handleStorageChange);
+
+    // Cross-tab BroadcastChannel listener
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('library_cache_invalidation');
+        bc.onmessage = (msg) => {
+          if (msg.data?.type === 'REFRESH_LIBRARY') {
+            console.log('[Library BroadcastChannel Sync] Admin upload message received:', msg.data);
+            handleUpdated(msg.data);
+          }
+        };
+      } catch (bcErr) {
+        console.warn('BroadcastChannel error:', bcErr);
+      }
+    }
+
+    // Supabase Realtime listener for immediate cache refresh upon admin upload
+    const channel = supabase
+      .channel('public-library-changes')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'library_materials' }, () => {
+        console.log('[Supabase Realtime] library_materials updated');
+        fetchMaterials();
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'materials' }, () => {
+        console.log('[Supabase Realtime] materials updated');
+        fetchMaterials();
+      })
+      .subscribe();
+
+    return () => {
+      window.removeEventListener('library_materials_updated', handleUpdated);
+      window.removeEventListener('supabase_library_revalidate', handleUpdated);
+      window.removeEventListener('storage', handleStorageChange);
+      if (bc) bc.close();
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const handleDownload = async (mat: any) => {

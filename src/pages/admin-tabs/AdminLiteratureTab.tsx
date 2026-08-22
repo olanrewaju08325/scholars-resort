@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark, CheckSquare, Square, Search, Zap, Upload, FileUp, X } from 'lucide-react';
-import { fetchJambBooks, saveJambBooks } from '@/services/novelService';
+import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark, CheckSquare, Square, Search, Zap, Upload, FileUp, X, Lock, Unlock, ShieldAlert } from 'lucide-react';
+import { fetchJambBooks, saveJambBooks, fetchLiteratureLockStatus, saveLiteratureLockStatus, uploadTextbookFileToSupabaseStorage } from '@/services/novelService';
 import type { LiteratureBook, NovelChapter, NovelQuestion } from '@/data/jambNovelsData';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { VirtualList } from '@/components/VirtualList';
@@ -19,6 +19,11 @@ export const AdminLiteratureTab = () => {
   const [selectedChapterId, setSelectedChapterId] = useState<number>(1);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+
+  // Literature Lock State
+  const [isLiteratureLocked, setIsLiteratureLocked] = useState(false);
+  const [lockReason, setLockReason] = useState('Updating official 2026 JAMB UTME literature prescribed texts.');
+  const [lockingInFlight, setLockingInFlight] = useState(false);
 
   // New Textbook / Book Upload Modal State
   const [addBookModalOpen, setAddBookModalOpen] = useState(false);
@@ -80,6 +85,11 @@ export const AdminLiteratureTab = () => {
   const loadBooks = async () => {
     setLoading(true);
     try {
+      // Fetch lock status
+      const lockData = await fetchLiteratureLockStatus();
+      setIsLiteratureLocked(lockData.isLocked);
+      if (lockData.lockReason) setLockReason(lockData.lockReason);
+
       const data = await fetchJambBooks();
       setBooks(data);
       if (data.length > 0) {
@@ -93,6 +103,21 @@ export const AdminLiteratureTab = () => {
       toast.error('Failed to load literature books');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSaveLockStatus = async (targetLockedState: boolean) => {
+    setLockingInFlight(true);
+    const res = await saveLiteratureLockStatus(targetLockedState, lockReason);
+    setLockingInFlight(false);
+    if (res.success) {
+      setIsLiteratureLocked(targetLockedState);
+      toast.success(targetLockedState 
+        ? 'Literature Hub is now LOCKED for students.' 
+        : 'Literature Hub is now UNLOCKED and live for students!'
+      );
+    } else {
+      toast.error('Failed to update lock status.');
     }
   };
 
@@ -386,7 +411,7 @@ export const AdminLiteratureTab = () => {
     toast.success('Question removed');
   };
 
-  const handlePdfFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePdfFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 25 * 1024 * 1024) {
@@ -394,6 +419,19 @@ export const AdminLiteratureTab = () => {
       return;
     }
     setUploadingPdf(true);
+    
+    try {
+      const storageRes = await uploadTextbookFileToSupabaseStorage(file);
+      if (storageRes.url) {
+        setNewBookPdfUrl(storageRes.url);
+        setUploadingPdf(false);
+        toast.success(`Uploaded ${file.name} to Supabase Storage!`);
+        return;
+      }
+    } catch {
+      // Fallback to Data URL if storage fails or bucket is not provisioned
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
       const dataUrl = event.target?.result as string;
@@ -508,6 +546,57 @@ export const AdminLiteratureTab = () => {
           </Button>
           <Button size="sm" onClick={() => handleSaveAll()} disabled={saving} className="bg-primary hover:bg-primary/90 font-bold">
             <Save className="w-4 h-4 mr-1.5" /> {saving ? 'Saving to Database...' : 'Save All Changes to Live DB'}
+          </Button>
+        </div>
+      </div>
+
+      {/* Literature Hub Lock Control Banner */}
+      <div className={`p-4 rounded-xl border transition-all flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
+        isLiteratureLocked 
+          ? 'bg-amber-500/10 border-amber-500/40 text-amber-900 dark:text-amber-200' 
+          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-900 dark:text-emerald-200'
+      }`}>
+        <div className="flex items-start md:items-center gap-3">
+          <div className={`p-2.5 rounded-lg shrink-0 ${
+            isLiteratureLocked ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+          }`}>
+            {isLiteratureLocked ? <Lock className="w-5 h-5" /> : <Unlock className="w-5 h-5" />}
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-sm font-bold">
+                Literature Hub Access Status:
+              </h3>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                isLiteratureLocked ? 'bg-red-500/20 text-red-600 dark:text-red-400' : 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400'
+              }`}>
+                {isLiteratureLocked ? 'LOCKED FOR STUDENTS' : 'UNLOCKED (LIVE)'}
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {isLiteratureLocked 
+                ? 'Students visiting the Literature Hub will see a maintenance notice while you verify JAMB prescribed texts.' 
+                : 'Students have full access to study novels, plot summaries, and practice chapter drills.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full md:w-auto">
+          <Input
+            placeholder="Lock Reason (e.g. Updating 2026 JAMB Prescribed Texts)..."
+            value={lockReason}
+            onChange={e => setLockReason(e.target.value)}
+            className="text-xs bg-background h-9 min-w-[260px]"
+          />
+          <Button
+            size="sm"
+            variant={isLiteratureLocked ? "default" : "destructive"}
+            disabled={lockingInFlight}
+            onClick={() => handleSaveLockStatus(!isLiteratureLocked)}
+            className="text-xs font-bold shrink-0 gap-1.5"
+          >
+            {lockingInFlight ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : isLiteratureLocked ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+            {isLiteratureLocked ? 'Unlock Hub for Students' : 'Lock Literature Hub'}
           </Button>
         </div>
       </div>

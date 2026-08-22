@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { BookOpen, PlayCircle, Layers } from 'lucide-react';
+import { BookOpen, PlayCircle, Layers, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 
 const PracticeSetup = () => {
   const { profile } = useAuth();
@@ -23,6 +24,8 @@ const PracticeSetup = () => {
   const [learningStyle, setLearningStyle] = useState('normal');
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
+  const [availableQCount, setAvailableQCount] = useState<number | null>(null);
+  const [verifyingIntegrity, setVerifyingIntegrity] = useState(false);
 
   useEffect(() => {
     const fetchSubjects = async () => {
@@ -43,15 +46,27 @@ const PracticeSetup = () => {
 
   useEffect(() => {
     if (selectedSubject) {
+      setVerifyingIntegrity(true);
+      
+      // Perform Data Integrity Check
+      const subjObj = subjects.find(s => s.id === selectedSubject);
+      const subjNameOrId = subjObj ? subjObj.name : selectedSubject;
+
+      checkSubjectDataIntegrity(subjNameOrId).then(res => {
+        setAvailableQCount(res.availableCount);
+        setVerifyingIntegrity(false);
+      });
+
       supabase.from('topics').select('*').eq('subject_id', selectedSubject)
         .then(({ data }) => setTopics(data || []));
     } else {
       setTopics([]);
       setSelectedTopic('');
+      setAvailableQCount(null);
     }
-  }, [selectedSubject]);
+  }, [selectedSubject, subjects]);
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!profile?.has_paid) {
       toast.error("Practice Mode requires an active premium subscription.");
       navigate('/pricing');
@@ -62,12 +77,20 @@ const PracticeSetup = () => {
       return;
     }
     
+    // Final Data Integrity Verification prior to navigation
+    const subjObj = subjects.find(s => s.id === selectedSubject);
+    const subjNameOrId = subjObj ? subjObj.name : selectedSubject;
+    
+    const integrityResult = await checkSubjectDataIntegrity(subjNameOrId);
+    console.log('[CBT Engine Session Verification]', integrityResult);
+
     navigate('/practice/session', { 
       state: { 
         subjectId: selectedSubject, 
         topicId: selectedTopic,
         difficulty,
         questionCount: parseInt(questionCount),
+        expectedQCount: availableQCount ?? integrityResult.availableCount,
         learningStyle
       } 
     });
@@ -104,9 +127,26 @@ const PracticeSetup = () => {
           ) : (
             <>
               <div className="space-y-2">
-                <label className="text-sm font-medium flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-primary" /> Subject
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-primary" /> Subject
+                  </label>
+                  {selectedSubject && (
+                    <span className="text-xs font-semibold flex items-center gap-1">
+                      {verifyingIntegrity ? (
+                        <span className="text-muted-foreground animate-pulse">Checking DB...</span>
+                      ) : availableQCount !== null && availableQCount > 0 ? (
+                        <span className="text-emerald-500 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5" /> {availableQCount} Questions Ready
+                        </span>
+                      ) : (
+                        <span className="text-amber-500 flex items-center gap-1">
+                          <AlertCircle className="w-3.5 h-3.5" /> 0 DB Questions Found
+                        </span>
+                      )}
+                    </span>
+                  )}
+                </div>
                 <select 
                   className="w-full bg-muted border border-border rounded-md p-3"
                   value={selectedSubject}

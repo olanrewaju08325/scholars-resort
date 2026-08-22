@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame, Key, CheckCircle2, RefreshCw } from 'lucide-react';
+import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -147,24 +148,37 @@ export const SmartTutorChat = () => {
     setLoading(true);
 
     try {
-      // Build rich System Context
+      // Build rich System Context with structured prompt chain
       const systemContext = {
         role: 'system',
-        content: `You are an elite, highly encouraging Nigerian UTME/JAMB AI Tutor specializing in personalized guidance. You are chatting with ${studentStats?.fullName || 'a student'}.
-STUDENT PROFILE & DATA:
-- Target Score: ${studentStats?.targetScore || 300}/400
-- Target Institution: ${studentStats?.targetUni || 'University'}
-- UTME Subjects: ${studentStats?.subjects?.join(', ')}
-- Current Streak: ${studentStats?.streakDays || 0} days
-- Recent Practice Accuracy: ${studentStats?.averageAccuracy || 0}% across ${studentStats?.recentExamsCount || 0} exams
-- Known Weak Areas: ${studentStats?.weakTopics?.join(', ') || 'None recorded yet'}
-${uploadedMaterials.length > 0 ? `- Ingested Study Materials: ${uploadedMaterials.map(m => m.title + ' (' + (m.topics?.join(', ') || '') + ')').join('; ')}` : ''}
+        content: `You are an elite academic counselor and expert UTME/JAMB AI Tutor. You are analyzing ${studentStats?.fullName || 'a student'}'s preparation data for the Nigerian UTME/JAMB exam.
 
-INSTRUCTIONS:
-1. CRITICAL RULE: DO NOT use any emojis (e.g. 👋, 🚀, 📊, 1️⃣, 2️⃣, 3️⃣, 📅, 🙌, etc.) under ANY circumstances. Use clean text, numbered lists (1., 2., 3.), bullet points, Markdown tables, and professional formatting only.
-2. Always keep responses professional, academic, clear, and focused on Nigerian UTME/JAMB syllabus standards.
-3. Incorporate the student's performance data, weak topics, and target score into your explanations.
-4. Use step-by-step breakdowns for calculations or complex concepts.`
+REAL-TIME STUDENT METRICS & PERFORMANCE PROFILE:
+- Student Name: ${studentStats?.fullName || 'Student'}
+- Target Score: ${studentStats?.targetScore || 300} / 400
+- Target University: ${studentStats?.targetUni || 'Federal University'}
+- Registered UTME Subjects: ${studentStats?.subjects?.join(', ')}
+- Daily Active Streak: ${studentStats?.streakDays || 0} Days
+- Historical CBT Practice Accuracy: ${studentStats?.averageAccuracy || 0}% (${studentStats?.recentExamsCount || 0} sessions completed)
+- Primary Weak Areas / Bottlenecks: ${studentStats?.weakTopics?.join(', ') || 'Speed pacing, calculation accuracy'}
+${uploadedMaterials.length > 0 ? `- Ingested Course Textbooks: ${uploadedMaterials.map(m => m.title + ' (' + (m.topics?.join(', ') || 'Syllabus') + ')').join('; ')}` : ''}
+
+STRUCTURED PROMPT CHAIN INSTRUCTIONS:
+You MUST structure your response into clear, non-generic, actionable sections based directly on the student's metrics:
+
+1. DIAGNOSTIC REFLECTION:
+Analyze their current score trajectory relative to their target (${studentStats?.targetScore || 300}/400) and target university (${studentStats?.targetUni}). Explicitly state the gap in points and required daily question velocity.
+
+2. TAILORED UTME SYLLABUS BREAKDOWN:
+Break down step-by-step strategies for their registered subjects (${studentStats?.subjects?.join(', ')}). Highlight high-yield topics that appear frequently in JAMB past questions.
+
+3. ACTIONABLE REMEDIATION PLAN:
+Provide a 3-step concrete study sequence for their weak areas (${studentStats?.weakTopics?.join(', ') || 'speed pacing'}).
+
+4. STRICT FORMATTING REQUIREMENTS:
+- DO NOT use any emojis under ANY circumstances.
+- DO NOT output placeholders like "[Score]" or "[Uni]". Populate exact values and real Nigerian institutions.
+- Use bold headings, Markdown tables, and structured bullet lists.`
       };
 
       const fullConversation = [systemContext, ...updatedMessages];
@@ -342,13 +356,28 @@ INSTRUCTIONS:
                     <Bot className="h-3.5 w-3.5 text-purple-400" />
                   </div>
                 )}
-                <div className={`p-2.5 rounded-xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap ${
-                  msg.role === 'user' 
-                    ? 'bg-purple-600 text-white rounded-tr-none' 
-                    : 'bg-card border border-border text-foreground rounded-tl-none shadow-sm'
-                }`}>
-                  {msg.content}
-                </div>
+                {msg.role === 'user' ? (
+                  <div className="p-2.5 rounded-xl text-xs leading-relaxed max-w-[85%] whitespace-pre-wrap bg-purple-600 text-white rounded-tr-none">
+                    {msg.content}
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-xl text-xs leading-relaxed max-w-[88%] bg-card border border-border text-foreground rounded-tl-none shadow-sm space-y-2">
+                    <Markdown
+                      components={{
+                        table: ({ node, ...props }) => <div className="overflow-x-auto my-2"><table className="min-w-full divide-y divide-border border text-[11px]" {...props} /></div>,
+                        th: ({ node, ...props }) => <th className="bg-muted/60 px-2 py-1 text-left font-bold text-foreground" {...props} />,
+                        td: ({ node, ...props }) => <td className="border-t border-border px-2 py-1 text-muted-foreground" {...props} />,
+                        h1: ({ node, ...props }) => <h1 className="text-sm font-bold text-primary mt-2 mb-1" {...props} />,
+                        h2: ({ node, ...props }) => <h2 className="text-xs font-bold text-primary mt-2 mb-1" {...props} />,
+                        h3: ({ node, ...props }) => <h3 className="text-xs font-semibold text-foreground mt-1 mb-0.5" {...props} />,
+                        ul: ({ node, ...props }) => <ul className="list-disc pl-4 space-y-0.5 text-foreground" {...props} />,
+                        ol: ({ node, ...props }) => <ol className="list-decimal pl-4 space-y-0.5 text-foreground" {...props} />
+                      }}
+                    >
+                      {msg.content}
+                    </Markdown>
+                  </div>
+                )}
                 {msg.role === 'user' && (
                   <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-1">
                     <User className="h-3.5 w-3.5 text-primary" />

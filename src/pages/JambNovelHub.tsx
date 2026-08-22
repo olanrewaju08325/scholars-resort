@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   BookOpen, Sparkles, CheckCircle2, UserCheck, 
   Bookmark, ArrowRight, ArrowLeft, Search, RefreshCw, Layers, Quote, BookA,
-  FileText, Eye, Download, Maximize2
+  FileText, Eye, Download, Maximize2, Lock, ShieldAlert
 } from 'lucide-react';
-import { fetchJambBooks } from '@/services/novelService';
+import { fetchJambBooks, fetchLiteratureLockStatus } from '@/services/novelService';
 import type { LiteratureBook, NovelChapter } from '@/data/jambNovelsData';
 import { toast } from 'sonner';
 
@@ -24,11 +25,19 @@ export const JambNovelHub = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
-  // Load books from live database
+  // Lock State
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockReason, setLockReason] = useState('');
+
+  // Load books & lock status from live database
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
+        const lockInfo = await fetchLiteratureLockStatus();
+        setIsLocked(lockInfo.isLocked);
+        if (lockInfo.lockReason) setLockReason(lockInfo.lockReason);
+
         const data = await fetchJambBooks();
         setBooks(data);
         if (data.length > 0) {
@@ -113,6 +122,32 @@ export const JambNovelHub = () => {
       <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
         <RefreshCw className="w-8 h-8 animate-spin text-primary" />
         <p className="text-sm font-semibold">Loading Official JAMB Literature & Novel Hub...</p>
+      </div>
+    );
+  }
+
+  if (isLocked) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full bg-card border-amber-500/30 text-card-foreground shadow-2xl text-center p-8 space-y-6">
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/30">
+            <Lock className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold font-display">Literature Hub Currently Locked</h2>
+            <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">
+              {lockReason || "The academic team is currently updating the official JAMB UTME literature prescribed texts for this session. Please check back shortly!"}
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+            <Button asChild className="font-bold text-xs">
+              <Link to="/practice?mode=subject">Go to CBT Practice Mode</Link>
+            </Button>
+            <Button variant="outline" onClick={() => window.location.reload()} className="text-xs font-semibold">
+              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Check Again
+            </Button>
+          </div>
+        </Card>
       </div>
     );
   }

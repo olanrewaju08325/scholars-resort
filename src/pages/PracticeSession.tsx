@@ -11,6 +11,7 @@ import { withRetry } from '@/lib/apiWithRetry';
 import { toast } from 'sonner';
 import { callGroqAPI } from '@/services/aiService';
 import { getCustomQuestions } from '@/lib/offlineStore';
+import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 
 const PracticeSession = () => {
   const { state } = useLocation();
@@ -67,25 +68,51 @@ const PracticeSession = () => {
       
       if (sessionData) setSessionId(sessionData.id);
 
-      // 2. Fetch Questions
-      let query = supabase.from('questions').select('*').eq('is_active', true);
-      
-      if (state.subjectId && state.subjectId !== 'all') {
-        query = query.eq('subject_id', state.subjectId);
-      }
-      if (state.topicId && state.topicId !== 'all') {
-        query = query.eq('topic_id', state.topicId);
-      }
-      if (state.difficulty && state.difficulty !== 'mixed' && state.difficulty !== 'adaptive') {
-        query = query.eq('difficulty', state.difficulty);
-      }
-      
+      // 2. Fetch Questions dynamically using canonical subject matching
       const count = state.questionCount || 20;
-      const { data: qData } = await query.limit(count); 
+      let fetchedQuestions: any[] = [];
+
+      if (state.subjectId && state.subjectId !== 'all') {
+        // Server-side data integrity check & real-time fetch
+        const expectedCount = state.expectedQCount || undefined;
+        const integrity = await checkSubjectDataIntegrity(state.subjectId, expectedCount);
+        console.log('[CBT Practice Server-Side Integrity Audit]', integrity);
+
+        if (integrity.discrepancyDetected) {
+          console.warn(`[CBT Data Integrity Discrepancy] Setup count (${expectedCount}) !== DB count (${integrity.availableCount}). Forcing real-time fetch from Supabase.`);
+        }
+
+        fetchedQuestions = integrity.questions && integrity.questions.length > 0 
+          ? integrity.questions 
+          : await fetchQuestionsForSubject(state.subjectId, Math.max(count * 3, 100));
+      } else {
+        const { data: qData } = await supabase.from('questions').select('*').eq('is_active', true).limit(Math.max(count * 3, 100));
+        fetchedQuestions = qData || [];
+      }
+
+      let filteredQuestions = [...fetchedQuestions];
+
+      if (state.topicId && state.topicId !== 'all') {
+        const topicFiltered = filteredQuestions.filter(q => q.topic_id === state.topicId);
+        if (topicFiltered.length > 0) {
+          filteredQuestions = topicFiltered;
+        } else {
+          console.warn(`[CBT Data Integrity Fallback] Topic "${state.topicId}" returned 0 questions. Falling back to subject-wide question pool.`);
+        }
+      }
+
+      if (state.difficulty && state.difficulty !== 'mixed' && state.difficulty !== 'adaptive') {
+        const diffFiltered = filteredQuestions.filter(q => q.difficulty === state.difficulty);
+        if (diffFiltered.length > 0) {
+          filteredQuestions = diffFiltered;
+        } else {
+          console.warn(`[CBT Data Integrity Fallback] Difficulty level "${state.difficulty}" returned 0 questions for this subject. Falling back to mixed difficulty questions.`);
+        }
+      }
       
       const customQ = getCustomQuestions(state.subjectId !== 'all' ? state.subjectId : undefined);
 
-      let allCombined = [...(qData || []), ...customQ];
+      let allCombined = [...filteredQuestions, ...customQ];
       if (allCombined.length > 0) {
         const parsed = allCombined.map(q => ({
           ...q,

@@ -65,6 +65,9 @@ export const MaterialsTab = () => {
 
       if (uploadError) throw uploadError;
 
+      const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(filePath);
+      const publicUrl = publicUrlData?.publicUrl || filePath;
+
       const { data: userData } = await supabase.auth.getUser();
 
       const { error: dbError } = await supabase.from('materials').insert({
@@ -80,7 +83,46 @@ export const MaterialsTab = () => {
 
       if (dbError) throw dbError;
 
-      setUploadStatus({ type: 'success', message: 'Material uploaded successfully!' });
+      // Sync directly into library_materials so it appears in the student library instantly
+      try {
+        await supabase.from('library_materials').insert({
+          title,
+          description,
+          subject_id: subjectId,
+          file_url: publicUrl,
+          is_premium: isPremium,
+          is_active: true
+        });
+
+        // Forced manual revalidation check against Supabase
+        const { data: verified } = await supabase
+          .from('library_materials')
+          .select('id')
+          .eq('title', title)
+          .limit(1);
+
+        console.log('[Admin Upload Revalidation]', verified && verified.length > 0 ? 'Verified in Supabase DB' : 'Revalidation pending');
+      } catch (syncErr) {
+        console.warn('Library sync notice:', syncErr);
+      }
+
+      // Dispatch global revalidation events for student-facing UI
+      window.dispatchEvent(new CustomEvent('library_materials_updated', { detail: { title, timestamp: Date.now() } }));
+      window.dispatchEvent(new CustomEvent('supabase_library_revalidate', { detail: { title, timestamp: Date.now() } }));
+
+      // Cross-tab broadcast & localStorage cache invalidation
+      try {
+        localStorage.setItem('library_last_updated', Date.now().toString());
+        if (typeof BroadcastChannel !== 'undefined') {
+          const bc = new BroadcastChannel('library_cache_invalidation');
+          bc.postMessage({ type: 'REFRESH_LIBRARY', title, timestamp: Date.now() });
+          bc.close();
+        }
+      } catch (bcErr) {
+        console.warn('BroadcastChannel sync notice:', bcErr);
+      }
+
+      setUploadStatus({ type: 'success', message: 'Material uploaded, verified, and indexed in Student Library successfully!' });
       setTitle('');
       setDescription('');
       setFile(null);

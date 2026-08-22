@@ -11,6 +11,7 @@ import { useConfirm } from '@/hooks/useConfirm';
 import { recordStudyAction } from '@/lib/streakService';
 import { checkAndAwardBadges } from '@/lib/gamification';
 import { saveExamSnapshot, clearExamSnapshot } from '@/lib/offlineDb';
+import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { toast } from 'sonner';
 import { MathText } from '@/components/MathText';
 import { playWarningBeep } from '@/lib/celebration';
@@ -22,6 +23,9 @@ const CBTExam = () => {
   
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [startingSubject, setStartingSubject] = useState<string>('Use of English');
+  const [activeSubjectTab, setActiveSubjectTab] = useState<string>('Use of English');
+  const [examSubjectsList, setExamSubjectsList] = useState<string[]>([]);
   
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -63,52 +67,44 @@ const CBTExam = () => {
       }
 
       // JAMB 180-Question Master Logic
-      // 1. Get subjects from profile, default if missing
-      let subjects = profile.utme_subjects || [];
-      if (!subjects || subjects.length < 4) {
-        subjects = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+      let userSubs = profile.utme_subjects || [];
+      if (!userSubs || userSubs.length < 4) {
+        userSubs = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
       }
+      
+      const normalizedSubs = userSubs.map((s: string) => normalizeSubjectName(s));
+      const hasEnglish = normalizedSubs.includes('Use of English');
+      
+      const finalSubjects = hasEnglish 
+        ? ['Use of English', ...normalizedSubs.filter((s: string) => s !== 'Use of English').slice(0, 3)]
+        : ['Use of English', ...normalizedSubs.slice(0, 3)];
+
+      setExamSubjectsList(finalSubjects);
       
       let allQuestions: any[] = [];
       
-      // 2. Fetch English (60 questions)
-      const { data: englishData } = await supabase
-        .from('questions')
-        .select('*, subjects!inner(name)')
-        .eq('subjects.name', 'Use of English')
-        .eq('is_active', true)
-        .limit(60);
+      for (const subj of finalSubjects) {
+        // Data integrity check
+        const integrity = await checkSubjectDataIntegrity(subj);
+        console.log('[CBT Exam Integrity Audit]', integrity);
+
+        const limit = subj === 'Use of English' ? 60 : 40;
+        const fetched = await fetchQuestionsForSubject(subj, limit);
         
-      if (englishData) allQuestions = [...allQuestions, ...englishData];
-      
-      // 3. Fetch 3 other subjects (40 each)
-      const otherSubjects = subjects.filter((s: string) => s !== 'Use of English').slice(0, 3);
-      
-      for (const subject of otherSubjects) {
-        const { data: subjectData } = await supabase
-          .from('questions')
-          .select('*, subjects!inner(name)')
-          .eq('subjects.name', subject)
-          .eq('is_active', true)
-          .limit(40);
-          
-        if (subjectData) allQuestions = [...allQuestions, ...subjectData];
-      }
-      
-      // Format options and shuffle slightly within blocks (in a real app we'd keep them ordered by subject)
-      let parsed = allQuestions.map(q => ({
-        ...q,
-        options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
-      }));
-      
-      // Shuffle questions to prevent pattern matching
-      parsed = parsed.sort(() => Math.random() - 0.5);
-      
-      if (parsed.length < 10) { // arbitrary low limit to detect empty DB
-        toast.error("Insufficient questions in the database to form a full exam. Please contact support.");
+        const tagged = (fetched || []).map(q => ({
+          ...q,
+          subject_name: subj,
+          options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
+        }));
+
+        allQuestions = [...allQuestions, ...tagged];
       }
 
-      setQuestions(parsed);
+      if (allQuestions.length < 10) {
+        toast.error("Insufficient active questions in the database to form a full exam. Please contact support.");
+      }
+
+      setQuestions(allQuestions);
       setLoading(false);
     };
     
@@ -356,21 +352,38 @@ const CBTExam = () => {
           
           <div className="grid grid-cols-2 gap-8 mb-8">
             <div className="bg-slate-50 p-4 border border-slate-200 rounded">
-              <h3 className="font-bold text-slate-800 mb-2 border-b pb-1">Registered Subjects</h3>
-              <ul className="list-disc pl-5 text-sm space-y-1 font-bold text-slate-700">
-                {(profile?.utme_subjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry']).map((s: string, i: number) => (
-                  <li key={i}>{s.toUpperCase()}</li>
+              <h3 className="font-bold text-slate-800 mb-2 border-b pb-1">Registered UTME Subjects</h3>
+              <ul className="list-disc pl-5 text-sm space-y-1 font-bold text-slate-700 mb-4">
+                {examSubjectsList.map((s: string, i: number) => (
+                  <li key={i}>{s.toUpperCase()} ({s === 'Use of English' ? '60 Qs' : '40 Qs'})</li>
                 ))}
               </ul>
+
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-1">
+                  Choose Starting Subject First:
+                </label>
+                <select 
+                  className="w-full bg-white border border-slate-300 rounded p-2 text-sm font-bold text-slate-800"
+                  value={startingSubject}
+                  onChange={(e) => setStartingSubject(e.target.value)}
+                >
+                  {examSubjectsList.map((subj, idx) => (
+                    <option key={idx} value={subj}>
+                      Start with {subj} First ({subj === 'Use of English' ? '60 Questions' : '40 Questions'})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="bg-yellow-50 p-4 border border-yellow-200 rounded text-sm text-yellow-900">
               <h3 className="font-bold mb-2 border-b border-yellow-200 pb-1 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Important Instructions</h3>
               <ul className="list-disc pl-5 space-y-1">
                 <li>Do not click "Submit Exam" until you have answered all questions.</li>
+                <li><strong>Subject Switcher:</strong> Use the subject tabs at the top of the exam screen to freely switch between registered subjects at any time during the test.</li>
                 <li><strong>Laptop/PC Recommendation:</strong> For best exam experience, full split view, and quick desktop keyboard shortcuts (A, B, C, D, N, P), using a Laptop or Desktop computer is recommended.</li>
                 <li>Use <kbd className="px-1 bg-white border border-slate-300 rounded">A</kbd> <kbd className="px-1 bg-white border border-slate-300 rounded">B</kbd> <kbd className="px-1 bg-white border border-slate-300 rounded">C</kbd> <kbd className="px-1 bg-white border border-slate-300 rounded">D</kbd> to select answers.</li>
                 <li>Use <kbd className="px-1 bg-white border border-slate-300 rounded">N</kbd> for Next, <kbd className="px-1 bg-white border border-slate-300 rounded">P</kbd> for Previous.</li>
-                <li>Any attempt to switch tabs or minimize the window will lead to automatic submission.</li>
               </ul>
             </div>
           </div>
@@ -378,16 +391,24 @@ const CBTExam = () => {
           <div className="flex justify-center border-t border-slate-200 pt-6">
             <Button 
               size="lg" 
-              className="bg-green-600 hover:bg-green-700 text-white px-12 py-6 text-xl rounded-none shadow-lg"
+              className="bg-green-600 hover:bg-green-700 text-white px-12 py-6 text-xl rounded-none shadow-lg font-bold tracking-wide"
               onClick={() => {
                 if (document.documentElement.requestFullscreen) {
                   document.documentElement.requestFullscreen().catch((err) => console.log('Fullscreen denied:', err));
                 }
+                
+                // Find index of first question matching chosen starting subject
+                const startIdx = questions.findIndex(q => q.subject_name === startingSubject);
+                if (startIdx >= 0) {
+                  setCurrentQuestionIdx(startIdx);
+                  setActiveSubjectTab(startingSubject);
+                }
+
                 setHasStarted(true);
                 setSessionStartedAt(new Date().toISOString());
               }}
             >
-              START EXAM
+              START EXAM WITH {startingSubject.toUpperCase()}
             </Button>
           </div>
         </div>
@@ -460,9 +481,47 @@ const CBTExam = () => {
         
         {/* Left Side: Question Area */}
         <div className="flex-1 flex flex-col relative bg-white m-4 lg:mr-0 rounded-xl shadow-sm border border-slate-200 lg:min-h-0 min-h-[500px]">
-          <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50 rounded-t-xl">
-            <div className="flex items-center gap-2">
-               <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md font-bold text-sm">Question {currentQuestionIdx + 1}</span>
+          {/* Real JAMB Subject Switcher Tabs */}
+          <div className="bg-slate-800 px-4 py-2 flex items-center gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
+            {examSubjectsList.map((subjName, idx) => {
+              const activeQSubject = q?.subject_name;
+              const isSelectedSubject = activeQSubject === subjName;
+              
+              // Count answered in this subject
+              const subjectQs = questions.filter(item => item.subject_name === subjName);
+              const answeredSubjCount = subjectQs.filter(item => !!answers[item.id]).length;
+
+              return (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    const firstSubjIdx = questions.findIndex(item => item.subject_name === subjName);
+                    if (firstSubjIdx >= 0) {
+                      setCurrentQuestionIdx(firstSubjIdx);
+                      setActiveSubjectTab(subjName);
+                    }
+                  }}
+                  className={`px-4 py-2 rounded text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-2 ${
+                    isSelectedSubject
+                      ? 'bg-green-600 text-white shadow-md border border-green-400'
+                      : 'bg-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white'
+                  }`}
+                >
+                  <span>{subjName}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${isSelectedSubject ? 'bg-green-800 text-green-100' : 'bg-slate-800 text-slate-400'}`}>
+                    {answeredSubjCount}/{subjectQs.length || (subjName === 'Use of English' ? 60 : 40)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
+            <div className="flex items-center gap-3">
+               <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md font-bold text-sm">Question {currentQuestionIdx + 1} of {questions.length}</span>
+               <span className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded text-xs font-bold uppercase">
+                 {q?.subject_name || 'Subject'}
+               </span>
             </div>
             <Button variant="outline" size="sm" onClick={toggleFlag} className={flagged[currentQuestionIdx] ? "bg-red-50 text-red-600 border-red-200" : ""}>
               <Flag className={`w-4 h-4 mr-2 ${flagged[currentQuestionIdx] ? "fill-red-600" : ""}`} />
