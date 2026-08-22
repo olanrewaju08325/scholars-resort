@@ -127,7 +127,9 @@ export const StudentsTab = () => {
         const enriched: Profile[] = profData.map((rawP: any) => {
           const overrides = localOverrides[rawP.id] || {};
           const p = { ...rawP, ...overrides };
-          const isMasterAdmin = p.email && p.email.toLowerCase().trim() === 'admitwise2@gmail.com';
+          const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const isMasterAdminEmail = (email?: string | null) => email ? ADMIN_EMAILS.includes(email.toLowerCase().trim()) : false;
+          const isMasterAdmin = p.email && ADMIN_EMAILS.includes(p.email.toLowerCase().trim());
           const effectiveRole = isMasterAdmin ? 'admin' : (p.role || 'student');
           const effectiveStatus = p.is_banned ? 'banned' : (p.is_suspended || p.status === 'suspended' ? 'suspended' : (p.status || 'active'));
           
@@ -276,7 +278,8 @@ export const StudentsTab = () => {
 
   // Open Ban / Suspend Modal
   const openStatusModal = (user: Profile, action: 'suspend' | 'ban') => {
-    if (user.email?.toLowerCase().trim() === 'admitwise2@gmail.com') {
+    const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())) {
       toast.error('Primary system administrator cannot be suspended or banned.');
       return;
     }
@@ -398,7 +401,8 @@ export const StudentsTab = () => {
 
   // Delete User Account Completely
   const handleDeleteUser = async (user: Profile) => {
-    if (user.email?.toLowerCase().trim() === 'admitwise2@gmail.com') {
+    const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())) {
       toast.error('Primary system administrator cannot be deleted.');
       return;
     }
@@ -516,7 +520,8 @@ export const StudentsTab = () => {
 
   // Revoke Subscription
   const handleRevokeAccess = async (user: Profile) => {
-    if (user.email?.toLowerCase().trim() === 'admitwise2@gmail.com') {
+    const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())) {
       toast.error("Master Administrator access cannot be revoked.");
       return;
     }

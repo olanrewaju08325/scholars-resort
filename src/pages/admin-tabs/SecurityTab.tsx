@@ -104,7 +104,8 @@ export const SecurityTab = () => {
 
   const executeStatusChange = async (status: 'suspended' | 'banned') => {
     if (!foundUser) return;
-    if (foundUser.email?.toLowerCase().trim() === 'admitwise2@gmail.com') {
+    const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    if (foundUser.email && ADMIN_EMAILS.includes(foundUser.email.toLowerCase().trim())) {
       toast.error("Cannot suspend or ban primary system administrator.");
       return;
     }

@@ -67,7 +67,9 @@ export const AppLayout = () => {
     { label: 'Library', icon: BookOpen, path: '/library' }
   ];
 
-  const isAdmin = profile?.role === 'admin' || user?.email === 'admitwise2@gmail.com' || profile?.email === 'admitwise2@gmail.com';
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const userEmail = (user?.email || profile?.email || '').toLowerCase().trim();
+  const isAdmin = profile?.role === 'admin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail);
 
   const baseNavItems = profile?.role === 'guardian' ? guardianNavItems : studentNavItems;
   const navItems = isAdmin 
