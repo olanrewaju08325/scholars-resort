@@ -610,85 +610,106 @@ app.post('/api/groq-telemetry/log', (req, res) => {
 
 // Endpoint to fetch real-time Groq API usage telemetry & server logs
 app.get('/api/groq-telemetry', async (req, res) => {
-  const customGroqKey = req.headers['x-groq-key'] as string;
-  const groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+  try {
+    const customGroqKey = req.headers['x-groq-key'] as string;
+    const groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 
-  if ((!latestGroqQuotaHeader.remainingTokens || !latestGroqQuotaHeader.limitTokens) && groqKey && groqKey.trim().length > 10) {
-    try {
-      const liveRes = await fetch('https://api.groq.com/openai/v1/models', {
-        headers: { 'Authorization': `Bearer ${groqKey.trim()}` }
-      });
-      if (liveRes.ok) {
-        const remTokens = liveRes.headers.get('x-ratelimit-remaining-tokens') || liveRes.headers.get('x-ratelimit-remaining-tokens-minute');
-        const limTokens = liveRes.headers.get('x-ratelimit-limit-tokens') || liveRes.headers.get('x-ratelimit-limit-tokens-minute');
-        const resReset = liveRes.headers.get('x-ratelimit-reset-tokens');
-        const remReqs = liveRes.headers.get('x-ratelimit-remaining-requests');
-        const limReqs = liveRes.headers.get('x-ratelimit-limit-requests');
+    if ((!latestGroqQuotaHeader.remainingTokens || !latestGroqQuotaHeader.limitTokens) && groqKey && groqKey.trim().length > 10) {
+      try {
+        const liveRes = await fetch('https://api.groq.com/openai/v1/models', {
+          headers: { 'Authorization': `Bearer ${groqKey.trim()}` }
+        });
+        if (liveRes.ok) {
+          const remTokens = liveRes.headers.get('x-ratelimit-remaining-tokens') || liveRes.headers.get('x-ratelimit-remaining-tokens-minute');
+          const limTokens = liveRes.headers.get('x-ratelimit-limit-tokens') || liveRes.headers.get('x-ratelimit-limit-tokens-minute');
+          const resReset = liveRes.headers.get('x-ratelimit-reset-tokens');
+          const remReqs = liveRes.headers.get('x-ratelimit-remaining-requests');
+          const limReqs = liveRes.headers.get('x-ratelimit-limit-requests');
 
-        if (remTokens || limTokens) {
-          latestGroqQuotaHeader = {
-            remainingTokens: remTokens,
-            limitTokens: limTokens,
-            resetTokens: resReset || '1m',
-            remainingRequests: remReqs,
-            limitRequests: limReqs,
-            lastUpdated: new Date().toISOString()
-          };
+          if (remTokens || limTokens) {
+            latestGroqQuotaHeader = {
+              remainingTokens: remTokens,
+              limitTokens: limTokens,
+              resetTokens: resReset || '1m',
+              remainingRequests: remReqs,
+              limitRequests: limReqs,
+              lastUpdated: new Date().toISOString()
+            };
+          }
         }
+      } catch (err) {
+        console.warn('Live Groq quota check warning:', err);
       }
-    } catch (err) {
-      console.warn('Live Groq quota check warning:', err);
     }
+
+    let totalTokens = 0;
+    let totalPromptTokens = 0;
+    let totalCompletionTokens = 0;
+    let successCount = 0;
+    let errorCount = 0;
+    let totalLatencyMs = 0;
+
+    const modelMap: Record<string, { totalTokens: number; calls: number }> = {};
+
+    groqServerLogs.forEach(log => {
+      totalTokens += log.totalTokens;
+      totalPromptTokens += log.promptTokens;
+      totalCompletionTokens += log.completionTokens;
+      totalLatencyMs += log.latencyMs;
+      if (log.status === 'success') successCount++;
+      else errorCount++;
+
+      if (!modelMap[log.model]) {
+        modelMap[log.model] = { totalTokens: 0, calls: 0 };
+      }
+      modelMap[log.model].totalTokens += log.totalTokens;
+      modelMap[log.model].calls += 1;
+    });
+
+    const avgLatencyMs = groqServerLogs.length > 0 ? Math.round(totalLatencyMs / groqServerLogs.length) : 0;
+
+    const modelUsage = Object.entries(modelMap).map(([model, stats]) => ({
+      model,
+      totalTokens: stats.totalTokens,
+      calls: stats.calls
+    })).sort((a, b) => b.totalTokens - a.totalTokens);
+
+    return res.json({
+      success: true,
+      quota: latestGroqQuotaHeader,
+      totals: {
+        totalTokens,
+        totalPromptTokens,
+        totalCompletionTokens,
+        totalRequests: groqServerLogs.length,
+        successCount,
+        errorCount,
+        avgLatencyMs
+      },
+      modelUsage,
+      logs: groqServerLogs.slice(0, 100),
+      serverUptimeSeconds: Math.floor(process.uptime())
+    });
+  } catch (globalErr: any) {
+    console.error('[Server Groq Telemetry Global Error]', globalErr);
+    return res.status(200).json({
+      success: false,
+      error: globalErr.message || 'Telemetry failure',
+      quota: latestGroqQuotaHeader,
+      totals: {
+        totalTokens: 0,
+        totalPromptTokens: 0,
+        totalCompletionTokens: 0,
+        totalRequests: 0,
+        successCount: 0,
+        errorCount: 0,
+        avgLatencyMs: 0
+      },
+      modelUsage: [],
+      logs: [],
+      serverUptimeSeconds: Math.floor(process.uptime())
+    });
   }
-
-  let totalTokens = 0;
-  let totalPromptTokens = 0;
-  let totalCompletionTokens = 0;
-  let successCount = 0;
-  let errorCount = 0;
-  let totalLatencyMs = 0;
-
-  const modelMap: Record<string, { totalTokens: number; calls: number }> = {};
-
-  groqServerLogs.forEach(log => {
-    totalTokens += log.totalTokens;
-    totalPromptTokens += log.promptTokens;
-    totalCompletionTokens += log.completionTokens;
-    totalLatencyMs += log.latencyMs;
-    if (log.status === 'success') successCount++;
-    else errorCount++;
-
-    if (!modelMap[log.model]) {
-      modelMap[log.model] = { totalTokens: 0, calls: 0 };
-    }
-    modelMap[log.model].totalTokens += log.totalTokens;
-    modelMap[log.model].calls += 1;
-  });
-
-  const avgLatencyMs = groqServerLogs.length > 0 ? Math.round(totalLatencyMs / groqServerLogs.length) : 0;
-
-  const modelUsage = Object.entries(modelMap).map(([model, stats]) => ({
-    model,
-    totalTokens: stats.totalTokens,
-    calls: stats.calls
-  })).sort((a, b) => b.totalTokens - a.totalTokens);
-
-  return res.json({
-    success: true,
-    quota: latestGroqQuotaHeader,
-    totals: {
-      totalTokens,
-      totalPromptTokens,
-      totalCompletionTokens,
-      totalRequests: groqServerLogs.length,
-      successCount,
-      errorCount,
-      avgLatencyMs
-    },
-    modelUsage,
-    logs: groqServerLogs.slice(0, 100),
-    serverUptimeSeconds: Math.floor(process.uptime())
-  });
 });
 
 // API Route: Get real-time accurate counts of active questions grouped by subject_id
@@ -831,6 +852,45 @@ app.post('/api/admin/materials/upload-metadata', async (req, res) => {
   } catch (err: any) {
     console.error('[Server Admin Material Upload Metadata Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server error uploading material metadata' });
+  }
+});
+
+// API Route: Secure Material Deletion (Bypasses Client-Side RLS)
+app.post('/api/admin/materials/delete', async (req, res) => {
+  const { id, title, file_path } = req.body;
+  if (!id && !title) {
+    return res.status(400).json({ success: false, error: 'Missing required id or title parameter' });
+  }
+
+  try {
+    const results: string[] = [];
+
+    // 1. Delete from materials table by ID or by matching title
+    if (id) {
+      const { error: err1 } = await supabase.from('materials').delete().eq('id', id);
+      if (!err1) results.push('materials_deleted_by_id');
+      const { error: err2 } = await supabase.from('library_materials').delete().eq('id', id);
+      if (!err2) results.push('library_materials_deleted_by_id');
+    }
+
+    if (title) {
+      const { error: err1 } = await supabase.from('materials').delete().ilike('title', title.trim());
+      if (!err1) results.push('materials_deleted_by_title');
+      const { error: err2 } = await supabase.from('library_materials').delete().ilike('title', title.trim());
+      if (!err2) results.push('library_materials_deleted_by_title');
+    }
+
+    // 2. Also try to delete from storage if file_path is specified
+    if (file_path) {
+      const cleanPath = file_path.split('/').slice(-2).join('/'); // e.g. "subject_id/file.pdf"
+      await supabase.storage.from('study-materials').remove([file_path, cleanPath]).catch(() => {});
+      await supabase.storage.from('materials').remove([file_path, cleanPath]).catch(() => {});
+    }
+
+    return res.json({ success: true, results });
+  } catch (err: any) {
+    console.error('[Server Secure Delete Material Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Server error deleting material' });
   }
 });
 

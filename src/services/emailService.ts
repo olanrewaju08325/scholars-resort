@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { errorTracker } from '@/lib/errorTracker';
 import { sendPlatformEmail } from '@/lib/emailService';
+import { getApiUrl } from '@/lib/utils';
 
 export interface SMTPConfig {
   host: string;
@@ -116,7 +117,7 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
 
     // 1. Primary: Call backend /api/send-bulk-email
     try {
-      const response = await fetch('/api/send-bulk-email', {
+      const response = await fetch(getApiUrl('/api/send-bulk-email'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

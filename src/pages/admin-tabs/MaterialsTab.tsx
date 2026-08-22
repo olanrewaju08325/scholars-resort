@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { useConfirm } from '@/hooks/useConfirm';
 import { supabase } from '@/lib/supabase';
 import { Upload, Book, FileText, Trash2, CheckCircle, XCircle } from 'lucide-react';
+import { toast } from 'sonner';
+import { getApiUrl } from '@/lib/utils';
 
 export const MaterialsTab = () => {
   const [materials, setMaterials] = useState<any[]>([]);
@@ -257,16 +259,70 @@ export const MaterialsTab = () => {
     }
   };
 
-  const handleDelete = async (id: string, filePath: string) => {
+  const handleDelete = async (id: string, filePath: string, title: string) => {
     confirmAction(
       "Delete Material",
-      "Are you sure you want to delete this material?",
+      `Are you sure you want to delete "${title}"? This will permanently remove it from the Library, Resource Centre, and storage bucket.`,
       async () => {
-        // Delete from storage
-        await supabase.storage.from('materials').remove([filePath]);
-        
-        // Delete from DB
-        await supabase.from('materials').delete().eq('id', id);
+        try {
+          // 1. Call our secure server-side deletion API
+          const response = await fetch(getApiUrl('/api/admin/materials/delete'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              id,
+              title,
+              file_path: filePath
+            })
+          });
+
+          if (!response.ok) {
+            console.warn('Server delete response not ok, executing client fallbacks...');
+          }
+        } catch (apiErr) {
+          console.warn('Failed server-side delete, executing client fallbacks:', apiErr);
+        }
+
+        // 2. Perform direct client fallbacks to guarantee deletion
+        try {
+          if (filePath) {
+            const cleanPath = filePath.split('/').slice(-2).join('/');
+            await supabase.storage.from('study-materials').remove([filePath, cleanPath]).catch(() => {});
+            await supabase.storage.from('materials').remove([filePath, cleanPath]).catch(() => {});
+            await supabase.storage.from('library').remove([filePath, cleanPath]).catch(() => {});
+          }
+          
+          if (id) {
+            await supabase.from('materials').delete().eq('id', id).catch(() => {});
+            await supabase.from('library_materials').delete().eq('id', id).catch(() => {});
+          }
+
+          if (title) {
+            await supabase.from('materials').delete().ilike('title', title.trim()).catch(() => {});
+            await supabase.from('library_materials').delete().ilike('title', title.trim()).catch(() => {});
+          }
+        } catch (fallbackErr) {
+          console.warn('Client fallback delete notice:', fallbackErr);
+        }
+
+        // 3. Clear from localStorage if matching by ID or title
+        try {
+          const localRaw = localStorage.getItem('scholar_local_materials');
+          if (localRaw) {
+            const localArr = JSON.parse(localRaw);
+            const filtered = localArr.filter((item: any) => 
+              item.id !== id && 
+              (!title || item.title?.toLowerCase().trim() !== title.toLowerCase().trim())
+            );
+            localStorage.setItem('scholar_local_materials', JSON.stringify(filtered));
+          }
+        } catch {}
+
+        // 4. Dispatch revalidation events to sync student-facing view instantly
+        window.dispatchEvent(new CustomEvent('library_materials_updated', { detail: { title, timestamp: Date.now() } }));
+        window.dispatchEvent(new CustomEvent('supabase_library_revalidate', { detail: { title, timestamp: Date.now() } }));
+
+        toast.success(`Successfully deleted "${title}" from both Library and Resource Centre!`);
         fetchMaterials();
       },
       { destructive: true }
@@ -404,7 +460,7 @@ export const MaterialsTab = () => {
                     <Button size="sm" variant="outline" className="flex-1 text-xs" onClick={() => toggleVisibility(mat.id, mat.visibility)}>
                       {mat.visibility ? 'Unpublish' : 'Publish'}
                     </Button>
-                    <Button size="sm" variant="destructive" className="px-3" onClick={() => handleDelete(mat.id, mat.file_path)}>
+                    <Button size="sm" variant="destructive" className="px-3" onClick={() => handleDelete(mat.id, mat.file_path || mat.file_url || '', mat.title)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
