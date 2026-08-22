@@ -15,7 +15,7 @@ Scholars Resort is a full-featured, AI-powered UTME CBT preparation platform bui
 
 - **Frontend**: React 18, TypeScript, Vite, Tailwind CSS, Framer Motion, Lucide Icons, Recharts, KaTeX.
 - **Backend & Database**: Supabase (PostgreSQL with RLS, SECURITY DEFINER functions, Triggers, Full-Text Search), Edge Functions.
-- **Deployment**: Configured for Netlify (`netlify.toml` + `public/_redirects`), Vercel, or Cloud Run.
+- **Deployment**: Optimized for Vercel and Cloud Run.
 
 ## ⚡ Build & Run Instructions
 
@@ -30,9 +30,13 @@ npm run dev
 npm run build
 ```
 
-## 🌐 Netlify Deployment
+## 🔺 Vercel Deployment
 
-1. Connect your GitHub repository to Netlify.
-2. Build command: `npm run build`
-3. Publish directory: `dist`
-4. Routing: Handled automatically via `netlify.toml` & `public/_redirects`.
+1. Import your GitHub repository into **Vercel**.
+2. Configure Project Settings:
+   - **Framework Preset**: Vite
+   - **Build Command**: `npm run build`
+   - **Output Directory**: `dist`
+3. Add Environment Variables in Vercel Project Settings (e.g., Supabase URL, Anon Key, Groq API Key).
+4. Click **Deploy**. Vercel will automatically build and host your full-stack application with optimal performance and server routing.
+

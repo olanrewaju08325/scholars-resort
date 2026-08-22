@@ -39,7 +39,13 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-let cachedWorkingSmtpConfig: any = null;
+let cachedWorkingSmtpConfig: any = {
+  host: 'smtp.gmail.com',
+  port: 587,
+  user: 'admitwise2@gmail.com',
+  pass: 'fliwopndlqxipara',
+  from: 'admitwise2@gmail.com'
+};
 
 // Helper to resolve SMTP settings from DB or env or request
 async function getSmtpConfig(customConfig?: any) {

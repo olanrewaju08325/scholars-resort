@@ -481,12 +481,18 @@ export const StudentsTab = () => {
       `Are you sure you want to activate full lifetime premium access for ${user.full_name || user.email}?`,
       async () => {
         try {
+          try {
+            const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
+            existingOverrides[user.id] = { ...(existingOverrides[user.id] || {}), has_paid: true };
+            localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
+          } catch {}
+
           await supabase
             .from('profiles')
             .update({ has_paid: true, updated_at: new Date().toISOString() })
             .eq('id', user.id);
 
-          fetch(getApiUrl('/api/admin/subscriptions/grant'), {
+          await fetch(getApiUrl('/api/admin/subscriptions/grant'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -494,12 +500,6 @@ export const StudentsTab = () => {
               plan_name: 'Lifetime Access (Gifted)'
             })
           }).catch(() => null);
-
-          try {
-            const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
-            existingOverrides[user.id] = { ...(existingOverrides[user.id] || {}), has_paid: true };
-            localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
-          } catch {}
 
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, has_paid: true } : p));
           if (selectedUser?.id === user.id) {
