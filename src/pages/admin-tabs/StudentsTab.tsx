@@ -4,14 +4,15 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/utils';
 import { 
   Users, Download, ShieldCheck, Search, Filter, ArrowUpDown, 
-  Flag, ChevronLeft, ChevronRight, Flame, Smartphone, RefreshCw,
-  UserCheck, Shield, HeartHandshake, Eye, Link as LinkIcon, 
-  GraduationCap, Phone, Mail, Award, CheckCircle, XCircle, Unlock
+  ChevronLeft, ChevronRight, Flame, Smartphone, RefreshCw,
+  UserCheck, Shield, HeartHandshake, Eye, GraduationCap, Phone, 
+  Mail, CheckCircle, XCircle, Unlock, Ban, AlertTriangle, 
+  Trash2, UserX, ShieldAlert, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -21,6 +22,10 @@ interface Profile {
   email: string;
   full_name: string | null;
   role: 'student' | 'guardian' | 'admin' | string;
+  status?: 'active' | 'suspended' | 'banned' | string;
+  is_banned?: boolean;
+  is_suspended?: boolean;
+  ban_reason?: string | null;
   has_paid: boolean;
   xp?: number;
   streak_days?: number;
@@ -55,7 +60,7 @@ export const StudentsTab = () => {
 
   // Filtering & Sorting
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'paid' | 'unpaid' | 'active'
+  const [filterStatus, setFilterStatus] = useState('all'); // 'all' | 'active' | 'suspended' | 'banned' | 'paid' | 'unpaid'
   const [sortBy, setSortBy] = useState('created_at');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
@@ -76,7 +81,12 @@ export const StudentsTab = () => {
   const [linkStudentId, setLinkStudentId] = useState('');
   const [linkingLoading, setLinkingLoading] = useState(false);
 
-  const MASTER_ADMINS = ['admitwise2@gmail.com'];
+  // Ban / Suspend Modal State
+  const [isBanModalOpen, setIsBanModalOpen] = useState(false);
+  const [banTargetUser, setBanTargetUser] = useState<Profile | null>(null);
+  const [banActionType, setBanActionType] = useState<'suspend' | 'ban'>('suspend');
+  const [banReasonInput, setBanReasonInput] = useState('');
+  const [statusLoading, setStatusLoading] = useState(false);
 
   useEffect(() => {
     fetchAllData();
@@ -92,7 +102,7 @@ export const StudentsTab = () => {
         .order('created_at', { ascending: false });
 
       if (profError) {
-        console.warn('Profiles fetch warn:', profError);
+        console.warn('Profiles fetch warning:', profError);
       }
 
       // 2. Fetch guardian links
@@ -102,12 +112,16 @@ export const StudentsTab = () => {
         .eq('status', 'active');
 
       if (profData) {
-        const enriched = profData.map((p: any) => {
-          const isMaster = p.email && MASTER_ADMINS.includes(p.email.toLowerCase().trim());
+        const enriched: Profile[] = profData.map((p: any) => {
+          const isMasterAdmin = p.email && p.email.toLowerCase().trim() === 'admitwise2@gmail.com';
+          const effectiveRole = isMasterAdmin ? 'admin' : (p.role || 'student');
+          const effectiveStatus = p.is_banned ? 'banned' : (p.is_suspended || p.status === 'suspended' ? 'suspended' : (p.status || 'active'));
+          
           return {
             ...p,
-            role: isMaster ? 'admin' : (p.role || 'student'),
-            has_paid: isMaster ? true : !!p.has_paid,
+            role: effectiveRole,
+            status: effectiveStatus,
+            has_paid: isMasterAdmin ? true : !!p.has_paid,
             xp: p.xp || 0,
             streak_days: p.streak_days || p.study_streak || 0
           };
@@ -156,7 +170,8 @@ export const StudentsTab = () => {
     const guardians = profiles.filter(p => p.role === 'guardian').length;
     const admins = profiles.filter(p => p.role === 'admin').length;
     const paid = profiles.filter(p => p.has_paid).length;
-    return { total, students, guardians, admins, paid };
+    const suspendedOrBanned = profiles.filter(p => p.status === 'banned' || p.status === 'suspended').length;
+    return { total, students, guardians, admins, paid, suspendedOrBanned };
   }, [profiles]);
 
   // Processed Data
@@ -179,14 +194,17 @@ export const StudentsTab = () => {
       );
     }
 
-    // Filter by payment / active status
+    // Filter by status / payment
     if (filterStatus === 'paid') {
       result = result.filter(p => p.has_paid);
     } else if (filterStatus === 'unpaid') {
       result = result.filter(p => !p.has_paid && p.role !== 'admin');
     } else if (filterStatus === 'active') {
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-      result = result.filter(p => p.updated_at && new Date(p.updated_at) > sevenDaysAgo);
+      result = result.filter(p => p.status === 'active' || !p.status);
+    } else if (filterStatus === 'suspended') {
+      result = result.filter(p => p.status === 'suspended' || p.is_suspended);
+    } else if (filterStatus === 'banned') {
+      result = result.filter(p => p.status === 'banned' || p.is_banned);
     }
 
     // Sort
@@ -242,36 +260,199 @@ export const StudentsTab = () => {
     setSelectedIds(newSet);
   };
 
-  // Grant Subscription via Direct Supabase & Resilient Server API
+  // Open Ban / Suspend Modal
+  const openStatusModal = (user: Profile, action: 'suspend' | 'ban') => {
+    if (user.email?.toLowerCase().trim() === 'admitwise2@gmail.com') {
+      toast.error('Primary system administrator cannot be suspended or banned.');
+      return;
+    }
+    setBanTargetUser(user);
+    setBanActionType(action);
+    setBanReasonInput('');
+    setIsBanModalOpen(true);
+  };
+
+  // Execute Suspend / Ban
+  const handleExecuteStatusChange = async () => {
+    if (!banTargetUser) return;
+    setStatusLoading(true);
+    const targetStatus = banActionType === 'ban' ? 'banned' : 'suspended';
+
+    try {
+      // 1. Call server API
+      const res = await fetch(getApiUrl('/api/admin/users/status'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: banTargetUser.id,
+          status: targetStatus,
+          reason: banReasonInput.trim() || `User ${targetStatus} by administrator`
+        })
+      });
+
+      // 2. Direct Supabase update as fallback
+      await supabase.from('profiles').update({
+        status: targetStatus,
+        is_banned: targetStatus === 'banned',
+        is_suspended: targetStatus === 'suspended',
+        ban_reason: banReasonInput.trim() || null
+      }).eq('id', banTargetUser.id);
+
+      // 3. Update state
+      setProfiles(prev => prev.map(p => p.id === banTargetUser.id ? {
+        ...p,
+        status: targetStatus,
+        is_banned: targetStatus === 'banned',
+        is_suspended: targetStatus === 'suspended',
+        ban_reason: banReasonInput.trim()
+      } : p));
+
+      if (selectedUser?.id === banTargetUser.id) {
+        setSelectedUser(prev => prev ? {
+          ...prev,
+          status: targetStatus,
+          is_banned: targetStatus === 'banned',
+          is_suspended: targetStatus === 'suspended',
+          ban_reason: banReasonInput.trim()
+        } : null);
+      }
+
+      toast.success(`User ${banTargetUser.full_name || banTargetUser.email} has been ${targetStatus}.`);
+      setIsBanModalOpen(false);
+    } catch (err: any) {
+      toast.error(`Failed to ${targetStatus} user: ${err.message}`);
+    } finally {
+      setStatusLoading(false);
+    }
+  };
+
+  // Reactivate User (Unban / Unsuspend)
+  const handleReactivateUser = async (user: Profile) => {
+    try {
+      await fetch(getApiUrl('/api/admin/users/status'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: user.id,
+          status: 'active',
+          reason: 'Reactivated by administrator'
+        })
+      });
+
+      await supabase.from('profiles').update({
+        status: 'active',
+        is_banned: false,
+        is_suspended: false,
+        ban_reason: null
+      }).eq('id', user.id);
+
+      setProfiles(prev => prev.map(p => p.id === user.id ? {
+        ...p,
+        status: 'active',
+        is_banned: false,
+        is_suspended: false,
+        ban_reason: null
+      } : p));
+
+      if (selectedUser?.id === user.id) {
+        setSelectedUser(prev => prev ? {
+          ...prev,
+          status: 'active',
+          is_banned: false,
+          is_suspended: false,
+          ban_reason: null
+        } : null);
+      }
+
+      toast.success(`User ${user.full_name || user.email} account reactivated!`);
+    } catch (err: any) {
+      toast.error(`Failed to reactivate: ${err.message}`);
+    }
+  };
+
+  // Delete User Account Completely
+  const handleDeleteUser = async (user: Profile) => {
+    if (user.email?.toLowerCase().trim() === 'admitwise2@gmail.com') {
+      toast.error('Primary system administrator cannot be deleted.');
+      return;
+    }
+
+    confirmAction(
+      "Permanently Delete Account",
+      `Are you sure you want to completely delete the account for ${user.full_name || user.email}? This will erase all exam scores, subscriptions, and profile records permanently.`,
+      async () => {
+        try {
+          // 1. Call server deletion endpoint
+          await fetch(getApiUrl('/api/admin/users/delete'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id })
+          });
+
+          // 2. Direct Supabase delete
+          await supabase.from('profiles').delete().eq('id', user.id);
+
+          // 3. Update React state
+          setProfiles(prev => prev.filter(p => p.id !== user.id));
+          if (selectedUser?.id === user.id) {
+            setSelectedUser(null);
+            setIsDetailOpen(false);
+          }
+
+          toast.success(`Account for ${user.full_name || user.email} deleted successfully.`);
+        } catch (err: any) {
+          toast.error(`Failed to delete user: ${err.message}`);
+        }
+      }
+    );
+  };
+
+  // Change Role (Admin, Student, Guardian)
+  const handleRoleChange = async (userId: string, newRole: string) => {
+    try {
+      await fetch(getApiUrl('/api/admin/users/role'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, role: newRole })
+      });
+
+      const updates: any = { role: newRole };
+      if (newRole === 'admin') {
+        updates.has_paid = true;
+      }
+      await supabase.from('profiles').update(updates).eq('id', userId);
+
+      setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole, has_paid: newRole === 'admin' ? true : p.has_paid } : p));
+      if (selectedUser?.id === userId) {
+        setSelectedUser(prev => prev ? { ...prev, role: newRole, has_paid: newRole === 'admin' ? true : prev.has_paid } : null);
+      }
+      toast.success(`User role updated to ${newRole.toUpperCase()}`);
+    } catch (err: any) {
+      toast.error(`Failed to update role: ${err.message}`);
+    }
+  };
+
+  // Grant Subscription
   const handleGiftAccess = async (user: Profile) => {
     confirmAction(
       "Grant Premium Subscription",
       `Are you sure you want to activate full lifetime premium access for ${user.full_name || user.email}?`,
       async () => {
         try {
-          // 1. Direct Supabase update (primary source of truth across all components)
-          const { error: updateErr } = await supabase
+          await supabase
             .from('profiles')
             .update({ has_paid: true, updated_at: new Date().toISOString() })
             .eq('id', user.id);
 
-          if (updateErr) {
-            console.warn('Direct profile update warning:', updateErr);
-          }
+          fetch(getApiUrl('/api/admin/subscriptions/grant'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user_id: user.id,
+              plan_name: 'Lifetime Access (Gifted)'
+            })
+          }).catch(() => null);
 
-          // 2. Background server sync (bypasses RLS for subscriptions table, fails gracefully if offline/external)
-          try {
-            fetch(getApiUrl('/api/admin/subscriptions/grant'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                user_id: user.id,
-                plan_name: 'Lifetime Access (Gifted)'
-              })
-            }).catch(() => null);
-          } catch {}
-
-          // 3. Update React state immediately
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, has_paid: true } : p));
           if (selectedUser?.id === user.id) {
             setSelectedUser(prev => prev ? { ...prev, has_paid: true } : null);
@@ -287,7 +468,7 @@ export const StudentsTab = () => {
 
   // Revoke Subscription
   const handleRevokeAccess = async (user: Profile) => {
-    if (MASTER_ADMINS.includes(user.email.toLowerCase().trim())) {
+    if (user.email?.toLowerCase().trim() === 'admitwise2@gmail.com') {
       toast.error("Master Administrator access cannot be revoked.");
       return;
     }
@@ -321,7 +502,7 @@ export const StudentsTab = () => {
         try {
           const ids = Array.from(selectedIds);
           for (const id of ids) {
-            await fetch(getApiUrl('/api/admin/subscriptions/grant'), {
+            fetch(getApiUrl('/api/admin/subscriptions/grant'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ user_id: id })
@@ -347,7 +528,7 @@ export const StudentsTab = () => {
       `Reset registered hardware device for ${user.full_name || user.email}? This will permit them to bind a new device on their next sign-in.`,
       async () => {
         try {
-          await fetch(getApiUrl('/api/admin/device/reset'), {
+          fetch(getApiUrl('/api/admin/device/reset'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id })
@@ -365,20 +546,6 @@ export const StudentsTab = () => {
         }
       }
     );
-  };
-
-  // Change Role
-  const handleRoleChange = async (userId: string, newRole: string) => {
-    try {
-      await supabase.from('profiles').update({ role: newRole }).eq('id', userId);
-      setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole } : p));
-      if (selectedUser?.id === userId) {
-        setSelectedUser(prev => prev ? { ...prev, role: newRole } : null);
-      }
-      toast.success(`User role updated to ${newRole.toUpperCase()}`);
-    } catch (err: any) {
-      toast.error(`Failed to update role: ${err.message}`);
-    }
   };
 
   // Link Guardian to Student
@@ -420,9 +587,9 @@ export const StudentsTab = () => {
   // Export CSV
   const exportToCSV = () => {
     if (processedProfiles.length === 0) return;
-    const headers = ['Name,Email,Role,Phone,Target University,Status,Streak,Score (XP),Joined Date'];
+    const headers = ['Name,Email,Role,Status,Phone,Target University,Subscription,Streak,Score (XP),Joined Date'];
     const rows = processedProfiles.map(s => 
-      `"${s.full_name || 'N/A'}","${s.email}","${s.role}","${s.phone || ''}","${s.target_university || ''}",${s.has_paid ? 'Paid' : 'Unpaid'},${s.streak_days || 0},${s.xp || 0},"${new Date(s.created_at).toLocaleDateString()}"`
+      `"${s.full_name || 'N/A'}","${s.email}","${s.role}","${s.status || 'active'}","${s.phone || ''}","${s.target_university || ''}",${s.has_paid ? 'Paid' : 'Unpaid'},${s.streak_days || 0},${s.xp || 0},"${new Date(s.created_at).toLocaleDateString()}"`
     );
     const csvContent = "data:text/csv;charset=utf-8," + headers.concat(rows).join("\n");
     const encodedUri = encodeURI(csvContent);
@@ -441,12 +608,12 @@ export const StudentsTab = () => {
       {/* Top Header & Quick Actions */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 flex-wrap">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-white">
+          <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
             <Users className="w-6 h-6 text-primary shrink-0" /> 
             Users & Guardians Directory
           </h2>
-          <p className="text-slate-400 text-xs sm:text-sm">
-            Manage registered Students, Parent/Guardian accounts, role privileges, and active subscriptions.
+          <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm">
+            Manage registered Students, Parent/Guardian accounts, role privileges, bans, suspensions, and subscriptions.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap shrink-0">
@@ -455,7 +622,7 @@ export const StudentsTab = () => {
             size="sm"
             onClick={() => { setRefreshing(true); fetchAllData(); }}
             disabled={refreshing}
-            className="border-slate-700 bg-slate-900 text-slate-300 hover:bg-slate-800 gap-1.5 text-xs"
+            className="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5 text-xs font-semibold"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
@@ -464,7 +631,7 @@ export const StudentsTab = () => {
           <Button
             size="sm"
             onClick={() => setIsLinkModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs"
+            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs font-semibold"
           >
             <HeartHandshake className="w-3.5 h-3.5" />
             Link Guardian & Student
@@ -473,7 +640,7 @@ export const StudentsTab = () => {
           {selectedIds.size > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button onClick={handleBulkGiftAccess} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs">
+                <Button onClick={handleBulkGiftAccess} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold">
                   Bulk Grant Access ({selectedIds.size})
                 </Button>
               </TooltipTrigger>
@@ -481,24 +648,24 @@ export const StudentsTab = () => {
             </Tooltip>
           )}
 
-          <Button onClick={exportToCSV} variant="outline" size="sm" className="border-slate-700 bg-slate-900 text-slate-200 hover:bg-slate-800 gap-1.5 text-xs">
+          <Button onClick={exportToCSV} variant="outline" size="sm" className="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5 text-xs font-semibold">
             <Download className="w-3.5 h-3.5" /> Export CSV
           </Button>
         </div>
       </div>
 
-      {/* High-Level Directory Overview Cards */}
+      {/* Directory Stat Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <Card 
           onClick={() => { setActiveCategory('all'); setCurrentPage(1); }}
-          className={`cursor-pointer transition-all border ${activeCategory === 'all' ? 'bg-slate-800 border-primary shadow-md' : 'bg-slate-900/80 border-slate-800 hover:bg-slate-850'}`}
+          className={`cursor-pointer transition-all border ${activeCategory === 'all' ? 'bg-slate-800 text-white border-primary shadow-md' : 'bg-card hover:bg-muted/50 border-border'}`}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-slate-400 font-medium">All Users</p>
-              <p className="text-xl font-bold text-white mt-1">{stats.total}</p>
+              <p className="text-xs text-muted-foreground font-medium">All Users</p>
+              <p className="text-xl font-bold mt-1">{stats.total}</p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-slate-800 flex items-center justify-center text-slate-300">
+            <div className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-700 dark:text-slate-300">
               <Users className="w-5 h-5" />
             </div>
           </CardContent>
@@ -506,14 +673,14 @@ export const StudentsTab = () => {
 
         <Card 
           onClick={() => { setActiveCategory('student'); setCurrentPage(1); }}
-          className={`cursor-pointer transition-all border ${activeCategory === 'student' ? 'bg-slate-800 border-primary shadow-md' : 'bg-slate-900/80 border-slate-800 hover:bg-slate-850'}`}
+          className={`cursor-pointer transition-all border ${activeCategory === 'student' ? 'bg-slate-800 text-white border-blue-500 shadow-md' : 'bg-card hover:bg-muted/50 border-border'}`}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-blue-400 font-medium">Students</p>
-              <p className="text-xl font-bold text-blue-300 mt-1">{stats.students}</p>
+              <p className="text-xs text-blue-500 font-medium">Students</p>
+              <p className="text-xl font-bold text-blue-600 dark:text-blue-400 mt-1">{stats.students}</p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-blue-950/60 border border-blue-800/40 flex items-center justify-center text-blue-400">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
               <GraduationCap className="w-5 h-5" />
             </div>
           </CardContent>
@@ -521,30 +688,30 @@ export const StudentsTab = () => {
 
         <Card 
           onClick={() => { setActiveCategory('guardian'); setCurrentPage(1); }}
-          className={`cursor-pointer transition-all border ${activeCategory === 'guardian' ? 'bg-slate-800 border-purple-500 shadow-md' : 'bg-slate-900/80 border-slate-800 hover:bg-slate-850'}`}
+          className={`cursor-pointer transition-all border ${activeCategory === 'guardian' ? 'bg-slate-800 text-white border-purple-500 shadow-md' : 'bg-card hover:bg-muted/50 border-border'}`}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-purple-400 font-medium">Guardians & Parents</p>
-              <p className="text-xl font-bold text-purple-300 mt-1">{stats.guardians}</p>
+              <p className="text-xs text-purple-500 font-medium">Guardians & Parents</p>
+              <p className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{stats.guardians}</p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-purple-950/60 border border-purple-800/40 flex items-center justify-center text-purple-400">
+            <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
               <HeartHandshake className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
 
         <Card 
-          onClick={() => { setFilterStatus('paid'); setCurrentPage(1); }}
-          className={`cursor-pointer transition-all border ${filterStatus === 'paid' ? 'bg-slate-800 border-green-500 shadow-md' : 'bg-slate-900/80 border-slate-800 hover:bg-slate-850'}`}
+          onClick={() => { setActiveCategory('admin'); setCurrentPage(1); }}
+          className={`cursor-pointer transition-all border ${activeCategory === 'admin' ? 'bg-slate-800 text-white border-amber-500 shadow-md' : 'bg-card hover:bg-muted/50 border-border'}`}
         >
           <CardContent className="p-4 flex items-center justify-between">
             <div>
-              <p className="text-xs text-green-400 font-medium">Premium Paid</p>
-              <p className="text-xl font-bold text-green-300 mt-1">{stats.paid}</p>
+              <p className="text-xs text-amber-500 font-medium">Administrators</p>
+              <p className="text-xl font-bold text-amber-600 dark:text-amber-400 mt-1">{stats.admins}</p>
             </div>
-            <div className="w-9 h-9 rounded-xl bg-green-950/60 border border-green-800/40 flex items-center justify-center text-green-400">
-              <ShieldCheck className="w-5 h-5" />
+            <div className="w-9 h-9 rounded-xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-800/40 flex items-center justify-center text-amber-600 dark:text-amber-400">
+              <Shield className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
@@ -611,9 +778,11 @@ export const StudentsTab = () => {
                   onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
                 >
                   <option value="all">All Status</option>
+                  <option value="active">Active Only</option>
+                  <option value="suspended">Suspended Accounts</option>
+                  <option value="banned">Banned Accounts</option>
                   <option value="paid">Paid / Premium</option>
                   <option value="unpaid">Unpaid / Free</option>
-                  <option value="active">Active Recently</option>
                 </select>
               </div>
             </div>
@@ -637,6 +806,7 @@ export const StudentsTab = () => {
                     <div className="flex items-center gap-1">User / Account <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
                   <th className="px-4 py-3 font-semibold">Role</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
                   <th className="px-4 py-3 font-semibold cursor-pointer hover:text-white" onClick={() => toggleSort('has_paid')}>
                     <div className="flex items-center gap-1">Subscription <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
@@ -644,10 +814,7 @@ export const StudentsTab = () => {
                   <th className="px-4 py-3 font-semibold cursor-pointer hover:text-white" onClick={() => toggleSort('xp')}>
                     <div className="flex items-center gap-1">Score / Streak <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
-                  <th className="px-4 py-3 font-semibold cursor-pointer hover:text-white" onClick={() => toggleSort('created_at')}>
-                    <div className="flex items-center gap-1">Registered <ArrowUpDown className="w-3 h-3" /></div>
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-right">Actions</th>
+                  <th className="px-4 py-3 font-semibold text-right">Actions & Controls</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
@@ -656,9 +823,11 @@ export const StudentsTab = () => {
                 ) : paginatedProfiles.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-16 text-center text-slate-500">No accounts match the current filter criteria.</td></tr>
                 ) : paginatedProfiles.map(user => {
-                  const isMaster = user.email && MASTER_ADMINS.includes(user.email.toLowerCase().trim());
+                  const isMasterAdmin = user.email?.toLowerCase().trim() === 'admitwise2@gmail.com';
                   const guardians = studentToGuardians[user.id] || [];
                   const wards = guardianToStudents[user.id] || [];
+                  const isBanned = user.status === 'banned' || user.is_banned;
+                  const isSuspended = user.status === 'suspended' || user.is_suspended;
 
                   return (
                     <tr key={user.id} className="hover:bg-slate-800/40 transition-colors group">
@@ -675,7 +844,7 @@ export const StudentsTab = () => {
                       <td className="px-4 py-3">
                         <div className="font-semibold text-slate-100 flex items-center gap-1.5">
                           {user.full_name || 'Anonymous User'}
-                          {isMaster && (
+                          {isMasterAdmin && (
                             <Badge className="bg-amber-500/20 text-amber-300 border-amber-500/40 text-[9px] px-1 py-0 font-mono">
                               MASTER
                             </Badge>
@@ -692,54 +861,68 @@ export const StudentsTab = () => {
                         )}
                       </td>
 
-                      {/* Role Badge */}
+                      {/* Role Selector */}
                       <td className="px-4 py-3">
-                        {user.role === 'admin' || isMaster ? (
-                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1 w-fit">
-                            <Shield className="w-3 h-3" /> Admin
+                        <select
+                          value={user.role}
+                          disabled={isMasterAdmin}
+                          onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                          className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none cursor-pointer hover:border-slate-500"
+                        >
+                          <option value="student">Student</option>
+                          <option value="guardian">Guardian / Parent</option>
+                          <option value="admin">Administrator</option>
+                        </select>
+                      </td>
+
+                      {/* Status Badge */}
+                      <td className="px-4 py-3">
+                        {isBanned ? (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40 flex items-center gap-1 w-fit">
+                            <Ban className="w-3 h-3" /> Banned
                           </span>
-                        ) : user.role === 'guardian' ? (
-                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/30 flex items-center gap-1 w-fit">
-                            <HeartHandshake className="w-3 h-3" /> Guardian
+                        ) : isSuspended ? (
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/40 flex items-center gap-1 w-fit">
+                            <AlertTriangle className="w-3 h-3" /> Suspended
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30 flex items-center gap-1 w-fit">
-                            <GraduationCap className="w-3 h-3" /> Student
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center gap-1 w-fit">
+                            <CheckCircle className="w-3 h-3" /> Active
                           </span>
                         )}
                       </td>
 
                       {/* Subscription Status */}
                       <td className="px-4 py-3">
-                        {user.has_paid || isMaster ? (
+                        {user.has_paid || isMasterAdmin ? (
                           <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-500/20 text-green-400 border border-green-500/30 inline-flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3 text-green-400" /> Verified Premium
+                            <CheckCircle className="w-3 h-3 text-green-400" /> Premium
                           </span>
                         ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30 inline-flex items-center gap-1">
-                            <XCircle className="w-3 h-3 text-red-400" /> Unpaid / Free
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-800 text-slate-400 border border-slate-700 inline-flex items-center gap-1">
+                            <XCircle className="w-3 h-3 text-slate-500" /> Free Plan
                           </span>
                         )}
                       </td>
 
-                      {/* Associated Network (Guardians or Wards) */}
+                      {/* Associated Network */}
                       <td className="px-4 py-3 text-xs">
                         {user.role === 'guardian' ? (
                           wards.length > 0 ? (
                             <div className="space-y-0.5">
-                              <span className="text-purple-300 font-semibold">{wards.length} Linked Ward(s):</span>
-                              <div className="text-slate-400 text-[11px] truncate max-w-[160px]">
+                              <span className="text-purple-300 font-semibold">{wards.length} Ward(s):</span>
+                              <div className="text-slate-400 text-[11px] truncate max-w-[140px]">
                                 {wards.map(w => w.full_name || w.email).join(', ')}
                               </div>
                             </div>
                           ) : (
-                            <span className="text-slate-500 italic">No students linked</span>
+                            <span className="text-slate-500 italic">No wards linked</span>
                           )
                         ) : (
                           guardians.length > 0 ? (
                             <div className="space-y-0.5">
                               <span className="text-blue-300 font-semibold">{guardians.length} Guardian(s):</span>
-                              <div className="text-slate-400 text-[11px] truncate max-w-[160px]">
+                              <div className="text-slate-400 text-[11px] truncate max-w-[140px]">
                                 {guardians.map(g => g.full_name || g.email).join(', ')}
                               </div>
                             </div>
@@ -763,14 +946,9 @@ export const StudentsTab = () => {
                         )}
                       </td>
 
-                      {/* Registered Date */}
-                      <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
-                        {user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}
-                      </td>
-
                       {/* Action Buttons */}
                       <td className="px-4 py-3 text-right">
-                        <div className="flex justify-end gap-1.5">
+                        <div className="flex justify-end items-center gap-1">
                           {/* View details */}
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -783,8 +961,55 @@ export const StudentsTab = () => {
                                 <Eye className="w-3.5 h-3.5" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>View full profile metadata & linked network</TooltipContent>
+                            <TooltipContent>Inspect account profile</TooltipContent>
                           </Tooltip>
+
+                          {/* Suspend / Ban / Reactivate Controls */}
+                          {isBanned || isSuspended ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  className="h-7 w-7 text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/60" 
+                                  onClick={() => handleReactivateUser(user)}
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Reactivate account</TooltipContent>
+                            </Tooltip>
+                          ) : !isMasterAdmin ? (
+                            <>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className="h-7 w-7 text-amber-400 hover:text-amber-300 hover:bg-amber-950/60" 
+                                    onClick={() => openStatusModal(user, 'suspend')}
+                                  >
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Suspend user account</TooltipContent>
+                              </Tooltip>
+
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button 
+                                    size="icon" 
+                                    variant="ghost" 
+                                    className="h-7 w-7 text-red-400 hover:text-red-300 hover:bg-red-950/60" 
+                                    onClick={() => openStatusModal(user, 'ban')}
+                                  >
+                                    <Ban className="w-3.5 h-3.5" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Ban user permanently</TooltipContent>
+                              </Tooltip>
+                            </>
+                          ) : null}
 
                           {/* Reset device hardware binding */}
                           <Tooltip>
@@ -798,11 +1023,11 @@ export const StudentsTab = () => {
                                 <Smartphone className="w-3.5 h-3.5" />
                               </Button>
                             </TooltipTrigger>
-                            <TooltipContent>Reset Device Pairing Lock (Clear registered MAC/Hardware ID)</TooltipContent>
+                            <TooltipContent>Reset Device Pairing Lock</TooltipContent>
                           </Tooltip>
 
                           {/* Grant/Revoke Access */}
-                          {!user.has_paid && !isMaster ? (
+                          {!user.has_paid && !isMasterAdmin ? (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button 
@@ -814,9 +1039,9 @@ export const StudentsTab = () => {
                                   <ShieldCheck className="w-3.5 h-3.5" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Activate lifetime premium subscription</TooltipContent>
+                              <TooltipContent>Activate lifetime premium</TooltipContent>
                             </Tooltip>
-                          ) : !isMaster && (
+                          ) : !isMasterAdmin && (
                             <Tooltip>
                               <TooltipTrigger asChild>
                                 <Button 
@@ -828,7 +1053,24 @@ export const StudentsTab = () => {
                                   <Unlock className="w-3.5 h-3.5" />
                                 </Button>
                               </TooltipTrigger>
-                              <TooltipContent>Revoke premium status (Downgrade to free)</TooltipContent>
+                              <TooltipContent>Revoke premium (Set free)</TooltipContent>
+                            </Tooltip>
+                          )}
+
+                          {/* Delete Account */}
+                          {!isMasterAdmin && (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button 
+                                  size="icon" 
+                                  variant="ghost" 
+                                  className="h-7 w-7 text-red-500 hover:text-red-400 hover:bg-red-950/80" 
+                                  onClick={() => handleDeleteUser(user)}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Delete user account completely</TooltipContent>
                             </Tooltip>
                           )}
                         </div>
@@ -871,6 +1113,59 @@ export const StudentsTab = () => {
         </CardContent>
       </Card>
 
+      {/* Ban / Suspend Dialog */}
+      <Dialog open={isBanModalOpen} onOpenChange={setIsBanModalOpen}>
+        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-white">
+              {banActionType === 'ban' ? (
+                <>
+                  <Ban className="w-5 h-5 text-red-500" />
+                  Ban Account: {banTargetUser?.full_name || banTargetUser?.email}
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-5 h-5 text-amber-500" />
+                  Suspend Account: {banTargetUser?.full_name || banTargetUser?.email}
+                </>
+              )}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400 text-xs">
+              {banActionType === 'ban' 
+                ? 'Banning blocks user login completely until manually unbanned by an administrator.'
+                : 'Suspension temporarily locks the user out of exams and study workspaces.'
+              }
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-xs text-slate-400 font-semibold mb-1 block">Reason for {banActionType === 'ban' ? 'Ban' : 'Suspension'}</label>
+              <Input 
+                placeholder="e.g. Terms of Service violation, suspicious login activity, exam cheating..."
+                value={banReasonInput}
+                onChange={(e) => setBanReasonInput(e.target.value)}
+                className="bg-slate-950 border-slate-700 text-xs"
+              />
+            </div>
+
+            <DialogFooter className="gap-2 pt-3">
+              <Button variant="outline" size="sm" onClick={() => setIsBanModalOpen(false)} disabled={statusLoading}>
+                Cancel
+              </Button>
+              <Button 
+                size="sm" 
+                className={banActionType === 'ban' ? 'bg-red-600 hover:bg-red-700 text-white font-semibold' : 'bg-amber-600 hover:bg-amber-700 text-white font-semibold'}
+                onClick={handleExecuteStatusChange}
+                disabled={statusLoading}
+              >
+                {statusLoading ? 'Processing...' : `Confirm ${banActionType === 'ban' ? 'Ban' : 'Suspension'}`}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* User Detail & Inspection Dialog */}
       <Dialog open={isDetailOpen} onOpenChange={setIsDetailOpen}>
         <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-lg">
@@ -892,6 +1187,7 @@ export const StudentsTab = () => {
                   <div className="flex items-center gap-2 mt-1">
                     <select
                       value={selectedUser.role}
+                      disabled={selectedUser.email?.toLowerCase().trim() === 'admitwise2@gmail.com'}
                       onChange={(e) => handleRoleChange(selectedUser.id, e.target.value)}
                       className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none"
                     >
@@ -903,10 +1199,23 @@ export const StudentsTab = () => {
                 </div>
 
                 <div>
+                  <p className="text-[11px] text-slate-500 uppercase font-semibold">Account Status</p>
+                  <p className="font-semibold text-xs mt-1">
+                    {selectedUser.status === 'banned' || selectedUser.is_banned ? (
+                      <span className="text-red-400 font-bold uppercase">Banned</span>
+                    ) : selectedUser.status === 'suspended' || selectedUser.is_suspended ? (
+                      <span className="text-amber-400 font-bold uppercase">Suspended</span>
+                    ) : (
+                      <span className="text-emerald-400 font-bold uppercase">Active</span>
+                    )}
+                  </p>
+                </div>
+
+                <div>
                   <p className="text-[11px] text-slate-500 uppercase font-semibold">Payment Status</p>
                   <p className="font-semibold text-xs mt-1">
                     {selectedUser.has_paid ? (
-                      <span className="text-green-400">Verified Premium (Active)</span>
+                      <span className="text-green-400">Verified Premium</span>
                     ) : (
                       <span className="text-red-400">Unpaid / Free Plan</span>
                     )}
@@ -928,11 +1237,6 @@ export const StudentsTab = () => {
                   <p className="text-xs font-mono text-slate-300 mt-0.5 truncate">
                     {selectedUser.device_uuid ? selectedUser.device_uuid : 'No active device bound'}
                   </p>
-                </div>
-
-                <div>
-                  <p className="text-[11px] text-slate-500 uppercase font-semibold">Account UUID</p>
-                  <p className="text-[11px] font-mono text-slate-400 mt-0.5 truncate">{selectedUser.id}</p>
                 </div>
               </div>
 
@@ -979,17 +1283,17 @@ export const StudentsTab = () => {
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="w-1/2 border-slate-700 hover:bg-slate-800 text-xs"
+                  className="w-1/3 border-slate-700 hover:bg-slate-800 text-xs"
                   onClick={() => handleResetDevice(selectedUser)}
                 >
-                  <Smartphone className="w-3.5 h-3.5 mr-1" /> Reset Device Lock
+                  <Smartphone className="w-3.5 h-3.5 mr-1" /> Reset Device
                 </Button>
 
                 {selectedUser.has_paid ? (
                   <Button 
                     variant="outline" 
                     size="sm" 
-                    className="w-1/2 border-red-800/40 text-red-400 hover:bg-red-950 text-xs"
+                    className="w-1/3 border-red-800/40 text-red-400 hover:bg-red-950 text-xs"
                     onClick={() => handleRevokeAccess(selectedUser)}
                   >
                     Revoke Access
@@ -997,10 +1301,21 @@ export const StudentsTab = () => {
                 ) : (
                   <Button 
                     size="sm" 
-                    className="w-1/2 bg-green-600 hover:bg-green-700 text-white text-xs"
+                    className="w-1/3 bg-green-600 hover:bg-green-700 text-white text-xs"
                     onClick={() => handleGiftAccess(selectedUser)}
                   >
                     <ShieldCheck className="w-3.5 h-3.5 mr-1" /> Grant Premium
+                  </Button>
+                )}
+
+                {selectedUser.email?.toLowerCase().trim() !== 'admitwise2@gmail.com' && (
+                  <Button 
+                    variant="destructive"
+                    size="sm" 
+                    className="w-1/3 text-xs font-semibold"
+                    onClick={() => handleDeleteUser(selectedUser)}
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete User
                   </Button>
                 )}
               </div>

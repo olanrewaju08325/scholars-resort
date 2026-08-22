@@ -1055,6 +1055,130 @@ app.post('/api/admin/device/reset', async (req, res) => {
   }
 });
 
+// API Route: Admin User Status Update (Suspend, Ban, Reactivate)
+app.post('/api/admin/users/status', async (req, res) => {
+  const { user_id, status, reason } = req.body;
+  if (!user_id || !status) {
+    return res.status(400).json({ success: false, error: 'user_id and status are required.' });
+  }
+
+  try {
+    const isBanned = status === 'banned';
+    const isSuspended = status === 'suspended';
+
+    const updates: any = {
+      status,
+      is_banned: isBanned,
+      is_suspended: isSuspended,
+      ban_reason: (isBanned || isSuspended) ? (reason || 'Administrative action') : null,
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user_id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      console.warn('[Admin User Status Update Warning]', error.message);
+      return res.status(200).json({ success: false, error: error.message });
+    }
+
+    // Try logging into security/audit logs
+    try {
+      await supabase.from('admin_audit_logs').insert({
+        action: `USER_${status.toUpperCase()}`,
+        details: `User ${user_id} set to ${status}. Reason: ${reason || 'None provided'}`,
+        target_id: user_id,
+        created_at: new Date().toISOString()
+      });
+    } catch {}
+
+    return res.json({ success: true, message: `User status changed to ${status}.`, profile: data });
+  } catch (err: any) {
+    console.error('[API /api/admin/users/status Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
+  }
+});
+
+// API Route: Admin User Role Update
+app.post('/api/admin/users/role', async (req, res) => {
+  const { user_id, role } = req.body;
+  if (!user_id || !role) {
+    return res.status(400).json({ success: false, error: 'user_id and role are required.' });
+  }
+
+  try {
+    const updates: any = {
+      role,
+      updated_at: new Date().toISOString()
+    };
+    if (role === 'admin') {
+      updates.has_paid = true;
+      updates.onboarding_completed = true;
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(updates)
+      .eq('id', user_id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      return res.status(200).json({ success: false, error: error.message });
+    }
+
+    return res.json({ success: true, message: `User role updated to ${role}.`, profile: data });
+  } catch (err: any) {
+    console.error('[API /api/admin/users/role Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Admin User Complete Deletion
+app.post('/api/admin/users/delete', async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) {
+    return res.status(400).json({ success: false, error: 'user_id is required.' });
+  }
+
+  try {
+    // Delete user from linked tables
+    await Promise.allSettled([
+      supabase.from('guardian_links').delete().or(`guardian_id.eq.${user_id},student_id.eq.${user_id}`),
+      supabase.from('guardian_student_relationships').delete().or(`guardian_id.eq.${user_id},student_id.eq.${user_id}`),
+      supabase.from('exam_sessions').delete().eq('user_id', user_id),
+      supabase.from('manual_payments').delete().eq('user_id', user_id),
+      supabase.from('device_sessions').delete().eq('user_id', user_id),
+      supabase.from('session_answers').delete().eq('user_id', user_id),
+      supabase.from('support_tickets').delete().eq('user_id', user_id),
+      supabase.from('study_streaks').delete().eq('user_id', user_id),
+      supabase.from('profiles').delete().eq('id', user_id)
+    ]);
+
+    // Try deleting from auth.users if admin service role is available
+    try {
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (serviceRoleKey) {
+        const adminAuthClient = createClient(supabaseUrl, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false }
+        });
+        await adminAuthClient.auth.admin.deleteUser(user_id);
+      }
+    } catch (authErr) {
+      console.warn('[Admin User Auth Delete Warning]', authErr);
+    }
+
+    return res.json({ success: true, message: 'User and all associated records deleted successfully.' });
+  } catch (err: any) {
+    console.error('[API /api/admin/users/delete Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // API Route: Guardian Portal - Get Linked Students (strictly scoped by guardian_id)
 app.get('/api/guardian/students', async (req, res) => {
   const guardianId = req.query.guardianId as string;
