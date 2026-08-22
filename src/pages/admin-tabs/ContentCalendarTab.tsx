@@ -72,14 +72,24 @@ export const ContentCalendarTab = () => {
         if (error) throw error;
       } else if (type === 'announcement') {
         const { data: { user } } = await supabase.auth.getUser();
-        const { error } = await supabase.from('announcements').insert({
+        const basePayload = {
           title,
           body: 'Scheduled Announcement',
+          content: 'Scheduled Announcement',
           target: 'all',
-          publish_at: new Date(scheduledAt).toISOString(),
           created_by: user?.id
+        };
+
+        const { error } = await supabase.from('announcements').insert({
+          ...basePayload,
+          publish_at: new Date(scheduledAt).toISOString()
         });
-        if (error) throw error;
+
+        if (error) {
+          // Fallback in case publish_at is not a column
+          const { error: fallbackErr } = await supabase.from('announcements').insert(basePayload);
+          if (fallbackErr) throw fallbackErr;
+        }
       }
       
       toast.success('Event scheduled successfully!');

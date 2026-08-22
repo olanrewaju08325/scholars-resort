@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import { ShieldCheck, Loader2, Users, ArrowRight, LogIn, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { sendNotification } from '@/lib/notifications';
 
 const GuardianConnect = () => {
   const [searchParams] = useSearchParams();
@@ -66,6 +67,7 @@ const GuardianConnect = () => {
         // When user IS logged in, link this guardian to the student
         let studentId = '';
         try {
+          // Check guardian_links
           const { data: linkData } = await supabase
             .from('guardian_links')
             .select('id, student_id, invitation_code, status, expires_at')
@@ -90,6 +92,22 @@ const GuardianConnect = () => {
                 status: 'active'
               })
               .eq('invitation_code', savedCode);
+          }
+
+          // Also synchronize guardian_student_relationships table
+          if (studentId) {
+            try {
+              await supabase
+                .from('guardian_student_relationships')
+                .upsert({
+                  guardian_id: profile.id,
+                  student_id: studentId,
+                  status: 'active',
+                  created_at: new Date().toISOString()
+                }, { onConflict: 'guardian_id,student_id' });
+            } catch (relErr) {
+              console.warn('[GuardianConnect] guardian_student_relationships notice:', relErr);
+            }
           }
         } catch (dbErr) {
           console.warn('[GuardianConnect] DB link notice:', dbErr);
@@ -120,7 +138,16 @@ const GuardianConnect = () => {
           } catch {}
         }
 
-        // Fire-and-forget notification
+        // Fire notifications
+        if (studentId) {
+          await sendNotification(
+            studentId,
+            'Guardian Connected! 🤝',
+            `${profile.full_name || 'Your guardian'} has successfully linked with your Scholars Resort account to support your JAMB preparation.`,
+            'success'
+          );
+        }
+
         if (profile?.email) {
           supabase.functions.invoke('communication-center', {
             body: {

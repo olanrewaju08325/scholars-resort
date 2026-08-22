@@ -22,18 +22,13 @@ export const WeeklyChallenge = () => {
     const now = new Date().toISOString().split('T')[0];
     let userSubj = 'Use of English';
 
-    if (profile?.id) {
+    if (profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0) {
+      userSubj = profile.utme_subjects[Math.floor(Math.random() * profile.utme_subjects.length)];
+    } else {
       try {
-        const { data: userSubjs } = await supabase
-          .from('student_subjects')
-          .select('subjects(name)')
-          .eq('student_id', profile.id);
-
-        if (userSubjs && userSubjs.length > 0) {
-          const names = userSubjs.map((s: any) => s.subjects?.name).filter(Boolean);
-          if (names.length > 0) {
-            userSubj = names[Math.floor(Math.random() * names.length)];
-          }
+        const { data: subs } = await supabase.from('subjects').select('name').limit(10);
+        if (subs && subs.length > 0) {
+          userSubj = subs[Math.floor(Math.random() * subs.length)].name;
         }
       } catch {}
     }

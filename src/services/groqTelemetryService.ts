@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { getApiUrl } from '@/lib/utils';
 
 export interface GroqLogEntry {
   id: string;
@@ -79,11 +80,12 @@ export const fetchGroqTelemetry = async (groqApiKey?: string): Promise<GroqTelem
       headers['X-Groq-Key'] = groqApiKey;
     }
 
-    const res = await fetch('/api/groq-telemetry', { headers }).catch(() => null);
+    const targetUrl = getApiUrl('/api/groq-telemetry');
+    const res = await fetch(targetUrl, { headers }).catch(() => null);
     if (res && res.ok) {
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
-        const data = await res.json();
+        const data = await res.json().catch(() => null);
         if (data && data.success) {
           fallbackData = data;
         }
@@ -150,14 +152,12 @@ export const reportGroqCallTelemetry = async (logData: {
 }) => {
   try {
     // 1. Post to server telemetry endpoint if available
-    const res = await fetch('/api/groq-telemetry/log', {
+    const targetUrl = getApiUrl('/api/groq-telemetry/log');
+    await fetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(logData)
     }).catch(() => null);
-    if (!res || !res.ok) {
-      // Endpoint not available on static hosting (e.g. Vercel), fail silently
-    }
   } catch {}
 
   try {

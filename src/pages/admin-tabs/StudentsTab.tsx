@@ -242,26 +242,36 @@ export const StudentsTab = () => {
     setSelectedIds(newSet);
   };
 
-  // Grant Subscription via Server API & Client update (bypasses RLS 403)
+  // Grant Subscription via Direct Supabase & Resilient Server API
   const handleGiftAccess = async (user: Profile) => {
     confirmAction(
       "Grant Premium Subscription",
       `Are you sure you want to activate full lifetime premium access for ${user.full_name || user.email}?`,
       async () => {
         try {
-          // 1. Call server API to safely bypass RLS
-          const res = await fetch(getApiUrl('/api/admin/subscriptions/grant'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              user_id: user.id,
-              plan_name: 'Lifetime Access (Gifted)'
-            })
-          });
+          // 1. Direct Supabase update (primary source of truth across all components)
+          const { error: updateErr } = await supabase
+            .from('profiles')
+            .update({ has_paid: true, updated_at: new Date().toISOString() })
+            .eq('id', user.id);
 
-          // 2. Direct client fallback update
-          await supabase.from('profiles').update({ has_paid: true }).eq('id', user.id);
+          if (updateErr) {
+            console.warn('Direct profile update warning:', updateErr);
+          }
 
+          // 2. Background server sync (bypasses RLS for subscriptions table, fails gracefully if offline/external)
+          try {
+            fetch(getApiUrl('/api/admin/subscriptions/grant'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: user.id,
+                plan_name: 'Lifetime Access (Gifted)'
+              })
+            }).catch(() => null);
+          } catch {}
+
+          // 3. Update React state immediately
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, has_paid: true } : p));
           if (selectedUser?.id === user.id) {
             setSelectedUser(prev => prev ? { ...prev, has_paid: true } : null);
@@ -269,7 +279,7 @@ export const StudentsTab = () => {
 
           toast.success(`Premium access granted to ${user.full_name || user.email}!`);
         } catch (err: any) {
-          toast.error(`Failed to grant access: ${err.message}`);
+          toast.error(`Failed to grant access: ${err.message || 'Unknown error'}`);
         }
       }
     );

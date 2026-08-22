@@ -20,7 +20,7 @@ const WeaknessDrill = () => {
       try {
         const { data: answers } = await supabase
           .from('session_answers')
-          .select('is_correct, questions!question_id(topic_id, subject_id, topics(name), subjects(name))')
+          .select('question_id, is_correct')
           .eq('user_id', profile.id)
           .limit(500);
 
@@ -30,14 +30,49 @@ const WeaknessDrill = () => {
           return;
         }
 
+        const qIds = Array.from(new Set(answers.map((a: any) => a.question_id).filter(Boolean)));
+        let qMap: Record<string, { topic_id: string; subject_id: string }> = {};
+
+        if (qIds.length > 0) {
+          const { data: questions } = await supabase
+            .from('questions')
+            .select('id, topic_id, subject_id')
+            .in('id', qIds.slice(0, 200));
+
+          (questions || []).forEach((q: any) => {
+            qMap[q.id] = { topic_id: q.topic_id, subject_id: q.subject_id };
+          });
+        }
+
+        const topicIds = Array.from(new Set(Object.values(qMap).map(q => q.topic_id).filter(Boolean)));
+        const subjectIds = Array.from(new Set(Object.values(qMap).map(q => q.subject_id).filter(Boolean)));
+
+        let topicNameMap: Record<string, string> = {};
+        if (topicIds.length > 0) {
+          const { data: topics } = await supabase.from('topics').select('id, name').in('id', topicIds);
+          (topics || []).forEach((t: any) => { topicNameMap[t.id] = t.name; });
+        }
+
+        let subjectNameMap: Record<string, string> = {};
+        if (subjectIds.length > 0) {
+          const { data: subjects } = await supabase.from('subjects').select('id, name').in('id', subjectIds);
+          (subjects || []).forEach((s: any) => { subjectNameMap[s.id] = s.name; });
+        }
+
         const topicScores: Record<string, { correct: number; total: number; topicName: string; subjectId: string; subjectName: string }> = {};
 
         answers.forEach((a: any) => {
-          const q = a.questions;
-          if (!q?.topic_id || !q?.topics?.name) return;
+          const q = qMap[a.question_id];
+          if (!q?.topic_id || !topicNameMap[q.topic_id]) return;
           const key = q.topic_id;
           if (!topicScores[key]) {
-            topicScores[key] = { correct: 0, total: 0, topicName: q.topics.name, subjectId: q.subject_id || '', subjectName: q.subjects?.name || 'Unknown' };
+            topicScores[key] = { 
+              correct: 0, 
+              total: 0, 
+              topicName: topicNameMap[q.topic_id], 
+              subjectId: q.subject_id || '', 
+              subjectName: subjectNameMap[q.subject_id] || 'General Studies' 
+            };
           }
           topicScores[key].total++;
           if (a.is_correct) topicScores[key].correct++;
@@ -51,7 +86,7 @@ const WeaknessDrill = () => {
 
         setWeakTopics(weak.length > 0 ? weak : []);
       } catch (e) {
-        console.error(e);
+        console.error('[WeaknessDrill] Error loading weakness data:', e);
       }
       setLoading(false);
     };

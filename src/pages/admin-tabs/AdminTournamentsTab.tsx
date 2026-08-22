@@ -67,12 +67,41 @@ export const AdminTournamentsTab = () => {
   };
 
   const fetchParticipants = async (tournamentId: string) => {
-    const { data } = await supabase
-      .from('tournament_participants')
-      .select('*, profiles!user_id(full_name, email)')
-      .eq('tournament_id', tournamentId)
-      .order('score', { ascending: false });
-    if (data) setParticipants(data);
+    try {
+      const { data, error } = await supabase
+        .from('tournament_participants')
+        .select('*')
+        .eq('tournament_id', tournamentId)
+        .order('score', { ascending: false });
+
+      if (error || !data) {
+        setParticipants([]);
+        return;
+      }
+
+      const userIds = Array.from(new Set(data.map((d: any) => d.user_id).filter(Boolean)));
+      let profileMap: Record<string, any> = {};
+
+      if (userIds.length > 0) {
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', userIds);
+
+        (profs || []).forEach((p: any) => {
+          profileMap[p.id] = p;
+        });
+      }
+
+      const enriched = data.map((d: any) => ({
+        ...d,
+        profiles: profileMap[d.user_id] || { full_name: 'Scholar', email: 'N/A' }
+      }));
+
+      setParticipants(enriched);
+    } catch {
+      setParticipants([]);
+    }
   };
 
   const handleAIGenerateWeeklyChallenge = async () => {

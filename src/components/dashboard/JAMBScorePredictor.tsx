@@ -39,19 +39,23 @@ export const JAMBScorePredictor = () => {
 
     try {
       // Fetch actual performance data
-      const { data: sessions } = await supabase
+      const { data: sessions, error: sessErr } = await supabase
         .from('exam_sessions')
-        .select('score_percent, total_questions, created_at')
+        .select('score, total_questions, created_at, submitted_at')
         .eq('user_id', profile.id)
         .eq('status', 'submitted')
         .order('created_at', { ascending: false })
         .limit(10);
 
+      if (sessErr) {
+        console.warn('[JAMBScorePredictor] exam_sessions query notice:', sessErr);
+      }
+
       let answers: any[] = [];
       try {
         const { data: ansData } = await supabase
           .from('session_answers')
-          .select('is_correct')
+          .select('question_id, is_correct')
           .eq('user_id', profile.id)
           .limit(200);
         if (ansData) answers = ansData;
@@ -59,17 +63,42 @@ export const JAMBScorePredictor = () => {
 
       // Aggregate subject performance
       const subjectScores: Record<string, { correct: number; total: number }> = {};
-      (answers || []).forEach((a: any) => {
-        const name = a.questions?.subjects?.name;
-        if (!name) return;
-        if (!subjectScores[name]) subjectScores[name] = { correct: 0, total: 0 };
-        subjectScores[name].total++;
-        if (a.is_correct) subjectScores[name].correct++;
-      });
+      if (answers && answers.length > 0) {
+        const qIds = Array.from(new Set(answers.map((a: any) => a.question_id).filter(Boolean)));
+        if (qIds.length > 0) {
+          try {
+            const { data: qList } = await supabase
+              .from('questions')
+              .select('id, subject_id')
+              .in('id', qIds.slice(0, 50));
 
-      const subjectSummary = Object.entries(subjectScores)
-        .map(([name, s]) => `${name}: ${Math.round((s.correct / s.total) * 100)}%`)
-        .join(', ');
+            const subIds = Array.from(new Set((qList || []).map((q: any) => q.subject_id).filter(Boolean)));
+            let subMap: Record<string, string> = {};
+            if (subIds.length > 0) {
+              const { data: subs } = await supabase.from('subjects').select('id, name').in('id', subIds);
+              (subs || []).forEach((s: any) => { subMap[s.id] = s.name; });
+            }
+
+            const qSubMap: Record<string, string> = {};
+            (qList || []).forEach((q: any) => {
+              if (q.subject_id && subMap[q.subject_id]) qSubMap[q.id] = subMap[q.subject_id];
+            });
+
+            answers.forEach((a: any) => {
+              const name = qSubMap[a.question_id] || 'General';
+              if (!subjectScores[name]) subjectScores[name] = { correct: 0, total: 0 };
+              subjectScores[name].total++;
+              if (a.is_correct) subjectScores[name].correct++;
+            });
+          } catch {}
+        }
+      }
+
+      const subjectSummary = Object.entries(subjectScores).length > 0
+        ? Object.entries(subjectScores)
+            .map(([name, s]) => `${name}: ${Math.round((s.correct / s.total) * 100)}%`)
+            .join(', ')
+        : (profile?.utme_subjects?.join(', ') || 'English, Mathematics, Physics, Chemistry');
 
       const averageScore = sessions && sessions.length > 0
         ? Math.round(sessions.reduce((acc, s) => acc + ((s.score || 0) / (s.total_questions || 50)) * 400, 0) / sessions.length)

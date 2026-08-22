@@ -41,12 +41,16 @@ export const StudentInsightsTab = () => {
       setStudent(foundStudent);
 
       // Fetch their exam sessions
-      const { data: sessions } = await supabase
+      const { data: sessions, error: sessError } = await supabase
         .from('exam_sessions')
-        .select('*, mock_exams(title)')
+        .select('*')
         .eq('user_id', foundStudent.id)
         .eq('status', 'submitted')
         .order('submitted_at', { ascending: true });
+
+      if (sessError) {
+        console.warn('[StudentInsightsTab] exam_sessions query notice:', sessError);
+      }
 
       if (sessions) {
         setExamSessions(sessions.reverse()); // latest first for the list

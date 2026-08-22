@@ -122,18 +122,45 @@ export const StudySchedule = () => {
       // Get weak subjects from past exam data
       const { data: answers } = await supabase
         .from('session_answers')
-        .select('is_correct, questions!question_id(subjects!subject_id(name))')
+        .select('question_id, is_correct')
         .eq('user_id', profile.id)
         .limit(100);
 
       const subjectScores: Record<string, { correct: number; total: number }> = {};
-      (answers || []).forEach((a: any) => {
-        const name = a.questions?.subjects?.name;
-        if (!name) return;
-        if (!subjectScores[name]) subjectScores[name] = { correct: 0, total: 0 };
-        subjectScores[name].total++;
-        if (a.is_correct) subjectScores[name].correct++;
-      });
+
+      if (answers && answers.length > 0) {
+        const qIds = Array.from(new Set(answers.map((a: any) => a.question_id).filter(Boolean)));
+        let qMap: Record<string, string> = {};
+
+        if (qIds.length > 0) {
+          const { data: questions } = await supabase
+            .from('questions')
+            .select('id, subject_id')
+            .in('id', qIds.slice(0, 100));
+
+          const subjectIds = Array.from(new Set((questions || []).map((q: any) => q.subject_id).filter(Boolean)));
+          let subNameMap: Record<string, string> = {};
+
+          if (subjectIds.length > 0) {
+            const { data: subs } = await supabase.from('subjects').select('id, name').in('id', subjectIds);
+            (subs || []).forEach((s: any) => { subNameMap[s.id] = s.name; });
+          }
+
+          (questions || []).forEach((q: any) => {
+            if (q.subject_id && subNameMap[q.subject_id]) {
+              qMap[q.id] = subNameMap[q.subject_id];
+            }
+          });
+        }
+
+        answers.forEach((a: any) => {
+          const name = qMap[a.question_id];
+          if (!name) return;
+          if (!subjectScores[name]) subjectScores[name] = { correct: 0, total: 0 };
+          subjectScores[name].total++;
+          if (a.is_correct) subjectScores[name].correct++;
+        });
+      }
 
       const weakSubjects = Object.entries(subjectScores)
         .map(([name, s]) => ({ name, rate: s.total > 0 ? s.correct / s.total : 1 }))
@@ -142,7 +169,7 @@ export const StudySchedule = () => {
         .map(s => s.name);
 
       const prompt = `Create a JSON daily study schedule for a Nigerian JAMB student.
-Weak subjects: ${weakSubjects.join(', ') || 'Mathematics, Physics, Chemistry, Use of English'}.
+Weak subjects: ${weakSubjects.join(', ') || (profile?.utme_subjects?.join(', ') || 'Mathematics, Physics, Chemistry, Use of English')}.
 Return ONLY valid JSON with this structure:
 {
   "morning": [{"title": "Physics: Motion & Kinematics", "subject": "Physics"}],

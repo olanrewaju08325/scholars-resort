@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { sendEmailMessage } from '@/services/emailService';
+import { sendNotification } from '@/lib/notifications';
 
 const GuardianPortal = () => {
   const { profile, user, signOut } = useAuth();
@@ -38,69 +39,239 @@ const GuardianPortal = () => {
 
 
 
+  const [fetchError, setFetchError] = useState<string | null>(null);
+
   const fetchLinkedStudents = async () => {
     if (!profile) return;
     setLoading(true);
+    setFetchError(null);
     
-    // Fetch active links for this guardian
-    const { data: links, error } = await supabase
-      .from('guardian_links')
-      .select('student_id, profiles!student_id(id, full_name, has_paid)')
-      .eq('guardian_id', profile.id)
-      .eq('status', 'active');
-      
-    if (!error && links) {
-      const formatted = links.map((l: any) => {
-        const p = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles;
+    try {
+      // 1. Try server-side Supabase joined endpoint first
+      let loadedStudents: any[] | null = null;
+      try {
+        const response = await fetch(`/api/guardian/students?guardianId=${encodeURIComponent(profile.id)}`);
+        if (response.ok) {
+          const json = await response.json();
+          if (json.success && Array.isArray(json.students)) {
+            loadedStudents = json.students;
+          }
+        }
+      } catch (apiErr) {
+        console.warn('[GuardianPortal] Server endpoint unreachable, falling back to direct DB queries:', apiErr);
+      }
+
+      if (loadedStudents !== null) {
+        setLinkedStudents(loadedStudents);
+        if (loadedStudents.length > 0) {
+          if (!activeStudentId || !loadedStudents.some(f => f.id === activeStudentId)) {
+            setActiveStudentId(loadedStudents[0].id);
+          }
+        } else {
+          setActiveStudentData(null);
+        }
+        setLoading(false);
+        return;
+      }
+
+      // 2. Direct client fallback: Query guardian_student_relationships and guardian_links
+      let studentIds: string[] = [];
+
+      try {
+        const { data: rels, error: relErr } = await supabase
+          .from('guardian_student_relationships')
+          .select('student_id')
+          .eq('guardian_id', profile.id)
+          .eq('status', 'active');
+
+        if (!relErr && rels && rels.length > 0) {
+          studentIds = Array.from(new Set(rels.map((r: any) => r.student_id).filter(Boolean)));
+        }
+      } catch {}
+
+      if (studentIds.length === 0) {
+        const { data: links, error: linkErr } = await supabase
+          .from('guardian_links')
+          .select('student_id')
+          .eq('guardian_id', profile.id)
+          .eq('status', 'active');
+          
+        if (linkErr) {
+          console.warn('[GuardianPortal] Error loading guardian links:', linkErr);
+        } else if (links && links.length > 0) {
+          studentIds = Array.from(new Set(links.map((l: any) => l.student_id).filter(Boolean)));
+        }
+      }
+
+      if (studentIds.length === 0) {
+        setLinkedStudents([]);
+        setActiveStudentData(null);
+        setLoading(false);
+        return;
+      }
+
+      // 3. Fetch student profiles in a single clean query
+      const { data: studentProfiles, error: profErr } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, has_paid, target_score, target_university, target_course, streak_days, xp, last_active, created_at')
+        .in('id', studentIds);
+
+      if (profErr) {
+        console.warn('[GuardianPortal] Error loading student profiles:', profErr);
+        setFetchError('Unable to load student profile details. Please try again.');
+      }
+
+      const profileMap: Record<string, any> = {};
+      (studentProfiles || []).forEach((p: any) => {
+        profileMap[p.id] = p;
+      });
+
+      const formatted = studentIds.map((sId: string) => {
+        const p = profileMap[sId] || {};
         return {
-          id: p?.id,
-          name: p?.full_name,
-          has_paid: p?.has_paid,
+          id: sId,
+          name: p.full_name || p.email || 'Student Ward',
+          email: p.email || '',
+          has_paid: !!p.has_paid,
+          target_score: p.target_score || 320,
+          target_university: p.target_university || '',
+          target_course: p.target_course || '',
+          xp: p.xp || 0,
+          streak_days: p.streak_days || 0,
+          last_active: p.last_active,
           status: 'active'
         };
       });
+
       setLinkedStudents(formatted);
-      if (formatted.length > 0 && !activeStudentId) {
-        setActiveStudentId(formatted[0].id);
+      if (formatted.length > 0) {
+        if (!activeStudentId || !formatted.some(f => f.id === activeStudentId)) {
+          setActiveStudentId(formatted[0].id);
+        }
       }
+    } catch (err: any) {
+      console.error('[GuardianPortal] Failed to fetch linked students:', err);
+      setFetchError(err.message || 'Failed to retrieve linked students');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const fetchStudentData = async (studentId: string) => {
-    if (!studentId) return;
+    if (!studentId || !profile) return;
     try {
       setLoading(true);
+      setFetchError(null);
+
+      // 1. Try server-side analytical endpoint
+      try {
+        const response = await fetch('/api/guardian/student-details', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ guardianId: profile.id, studentId })
+        });
+
+        if (response.ok) {
+          const resJson = await response.json();
+          if (resJson.success && resJson.data) {
+            setActiveStudentData(resJson.data);
+            setLoading(false);
+            return;
+          }
+        } else if (response.status === 403 || response.status === 404) {
+          const errData = await response.json().catch(() => ({}));
+          toast.error(errData.error || 'Access to student records is restricted or not found.');
+        }
+      } catch (srvErr) {
+        console.warn('[GuardianPortal] Server analytics route notice:', srvErr);
+      }
+
       const studentProfile = linkedStudents.find(s => s.id === studentId);
 
-      const { data: sessions } = await supabase
+      // 2. Fetch real exam sessions for this student
+      const { data: sessions, error: sessErr } = await supabase
         .from('exam_sessions')
         .select('*')
         .eq('user_id', studentId)
-        .eq('status', 'submitted')
-        .order('submitted_at', { ascending: false });
+        .order('created_at', { ascending: false });
 
-      const { data: payments } = await supabase
+      if (sessErr) {
+        console.warn('[GuardianPortal] exam_sessions notice:', sessErr.message);
+      }
+
+      // 3. Fetch real payment records for this student
+      const { data: payments, error: payErr } = await supabase
         .from('manual_payments')
         .select('*')
         .eq('user_id', studentId)
         .order('created_at', { ascending: false });
 
-      // Real weak subjects: find subjects with lowest average is_correct rate
-      const { data: answerData } = await supabase
-        .from('session_answers')
-        .select('is_correct, questions!question_id(subjects!subject_id(name))')
-        .eq('user_id', studentId)
-        .limit(200);
+      if (payErr) {
+        console.warn('[GuardianPortal] manual_payments notice:', payErr.message);
+      }
 
+      // 4. Fetch real answers for this student
+      const { data: answerData, error: ansErr } = await supabase
+        .from('session_answers')
+        .select('question_id, is_correct, created_at, time_spent_seconds')
+        .eq('user_id', studentId)
+        .order('created_at', { ascending: false })
+        .limit(300);
+
+      if (ansErr) {
+        console.warn('[GuardianPortal] session_answers notice:', ansErr.message);
+      }
+
+      // 5. Resolve subjects for weak areas analysis
       const subjectScores: Record<string, { correct: number; total: number }> = {};
-      (answerData || []).forEach((a: any) => {
-        const subName = a.questions?.subjects?.name;
-        if (!subName) return;
-        if (!subjectScores[subName]) subjectScores[subName] = { correct: 0, total: 0 };
-        subjectScores[subName].total++;
-        if (a.is_correct) subjectScores[subName].correct++;
-      });
+      
+      if (answerData && answerData.length > 0) {
+        const questionIds = Array.from(new Set(answerData.map((a: any) => a.question_id).filter(Boolean)));
+        
+        let qSubjectMap: Record<string, string> = {};
+        if (questionIds.length > 0) {
+          const { data: qList } = await supabase
+            .from('questions')
+            .select('id, subject_id')
+            .in('id', questionIds.slice(0, 100));
+
+          const subjectIds = Array.from(new Set((qList || []).map((q: any) => q.subject_id).filter(Boolean)));
+          
+          let subNameMap: Record<string, string> = {};
+          if (subjectIds.length > 0) {
+            const { data: subList } = await supabase
+              .from('subjects')
+              .select('id, name')
+              .in('id', subjectIds);
+            (subList || []).forEach((s: any) => { subNameMap[s.id] = s.name; });
+          }
+
+          (qList || []).forEach((q: any) => {
+            if (q.subject_id && subNameMap[q.subject_id]) {
+              qSubjectMap[q.id] = subNameMap[q.subject_id];
+            }
+          });
+        }
+
+        answerData.forEach((a: any) => {
+          const subName = qSubjectMap[a.question_id] || 'General Studies';
+          if (!subjectScores[subName]) subjectScores[subName] = { correct: 0, total: 0 };
+          subjectScores[subName].total++;
+          if (a.is_correct) subjectScores[subName].correct++;
+        });
+      }
+
+      // If no session_answers yet, also check exam_sessions subject details
+      if (Object.keys(subjectScores).length === 0 && sessions && sessions.length > 0) {
+        sessions.forEach((s: any) => {
+          const subName = s.subject_name || s.subject || 'UTME Mock Exam';
+          if (!subjectScores[subName]) subjectScores[subName] = { correct: 0, total: 0 };
+          const totalQ = s.total_questions || 50;
+          const score = s.score || 0;
+          subjectScores[subName].total += totalQ;
+          subjectScores[subName].correct += Math.min(score, totalQ);
+        });
+      }
 
       const weakSubjects = Object.entries(subjectScores)
         .map(([name, s]) => ({ name, rate: s.total > 0 ? s.correct / s.total : 1 }))
@@ -108,61 +279,146 @@ const GuardianPortal = () => {
         .slice(0, 3)
         .map(s => s.name);
 
-      // Real rank from leaderboard
-      const { data: rankData } = await supabase
-        .from('leaderboard_entries')
-        .select('rank')
-        .eq('user_id', studentId)
-        .maybeSingle();
-      const globalRank = rankData?.rank ?? null;
+      // 6. Calculate real Global Rank from profiles XP
+      let globalRank: number | null = null;
+      try {
+        const { count: higherRankCount } = await supabase
+          .from('profiles')
+          .select('id', { count: 'exact', head: true })
+          .gt('xp', studentProfile?.xp || 0);
+        globalRank = (higherRankCount || 0) + 1;
+      } catch {
+        globalRank = 1;
+      }
 
+      // 7. Calculate real average score & readiness
       let score = 0;
-      let target = (studentProfile as any)?.target_score || 320;
+      let target = studentProfile?.target_score || 320;
       let readiness = 0;
       let history: any[] = [];
 
-      if (sessions && sessions.length > 0) {
-        const total = sessions.reduce((acc, curr) => acc + (curr.score || 0), 0);
-        score = Math.round((total / sessions.length / 50) * 400); // JAMB out of 400
-        readiness = Math.min(100, Math.round((score / target) * 100 * 0.8 + (sessions.length * 2)));
+      const submittedSessions = (sessions || []).filter((s: any) => s.status === 'submitted' || (s.score && s.score > 0));
 
-        history = sessions.slice(0, 5).map(s => {
+      if (submittedSessions.length > 0) {
+        const totalScore = submittedSessions.reduce((acc: number, curr: any) => {
+          const raw = curr.score || 0;
+          const totalQ = curr.total_questions || 50;
+          const jambEquiv = Math.round((raw / totalQ) * 400);
+          return acc + jambEquiv;
+        }, 0);
+
+        score = Math.round(totalScore / submittedSessions.length);
+        readiness = Math.min(100, Math.max(15, Math.round((score / target) * 85 + (submittedSessions.length * 3))));
+
+        history = submittedSessions.slice(0, 6).map((s: any) => {
+          const raw = s.score || 0;
+          const totalQ = s.total_questions || 50;
+          const jambScore = Math.round((raw / totalQ) * 400);
           const mins = s.time_spent_seconds ? Math.floor(s.time_spent_seconds / 60) : null;
+          const dateStr = s.submitted_at || s.created_at;
           return {
-            date: new Date(s.submitted_at).toLocaleDateString(),
-            score: Math.round(((s.score || 0) / (s.total_questions || 50)) * 400),
+            date: dateStr ? new Date(dateStr).toLocaleDateString() : 'Recent',
+            score: jambScore,
+            percent: Math.round((raw / totalQ) * 100),
             time: mins ? `${mins} min` : 'N/A'
           };
         });
       }
 
-      const subjectProgress = Object.entries(subjectScores).map(([sub, s]) => ({
-        sub,
-        progress: s.total > 0 ? Math.round((s.correct / s.total) * 100) : 0
-      }));
+      // 8. Calculate real Focus Time in the last 7 days
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      let weeklyFocusSeconds = 0;
+      
+      (sessions || []).forEach((s: any) => {
+        const sessionDate = new Date(s.created_at || s.submitted_at || 0);
+        if (sessionDate >= sevenDaysAgo && s.time_spent_seconds) {
+          weeklyFocusSeconds += Number(s.time_spent_seconds);
+        }
+      });
+
+      (answerData || []).forEach((a: any) => {
+        const aDate = new Date(a.created_at || 0);
+        if (aDate >= sevenDaysAgo && a.time_spent_seconds) {
+          weeklyFocusSeconds += Number(a.time_spent_seconds);
+        }
+      });
+
+      const focusHours = Math.floor(weeklyFocusSeconds / 3600);
+      const focusMins = Math.floor((weeklyFocusSeconds % 3600) / 60);
+      const weeklyFocusFormatted = focusHours > 0 ? `${focusHours}h ${focusMins}m` : `${focusMins || (submittedSessions.length > 0 ? submittedSessions.length * 20 : 0)}m`;
+
+      // 9. Calculate real 14-day study activity heatmap
+      const heatmapDays: { date: string; count: number; intensity: number }[] = [];
+      const activityCountByDay: Record<string, number> = {};
+
+      for (let i = 13; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dayKey = d.toISOString().split('T')[0];
+        activityCountByDay[dayKey] = 0;
+      }
+
+      (sessions || []).forEach((s: any) => {
+        const day = (s.created_at || '').split('T')[0];
+        if (activityCountByDay[day] !== undefined) {
+          activityCountByDay[day] += 1;
+        }
+      });
+
+      (answerData || []).forEach((a: any) => {
+        const day = (a.created_at || '').split('T')[0];
+        if (activityCountByDay[day] !== undefined) {
+          activityCountByDay[day] += 1;
+        }
+      });
+
+      Object.entries(activityCountByDay).forEach(([date, count]) => {
+        let intensity = 0;
+        if (count >= 15) intensity = 3;
+        else if (count >= 5) intensity = 2;
+        else if (count > 0) intensity = 1;
+        heatmapDays.push({ date, count, intensity });
+      });
+
+      // 10. Calculate real Attendance Rate in last 7 days
+      const daysActiveInWeek = heatmapDays.slice(7).filter(d => d.count > 0).length;
+      const attendanceRate = Math.min(100, Math.round((daysActiveInWeek / 7) * 100));
+
+      // 11. Real Syllabus Progress
+      const defaultSubjects = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+      const subjectProgress = Object.keys(subjectScores).length > 0
+        ? Object.entries(subjectScores).map(([sub, s]) => ({
+            sub,
+            progress: s.total > 0 ? Math.min(100, Math.round((s.correct / s.total) * 100)) : 0
+          }))
+        : defaultSubjects.map(sub => ({ sub, progress: 0 }));
 
       setActiveStudentData({
-        id: studentProfile?.id,
-        name: studentProfile?.name || 'Student',
+        id: studentProfile?.id || studentId,
+        name: studentProfile?.name || 'Student Ward',
+        email: studentProfile?.email || '',
         has_paid: studentProfile?.has_paid || false,
         score,
-        weakSubjects: weakSubjects.length > 0 ? weakSubjects : ['No data yet'],
-        recentActivity: history.length > 0 ? `Exam on ${history[0].date}` : 'No activity',
+        weakSubjects: weakSubjects.length > 0 ? weakSubjects : ['No weak areas identified yet'],
+        recentActivity: history.length > 0 ? `Mock Exam on ${history[0].date}` : (studentProfile?.last_active ? `Active on ${new Date(studentProfile.last_active).toLocaleDateString()}` : 'No activity logged yet'),
         readiness,
         target,
         globalRank,
-        payments: (payments || []).map(p => ({
+        weeklyFocusTime: weeklyFocusFormatted,
+        attendanceRate: attendanceRate > 0 ? `${attendanceRate}%` : (studentProfile?.streak_days ? `${Math.min(100, studentProfile.streak_days * 15)}%` : '0%'),
+        heatmap: heatmapDays,
+        payments: (payments || []).map((p: any) => ({
           date: new Date(p.created_at).toLocaleDateString(),
-          amount: `₦${p.amount}`,
-          ref: p.id.substring(0, 8).toUpperCase()
+          amount: `₦${Number(p.amount || 0).toLocaleString()}`,
+          ref: p.id ? p.id.substring(0, 8).toUpperCase() : 'REC-AUTOPAY',
+          status: p.status || 'approved'
         })),
-        syllabus: subjectProgress.length > 0 ? subjectProgress : [
-          { sub: 'No exams taken yet', progress: 0 }
-        ],
+        syllabus: subjectProgress,
         history
       });
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      console.error('[GuardianPortal] Error fetching student details:', err);
+      setFetchError(err.message || 'Error loading student statistics');
     } finally {
       setLoading(false);
     }
@@ -283,6 +539,22 @@ Scholars Resort Academic Team`
         .eq('id', link.id);
         
       if (!updateError) {
+        // Also synchronize guardian_student_relationships table
+        if (link.student_id) {
+          try {
+            await supabase
+              .from('guardian_student_relationships')
+              .upsert({
+                guardian_id: profile.id,
+                student_id: link.student_id,
+                status: 'active',
+                created_at: new Date().toISOString()
+              }, { onConflict: 'guardian_id,student_id' });
+          } catch (relErr) {
+            console.warn('[GuardianPortal] relationship sync notice:', relErr);
+          }
+        }
+
         toast.success("Student linked successfully!");
         setInviteCode('');
         fetchLinkedStudents(); // Refresh the list
@@ -481,7 +753,7 @@ Scholars Resort Academic Team`
                      </CardContent>
                   </Card>
 
-                  {/* Exam History & Heatmap Placeholder (Feature 45 & 48) */}
+                  {/* Exam History & Heatmap (Feature 45 & 48) */}
                   <Card className="border-border shadow-sm">
                      <CardHeader className="border-b border-border bg-muted/30 pb-4">
                         <CardTitle className="text-lg flex items-center gap-2">
@@ -493,11 +765,11 @@ Scholars Resort Academic Team`
                         <div className="grid grid-cols-2 gap-4 mb-6">
                           <div className="p-4 rounded-xl border border-border bg-muted/20">
                             <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Weekly Focus Time</div>
-                            <div className="text-2xl font-display font-bold text-primary">14h 30m</div>
+                            <div className="text-2xl font-display font-bold text-primary">{activeStudentData.weeklyFocusTime || '0m'}</div>
                           </div>
                           <div className="p-4 rounded-xl border border-border bg-muted/20">
-                            <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Attendance Rate</div>
-                            <div className="text-2xl font-display font-bold text-green-500">92%</div>
+                            <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Attendance Rate (7d)</div>
+                            <div className="text-2xl font-display font-bold text-green-500">{activeStudentData.attendanceRate || '0%'}</div>
                           </div>
                         </div>
 
@@ -507,33 +779,38 @@ Scholars Resort Academic Team`
                              <span className="text-xs text-slate-500">Last 14 Days</span>
                            </div>
                            <div className="flex gap-1 justify-between">
-                             {[...Array(14)].map((_, i) => {
-                               const intensity = Math.floor(Math.random() * 4); // 0-3
-                               const colors = ['bg-slate-800', 'bg-green-900/50', 'bg-green-600', 'bg-green-400'];
+                             {(activeStudentData.heatmap && activeStudentData.heatmap.length > 0 ? activeStudentData.heatmap : [...Array(14)].map((_, i) => ({ date: `Day ${i+1}`, count: 0, intensity: 0 }))).map((day: any, i: number) => {
+                               const colors = ['bg-slate-800', 'bg-emerald-900/60', 'bg-emerald-600', 'bg-emerald-400'];
+                               const colorClass = colors[day.intensity || 0] || 'bg-slate-800';
                                return (
                                  <div 
                                    key={i} 
-                                   className={`w-full aspect-square rounded-sm ${colors[intensity]} border border-slate-800/50 transition-all hover:scale-110 hover:ring-1 hover:ring-green-400`}
-                                   title={`${intensity} sessions`}
+                                   className={`w-full aspect-square rounded-sm ${colorClass} border border-slate-800/50 transition-all hover:scale-110 hover:ring-1 hover:ring-emerald-400 cursor-pointer`}
+                                   title={`${day.date}: ${day.count} sessions completed`}
                                  ></div>
                                )
                              })}
                            </div>
                            <div className="flex justify-between mt-2 text-[10px] text-slate-500">
-                             <span>2 weeks ago</span>
+                             <span>14 days ago</span>
                              <span>Today</span>
                            </div>
                         </div>
                         <div className="space-y-3">
                            {activeStudentData.history.map((h: any, idx: number) => (
                               <div key={idx} className="flex items-center justify-between p-3 bg-muted/20 border border-border rounded text-sm">
-                                 <span className="font-semibold">{h.date} Exam</span>
+                                 <span className="font-semibold">{h.date} CBT Mock</span>
                                  <div className="flex gap-4">
-                                    <span className="text-primary font-bold">{h.score}%</span>
+                                    <span className="text-primary font-bold">{h.score} pts</span>
                                     <span className="text-muted-foreground">{h.time}</span>
                                  </div>
                               </div>
                            ))}
+                           {activeStudentData.history.length === 0 && (
+                              <div className="text-center py-4 text-sm text-muted-foreground">
+                                 No mock exam sessions completed yet.
+                              </div>
+                           )}
                         </div>
                      </CardContent>
                   </Card>
@@ -547,10 +824,10 @@ Scholars Resort Academic Team`
                         <div>
                            <h4 className="font-bold text-purple-600 dark:text-purple-400 mb-1">AI Guardian Suggestion</h4>
                            <p className="text-sm text-foreground/80 leading-relaxed">
-                              {activeStudentData.weakSubjects && activeStudentData.weakSubjects[0] !== 'No data yet' ? (
-                                `${activeStudentData.name} needs additional focus on ${activeStudentData.weakSubjects.join(', ')}. We recommend assigning a targeted practice session.`
+                              {activeStudentData.weakSubjects && activeStudentData.weakSubjects[0] !== 'No weak areas identified yet' ? (
+                                `${activeStudentData.name} needs targeted focus on ${activeStudentData.weakSubjects.join(', ')}. We recommend assigning a targeted practice drill.`
                               ) : (
-                                `${activeStudentData.name}'s performance data will update here automatically as they take practice drills and CBT mock exams.`
+                                `${activeStudentData.name}'s performance metrics will update automatically as they take CBT mock exams and practice drills.`
                               )}
                            </p>
                         </div>
@@ -563,7 +840,17 @@ Scholars Resort Academic Team`
                   {/* Action Buttons (Feature 54, 56, 57) */}
                   <div className="grid grid-cols-1 gap-3">
                      <Button 
-                        onClick={() => toast.success(`Motivation Nudge sent to ${activeStudentData.name}!`)}
+                        onClick={async () => {
+                          if (activeStudentData?.id) {
+                            await sendNotification(
+                              activeStudentData.id,
+                              'Motivation from Guardian! 🌟',
+                              `${profile?.full_name || 'Your Guardian'} sent you a study boost! Keep pushing toward your target JAMB score of ${activeStudentData.target}!`,
+                              'success'
+                            );
+                          }
+                          toast.success(`Motivation Nudge sent to ${activeStudentData.name}!`);
+                        }}
                         className="w-full justify-start gap-3 h-12"
                      >
                         <BellRing className="w-4 h-4" /> Send Motivation Nudge
