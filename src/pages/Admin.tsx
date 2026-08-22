@@ -72,7 +72,7 @@ export default function Admin() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com'];
   const isAdmin = profile?.role === 'admin' || 
                   (profile?.email && AUTHORIZED_ADMIN_EMAILS.includes(profile.email)) || 
                   (user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email));
@@ -253,6 +253,22 @@ export default function Admin() {
           </div>
           
           <div className="flex items-center gap-3 shrink-0">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/dashboard')}
+              className="hidden lg:flex items-center gap-2 text-xs font-semibold text-primary border-primary/30 hover:bg-primary/10"
+            >
+              <LayoutDashboard className="w-3.5 h-3.5" /> Student Dashboard
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/guardian')}
+              className="hidden lg:flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
+            >
+              <Users className="w-3.5 h-3.5" /> Guardian Portal
+            </Button>
             <AdminSessionTimeout timeoutMinutes={15} warningSeconds={60} />
             <AdminThemeToggle />
             <AdminNotificationSystem onNavigate={(module) => setActiveModule(module)} />

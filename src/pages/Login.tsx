@@ -23,7 +23,7 @@ const Login = () => {
     setError('');
 
     const cleanEmail = email.trim().toLowerCase();
-    const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com'];
     const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(cleanEmail);
 
     // Strict Maintenance Mode Check from Supabase DB settings

@@ -40,8 +40,8 @@ const Onboarding = () => {
     if (profile) {
       if (profile.role === 'guardian') {
         navigate('/guardian', { replace: true });
-      } else if (profile.role === 'admin' || (profile.email && ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(profile.email))) {
-        navigate('/scholarresortadmin@benedict', { replace: true });
+      } else if (profile.role === 'admin' || (profile.email && ['admitwise2@gmail.com'].includes(profile.email))) {
+        navigate('/dashboard', { replace: true });
       } else if (profile.onboarding_completed) {
         navigate('/dashboard', { replace: true });
       }

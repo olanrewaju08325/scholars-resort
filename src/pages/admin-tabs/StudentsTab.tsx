@@ -76,7 +76,7 @@ export const StudentsTab = () => {
   const [linkStudentId, setLinkStudentId] = useState('');
   const [linkingLoading, setLinkingLoading] = useState(false);
 
-  const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const MASTER_ADMINS = ['admitwise2@gmail.com'];
 
   useEffect(() => {
     fetchAllData();

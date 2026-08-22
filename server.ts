@@ -1016,7 +1016,7 @@ app.put('/api/questions/:id', async (req, res) => {
 // API Route: Admin Device Reset & Exemption Management
 app.post('/api/admin/device/reset', async (req, res) => {
   const { user_id, email } = req.body;
-  const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const MASTER_ADMINS = ['admitwise2@gmail.com'];
 
   try {
     if (email && MASTER_ADMINS.includes(email.toLowerCase().trim())) {

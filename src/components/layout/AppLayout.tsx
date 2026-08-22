@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive, LogOut, Users } from 'lucide-react';
+import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive, LogOut, Users, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommandPalette } from '@/components/CommandPalette';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -67,7 +67,12 @@ export const AppLayout = () => {
     { label: 'Library', icon: BookOpen, path: '/library' }
   ];
 
-  const navItems = profile?.role === 'guardian' ? guardianNavItems : studentNavItems;
+  const isAdmin = profile?.role === 'admin' || user?.email === 'admitwise2@gmail.com' || profile?.email === 'admitwise2@gmail.com';
+
+  const baseNavItems = profile?.role === 'guardian' ? guardianNavItems : studentNavItems;
+  const navItems = isAdmin 
+    ? [{ label: 'Admin Command Center', icon: ShieldAlert, path: '/scholarresortadmin@benedict', isAdminBadge: true }, ...baseNavItems]
+    : baseNavItems;
   const mobileNavItems = profile?.role === 'guardian' ? guardianNavItems : studentNavItems.slice(0, 5);
 
   const isActive = (path: string) => location.pathname === path;
