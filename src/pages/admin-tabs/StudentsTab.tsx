@@ -95,14 +95,21 @@ export const StudentsTab = () => {
   const fetchAllData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch all profiles
-      const { data: profData, error: profError } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let profData: any[] = [];
+      try {
+        const res = await fetch(getApiUrl('/api/admin/users/directory'));
+        const json = await res.json();
+        if (json && json.success && Array.isArray(json.profiles)) {
+          profData = json.profiles;
+        }
+      } catch {}
 
-      if (profError) {
-        console.warn('Profiles fetch warning:', profError);
+      if (!profData || profData.length === 0) {
+        const { data: dbProf } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        profData = dbProf || [];
       }
 
       // 2. Fetch guardian links

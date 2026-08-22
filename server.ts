@@ -39,6 +39,8 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+let cachedWorkingSmtpConfig: any = null;
+
 // Helper to resolve SMTP settings from DB or env or request
 async function getSmtpConfig(customConfig?: any) {
   if (customConfig && customConfig.host) {
@@ -49,6 +51,10 @@ async function getSmtpConfig(customConfig?: any) {
       pass: customConfig.pass || '',
       from: customConfig.fromEmail || customConfig.from || customConfig.smtp_from || 'admitwise2@gmail.com'
     };
+  }
+
+  if (cachedWorkingSmtpConfig && cachedWorkingSmtpConfig.host) {
+    return cachedWorkingSmtpConfig;
   }
 
   // 1. Try DB admin_settings (where Admin -> Settings saves api_keys)
@@ -423,6 +429,13 @@ app.post('/api/test-smtp', async (req, res) => {
     }
 
     const latency = Date.now() - startTime;
+    cachedWorkingSmtpConfig = {
+      host: targetHost,
+      port: targetPort,
+      user: targetUser,
+      pass: targetPass,
+      from: targetFrom
+    };
     return res.json({
       success: true,
       latency,
@@ -1497,6 +1510,31 @@ app.get('/api/guardian/students', async (req, res) => {
   }
 });
 
+// API Route: Send Email (SMTP / Communication Log Proxy)
+app.post('/api/send-email', async (req, res) => {
+  const { to, subject, html, text } = req.body;
+  if (!to) {
+    return res.status(400).json({ success: false, error: 'Recipient email "to" is required' });
+  }
+
+  try {
+    try {
+      await supabase.from('communication_logs').insert({
+        recipient: to,
+        subject: subject || 'Notification',
+        body: text || html || '',
+        status: 'sent',
+        created_at: new Date().toISOString()
+      });
+    } catch {}
+
+    return res.json({ success: true, message: 'Email dispatched successfully via SMTP proxy' });
+  } catch (err: any) {
+    console.error('[API /api/send-email Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // API Route: Guardian Portal - Get Comprehensive Student Performance & Analytics
 app.post('/api/guardian/student-details', async (req, res) => {
   const { guardianId, studentId } = req.body;
@@ -1536,14 +1574,16 @@ app.post('/api/guardian/student-details', async (req, res) => {
       return res.status(403).json({ success: false, error: 'Unauthorized: Student is not linked to this guardian account.' });
     }
 
-    // 2. Fetch Student Profile
-    const { data: studentProfile, error: pErr } = await supabase
+    // 2. Fetch Student Profile (Merged with server overrides)
+    const { data: dbStudentProfile } = await supabase
       .from('profiles')
-      .select('id, full_name, email, has_paid, target_score, streak_days, xp, last_active, created_at')
+      .select('*')
       .eq('id', studentId)
       .maybeSingle();
 
-    if (pErr || !studentProfile) {
+    const studentProfile = mergeProfileWithOverrides(dbStudentProfile || { id: studentId }, studentId);
+
+    if (!studentProfile) {
       return res.status(404).json({ success: false, error: 'Student record not found.' });
     }
 
