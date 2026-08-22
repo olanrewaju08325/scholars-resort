@@ -88,7 +88,7 @@ export function DashboardOverview() {
       // 2. Fetch Popular Exam Subjects
       const { data: examSessions } = await supabase
         .from('exam_sessions')
-        .select('subject_id, mode')
+        .select('*')
         .limit(200);
 
       const { data: subjectsList } = await supabase

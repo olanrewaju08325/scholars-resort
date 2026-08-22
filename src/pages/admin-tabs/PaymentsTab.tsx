@@ -17,34 +17,64 @@ export const PaymentsTab = () => {
 
   const fetchPayments = async () => {
     setLoading(true);
-    
-    // Fetch pending
-    const { data: pendingData } = await supabase
-      .from('manual_payments')
-      .select('*, profiles(full_name, email)')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-    
-    // Fetch history (recent approved/rejected)
-    const { data: historyData } = await supabase
-      .from('manual_payments')
-      .select('*, profiles(full_name, email)')
-      .in('status', ['approved', 'rejected'])
-      .order('created_at', { ascending: false })
-      .limit(10);
+    try {
+      // Fetch pending
+      const { data: rawPending } = await supabase
+        .from('manual_payments')
+        .select('*')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false });
       
-    // Stats calculation
-    const { data: allData } = await supabase.from('manual_payments').select('status, amount');
-    let pAmount = 0, aAmount = 0;
-    allData?.forEach(d => {
-      if (d.status === 'pending') pAmount += d.amount;
-      if (d.status === 'approved') aAmount += d.amount;
-    });
+      // Fetch history (recent approved/rejected)
+      const { data: rawHistory } = await supabase
+        .from('manual_payments')
+        .select('*')
+        .in('status', ['approved', 'rejected'])
+        .order('created_at', { ascending: false })
+        .limit(10);
 
-    setPendingPayments(pendingData || []);
-    setHistory(historyData || []);
-    setStats({ pendingAmount: pAmount, approvedAmount: aAmount });
-    
+      // Collect user IDs
+      const userIds = Array.from(new Set([
+        ...(rawPending || []).map(p => p.user_id),
+        ...(rawHistory || []).map(p => p.user_id)
+      ].filter(Boolean)));
+
+      let profileMap: Record<string, any> = {};
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', userIds);
+        
+        (profiles || []).forEach(p => {
+          profileMap[p.id] = p;
+        });
+      }
+
+      const pendingWithProfiles = (rawPending || []).map(p => ({
+        ...p,
+        profiles: profileMap[p.user_id] || { full_name: 'Unknown Student', email: 'N/A' }
+      }));
+
+      const historyWithProfiles = (rawHistory || []).map(p => ({
+        ...p,
+        profiles: profileMap[p.user_id] || { full_name: 'Unknown Student', email: 'N/A' }
+      }));
+
+      // Stats calculation
+      const { data: allData } = await supabase.from('manual_payments').select('status, amount');
+      let pAmount = 0, aAmount = 0;
+      allData?.forEach(d => {
+        if (d.status === 'pending') pAmount += Number(d.amount || 0);
+        if (d.status === 'approved') aAmount += Number(d.amount || 0);
+      });
+
+      setPendingPayments(pendingWithProfiles);
+      setHistory(historyWithProfiles);
+      setStats({ pendingAmount: pAmount, approvedAmount: aAmount });
+    } catch (err) {
+      console.warn('Error fetching payments:', err);
+    }
     setLoading(false);
   };
 

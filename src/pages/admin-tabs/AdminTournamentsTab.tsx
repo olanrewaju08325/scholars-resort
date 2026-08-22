@@ -103,10 +103,23 @@ Return STRICT JSON format:
 }`;
       
       const responseText = await callGroqAPI([{ role: 'user', content: prompt }]);
-      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) throw new Error("AI response format was not valid JSON.");
+      let cleanText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const firstBrace = cleanText.indexOf('{');
+      const lastBrace = cleanText.lastIndexOf('}');
       
-      const parsed = JSON.parse(jsonMatch[0]);
+      if (firstBrace === -1 || lastBrace <= firstBrace) {
+        throw new Error("AI response format was not valid JSON.");
+      }
+      
+      const jsonCandidate = cleanText.substring(firstBrace, lastBrace + 1);
+      let parsed: any;
+      try {
+        parsed = JSON.parse(jsonCandidate);
+      } catch (pErr) {
+        // Fallback: fix trailing commas if present
+        const fixed = jsonCandidate.replace(/,\s*([}\]])/g, '$1');
+        parsed = JSON.parse(fixed);
+      }
       
       const now = new Date();
       const start = new Date(now);

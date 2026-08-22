@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { errorTracker } from '../lib/errorTracker';
+import { reportGroqCallTelemetry } from './groqTelemetryService';
 
 // Cached API Key
 let cachedGroqKey: string | null = null;
@@ -325,6 +326,11 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
         });
 
         if (response.ok) {
+          const remTokens = response.headers.get('x-ratelimit-remaining-tokens') || response.headers.get('x-ratelimit-remaining-tokens-minute');
+          const limTokens = response.headers.get('x-ratelimit-limit-tokens') || response.headers.get('x-ratelimit-limit-tokens-minute');
+          const resReset = response.headers.get('x-ratelimit-reset-tokens');
+          const remReqs = response.headers.get('x-ratelimit-remaining-requests');
+
           const data = await response.json();
           const content = data?.choices?.[0]?.message?.content;
 
@@ -333,15 +339,17 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
             const promptTokens = data?.usage?.prompt_tokens || 100;
             const completionTokens = data?.usage?.completion_tokens || 200;
 
-            try {
-              supabase.from('ai_usage').insert({
-                provider: 'groq',
-                feature: 'groq_inference',
-                prompt_tokens: promptTokens,
-                completion_tokens: completionTokens,
-                created_at: new Date().toISOString()
-              }).then(() => {}, () => {});
-            } catch {}
+            reportGroqCallTelemetry({
+              model: currentModel,
+              promptTokens,
+              completionTokens,
+              totalTokens: promptTokens + completionTokens,
+              status: 'success',
+              remainingTokens: remTokens || undefined,
+              limitTokens: limTokens || undefined,
+              resetTokens: resReset || undefined,
+              remainingRequests: remReqs || undefined
+            });
 
             return content;
           }

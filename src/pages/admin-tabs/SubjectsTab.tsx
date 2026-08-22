@@ -20,8 +20,9 @@ export const SubjectsTab = () => {
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
     try {
-      // Auto seed missing subjects
+      // Auto seed missing subjects and unify duplicates
       await ensureAllJambSubjectsInDatabase();
+      await unifyDatabaseSubjects();
 
       const { data: subData } = await supabase.from('subjects').select('*').order('name');
       const loadedSubjects = subData || [];

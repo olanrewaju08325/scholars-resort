@@ -42,6 +42,7 @@ import { PlatformHealthTab } from './admin-tabs/PlatformHealthTab';
 import { AIKeysTab } from './admin-tabs/AIKeysTab';
 import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 import { initAdminOfflineSync } from '@/services/offlineSyncService';
+import { MaterialsTab } from './admin-tabs/MaterialsTab';
 import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AdminNotificationSystem } from '@/components/admin/AdminNotificationSystem';
@@ -101,7 +102,9 @@ export default function Admin() {
     { id: 'insights', label: 'Student Insights', icon: Activity },
     { id: 'analytics', label: 'Analytics', icon: BarChart },
     { id: 'security', label: 'Security', icon: ShieldAlert },
+    { id: 'roles', label: 'User Roles & Access', icon: Shield },
     { id: 'students', label: 'Users & Guardians', icon: Users },
+    { id: 'materials', label: '📚 Upload Study Materials', icon: BookOpen },
     { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
     { id: 'subjects', label: 'Subjects & Topics', icon: BookOpen },
     { id: 'content-studio', label: 'Content Studio', icon: FileQuestion },
@@ -111,7 +114,6 @@ export default function Admin() {
     { id: 'support', label: 'Support Center', icon: MessageSquare },
     { id: 'ai', label: 'AI Assistant', icon: Sparkles },
     { id: 'logs', label: 'Audit Logs', icon: List },
-    { id: 'roles', label: 'Roles & Access', icon: Shield },
     { id: 'backups', label: 'Backups', icon: DatabaseBackup },
     { id: 'smtp-health', label: 'SMTP Health Check', icon: Mail },
     { id: 'health', label: 'System Health', icon: Activity },
@@ -136,6 +138,7 @@ export default function Admin() {
       case 'analytics': return <AnalyticsTab />;
       case 'security': return <SecurityTab />;
       case 'students': return <StudentsTab />;
+      case 'materials': return <MaterialsTab />;
       case 'literature': return <AdminLiteratureTab />;
       case 'subjects': return <SubjectsTab />;
       case 'content-studio': return <ContentStudioTab />;

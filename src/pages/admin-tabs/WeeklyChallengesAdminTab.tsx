@@ -119,9 +119,18 @@ Return STRICT JSON format:
 }`;
 
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
-      const jsonMatch = content.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const parsed = JSON.parse(jsonMatch[0]);
+      let cleanText = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const firstBrace = cleanText.indexOf('{');
+      const lastBrace = cleanText.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const jsonCandidate = cleanText.substring(firstBrace, lastBrace + 1);
+        let parsed: any;
+        try {
+          parsed = JSON.parse(jsonCandidate);
+        } catch {
+          const fixed = jsonCandidate.replace(/,\s*([}\]])/g, '$1');
+          parsed = JSON.parse(fixed);
+        }
         parsed.duration_minutes = durationMinutes;
         setQuestionJSON(JSON.stringify(parsed, null, 2));
         if (!title) setTitle(`Weekly ${selectedSubject} AI Challenge`);

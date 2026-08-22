@@ -42,7 +42,7 @@ const Login = () => {
           .eq('email', cleanEmail)
           .maybeSingle();
         
-        if (profileCheck?.role !== 'admin' && profileCheck?.role !== 'superadmin') {
+        if (profileCheck?.role !== 'admin') {
           setError('Platform is currently under scheduled maintenance. Non-master administrative accounts are restricted from logging in.');
           setLoading(false);
           return;

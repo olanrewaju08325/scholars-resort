@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Key, ShieldCheck, RefreshCw, Zap, Activity, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { 
+  Key, ShieldCheck, RefreshCw, Zap, Activity, CheckCircle2, XCircle, 
+  AlertTriangle, Server, Clock, Terminal, Cpu, Search, Wifi
+} from 'lucide-react';
+import { fetchGroqTelemetry, type GroqTelemetryData, type GroqLogEntry } from '@/services/groqTelemetryService';
 
 export const AIKeysTab = () => {
   const [loading, setLoading] = useState(true);
@@ -12,6 +16,12 @@ export const AIKeysTab = () => {
   const [groqKey, setGroqKey] = useState('');
   const [testingGroq, setTestingGroq] = useState(false);
   const [groqStatus, setGroqStatus] = useState<{ ok?: boolean; msg?: string } | null>(null);
+
+  // Telemetry state
+  const [telemetry, setTelemetry] = useState<GroqTelemetryData | null>(null);
+  const [autoRefreshInterval, setAutoRefreshInterval] = useState<number>(3000); // 3 seconds default
+  const [logFilter, setLogFilter] = useState('');
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<string>('');
 
   const [limits, setLimits] = useState({
     monthly_token_limit: 5000000,
@@ -83,15 +93,39 @@ export const AIKeysTab = () => {
     setLoading(false);
   }, []);
 
+  // Poll server-side telemetry
+  const loadTelemetryData = useCallback(async () => {
+    const data = await fetchGroqTelemetry(groqKey);
+    if (data) {
+      setTelemetry(data);
+      setLastRefreshedAt(new Date().toLocaleTimeString());
+      if (data.totals.totalTokens > 0) {
+        setUsage(prev => ({
+          groqTokens: Math.max(prev.groqTokens, data.totals.totalTokens),
+          totalCalls: Math.max(prev.totalCalls, data.totals.totalRequests)
+        }));
+      }
+    }
+  }, [groqKey]);
+
   useEffect(() => {
     fetchKeysAndUsage();
   }, [fetchKeysAndUsage]);
 
+  useEffect(() => {
+    loadTelemetryData();
+    if (autoRefreshInterval <= 0) return;
+
+    const interval = setInterval(() => {
+      loadTelemetryData();
+    }, autoRefreshInterval);
+
+    return () => clearInterval(interval);
+  }, [loadTelemetryData, autoRefreshInterval]);
 
   const handleSaveKeys = async () => {
     setSaving(true);
     try {
-      // Save Keys
       const { error: keyErr } = await supabase.from('admin_settings').upsert({
         setting_key: 'ai_api_keys',
         setting_value: { groq: groqKey },
@@ -100,7 +134,6 @@ export const AIKeysTab = () => {
 
       if (keyErr) throw keyErr;
 
-      // Save Limits
       const { error: limitErr } = await supabase.from('admin_settings').upsert({
         setting_key: 'ai_limits',
         setting_value: limits,
@@ -111,6 +144,7 @@ export const AIKeysTab = () => {
 
       localStorage.setItem('groq_api_key', groqKey);
       toast.success("Groq API Key and Token Limits saved successfully to database!");
+      loadTelemetryData();
     } catch (err: any) {
       toast.error("Failed to save settings: " + err.message);
     }
@@ -128,7 +162,6 @@ export const AIKeysTab = () => {
       const trimmedKey = groqKey.trim();
       let workingModel = 'openai/gpt-oss-120b';
 
-      // 1. First probe available models on this key
       try {
         const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
           headers: { 'Authorization': `Bearer ${trimmedKey}` }
@@ -144,7 +177,6 @@ export const AIKeysTab = () => {
         }
       } catch {}
 
-      // 2. Perform test completion
       const testModels = [workingModel, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'groq/compound-mini'].filter((m, i, arr) => arr.indexOf(m) === i);
       let reply = '';
       let successModel = '';
@@ -179,6 +211,7 @@ export const AIKeysTab = () => {
 
       toast.success(`Groq API Verified (${successModel})! Reply: "${reply}"`);
       setGroqStatus({ ok: true, msg: `Verified with ${successModel}: "${reply}"` });
+      loadTelemetryData();
     } catch (err: any) {
       toast.error(`Groq Test Failed: ${err.message}`);
       setGroqStatus({ ok: false, msg: err.message });
@@ -187,6 +220,12 @@ export const AIKeysTab = () => {
   };
 
   const usagePercent = Math.min(100, (usage.groqTokens / (limits.monthly_token_limit || 1)) * 100);
+
+  const filteredLogs = (telemetry?.logs || []).filter(l => {
+    if (!logFilter) return true;
+    const term = logFilter.toLowerCase();
+    return l.model.toLowerCase().includes(term) || l.source.toLowerCase().includes(term) || l.status.toLowerCase().includes(term);
+  });
 
   if (loading) {
     return (
@@ -197,14 +236,26 @@ export const AIKeysTab = () => {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
-      <div>
-        <h2 className="text-2xl font-bold flex items-center gap-2">
-          <Key className="w-6 h-6 text-primary" /> AI Key & Quota Management
-        </h2>
-        <p className="text-muted-foreground text-sm mt-1">
-          Groq is configured as the official ultra-fast AI inference provider for Scholars Resort.
-        </p>
+    <div className="space-y-6 max-w-6xl">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h2 className="text-2xl font-bold flex items-center gap-2">
+            <Key className="w-6 h-6 text-primary" /> AI Key & Real-Time Usage Monitor
+          </h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Official server-side telemetry tracking actual Groq API token consumption and live rate limits.
+          </p>
+        </div>
+
+        {/* Real-time Status Badge */}
+        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+          </span>
+          <span className="text-emerald-400 font-bold uppercase tracking-wider text-[11px]">Live Telemetry</span>
+          {lastRefreshedAt && <span className="text-slate-500 text-[10px]">({lastRefreshedAt})</span>}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -215,7 +266,7 @@ export const AIKeysTab = () => {
             <CardTitle className="flex items-center gap-2 text-orange-400">
               <Zap className="w-5 h-5 text-orange-400" /> Groq API Configuration
             </CardTitle>
-            <CardDescription>Primary key used across all Student and Admin AI modules.</CardDescription>
+            <CardDescription>Primary production key for Student & Admin AI modules.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             
@@ -244,7 +295,7 @@ export const AIKeysTab = () => {
             </div>
 
             <div className="space-y-3 pt-2 border-t border-border">
-              <label className="text-sm font-medium text-slate-300">Monthly AI Token Limit</label>
+              <label className="text-sm font-medium text-slate-300">Monthly AI Token Quota Limit</label>
               <Input 
                 type="number" 
                 value={limits.monthly_token_limit} 
@@ -261,11 +312,28 @@ export const AIKeysTab = () => {
           </CardContent>
         </Card>
 
-        {/* Real-time Usage & Quota Monitor */}
+        {/* Quota & Server Rate Limit Telemetry */}
         <Card className="bg-card border-border">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Token Quota Monitor</CardTitle>
-            <CardDescription>Live telemetry on platform-wide Groq API calls.</CardDescription>
+            <div className="flex justify-between items-center">
+              <CardTitle className="flex items-center gap-2"><Activity className="w-4 h-4 text-primary" /> Live Quota & Server Headers</CardTitle>
+              <div className="flex items-center gap-2">
+                <select 
+                  value={autoRefreshInterval} 
+                  onChange={e => setAutoRefreshInterval(Number(e.target.value))}
+                  className="bg-slate-950 border border-slate-800 rounded text-[11px] font-mono px-2 py-1 text-slate-300"
+                >
+                  <option value={3000}>Refresh: 3s</option>
+                  <option value={5000}>Refresh: 5s</option>
+                  <option value={10000}>Refresh: 10s</option>
+                  <option value={0}>Manual Only</option>
+                </select>
+                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={loadTelemetryData}>
+                  <RefreshCw className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+            <CardDescription>Actual Groq API rate-limit headers directly from server response.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             
@@ -286,35 +354,181 @@ export const AIKeysTab = () => {
               </div>
             </div>
 
-            {usagePercent >= 80 && (
-              <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-lg flex items-start gap-3">
-                <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-amber-200">
-                  <p className="font-bold">Token Quota Warning</p>
-                  <p>You have consumed {usagePercent.toFixed(1)}% of your monthly limit. Increase limit above to prevent study plan generation interruptions.</p>
+            {telemetry?.quota?.remainingTokens ? (
+              <div className="p-4 bg-emerald-950/20 border border-emerald-500/30 rounded-lg space-y-2">
+                <div className="flex justify-between items-center text-xs text-emerald-400 font-bold uppercase">
+                  <span className="flex items-center gap-1.5"><Server className="w-3.5 h-3.5" /> Groq Server Response Telemetry</span>
+                  <span className="bg-emerald-500/20 px-2 py-0.5 rounded text-[10px]">Verified API Headers</span>
                 </div>
+                <div className="grid grid-cols-2 gap-3 text-xs font-mono pt-1">
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-400 text-[10px] block">Remaining Tokens:</span>
+                    <span className="text-emerald-400 font-bold text-sm">
+                      {isNaN(Number(telemetry.quota.remainingTokens)) ? telemetry.quota.remainingTokens : Number(telemetry.quota.remainingTokens).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-400 text-[10px] block">Quota Limit (Per Min):</span>
+                    <span className="text-slate-200 font-bold text-sm">
+                      {isNaN(Number(telemetry.quota.limitTokens)) ? telemetry.quota.limitTokens : Number(telemetry.quota.limitTokens).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-400 text-[10px] block">Remaining Requests:</span>
+                    <span className="text-amber-400 font-bold text-sm">{telemetry.quota.remainingRequests || 'N/A'}</span>
+                  </div>
+                  <div className="bg-slate-950 p-2.5 rounded border border-slate-800">
+                    <span className="text-slate-400 text-[10px] block">Reset Window:</span>
+                    <span className="text-blue-400 font-bold text-sm">{telemetry.quota.resetTokens || '1m'}</span>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded text-xs text-slate-400 flex items-center justify-between">
+                <span>Groq API headers will populate on next live API call.</span>
+                <Button size="sm" variant="outline" onClick={testGroqKey} className="h-6 text-[11px]">
+                  Probe Headers Now
+                </Button>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Total AI Calls</div>
-                <div className="text-2xl font-bold font-mono text-white">{usage.totalCalls}</div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                <div className="text-[10px] text-muted-foreground uppercase">Prompt Tokens</div>
+                <div className="text-base font-bold font-mono text-cyan-400">
+                  {(telemetry?.totals?.totalPromptTokens || 0).toLocaleString()}
+                </div>
               </div>
-              <div className="p-4 bg-slate-900 border border-slate-800 rounded-lg">
-                <div className="text-xs text-muted-foreground mb-1">Active AI Model</div>
-                <div className="text-xs font-mono font-bold text-green-400">Qwen 3.6 27B / GPT-OSS 120B</div>
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                <div className="text-[10px] text-muted-foreground uppercase">Completion Tokens</div>
+                <div className="text-base font-bold font-mono text-purple-400">
+                  {(telemetry?.totals?.totalCompletionTokens || 0).toLocaleString()}
+                </div>
               </div>
-            </div>
-
-            <div className="text-xs text-muted-foreground bg-muted/30 p-3 rounded border border-border">
-              All AI services (Study Plan, Tutor Chat, CBT Generation, Weekly Challenges) automatically route through Groq for fast execution.
+              <div className="p-3 bg-slate-900 border border-slate-800 rounded-lg">
+                <div className="text-[10px] text-muted-foreground uppercase">Avg Latency</div>
+                <div className="text-base font-bold font-mono text-emerald-400">
+                  {telemetry?.totals?.avgLatencyMs || 0}ms
+                </div>
+              </div>
             </div>
 
           </CardContent>
         </Card>
 
       </div>
+
+      {/* Model Usage Distribution */}
+      {telemetry?.modelUsage && telemetry.modelUsage.length > 0 && (
+        <Card className="bg-card border-border">
+          <CardHeader className="py-4">
+            <CardTitle className="text-base flex items-center gap-2"><Cpu className="w-4 h-4 text-primary" /> Token Consumption by Model</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 pb-4">
+            {telemetry.modelUsage.map((m, idx) => {
+              const pct = Math.round((m.totalTokens / (telemetry.totals.totalTokens || 1)) * 100);
+              return (
+                <div key={idx} className="space-y-1">
+                  <div className="flex justify-between items-center text-xs font-mono">
+                    <span className="font-semibold text-slate-200">{m.model}</span>
+                    <span className="text-slate-400">{m.totalTokens.toLocaleString()} tokens ({m.calls} calls)</span>
+                  </div>
+                  <div className="w-full bg-slate-950 h-2 rounded-full overflow-hidden border border-slate-800">
+                    <div className="bg-primary h-full transition-all" style={{ width: `${Math.max(5, pct)}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Real-time Server Log Stream Table */}
+      <Card className="bg-card border-border">
+        <CardHeader>
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+            <div>
+              <CardTitle className="flex items-center gap-2 text-base">
+                <Terminal className="w-4 h-4 text-emerald-400" /> Live Groq Server API Logs ({filteredLogs.length})
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Real-time log stream captured from actual Groq completion calls.
+              </CardDescription>
+            </div>
+            
+            <div className="relative w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
+              <Input 
+                type="text" 
+                placeholder="Filter logs by model/status..." 
+                value={logFilter}
+                onChange={e => setLogFilter(e.target.value)}
+                className="pl-8 h-8 text-xs bg-slate-950"
+              />
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {filteredLogs.length === 0 ? (
+            <div className="text-center py-8 text-slate-500 text-xs font-mono">
+              No server log entries captured yet. Execute a chat or test key to stream logs.
+            </div>
+          ) : (
+            <div className="overflow-x-auto border border-slate-800 rounded-lg">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] border-b border-slate-800">
+                  <tr>
+                    <th className="p-2.5">Time</th>
+                    <th className="p-2.5">Model</th>
+                    <th className="p-2.5">Prompt</th>
+                    <th className="p-2.5">Completion</th>
+                    <th className="p-2.5">Total</th>
+                    <th className="p-2.5">Latency</th>
+                    <th className="p-2.5">Source</th>
+                    <th className="p-2.5">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/60 bg-slate-900/40">
+                  {filteredLogs.slice(0, 30).map((log) => (
+                    <tr key={log.id} className="hover:bg-slate-800/40 transition-colors">
+                      <td className="p-2.5 text-slate-400 whitespace-nowrap">
+                        {new Date(log.timestamp).toLocaleTimeString()}
+                      </td>
+                      <td className="p-2.5 font-bold text-slate-200">
+                        {log.model}
+                      </td>
+                      <td className="p-2.5 text-cyan-400">
+                        {log.promptTokens}
+                      </td>
+                      <td className="p-2.5 text-purple-400">
+                        {log.completionTokens}
+                      </td>
+                      <td className="p-2.5 font-bold text-emerald-400">
+                        {log.totalTokens}
+                      </td>
+                      <td className="p-2.5 text-slate-300">
+                        {log.latencyMs}ms
+                      </td>
+                      <td className="p-2.5 text-[10px] uppercase text-slate-400">
+                        {log.source === 'server_proxy' ? 'Server Proxy' : 'Client Direct'}
+                      </td>
+                      <td className="p-2.5">
+                        <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                          log.status === 'success' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
+                        }`}>
+                          {log.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
     </div>
   );
 };
+

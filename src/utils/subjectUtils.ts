@@ -198,6 +198,39 @@ export const getSubjectAliases = (inputName: string): string[] => {
   ]));
 };
 
+export const isUUID = (str: any): boolean => {
+  return typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+};
+
+/**
+ * Resolves any subject name, alias, or ID string into an array of valid database UUIDs.
+ */
+export const resolveSubjectIdsByNameOrAlias = async (subjectNameOrId: string): Promise<string[]> => {
+  if (isUUID(subjectNameOrId)) {
+    return [subjectNameOrId];
+  }
+
+  const canonical = normalizeSubjectName(subjectNameOrId);
+  const aliases = getSubjectAliases(canonical);
+
+  try {
+    const { data: dbSubjects } = await supabase.from('subjects').select('id, name');
+    if (!dbSubjects || dbSubjects.length === 0) return [];
+
+    const matched = dbSubjects.filter(s => {
+      if (!s.id || !isUUID(s.id)) return false;
+      if (s.id === subjectNameOrId) return true;
+      const normalizedName = normalizeSubjectName(s.name);
+      return normalizedName === canonical || aliases.includes(s.name.toLowerCase());
+    }).map(s => s.id).filter(isUUID);
+
+    return Array.from(new Set(matched));
+  } catch (err) {
+    console.warn('Error resolving subject UUIDs:', err);
+    return [];
+  }
+};
+
 /**
  * Ensures all official JAMB subjects exist in the Supabase `subjects` table and are active.
  */
@@ -233,7 +266,8 @@ export const ensureAllJambSubjectsInDatabase = async (): Promise<any[]> => {
 
 /**
  * Unifies and standardizes all database subject records and questions in Supabase.
- * Maps variations like 'English', 'English Language', 'use-of-english' to canonical IDs & names.
+ * Maps variations like 'English', 'English Language', 'use-of-english', 'Literature' to canonical IDs & names,
+ * and deletes true duplicate subject records from the database table.
  */
 export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; success: boolean }> => {
   try {
@@ -244,11 +278,12 @@ export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; s
     const { data: dbSubjects } = await supabase.from('subjects').select('*');
     if (!dbSubjects || dbSubjects.length === 0) return { updatedCount: 0, success: false };
 
-    // Build map of canonical name -> master subject record ID
+    // Build map of canonical name -> master subject record ID (valid UUID)
     const canonicalMap = new Map<string, string>();
     const duplicateIdsToMasterId = new Map<string, string>();
 
     dbSubjects.forEach(s => {
+      if (!isUUID(s.id)) return;
       const canonicalName = normalizeSubjectName(s.name);
       if (!canonicalMap.has(canonicalName)) {
         canonicalMap.set(canonicalName, s.id);
@@ -259,8 +294,30 @@ export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; s
 
     let updatedQuestions = 0;
 
-    // 3. Update questions referencing duplicate subject IDs to master subject ID
+    // 3a. Remap any string-alias subject_ids in `questions` to master subject UUID
+    try {
+      const { data: allQuestions } = await supabase.from('questions').select('id, subject_id');
+      if (allQuestions && allQuestions.length > 0) {
+        for (const q of allQuestions) {
+          if (q.subject_id && !isUUID(q.subject_id)) {
+            const canonical = normalizeSubjectName(q.subject_id);
+            const masterId = canonicalMap.get(canonical);
+            if (masterId) {
+              await supabase.from('questions').update({ subject_id: masterId }).eq('id', q.id);
+              updatedQuestions++;
+            }
+          }
+        }
+      }
+    } catch (strErr) {
+      console.warn('Error remapping string subject_ids:', strErr);
+    }
+
+    // 3b. Update questions, topics, materials referencing duplicate subject UUIDs, then delete duplicate subject rows
     for (const [dupId, masterId] of duplicateIdsToMasterId.entries()) {
+      if (!isUUID(dupId) || !isUUID(masterId)) continue;
+      
+      // Remap questions
       const { data: remapped } = await supabase
         .from('questions')
         .update({ subject_id: masterId })
@@ -268,30 +325,25 @@ export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; s
         .select('id');
       
       if (remapped) updatedQuestions += remapped.length;
+
+      // Remap topics
+      await supabase.from('topics').update({ subject_id: masterId }).eq('subject_id', dupId);
+
+      // Remap library materials
+      try {
+        await supabase.from('library_materials').update({ subject_id: masterId }).eq('subject_id', dupId);
+        await supabase.from('materials').update({ subject_id: masterId }).eq('subject_id', dupId);
+      } catch {}
+
+      // Delete the duplicate subject record from `subjects` table
+      await supabase.from('subjects').delete().eq('id', dupId);
     }
 
-    // 4. Update questions where `subject_id` is a string alias (e.g., 'English', 'use-of-english', 'Maths')
-    for (const officialSubject of OFFICIAL_JAMB_SUBJECTS) {
-      const masterId = canonicalMap.get(officialSubject.name);
-      if (!masterId) continue;
-
-      const aliasesToFix = getSubjectAliases(officialSubject.name).filter(alias => alias !== masterId);
-
-      for (const alias of aliasesToFix) {
-        const { data: fixed } = await supabase
-          .from('questions')
-          .update({ subject_id: masterId })
-          .eq('subject_id', alias)
-          .select('id');
-
-        if (fixed) updatedQuestions += fixed.length;
-      }
-    }
-
-    // 5. Update non-canonical subject names in `subjects` table to canonical names
+    // 4. Update non-canonical subject names in `subjects` table to canonical names
     for (const s of dbSubjects) {
+      if (!isUUID(s.id) || duplicateIdsToMasterId.has(s.id)) continue;
       const canonicalName = normalizeSubjectName(s.name);
-      if (s.name !== canonicalName && !duplicateIdsToMasterId.has(s.id)) {
+      if (s.name !== canonicalName) {
         await supabase.from('subjects').update({ name: canonicalName }).eq('id', s.id);
       }
     }
@@ -304,33 +356,31 @@ export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; s
 };
 
 /**
- * Universal question fetcher for a subject that accounts for canonical names, UUIDs, and aliases.
+ * Universal question fetcher for a subject that accounts for canonical names, UUIDs, and aliases safely.
  */
 export const fetchQuestionsForSubject = async (subjectNameOrId: string, limitCount: number = 40): Promise<any[]> => {
   const canonical = normalizeSubjectName(subjectNameOrId);
   const aliases = getSubjectAliases(canonical);
 
   try {
-    const { data: dbSubjects } = await supabase.from('subjects').select('id, name');
-    const matchedSubjectIds = (dbSubjects || [])
-      .filter(s => aliases.includes(s.name.toLowerCase()) || aliases.includes(s.id.toLowerCase()) || normalizeSubjectName(s.name) === canonical)
-      .map(s => s.id);
+    const matchedSubjectIds = await resolveSubjectIdsByNameOrAlias(subjectNameOrId);
+    const validUuids = matchedSubjectIds.filter(isUUID);
 
-    const allFilters = Array.from(new Set([...matchedSubjectIds, canonical, ...aliases, subjectNameOrId]));
+    if (validUuids.length > 0) {
+      const { data: qData } = await supabase
+        .from('questions')
+        .select('*, subjects(name)')
+        .eq('is_active', true)
+        .in('subject_id', validUuids)
+        .limit(limitCount);
 
-    const { data: qData } = await supabase
-      .from('questions')
-      .select('*, subjects(name)')
-      .eq('is_active', true)
-      .in('subject_id', allFilters)
-      .limit(limitCount);
-
-    if (qData && qData.length > 0) return qData;
+      if (qData && qData.length > 0) return qData;
+    }
   } catch (err) {
-    console.warn('Error querying by in(subject_id):', err);
+    console.warn('Error querying by in(subject_id) UUIDs:', err);
   }
 
-  // Fallback 1: Query all active questions and filter client side
+  // Fallback 1: Query active questions and filter client side
   try {
     const { data: allQ } = await supabase
       .from('questions')
@@ -342,7 +392,7 @@ export const fetchQuestionsForSubject = async (subjectNameOrId: string, limitCou
       const filtered = allQ.filter(q => {
         const qSubName = q.subjects?.name || q.subject || q.subject_id;
         if (!qSubName) return false;
-        return normalizeSubjectName(qSubName) === canonical || aliases.includes(qSubName.toLowerCase());
+        return normalizeSubjectName(qSubName) === canonical || aliases.includes(String(qSubName).toLowerCase());
       });
       if (filtered.length > 0) return filtered.slice(0, limitCount);
     }

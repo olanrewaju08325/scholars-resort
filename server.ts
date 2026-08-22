@@ -428,10 +428,65 @@ app.post('/api/test-smtp', async (req, res) => {
   }
 });
 
-// API Route: Groq AI Chat Proxy (Production Groq Key)
+// --- Groq Server-Side Telemetry Log Store ---
+interface GroqTelemetryLog {
+  id: string;
+  timestamp: string;
+  model: string;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  latencyMs: number;
+  status: 'success' | 'error';
+  remainingTokens?: string;
+  limitTokens?: string;
+  resetTokens?: string;
+  remainingRequests?: string;
+  limitRequests?: string;
+  source: 'server_proxy' | 'client_direct';
+}
+
+const groqServerLogs: GroqTelemetryLog[] = [];
+let latestGroqQuotaHeader = {
+  remainingTokens: null as string | null,
+  limitTokens: null as string | null,
+  resetTokens: null as string | null,
+  remainingRequests: null as string | null,
+  limitRequests: null as string | null,
+  lastUpdated: null as string | null
+};
+
+function addGroqServerLog(entry: Omit<GroqTelemetryLog, 'id' | 'timestamp'>) {
+  const log: GroqTelemetryLog = {
+    id: `groq_log_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    timestamp: new Date().toISOString(),
+    ...entry
+  };
+  
+  if (entry.remainingTokens || entry.limitTokens) {
+    latestGroqQuotaHeader = {
+      remainingTokens: entry.remainingTokens || latestGroqQuotaHeader.remainingTokens,
+      limitTokens: entry.limitTokens || latestGroqQuotaHeader.limitTokens,
+      resetTokens: entry.resetTokens || latestGroqQuotaHeader.resetTokens,
+      remainingRequests: entry.remainingRequests || latestGroqQuotaHeader.remainingRequests,
+      limitRequests: entry.limitRequests || latestGroqQuotaHeader.limitRequests,
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  groqServerLogs.unshift(log);
+  if (groqServerLogs.length > 500) {
+    groqServerLogs.length = 500;
+  }
+  return log;
+}
+
+// API Route: Groq AI Chat Proxy (Production Groq Key with Telemetry Logging)
 app.post('/api/groq-chat', async (req, res) => {
+  const startTime = Date.now();
   const { messages, model = 'openai/gpt-oss-120b', temperature = 0.7 } = req.body;
-  const groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+  const customGroqKey = req.headers['x-groq-key'] as string;
+  const groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 
   if (!groqKey || !groqKey.trim()) {
     return res.status(400).json({ error: 'GROQ_API_KEY is not configured on the server.' });
@@ -461,8 +516,42 @@ app.post('/api/groq-chat', async (req, res) => {
         })
       });
 
+      const latencyMs = Date.now() - startTime;
+      const remTokens = response.headers.get('x-ratelimit-remaining-tokens') || response.headers.get('x-ratelimit-remaining-tokens-minute');
+      const limTokens = response.headers.get('x-ratelimit-limit-tokens') || response.headers.get('x-ratelimit-limit-tokens-minute');
+      const resReset = response.headers.get('x-ratelimit-reset-tokens');
+      const remReqs = response.headers.get('x-ratelimit-remaining-requests');
+      const limReqs = response.headers.get('x-ratelimit-limit-requests');
+
       if (response.ok) {
         const data = await response.json();
+        const promptTokens = data?.usage?.prompt_tokens || 0;
+        const completionTokens = data?.usage?.completion_tokens || 0;
+        const totalTokens = data?.usage?.total_tokens || (promptTokens + completionTokens);
+
+        addGroqServerLog({
+          model: m,
+          promptTokens,
+          completionTokens,
+          totalTokens,
+          latencyMs,
+          status: 'success',
+          remainingTokens: remTokens || undefined,
+          limitTokens: limTokens || undefined,
+          resetTokens: resReset || undefined,
+          remainingRequests: remReqs || undefined,
+          limitRequests: limReqs || undefined,
+          source: 'server_proxy'
+        });
+
+        data._telemetry = {
+          remainingTokens: remTokens,
+          limitTokens: limTokens,
+          resetTokens: resReset,
+          remainingRequests: remReqs,
+          latencyMs
+        };
+
         return res.json(data);
       }
     } catch (groqErr) {
@@ -470,8 +559,135 @@ app.post('/api/groq-chat', async (req, res) => {
     }
   }
 
+  addGroqServerLog({
+    model,
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+    latencyMs: Date.now() - startTime,
+    status: 'error',
+    source: 'server_proxy'
+  });
+
   return res.status(502).json({
     error: 'All Groq model completion attempts failed on the server.'
+  });
+});
+
+// Endpoint to log client-side Groq call telemetry to server store
+app.post('/api/groq-telemetry/log', (req, res) => {
+  const {
+    model,
+    promptTokens = 0,
+    completionTokens = 0,
+    totalTokens = 0,
+    latencyMs = 0,
+    status = 'success',
+    remainingTokens,
+    limitTokens,
+    resetTokens,
+    remainingRequests,
+    limitRequests
+  } = req.body;
+
+  const log = addGroqServerLog({
+    model: model || 'groq-unknown',
+    promptTokens: Number(promptTokens) || 0,
+    completionTokens: Number(completionTokens) || 0,
+    totalTokens: Number(totalTokens) || (Number(promptTokens) + Number(completionTokens)),
+    latencyMs: Number(latencyMs) || 0,
+    status: status === 'error' ? 'error' : 'success',
+    remainingTokens: remainingTokens ? String(remainingTokens) : undefined,
+    limitTokens: limitTokens ? String(limitTokens) : undefined,
+    resetTokens: resetTokens ? String(resetTokens) : undefined,
+    remainingRequests: remainingRequests ? String(remainingRequests) : undefined,
+    limitRequests: limitRequests ? String(limitRequests) : undefined,
+    source: 'client_direct'
+  });
+
+  return res.json({ success: true, log });
+});
+
+// Endpoint to fetch real-time Groq API usage telemetry & server logs
+app.get('/api/groq-telemetry', async (req, res) => {
+  const customGroqKey = req.headers['x-groq-key'] as string;
+  const groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+
+  if ((!latestGroqQuotaHeader.remainingTokens || !latestGroqQuotaHeader.limitTokens) && groqKey && groqKey.trim().length > 10) {
+    try {
+      const liveRes = await fetch('https://api.groq.com/openai/v1/models', {
+        headers: { 'Authorization': `Bearer ${groqKey.trim()}` }
+      });
+      if (liveRes.ok) {
+        const remTokens = liveRes.headers.get('x-ratelimit-remaining-tokens') || liveRes.headers.get('x-ratelimit-remaining-tokens-minute');
+        const limTokens = liveRes.headers.get('x-ratelimit-limit-tokens') || liveRes.headers.get('x-ratelimit-limit-tokens-minute');
+        const resReset = liveRes.headers.get('x-ratelimit-reset-tokens');
+        const remReqs = liveRes.headers.get('x-ratelimit-remaining-requests');
+        const limReqs = liveRes.headers.get('x-ratelimit-limit-requests');
+
+        if (remTokens || limTokens) {
+          latestGroqQuotaHeader = {
+            remainingTokens: remTokens,
+            limitTokens: limTokens,
+            resetTokens: resReset || '1m',
+            remainingRequests: remReqs,
+            limitRequests: limReqs,
+            lastUpdated: new Date().toISOString()
+          };
+        }
+      }
+    } catch (err) {
+      console.warn('Live Groq quota check warning:', err);
+    }
+  }
+
+  let totalTokens = 0;
+  let totalPromptTokens = 0;
+  let totalCompletionTokens = 0;
+  let successCount = 0;
+  let errorCount = 0;
+  let totalLatencyMs = 0;
+
+  const modelMap: Record<string, { totalTokens: number; calls: number }> = {};
+
+  groqServerLogs.forEach(log => {
+    totalTokens += log.totalTokens;
+    totalPromptTokens += log.promptTokens;
+    totalCompletionTokens += log.completionTokens;
+    totalLatencyMs += log.latencyMs;
+    if (log.status === 'success') successCount++;
+    else errorCount++;
+
+    if (!modelMap[log.model]) {
+      modelMap[log.model] = { totalTokens: 0, calls: 0 };
+    }
+    modelMap[log.model].totalTokens += log.totalTokens;
+    modelMap[log.model].calls += 1;
+  });
+
+  const avgLatencyMs = groqServerLogs.length > 0 ? Math.round(totalLatencyMs / groqServerLogs.length) : 0;
+
+  const modelUsage = Object.entries(modelMap).map(([model, stats]) => ({
+    model,
+    totalTokens: stats.totalTokens,
+    calls: stats.calls
+  })).sort((a, b) => b.totalTokens - a.totalTokens);
+
+  return res.json({
+    success: true,
+    quota: latestGroqQuotaHeader,
+    totals: {
+      totalTokens,
+      totalPromptTokens,
+      totalCompletionTokens,
+      totalRequests: groqServerLogs.length,
+      successCount,
+      errorCount,
+      avgLatencyMs
+    },
+    modelUsage,
+    logs: groqServerLogs.slice(0, 100),
+    serverUptimeSeconds: Math.floor(process.uptime())
   });
 });
 

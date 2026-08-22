@@ -71,6 +71,19 @@ const ProtectedRoute = () => {
     return <Navigate to="/login" replace />;
   }
 
+  // Block access if account is suspended
+  if (profile?.role === 'suspended') {
+    return (
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
+        <ShieldAlert className="w-16 h-16 text-amber-500 mb-6" />
+        <h1 className="text-3xl font-bold text-white mb-4">Account Suspended</h1>
+        <p className="text-lg text-slate-400 max-w-md">
+          Your account access has been suspended by an administrator. Please contact support at support@scholarsresort.com for assistance.
+        </p>
+      </div>
+    );
+  }
+
   // 1. If student has not completed onboarding, force them to onboarding first.
   if (profile?.role === 'student' && profile?.onboarding_completed !== true) {
     return <Navigate to="/onboarding" replace />;
