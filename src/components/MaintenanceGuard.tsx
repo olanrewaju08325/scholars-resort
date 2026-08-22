@@ -68,10 +68,11 @@ export const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
   const isAdmin = 
     profile?.role === 'admin' || 
-    user?.email === 'admitwise2@gmail.com' ||
-    profile?.email === 'admitwise2@gmail.com';
+    (user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email)) ||
+    (profile?.email && AUTHORIZED_ADMIN_EMAILS.includes(profile.email));
 
   // Allow accessing login or admin path directly so master admin can log in during maintenance
   const isLoginPageOrAdminPath = location.pathname === '/login' || location.pathname.includes('scholarresortadmin');

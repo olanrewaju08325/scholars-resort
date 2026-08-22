@@ -707,23 +707,42 @@ app.get('/api/admin/subject-counts', async (req, res) => {
     const canonicalCounts: Record<string, number> = {};
     const years: Record<string, string[]> = {};
 
+    // Real-time grouping query using Supabase SDK
+    const { data: groupingData, error: groupError } = await supabase
+      .from('questions')
+      .select('subject_id')
+      .eq('is_active', true);
+
+    const groupCounts: Record<string, number> = {};
+    if (!groupError && groupingData) {
+      groupingData.forEach((q: any) => {
+        if (q.subject_id) {
+          groupCounts[q.subject_id] = (groupCounts[q.subject_id] || 0) + 1;
+        }
+      });
+    }
+
     if (subjects && subjects.length > 0) {
       await Promise.all(
         subjects.map(async (sub) => {
-          // Exact count from Database using head: true
-          const { count, error: countError } = await supabase
-            .from('questions')
-            .select('id', { count: 'exact', head: true })
-            .eq('subject_id', sub.id)
-            .eq('is_active', true);
+          // Use the real-time aggregated count
+          let count = groupCounts[sub.id] || 0;
 
-          if (!countError && count !== null) {
-            counts[sub.id] = count;
-            const canonical = sub.name.trim().toLowerCase();
-            canonicalCounts[canonical] = count;
-          } else {
-            counts[sub.id] = 0;
+          // Double check with direct fallback if count is zero to prevent missing newly inserted active questions
+          if (count === 0) {
+            const { count: fallbackCount, error: countError } = await supabase
+              .from('questions')
+              .select('id', { count: 'exact', head: true })
+              .eq('subject_id', sub.id)
+              .eq('is_active', true);
+            if (!countError && fallbackCount !== null) {
+              count = fallbackCount;
+            }
           }
+
+          counts[sub.id] = count;
+          const canonical = sub.name.trim().toLowerCase();
+          canonicalCounts[canonical] = count;
 
           // Fetch past years with active questions
           const { data: yearsData } = await supabase

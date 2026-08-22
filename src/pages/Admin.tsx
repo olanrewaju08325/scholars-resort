@@ -72,9 +72,10 @@ export default function Admin() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
   const isAdmin = profile?.role === 'admin' || 
-                  profile?.email === 'admitwise2@gmail.com' || 
-                  user?.email === 'admitwise2@gmail.com';
+                  (profile?.email && AUTHORIZED_ADMIN_EMAILS.includes(profile.email)) || 
+                  (user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email));
 
   if (!isAdmin) {
     return (

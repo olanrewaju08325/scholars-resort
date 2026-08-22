@@ -23,7 +23,8 @@ const Login = () => {
     setError('');
 
     const cleanEmail = email.trim().toLowerCase();
-    const isMasterAdmin = cleanEmail === 'admitwise2@gmail.com';
+    const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(cleanEmail);
 
     // Strict Maintenance Mode Check from Supabase DB settings
     try {
@@ -71,7 +72,7 @@ const Login = () => {
         // Fetch user profile role to route directly to designated dashboard
         let targetRoute = '/dashboard';
         const userMetaRole = authData?.user?.user_metadata?.role;
-        const isAdminEmail = cleanEmail === 'admitwise2@gmail.com';
+        const isAdminEmail = AUTHORIZED_ADMIN_EMAILS.includes(cleanEmail);
 
         if (isAdminEmail) {
           targetRoute = '/scholarresortadmin@benedict';

@@ -51,6 +51,8 @@ const AuthContext = createContext<AuthContextType>({
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
+export const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -68,8 +70,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
    * Fetch profile with retry logic and timeout to handle ERR_CONNECTION_CLOSED.
    * Retries up to 3 times with 1-second delay between attempts.
    */
+  /**
+   * Fetch profile with retry logic and timeout to handle ERR_CONNECTION_CLOSED.
+   * Retries up to 5 times with exponential backoff delay between attempts.
+   */
   const fetchProfile = async (userId: string, attempt = 1): Promise<void> => {
-    const MAX_ATTEMPTS = 3;
+    const MAX_ATTEMPTS = 5;
     const TIMEOUT_MS = 8000;
 
     try {
@@ -91,7 +97,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         let loadedProfile = data as Profile;
         // Master admin auto-elevation check using both profile and authenticated user email sources
         const currentEmail = user?.email || loadedProfile.email || '';
-        const isMasterAdmin = currentEmail === 'admitwise2@gmail.com';
+        const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.includes(currentEmail);
         
         if (isMasterAdmin && (loadedProfile.role !== 'admin' || !loadedProfile.email)) {
           loadedProfile.role = 'admin';
@@ -103,7 +109,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else if (!data && !error) {
         // Profile row does not exist yet. Auto-create in DB to ensure foreign key constraints pass
         console.warn(`[AuthContext] No profile record found for user ${userId}. Creating default profile...`);
-        const isAdminEmail = user?.email === 'admitwise2@gmail.com';
+        const isAdminEmail = user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email);
         const metaRole = user?.user_metadata?.role;
         const pendingInvite = localStorage.getItem('pending_guardian_code');
         const assignedRole: Profile['role'] = isAdminEmail 
@@ -141,13 +147,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       } else if (error && attempt < MAX_ATTEMPTS) {
         // Retry on transient errors (connection closed, network blip)
-        console.warn(`[AuthContext] Profile fetch attempt ${attempt} failed (${error.message}). Retrying...`);
-        await new Promise(r => setTimeout(r, 1000 * attempt));
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 16000);
+        console.warn(`[AuthContext] Profile fetch attempt ${attempt} failed (${error.message}). Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
         return fetchProfile(userId, attempt + 1);
       } else {
         console.warn('[AuthContext] Profile fetch failed, using fallback profile:', error);
         if (isMounted.current) {
-          const isAdminEmail = user?.email === 'admitwise2@gmail.com';
+          const isAdminEmail = user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email);
           const metaRole = user?.user_metadata?.role;
           const pendingInvite = localStorage.getItem('pending_guardian_code');
           const fallbackRole: Profile['role'] = isAdminEmail 
@@ -170,13 +177,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     } catch (err: any) {
       if (!isMounted.current) return;
       if (attempt < MAX_ATTEMPTS) {
-        console.warn(`[AuthContext] Profile fetch attempt ${attempt} threw (${err.message}). Retrying...`);
-        await new Promise(r => setTimeout(r, 1000 * attempt));
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 16000);
+        console.warn(`[AuthContext] Profile fetch attempt ${attempt} threw (${err.message}). Retrying in ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
         return fetchProfile(userId, attempt + 1);
       }
       console.warn('[AuthContext] Profile fetch threw error, using fallback profile:', err);
       if (isMounted.current) {
-        const isAdminEmail = user?.email === 'admitwise2@gmail.com';
+        const isAdminEmail = user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email);
         const metaRole = user?.user_metadata?.role;
         const fallbackRole: Profile['role'] = isAdminEmail 
           ? 'admin' 
@@ -261,8 +269,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // Admins and Master Accounts are completely exempt from Device Lock
     if (
       profile.role === 'admin' || 
-      profile.email === 'admitwise2@gmail.com' || 
-      user?.email === 'admitwise2@gmail.com'
+      (profile.email && AUTHORIZED_ADMIN_EMAILS.includes(profile.email)) || 
+      (user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email))
     ) {
       setIsDeviceLocked(false);
       const localDeviceId = localStorage.getItem('scholars_resort_device_uuid');

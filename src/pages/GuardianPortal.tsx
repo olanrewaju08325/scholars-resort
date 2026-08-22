@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Users, BarChart3, Clock, AlertTriangle, CheckCircle, Link as LinkIcon,
   Activity, Target, Trophy, Flame, BellRing, DollarSign, BookOpen, 
-  Mail, MessageSquare, ShieldCheck, Sun, Moon, FileDown
+  Mail, MessageSquare, ShieldCheck, Sun, Moon, FileDown, LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -16,8 +16,18 @@ import jsPDF from 'jspdf';
 import { sendEmailMessage } from '@/services/emailService';
 
 const GuardianPortal = () => {
-  const { profile, user } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const navigate = useNavigate();
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      navigate('/');
+      toast.success("Successfully logged out from parent portal.");
+    } catch {
+      toast.error("An error occurred during logout.");
+    }
+  };
 
   const [inviteCode, setInviteCode] = useState('');
   const [activeStudentId, setActiveStudentId] = useState<string | null>(null);
@@ -284,7 +294,39 @@ Scholars Resort Academic Team`
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col md:flex-row">
-      {/* Sidebar - Mobile First Layout (Feature 59) */}
+      {/* Mobile Top Navbar (Visible only on small screens) */}
+      <header className="md:hidden border-b border-border bg-card/60 backdrop-blur-md sticky top-0 z-40 px-4 py-3 flex items-center justify-between">
+        <Link to="/" className="flex items-center gap-2 font-display font-bold text-primary">
+          <Users className="h-5 w-5" />
+          <span className="text-sm">Guardian Portal</span>
+        </Link>
+        <div className="flex items-center gap-2">
+          {linkedStudents.length > 0 && (
+            <select 
+              className="h-8 bg-card border border-border rounded-md px-1.5 text-xs font-semibold max-w-[120px] outline-none"
+              value={activeStudentId || ''}
+              onChange={(e) => setActiveStudentId(e.target.value)}
+            >
+               {linkedStudents.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
+               ))}
+            </select>
+          )}
+          <Button 
+            onClick={handleLogout} 
+            variant="ghost" 
+            size="icon" 
+            className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+            title="Sign Out"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
+      </header>
+
+      {/* Sidebar - Mobile/Desktop Layout (Feature 59) */}
       <aside className="w-64 border-r border-border bg-card/50 flex flex-col hidden md:flex sticky top-0 h-screen">
         <div className="p-6">
           <Link to="/" className="flex items-center gap-2 text-xl font-bold font-display text-primary">
@@ -301,6 +343,16 @@ Scholars Resort Academic Team`
           </Link>
           {/* Theme toggle removed for premium Scholars Resort theme constraint */}
         </nav>
+        <div className="p-4 border-t border-border mt-auto">
+          <Button 
+            onClick={handleLogout} 
+            variant="ghost" 
+            className="w-full justify-start gap-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10 font-semibold"
+          >
+            <LogOut className="h-5 w-5 text-muted-foreground" />
+            Sign Out
+          </Button>
+        </div>
       </aside>
 
       {/* Main Content */}

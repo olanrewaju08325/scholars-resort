@@ -29,6 +29,15 @@ export default function Landing() {
   const [stats, setStats] = useState({ students: 1250, exams: 25400 });
   const [daysToJamb, setDaysToJamb] = useState(0);
   const [heroImageIdx, setHeroImageIdx] = useState(0);
+  const [telegramSupport, setTelegramSupport] = useState('https://t.me/+6dtsZgQpwrNhZDM8');
+  const [telegramAnnouncements, setTelegramAnnouncements] = useState('https://t.me/+9WU6HrQE6DJhYTRk');
+
+  // Dynamic Landing Page Feature Cards
+  const [card1, setCard1] = useState({ title: "AI Personal Tutor", desc: "Stuck on a Physics equation or Chemistry reaction? Our AI tutor breaks down complex problems into step-by-step explanations instantly." });
+  const [card2, setCard2] = useState({ title: "Exact CBT Replica", desc: "Our exam interface mimics the official JAMB UTME testing environment, including timer controls, question grid navigation, and key shortcuts." });
+  const [card3, setCard3] = useState({ title: "Weakness Analytics", desc: "We measure your speed and accuracy per topic to recommend customized drills before exam day." });
+  const [card4, setCard4] = useState({ title: "National Mocks & Battles", desc: "Compete against thousands of Nigerian students in weekly live tournaments and view your national percentile." });
+  const [card5, setCard5] = useState({ title: "Guardian & Parent Portal", desc: "Parents receive transparent weekly email progress summaries and live dashboard tracking for peace of mind." });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -38,6 +47,28 @@ export default function Landing() {
         
         const diff = Math.floor((targetDate.getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24));
         setDaysToJamb(diff > 0 ? diff : 0);
+
+        if (settings?.setting_value?.telegram_support_link) {
+          setTelegramSupport(settings.setting_value.telegram_support_link);
+        }
+        if (settings?.setting_value?.telegram_announcement_link) {
+          setTelegramAnnouncements(settings.setting_value.telegram_announcement_link);
+        }
+
+        const { data: landingSettings } = await supabase.from('admin_settings').select('setting_value').eq('setting_key', 'landing_config').maybeSingle();
+        if (landingSettings?.setting_value) {
+          const lConf = landingSettings.setting_value;
+          if (lConf.card1_title) setCard1(prev => ({ ...prev, title: lConf.card1_title }));
+          if (lConf.card1_desc) setCard1(prev => ({ ...prev, desc: lConf.card1_desc }));
+          if (lConf.card2_title) setCard2(prev => ({ ...prev, title: lConf.card2_title }));
+          if (lConf.card2_desc) setCard2(prev => ({ ...prev, desc: lConf.card2_desc }));
+          if (lConf.card3_title) setCard3(prev => ({ ...prev, title: lConf.card3_title }));
+          if (lConf.card3_desc) setCard3(prev => ({ ...prev, desc: lConf.card3_desc }));
+          if (lConf.card4_title) setCard4(prev => ({ ...prev, title: lConf.card4_title }));
+          if (lConf.card4_desc) setCard4(prev => ({ ...prev, desc: lConf.card4_desc }));
+          if (lConf.card5_title) setCard5(prev => ({ ...prev, title: lConf.card5_title }));
+          if (lConf.card5_desc) setCard5(prev => ({ ...prev, desc: lConf.card5_desc }));
+        }
 
         const { count: studentsCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'student');
         if (studentsCount) setStats(s => ({ ...s, students: Math.max(1245, studentsCount) }));
@@ -156,7 +187,7 @@ export default function Landing() {
                   <Lock className="w-3 h-3 text-primary" /> scholarsresort.com/dashboard
                 </div>
               </div>
-              <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80" alt="Scholars Resort Platform Interface" className="w-full object-cover" />
+              <img src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=1200&q=80" alt="Scholars Resort Platform Interface" className="w-full h-auto aspect-[16/10] sm:aspect-[16/9] md:h-[480px] object-cover object-top transition-all duration-300" />
             </div>
           </motion.div>
         </div>
@@ -173,8 +204,8 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-6">
             <div className="md:col-span-2 bg-card border border-border rounded-3xl p-8 relative overflow-hidden group hover:border-primary/50 transition-colors shadow-sm">
               <BrainCircuit className="w-12 h-12 text-primary mb-6" />
-              <h3 className="text-2xl font-bold mb-3 text-card-foreground">AI Personal Tutor</h3>
-              <p className="text-foreground/80 text-base mb-8 max-w-md">Stuck on a Physics equation or Chemistry reaction? Our AI tutor breaks down complex problems into step-by-step explanations instantly.</p>
+              <h3 className="text-2xl font-bold mb-3 text-card-foreground">{card1.title}</h3>
+              <p className="text-foreground/80 text-base mb-8 max-w-md">{card1.desc}</p>
               
               <div className="bg-muted/80 border border-border rounded-xl p-4 w-full max-w-sm ml-auto shadow-md">
                 <div className="flex items-start gap-3 mb-3">
@@ -190,27 +221,27 @@ export default function Landing() {
 
             <div className="bg-card border border-border rounded-3xl p-8 group hover:border-blue-500/50 transition-colors shadow-sm">
               <LayoutDashboard className="w-10 h-10 text-blue-500 mb-4" />
-              <h3 className="text-xl font-bold mb-2 text-card-foreground">Exact CBT Replica</h3>
-              <p className="text-foreground/80 text-sm leading-relaxed">Our exam interface mimics the official JAMB UTME testing environment, including timer controls, question grid navigation, and key shortcuts.</p>
+              <h3 className="text-xl font-bold mb-2 text-card-foreground">{card2.title}</h3>
+              <p className="text-foreground/80 text-sm leading-relaxed">{card2.desc}</p>
             </div>
 
             <div className="bg-card border border-border rounded-3xl p-8 group hover:border-amber-500/50 transition-colors shadow-sm">
               <BarChart className="w-10 h-10 text-amber-500 mb-4" />
-              <h3 className="text-xl font-bold mb-2 text-card-foreground">Weakness Analytics</h3>
-              <p className="text-foreground/80 text-sm leading-relaxed">We measure your speed and accuracy per topic to recommend customized drills before exam day.</p>
+              <h3 className="text-xl font-bold mb-2 text-card-foreground">{card3.title}</h3>
+              <p className="text-foreground/80 text-sm leading-relaxed">{card3.desc}</p>
             </div>
 
             <div className="bg-card border border-border rounded-3xl p-8 group hover:border-purple-500/50 transition-colors shadow-sm">
               <Trophy className="w-10 h-10 text-purple-500 mb-4" />
-              <h3 className="text-xl font-bold mb-2 text-card-foreground">National Mocks & Battles</h3>
-              <p className="text-foreground/80 text-sm leading-relaxed">Compete against thousands of Nigerian students in weekly live tournaments and view your national percentile.</p>
+              <h3 className="text-xl font-bold mb-2 text-card-foreground">{card4.title}</h3>
+              <p className="text-foreground/80 text-sm leading-relaxed">{card4.desc}</p>
             </div>
 
             <div className="md:col-span-2 bg-card border border-border rounded-3xl p-8 flex flex-col sm:flex-row items-center gap-8 group hover:border-emerald-500/50 transition-colors shadow-sm">
               <div className="flex-1">
                 <Users className="w-10 h-10 text-emerald-500 mb-4" />
-                <h3 className="text-xl font-bold mb-2 text-card-foreground">Guardian & Parent Portal</h3>
-                <p className="text-foreground/80 text-sm leading-relaxed">Parents receive transparent weekly email progress summaries and live dashboard tracking for peace of mind.</p>
+                <h3 className="text-xl font-bold mb-2 text-card-foreground">{card5.title}</h3>
+                <p className="text-foreground/80 text-sm leading-relaxed">{card5.desc}</p>
               </div>
               <div className="w-28 h-28 rounded-full border-4 border-border relative flex items-center justify-center shrink-0">
                 <div className="absolute inset-0 rounded-full border-4 border-emerald-500" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 75%, 0 75%)' }} />
@@ -244,9 +275,46 @@ export default function Landing() {
                 </div>
               </div>
               
-              <Button asChild size="lg" className="bg-white text-primary hover:bg-slate-100 h-14 px-10 text-lg rounded-xl font-extrabold shadow-xl transition-all">
-                <Link to="/signup">Start Your Preparation Now</Link>
-              </Button>
+              <div className="flex flex-col items-center gap-6">
+                <Button asChild size="lg" className="bg-white text-primary hover:bg-slate-100 h-14 px-10 text-lg rounded-xl font-extrabold shadow-xl transition-all">
+                  <Link to="/signup">Start Your Preparation Now</Link>
+                </Button>
+
+                <div className="w-full max-w-2xl mt-8 pt-8 border-t border-white/20">
+                  <h3 className="text-lg md:text-xl font-bold text-white mb-4">Join Our Official Telegram Platforms</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <a 
+                      href={telegramSupport} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="inline-flex items-center justify-center gap-3 bg-black/35 hover:bg-black/50 border border-white/25 rounded-2xl p-4 text-white font-bold transition-all text-sm group"
+                    >
+                      <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm4.64 6.8c-.15.15-.31.33-.5.53l-8.02 8.02c-.18.18-.42.28-.68.28s-.5-.1-.68-.28L4.4 15.02c-.37-.37-.37-.97 0-1.34.37-.37.97-.37 1.34 0l1.62 1.62L14.7 8.1c.37-.37.97-.37 1.34 0s.37.97 0 1.34l-.4.36z" />
+                      </svg>
+                      <div>
+                        <div className="text-left font-extrabold text-white text-sm">Join Support System</div>
+                        <div className="text-left text-xs text-white/70 font-normal">Direct help & setup support</div>
+                      </div>
+                    </a>
+
+                    <a 
+                      href={telegramAnnouncements} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="inline-flex items-center justify-center gap-3 bg-black/35 hover:bg-black/50 border border-white/25 rounded-2xl p-4 text-white font-bold transition-all text-sm group"
+                    >
+                      <svg className="w-5 h-5 fill-white" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 14h-2v-6h2v6zm0-8h-2V7h2v1z" />
+                      </svg>
+                      <div>
+                        <div className="text-left font-extrabold text-white text-sm">Join Announcements</div>
+                        <div className="text-left text-xs text-white/70 font-normal">Exam updates & study keys</div>
+                      </div>
+                    </a>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

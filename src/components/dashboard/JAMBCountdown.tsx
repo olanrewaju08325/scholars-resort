@@ -12,8 +12,30 @@ export const JAMBCountdown = () => {
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [examDate, setExamDate] = useState<Date>(new Date('2027-04-19'));
   const [loaded, setLoaded] = useState(false);
+  const [telegramSupport, setTelegramSupport] = useState('https://t.me/+6dtsZgQpwrNhZDM8');
+  const [telegramAnnouncements, setTelegramAnnouncements] = useState('https://t.me/+9WU6HrQE6DJhYTRk');
 
   useEffect(() => {
+    // Fetch Telegram links & global countdown from global_config
+    supabase
+      .from('admin_settings')
+      .select('setting_value')
+      .eq('setting_key', 'global_config')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.setting_value) {
+          if (data.setting_value.telegram_support_link) {
+            setTelegramSupport(data.setting_value.telegram_support_link);
+          }
+          if (data.setting_value.telegram_announcement_link) {
+            setTelegramAnnouncements(data.setting_value.telegram_announcement_link);
+          }
+          if (data.setting_value.jamb_date) {
+            setExamDate(new Date(data.setting_value.jamb_date));
+          }
+        }
+      });
+
     // Try to get exam date from study_goals
     if (profile?.id) {
       supabase
@@ -89,6 +111,28 @@ export const JAMBCountdown = () => {
       </CardContent>
       <div className="pb-4 text-center text-xs text-muted-foreground">
         {daysLeft > 0 ? `${daysLeft} days of preparation remaining` : 'Exam time!'}
+      </div>
+
+      <div className="border-t border-border p-3 bg-muted/20 space-y-2">
+        <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest text-center">Official Communities</div>
+        <div className="grid grid-cols-2 gap-2">
+          <a 
+            href={telegramSupport} 
+            target="_blank" 
+            rel="noreferrer" 
+            className="flex items-center justify-center gap-1 py-1 px-1.5 bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/20 rounded-lg text-sky-600 dark:text-sky-400 font-extrabold text-[10px] transition-colors"
+          >
+            Support Group
+          </a>
+          <a 
+            href={telegramAnnouncements} 
+            target="_blank" 
+            rel="noreferrer" 
+            className="flex items-center justify-center gap-1 py-1 px-1.5 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 rounded-lg text-blue-600 dark:text-blue-400 font-extrabold text-[10px] transition-colors"
+          >
+            Announcements
+          </a>
+        </div>
       </div>
     </Card>
   );

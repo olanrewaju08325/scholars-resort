@@ -15,6 +15,8 @@ export const SettingsTab = () => {
   const [cbtEnabled, setCbtEnabled] = useState(true);
   const [tournamentsEnabled, setTournamentsEnabled] = useState(true);
   const [jambDate, setJambDate] = useState("2026-04-15T08:00:00");
+  const [telegramSupportLink, setTelegramSupportLink] = useState('https://t.me/+6dtsZgQpwrNhZDM8');
+  const [telegramAnnouncementLink, setTelegramAnnouncementLink] = useState('https://t.me/+9WU6HrQE6DJhYTRk');
 
   // Landing Customization
   const [landingTitle, setLandingTitle] = useState('Scholars Resort CBT & E-Learning Platform');
@@ -22,6 +24,19 @@ export const SettingsTab = () => {
   const [heroImage1, setHeroImage1] = useState('https://images.unsplash.com/photo-1522202176988-66273c2fd55f?q=80&w=1600');
   const [heroImage2, setHeroImage2] = useState('https://images.unsplash.com/photo-1516321318423-f06f85e504b3?q=80&w=1600');
   const [heroImage3, setHeroImage3] = useState('https://images.unsplash.com/photo-1434030216411-0b793f4b4173?q=80&w=1600');
+
+  // Landing Feature Cards
+  const [card1Title, setCard1Title] = useState("AI Personal Tutor");
+  const [card1Desc, setCard1Desc] = useState("Stuck on a Physics equation or Chemistry reaction? Our AI tutor breaks down complex problems into step-by-step explanations instantly.");
+  const [card2Title, setCard2Title] = useState("Exact CBT Replica");
+  const [card2Desc, setCard2Desc] = useState("Our exam interface mimics the official JAMB UTME testing environment, including timer controls, question grid navigation, and key shortcuts.");
+  const [card3Title, setCard3Title] = useState("Weakness Analytics");
+  const [card3Desc, setCard3Desc] = useState("We measure your speed and accuracy per topic to recommend customized drills before exam day.");
+  const [card4Title, setCard4Title] = useState("National Mocks & Battles");
+  const [card4Desc, setCard4Desc] = useState("Compete against thousands of Nigerian students in weekly live tournaments and view your national percentile.");
+  const [card5Title, setCard5Title] = useState("Guardian & Parent Portal");
+  const [card5Desc, setCard5Desc] = useState("Parents receive transparent weekly email progress summaries and live dashboard tracking for peace of mind.");
+
   const [paystackKey, setPaystackKey] = useState('');
   const [stripeKey, setStripeKey] = useState('');
   
@@ -47,6 +62,11 @@ export const SettingsTab = () => {
       const ft = data.find(s => s.setting_key === 'feature_toggles')?.setting_value;
       const keys = data.find(s => s.setting_key === 'api_keys')?.setting_value;
       const globalConf = data.find(s => s.setting_key === 'global_config')?.setting_value;
+      if (globalConf) {
+        if (globalConf.jamb_date) setJambDate(globalConf.jamb_date);
+        if (globalConf.telegram_support_link) setTelegramSupportLink(globalConf.telegram_support_link);
+        if (globalConf.telegram_announcement_link) setTelegramAnnouncementLink(globalConf.telegram_announcement_link);
+      }
       
       const landingConf = data.find(s => s.setting_key === 'landing_config')?.setting_value;
       if (landingConf) {
@@ -57,6 +77,16 @@ export const SettingsTab = () => {
           setHeroImage2(landingConf.hero_images[1]);
           setHeroImage3(landingConf.hero_images[2]);
         }
+        if (landingConf.card1_title) setCard1Title(landingConf.card1_title);
+        if (landingConf.card1_desc) setCard1Desc(landingConf.card1_desc);
+        if (landingConf.card2_title) setCard2Title(landingConf.card2_title);
+        if (landingConf.card2_desc) setCard2Desc(landingConf.card2_desc);
+        if (landingConf.card3_title) setCard3Title(landingConf.card3_title);
+        if (landingConf.card3_desc) setCard3Desc(landingConf.card3_desc);
+        if (landingConf.card4_title) setCard4Title(landingConf.card4_title);
+        if (landingConf.card4_desc) setCard4Desc(landingConf.card4_desc);
+        if (landingConf.card5_title) setCard5Title(landingConf.card5_title);
+        if (landingConf.card5_desc) setCard5Desc(landingConf.card5_desc);
       }
 
       if (mm) {
@@ -106,14 +136,28 @@ export const SettingsTab = () => {
         },
         {
           setting_key: 'global_config',
-          setting_value: { jamb_date: jambDate }
+          setting_value: { 
+            jamb_date: jambDate,
+            telegram_support_link: telegramSupportLink,
+            telegram_announcement_link: telegramAnnouncementLink
+          }
         },
         {
           setting_key: 'landing_config',
           setting_value: {
             title: landingTitle,
             subtitle: landingSubtitle,
-            hero_images: [heroImage1, heroImage2, heroImage3]
+            hero_images: [heroImage1, heroImage2, heroImage3],
+            card1_title: card1Title,
+            card1_desc: card1Desc,
+            card2_title: card2Title,
+            card2_desc: card2Desc,
+            card3_title: card3Title,
+            card3_desc: card3Desc,
+            card4_title: card4Title,
+            card4_desc: card4Desc,
+            card5_title: card5Title,
+            card5_desc: card5Desc
           }
         }
       ], { onConflict: 'setting_key' });
@@ -233,13 +277,77 @@ export const SettingsTab = () => {
                   className="bg-slate-950 border-slate-800 font-mono text-xs"
                 />
               </div>
+
+              <div className="pt-4 border-t border-slate-800 space-y-4">
+                <h4 className="text-sm font-bold text-emerald-400">Landing Page Feature Cards Customization</h4>
+                
+                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 1 (Double Span)</span>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 1 Title</label>
+                    <Input value={card1Title} onChange={e => setCard1Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 1 Description</label>
+                    <Input value={card1Desc} onChange={e => setCard1Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 2</span>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 2 Title</label>
+                    <Input value={card2Title} onChange={e => setCard2Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 2 Description</label>
+                    <Input value={card2Desc} onChange={e => setCard2Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 3</span>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 3 Title</label>
+                    <Input value={card3Title} onChange={e => setCard3Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 3 Description</label>
+                    <Input value={card3Desc} onChange={e => setCard3Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 4</span>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 4 Title</label>
+                    <Input value={card4Title} onChange={e => setCard4Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 4 Description</label>
+                    <Input value={card4Desc} onChange={e => setCard4Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                </div>
+
+                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 5 (Double Span)</span>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 5 Title</label>
+                    <Input value={card5Title} onChange={e => setCard5Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-slate-400 font-medium">Card 5 Description</label>
+                    <Input value={card5Desc} onChange={e => setCard5Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
           <Card className="bg-slate-900 border-slate-800 text-slate-100">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Power className="w-5 h-5 text-blue-400" /> Exam Countdown Config
+                <Power className="w-5 h-5 text-blue-400" /> Exam Countdown & Telegram Settings
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -249,9 +357,33 @@ export const SettingsTab = () => {
                   type="datetime-local" 
                   value={jambDate ? jambDate.slice(0, 16) : ''} 
                   onChange={e => setJambDate(new Date(e.target.value).toISOString())}
-                  className="bg-slate-800 border-slate-700 text-white" 
+                  className="bg-slate-850 border-slate-700 text-white" 
                 />
                 <p className="text-xs text-slate-500">Controls the real-time exam countdown timer across student dashboards.</p>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <label className="text-sm text-slate-400 font-medium">Telegram Support System Invite Link</label>
+                <Input 
+                  type="url" 
+                  value={telegramSupportLink} 
+                  onChange={e => setTelegramSupportLink(e.target.value)}
+                  placeholder="https://t.me/..."
+                  className="bg-slate-850 border-slate-700 text-white font-mono text-xs" 
+                />
+                <p className="text-xs text-slate-500">Official support link where students and guardians request assistance.</p>
+              </div>
+
+              <div className="space-y-2 pt-2 border-t border-slate-800/60">
+                <label className="text-sm text-slate-400 font-medium">Telegram Announcements Channel Link</label>
+                <Input 
+                  type="url" 
+                  value={telegramAnnouncementLink} 
+                  onChange={e => setTelegramAnnouncementLink(e.target.value)}
+                  placeholder="https://t.me/..."
+                  className="bg-slate-850 border-slate-700 text-white font-mono text-xs" 
+                />
+                <p className="text-xs text-slate-500">Official channel link for sharing updates, schedules, and materials.</p>
               </div>
             </CardContent>
           </Card>
