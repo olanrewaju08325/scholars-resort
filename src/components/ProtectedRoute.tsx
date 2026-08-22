@@ -49,8 +49,12 @@ const ProtectedRoute = () => {
 
   if (loading) return <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400">Loading workspace...</div>;
 
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const userEmail = (user?.email || profile?.email || '').toLowerCase().trim();
+  const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || profile?.role === 'admin';
+
   // Block access if maintenance mode is enabled AND user is not an admin
-  if (maintenance.enabled && profile?.role !== 'admin') {
+  if (maintenance.enabled && !isMasterAdmin) {
     return (
       <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-center p-6">
         <ShieldAlert className="w-16 h-16 text-red-500 mb-6" />
@@ -88,10 +92,6 @@ const ProtectedRoute = () => {
   if (profile?.role === 'student' && profile?.onboarding_completed !== true) {
     return <Navigate to="/onboarding" replace />;
   }
-
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  const userEmail = (user?.email || profile?.email || '').toLowerCase().trim();
-  const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || profile?.role === 'admin';
 
   // 2. Once onboarded, if student hasn't paid, hit the paywall. (Admins & Guardians are exempt)
   if (!isMasterAdmin && !profile?.has_paid && profile?.role !== 'guardian') {

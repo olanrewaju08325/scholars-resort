@@ -74,8 +74,8 @@ export default function Admin() {
 
   const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
   const isAdmin = profile?.role === 'admin' || 
-                  (profile?.email && AUTHORIZED_ADMIN_EMAILS.includes(profile.email)) || 
-                  (user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email));
+                  (profile?.email && AUTHORIZED_ADMIN_EMAILS.includes(profile.email.toLowerCase().trim())) || 
+                  (user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email.toLowerCase().trim()));
 
   if (!isAdmin) {
     return (
