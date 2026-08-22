@@ -89,8 +89,12 @@ const ProtectedRoute = () => {
     return <Navigate to="/onboarding" replace />;
   }
 
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const userEmail = (user?.email || profile?.email || '').toLowerCase().trim();
+  const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || profile?.role === 'admin';
+
   // 2. Once onboarded, if student hasn't paid, hit the paywall. (Admins & Guardians are exempt)
-  if (!profile?.has_paid && profile?.role !== 'admin' && profile?.role !== 'guardian') {
+  if (!isMasterAdmin && !profile?.has_paid && profile?.role !== 'guardian') {
     return <Navigate to="/pricing" replace />;
   }
 

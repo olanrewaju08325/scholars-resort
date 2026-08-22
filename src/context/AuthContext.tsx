@@ -52,7 +52,7 @@ const AuthContext = createContext<AuthContextType>({
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
-export const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com'];
+export const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -127,6 +127,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!isMounted.current) return;
 
       if (loadedProfile) {
+        try {
+          const localOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
+          if (localOverrides[userId]) {
+            loadedProfile = { ...loadedProfile, ...localOverrides[userId] };
+          }
+        } catch {}
+
         // Master admin auto-elevation check using both profile and authenticated user email sources
         const currentEmail = (user?.email || loadedProfile.email || '').toLowerCase().trim();
         const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === currentEmail);
@@ -141,7 +148,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             email: currentEmail, 
             has_paid: true, 
             onboarding_completed: true 
-          }).eq('id', userId).then();
+            }).eq('id', userId).then();
         }
         
         commitProfile(loadedProfile);

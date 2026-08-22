@@ -68,7 +68,7 @@ export const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ chil
     }
   };
 
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com'];
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
   const isAdmin = 
     profile?.role === 'admin' || 
     (user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email)) ||
