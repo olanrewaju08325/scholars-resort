@@ -80,7 +80,7 @@ export const SubjectsTab = () => {
         // Fetch ALL dynamic questions without row caps (up to 50,000 records)
         const { data: qData, count: totalDbCount } = await supabase
           .from('questions')
-          .select('id, subject_id, exam_year, subjects(id, name)', { count: 'exact' })
+          .select('id, subject_id, exam_year', { count: 'exact' })
           .limit(50000);
 
         totalQs = totalDbCount || qData?.length || 0;
@@ -96,7 +96,7 @@ export const SubjectsTab = () => {
 
         if (qData) {
           qData.forEach((q: any) => {
-            const rawSub = q.subjects?.name || q.subject_id;
+            const rawSub = q.subject_id;
             const canonical = normalizeSubjectName(rawSub || '');
             const exYear = q.exam_year || '';
 

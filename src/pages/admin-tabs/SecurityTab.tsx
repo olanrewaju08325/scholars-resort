@@ -44,15 +44,33 @@ export const SecurityTab = () => {
   };
 
   const fetchSecurityLogs = async () => {
-    // Fetch failed login attempts from activity logs if any, or high-risk actions
-    const { data } = await supabase
-      .from('activity_logs')
-      .select('*, profiles(full_name, email)')
-      .in('action', ['failed_login', 'password_reset', 'account_locked', 'role_changed'])
-      .order('created_at', { ascending: false })
-      .limit(15);
-      
-    if (data) setSecurityLogs(data);
+    try {
+      // Fetch failed login attempts from activity logs if any, or high-risk actions
+      const { data: rawLogs } = await supabase
+        .from('activity_logs')
+        .select('*')
+        .in('action', ['failed_login', 'password_reset', 'account_locked', 'role_changed'])
+        .order('created_at', { ascending: false })
+        .limit(15);
+        
+      if (rawLogs && rawLogs.length > 0) {
+        const userIds = Array.from(new Set(rawLogs.map(l => l.user_id).filter(Boolean)));
+        let profileMap: Record<string, any> = {};
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, full_name, email').in('id', userIds);
+          profiles?.forEach(p => { profileMap[p.id] = p; });
+        }
+        const formatted = rawLogs.map(l => ({
+          ...l,
+          profiles: profileMap[l.user_id] || { full_name: 'System User', email: '' }
+        }));
+        setSecurityLogs(formatted);
+      } else {
+        setSecurityLogs([]);
+      }
+    } catch {
+      setSecurityLogs([]);
+    }
   };
 
   const searchUser = async (e: React.FormEvent) => {

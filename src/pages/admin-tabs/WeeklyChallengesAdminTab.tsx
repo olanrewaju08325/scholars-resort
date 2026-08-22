@@ -42,13 +42,22 @@ export const WeeklyChallengesAdminTab = () => {
 
   const fetchChallenges = async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('weekly_challenges')
-      .select('*')
-      .order('week_start', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from('weekly_challenges')
+        .select('*')
+        .order('week_start', { ascending: false });
 
-    if (!error && data) setChallenges(data);
-    setLoading(false);
+      if (!error && data) {
+        setChallenges(data);
+      } else {
+        setChallenges([]);
+      }
+    } catch {
+      setChallenges([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Pull real question from database matching subject and difficulty

@@ -45,16 +45,19 @@ export const AnalyticsTab = () => {
         // Exam Analytics
         const { data: exams } = await supabase
           .from('exam_sessions')
-          .select('score, total_questions, created_at')
-          .not('score', 'is', null);
+          .select('*')
+          .limit(200);
 
         const examMap = last7Days.reduce((acc, date) => ({ ...acc, [date]: { exams: 0, avgScore: 0, sumScore: 0 } }), {} as Record<string, any>);
         
-        exams?.forEach(e => {
-          const date = e.created_at.split('T')[0];
-          if (examMap[date]) {
+        exams?.forEach((e: any) => {
+          const rawDate = e.created_at || e.started_at;
+          if (!rawDate) return;
+          const date = rawDate.split('T')[0];
+          if (examMap[date] && e.score !== null && e.score !== undefined) {
             examMap[date].exams += 1;
-            const percentage = (e.score / (e.total_questions || 1)) * 100;
+            const total = Number(e.total_questions) || 40;
+            const percentage = (Number(e.score) / total) * 100;
             examMap[date].sumScore += percentage;
             examMap[date].avgScore = Math.round(examMap[date].sumScore / examMap[date].exams);
           }

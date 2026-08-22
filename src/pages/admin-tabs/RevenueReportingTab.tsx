@@ -65,14 +65,31 @@ export const RevenueReportingTab = () => {
 
   const fetchPayments = useCallback(async () => {
     setLoading(true);
-    const { data, error } = await supabase
-      .from('manual_payments')
-      .select('*, profiles(full_name, email)')
-      .order('created_at', { ascending: false });
+    try {
+      const { data: rawPayments, error } = await supabase
+        .from('manual_payments')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (!error && data) {
-      setPayments(data);
-      calculateStats(data);
+      if (!error && rawPayments) {
+        const userIds = Array.from(new Set(rawPayments.map(p => p.user_id).filter(Boolean)));
+        let profileMap: Record<string, any> = {};
+        if (userIds.length > 0) {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', userIds);
+          profiles?.forEach(p => { profileMap[p.id] = p; });
+        }
+        const data = rawPayments.map(p => ({
+          ...p,
+          profiles: profileMap[p.user_id] || { full_name: 'Unknown User', email: p.email || 'N/A' }
+        }));
+        setPayments(data);
+        calculateStats(data);
+      }
+    } catch (e) {
+      console.warn('Payments load error:', e);
     }
     setLoading(false);
   }, [calculateStats]);

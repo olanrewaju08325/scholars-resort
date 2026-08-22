@@ -314,9 +314,10 @@ export const MaterialsTab = () => {
           }).catch(() => null);
         } catch {}
 
-        // 2. Perform direct client Supabase deletions with safe error handling (NO .catch chaining on Postgrest builders)
+        // 2. Perform direct client Supabase deletions with safe error handling
         try {
-          if (id) {
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id || '');
+          if (id && isUuid) {
             await supabase.from('materials').delete().eq('id', id);
             await supabase.from('library_materials').delete().eq('id', id);
           }

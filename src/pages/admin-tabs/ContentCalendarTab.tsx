@@ -35,7 +35,7 @@ export const ContentCalendarTab = () => {
     // Fetch announcements
     const { data: anns, error: annsError } = await supabase
       .from('announcements')
-      .select('id, title, created_at, publish_at');
+      .select('id, title, created_at');
 
     let combined: any[] = [];
     
@@ -48,8 +48,8 @@ export const ContentCalendarTab = () => {
     
     if (anns && !annsError) {
       combined = [...combined, ...anns
-        .filter(a => a.publish_at || a.created_at)
-        .map(a => ({ id: a.id, title: a.title, date: new Date(a.publish_at || a.created_at), type: 'announcement', original: a }))
+        .filter(a => a.created_at)
+        .map(a => ({ id: a.id, title: a.title, date: new Date(a.created_at), type: 'announcement', original: a }))
       ];
     }
 

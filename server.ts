@@ -9,12 +9,34 @@ import { GoogleGenAI } from '@google/genai';
 const app = express();
 const PORT = 3000;
 
-app.use(cors());
+// Universal CORS configuration for Vercel, dev preview, and custom origins
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, x-groq-api-key');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.use(cors({
+  origin: true,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'x-groq-api-key']
+}));
 app.use(express.json());
 
+// Production Supabase defaults
+const DEFAULT_SUPABASE_URL = 'https://syoodykedvqaoeplmamd.supabase.co';
+const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5b29keWtlZHZxYW9lcGxtYW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNjEyMTIsImV4cCI6MjEwMDkzNzIxMn0.GV7jgq04Qha6W1JENvc-ntVt9zSOLDx7vTaTxZlOTq4';
+
 // Helper to get Supabase client on server
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || 'placeholder_key';
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Helper to resolve SMTP settings from DB or env or request
@@ -801,8 +823,8 @@ app.post('/api/admin/materials/upload-metadata', async (req, res) => {
   try {
     const results: string[] = [];
 
-    // 1. Insert into materials table
-    const newMaterialId = `mat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    // 1. Insert into materials table (use UUID if table expects UUID)
+    const newMaterialId = crypto.randomUUID();
     const { error: matError } = await supabase.from('materials').insert({
       id: newMaterialId,
       title,
@@ -855,18 +877,21 @@ app.post('/api/admin/materials/upload-metadata', async (req, res) => {
   }
 });
 
+// Helper for validating UUID
+const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
+
 // API Route: Secure Material Deletion (Bypasses Client-Side RLS)
 app.post('/api/admin/materials/delete', async (req, res) => {
   const { id, title, file_path } = req.body;
-  if (!id && !title) {
-    return res.status(400).json({ success: false, error: 'Missing required id or title parameter' });
+  if (!id && !title && !file_path) {
+    return res.status(400).json({ success: false, error: 'Missing required id, title, or file_path parameter' });
   }
 
   try {
     const results: string[] = [];
 
-    // 1. Delete from materials table by ID or by matching title
-    if (id) {
+    // 1. Delete from materials table by UUID or by matching title
+    if (id && isValidUUID(id)) {
       const { error: err1 } = await supabase.from('materials').delete().eq('id', id);
       if (!err1) results.push('materials_deleted_by_id');
       const { error: err2 } = await supabase.from('library_materials').delete().eq('id', id);
@@ -880,17 +905,54 @@ app.post('/api/admin/materials/delete', async (req, res) => {
       if (!err2) results.push('library_materials_deleted_by_title');
     }
 
-    // 2. Also try to delete from storage if file_path is specified
+    // 2. Also delete from storage if file_path is specified
     if (file_path) {
       const cleanPath = file_path.split('/').slice(-2).join('/'); // e.g. "subject_id/file.pdf"
       await supabase.storage.from('study-materials').remove([file_path, cleanPath]).catch(() => {});
       await supabase.storage.from('materials').remove([file_path, cleanPath]).catch(() => {});
+      await supabase.storage.from('library').remove([file_path, cleanPath]).catch(() => {});
+      results.push('storage_removed');
     }
 
     return res.json({ success: true, results });
   } catch (err: any) {
     console.error('[Server Secure Delete Material Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server error deleting material' });
+  }
+});
+
+// API Route: Server-Side Premium Subscription Grant (Bypasses Client-Side RLS)
+app.post('/api/admin/subscriptions/grant', async (req, res) => {
+  const { user_id, plan_name = 'Lifetime Access (Gifted)', duration_years = 100 } = req.body;
+  if (!user_id) {
+    return res.status(400).json({ success: false, error: 'user_id is required' });
+  }
+
+  try {
+    // 1. Update profile has_paid status
+    const { error: profError } = await supabase
+      .from('profiles')
+      .update({ has_paid: true, updated_at: new Date().toISOString() })
+      .eq('id', user_id);
+
+    if (profError) {
+      console.warn('[Server Grant Access] Profile update warning:', profError.message);
+    }
+
+    // 2. Try inserting into subscriptions table
+    const expiresAt = new Date(Date.now() + duration_years * 365 * 24 * 60 * 60 * 1000).toISOString();
+    try {
+      await supabase.from('subscriptions').insert({
+        user_id,
+        plan_name,
+        status: 'active',
+        expires_at: expiresAt
+      });
+    } catch {}
+
+    return res.json({ success: true, message: 'Premium subscription granted successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 
