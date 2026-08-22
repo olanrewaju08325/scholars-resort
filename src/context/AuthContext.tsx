@@ -55,11 +55,18 @@ export const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamil
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(() => {
+    try {
+      const cached = localStorage.getItem('scholars_cached_profile');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return null;
+  });
   const [isDeviceLocked, setIsDeviceLocked] = useState(false);
   const [loading, setLoading] = useState(true);
   const [resetRequesting, setResetRequesting] = useState(false);
   const isMounted = useRef(true);
+  const isFetchingProfile = useRef(false);
 
   useEffect(() => {
     isMounted.current = true;
@@ -67,18 +74,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   /**
-   * Fetch profile with retry logic and timeout to handle ERR_CONNECTION_CLOSED.
-   * Retries up to 3 times with 1-second delay between attempts.
+   * Save loaded profile to state & local persistent cache
    */
+  const commitProfile = (p: Profile) => {
+    if (!isMounted.current) return;
+    setProfile(p);
+    try {
+      localStorage.setItem('scholars_cached_profile', JSON.stringify(p));
+    } catch {}
+  };
+
   /**
-   * Fetch profile with retry logic and timeout to handle ERR_CONNECTION_CLOSED.
-   * Retries up to 5 times with exponential backoff delay between attempts.
+   * Fetch profile with retry logic and exponential backoff to handle network drops and connection resets.
+   * Retries up to 5 times with exponential backoff and jitter.
    */
   const fetchProfile = async (userId: string, attempt = 1): Promise<void> => {
     const MAX_ATTEMPTS = 5;
-    const TIMEOUT_MS = 8000;
+    const TIMEOUT_MS = 10000;
 
     try {
+      isFetchingProfile.current = true;
       const fetchPromise = supabase
         .from('profiles')
         .select('*')
@@ -95,21 +110,31 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (data && !error) {
         let loadedProfile = data as Profile;
-        // Master admin auto-elevation check using both profile and authenticated user email sources
-        const currentEmail = user?.email || loadedProfile.email || '';
-        const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.includes(currentEmail);
         
-        if (isMasterAdmin && (loadedProfile.role !== 'admin' || !loadedProfile.email)) {
+        // Master admin auto-elevation check using both profile and authenticated user email sources
+        const currentEmail = (user?.email || loadedProfile.email || '').toLowerCase().trim();
+        const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === currentEmail);
+        
+        if (isMasterAdmin) {
           loadedProfile.role = 'admin';
           loadedProfile.email = currentEmail;
-          supabase.from('profiles').update({ role: 'admin', email: currentEmail }).eq('id', userId).then();
+          loadedProfile.has_paid = true;
+          loadedProfile.onboarding_completed = true;
+          supabase.from('profiles').update({ 
+            role: 'admin', 
+            email: currentEmail, 
+            has_paid: true, 
+            onboarding_completed: true 
+          }).eq('id', userId).then();
         }
-        setProfile(loadedProfile);
+        
+        commitProfile(loadedProfile);
         setLoading(false);
       } else if (!data && !error) {
         // Profile row does not exist yet. Auto-create in DB to ensure foreign key constraints pass
         console.warn(`[AuthContext] No profile record found for user ${userId}. Creating default profile...`);
-        const isAdminEmail = user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email);
+        const userEmail = (user?.email || '').toLowerCase().trim();
+        const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
         const metaRole = user?.user_metadata?.role;
         const pendingInvite = localStorage.getItem('pending_guardian_code');
         const assignedRole: Profile['role'] = isAdminEmail 
@@ -123,6 +148,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
           email: user?.email || '',
           has_paid: isAdminEmail || isGuardian ? true : false,
+          onboarding_completed: isAdminEmail ? true : false,
           streak_days: 0,
           xp: 0,
           coins: 0,
@@ -136,25 +162,26 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             .maybeSingle();
 
           if (isMounted.current) {
-            setProfile((upsertData as Profile) || (newProfile as Profile));
+            commitProfile((upsertData as Profile) || (newProfile as Profile));
             setLoading(false);
           }
         } catch {
           if (isMounted.current) {
-            setProfile(newProfile as Profile);
+            commitProfile(newProfile as Profile);
             setLoading(false);
           }
         }
       } else if (error && attempt < MAX_ATTEMPTS) {
         // Retry on transient errors (connection closed, network blip)
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 16000);
-        console.warn(`[AuthContext] Profile fetch attempt ${attempt} failed (${error.message}). Retrying in ${delay}ms...`);
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 16000) + Math.random() * 300;
+        console.warn(`[AuthContext] Profile fetch attempt ${attempt} failed (${error.message}). Retrying in ${Math.round(delay)}ms...`);
         await new Promise(r => setTimeout(r, delay));
         return fetchProfile(userId, attempt + 1);
       } else {
-        console.warn('[AuthContext] Profile fetch failed, using fallback profile:', error);
+        console.warn('[AuthContext] Profile fetch failed, maintaining existing or fallback profile:', error);
         if (isMounted.current) {
-          const isAdminEmail = user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email);
+          const userEmail = (user?.email || '').toLowerCase().trim();
+          const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
           const metaRole = user?.user_metadata?.role;
           const pendingInvite = localStorage.getItem('pending_guardian_code');
           const fallbackRole: Profile['role'] = isAdminEmail 
@@ -162,46 +189,55 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             : (metaRole === 'guardian' || metaRole === 'parent' || !!pendingInvite ? 'guardian' : 'student');
           const isGuardian = fallbackRole === 'guardian';
 
-          setProfile({
-            id: userId,
-            role: fallbackRole,
-            full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
-            email: user?.email || '',
-            has_paid: isAdminEmail || isGuardian ? true : false,
-            xp: 0,
-            coins: 0,
-          });
+          if (!profile) {
+            commitProfile({
+              id: userId,
+              role: fallbackRole,
+              full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
+              email: user?.email || '',
+              has_paid: isAdminEmail || isGuardian ? true : false,
+              onboarding_completed: isAdminEmail ? true : false,
+              xp: 0,
+              coins: 0,
+            });
+          }
           setLoading(false);
         }
       }
     } catch (err: any) {
       if (!isMounted.current) return;
       if (attempt < MAX_ATTEMPTS) {
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 16000);
-        console.warn(`[AuthContext] Profile fetch attempt ${attempt} threw (${err.message}). Retrying in ${delay}ms...`);
+        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 16000) + Math.random() * 300;
+        console.warn(`[AuthContext] Profile fetch attempt ${attempt} threw (${err.message}). Retrying in ${Math.round(delay)}ms...`);
         await new Promise(r => setTimeout(r, delay));
         return fetchProfile(userId, attempt + 1);
       }
       console.warn('[AuthContext] Profile fetch threw error, using fallback profile:', err);
       if (isMounted.current) {
-        const isAdminEmail = user?.email && AUTHORIZED_ADMIN_EMAILS.includes(user.email);
+        const userEmail = (user?.email || '').toLowerCase().trim();
+        const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
         const metaRole = user?.user_metadata?.role;
         const fallbackRole: Profile['role'] = isAdminEmail 
           ? 'admin' 
           : (metaRole === 'guardian' || metaRole === 'parent' ? 'guardian' : 'student');
         const isGuardian = fallbackRole === 'guardian';
 
-        setProfile({
-          id: userId,
-          role: fallbackRole,
-          full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
-          email: user?.email || '',
-          has_paid: isAdminEmail || isGuardian ? true : false,
-          xp: 0,
-          coins: 0,
-        });
+        if (!profile) {
+          commitProfile({
+            id: userId,
+            role: fallbackRole,
+            full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
+            email: user?.email || '',
+            has_paid: isAdminEmail || isGuardian ? true : false,
+            onboarding_completed: isAdminEmail ? true : false,
+            xp: 0,
+            coins: 0,
+          });
+        }
         setLoading(false);
       }
+    } finally {
+      isFetchingProfile.current = false;
     }
   };
 
@@ -209,19 +245,47 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (user) await fetchProfile(user.id);
   };
 
+  // Persistent session verification & heartbeat
   useEffect(() => {
-    // Get session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!isMounted.current) return;
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      } else {
-        setLoading(false);
-      }
-    });
+    let sessionInterval: NodeJS.Timeout;
 
-    // Listen for auth state changes
+    const verifySession = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) {
+          console.warn('[AuthContext] Session verification warning:', error.message);
+          return;
+        }
+        if (!isMounted.current) return;
+
+        if (session?.user) {
+          setUser(session.user);
+          if (!profile || profile.id !== session.user.id) {
+            fetchProfile(session.user.id);
+          }
+        } else {
+          // If no active session from Supabase but user was cached, attempt token refresh
+          if (user) {
+            const { data: refreshed } = await supabase.auth.refreshSession();
+            if (refreshed?.user) {
+              setUser(refreshed.user);
+            } else {
+              setUser(null);
+              setProfile(null);
+              localStorage.removeItem('scholars_cached_profile');
+            }
+          }
+          setLoading(false);
+        }
+      } catch (e) {
+        console.warn('[AuthContext] verifySession exception:', e);
+      }
+    };
+
+    // 1. Initial verification on mount
+    verifySession();
+
+    // 2. Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (!isMounted.current) return;
       setUser(session?.user ?? null);
@@ -229,11 +293,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         fetchProfile(session.user.id);
       } else {
         setProfile(null);
+        localStorage.removeItem('scholars_cached_profile');
         setLoading(false);
       }
     });
 
-    return () => subscription.unsubscribe();
+    // 3. Periodic heartbeat verification every 60 seconds
+    sessionInterval = setInterval(verifySession, 60000);
+
+    // 4. Re-verify when tab becomes visible or focused
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        verifySession();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', verifySession);
+
+    return () => {
+      subscription.unsubscribe();
+      clearInterval(sessionInterval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', verifySession);
+    };
   }, []);
 
   // Listen to profile changes in Realtime (for instant has_paid update after admin approval)
@@ -333,31 +415,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     <AuthContext.Provider value={{ user, profile, isDeviceLocked, loading, signOut, refreshProfile }}>
       {!loading && isDeviceLocked ? (
         <div className="min-h-screen bg-slate-950 text-slate-200 flex items-center justify-center p-4">
-          <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-red-500/10 flex items-center justify-center mx-auto mb-5">
-              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="max-w-md w-full bg-slate-900 border border-slate-800 p-8 rounded-2xl text-center shadow-2xl space-y-4">
+            <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto mb-2">
+              <svg className="w-8 h-8 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m0 0v2m0-2h2m-2 0H10m2-8V5a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2" />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-red-400 mb-3">Device Locked</h2>
-            <p className="text-slate-400 mb-2 text-sm leading-relaxed">
-              Your Scholars Resort account is currently tied to a different device.
-            </p>
-            <p className="text-slate-500 text-xs mb-6">
-              You are allowed 1 device reset per month. Submit a request and an administrator will approve it within 24 hours.
-            </p>
+            <h2 className="text-2xl font-bold text-amber-400">Device Security Policy</h2>
+            
+            <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 text-left space-y-2 text-xs text-slate-300">
+              <p className="font-semibold text-slate-200 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 inline-block"></span>
+                Why are you seeing this screen?
+              </p>
+              <p className="text-slate-400 leading-relaxed">
+                To guarantee examination integrity, UTME mock score fairness, and account security, each student account is paired to <strong>one active device</strong>.
+              </p>
+              <p className="text-slate-400 leading-relaxed">
+                Your account is currently bound to your previous device. You can continue studying on your original device, or click below to submit a 1-click device reset request.
+              </p>
+            </div>
+
             <button
               onClick={handleRequestDeviceReset}
               disabled={resetRequesting}
-              className="w-full h-12 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+              className="w-full h-12 bg-primary text-primary-foreground font-bold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-lg shadow-primary/20 text-sm"
             >
-              {resetRequesting ? 'Submitting...' : 'Request Device Reset'}
+              {resetRequesting ? 'Submitting Reset Request...' : 'Request Instant Device Reset'}
             </button>
             <button
               onClick={signOut}
-              className="w-full mt-3 h-10 text-sm text-slate-400 hover:text-slate-200 transition-colors"
+              className="w-full h-10 text-xs text-slate-400 hover:text-slate-200 transition-colors"
             >
-              Sign out instead
+              Sign out and use original device
             </button>
           </div>
         </div>

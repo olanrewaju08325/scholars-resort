@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   Target, BookOpen, Clock, ChevronRight, CheckCircle2, 
   GraduationCap, Sparkles, School, Trophy, Users, 
-  ArrowRight, Brain, Zap
+  ArrowRight, Brain, Zap, Smartphone, ShieldCheck, Lock, Info
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,8 +40,8 @@ const Onboarding = () => {
     if (profile) {
       if (profile.role === 'guardian') {
         navigate('/guardian', { replace: true });
-      } else if (profile.role === 'admin') {
-        navigate('/admin', { replace: true });
+      } else if (profile.role === 'admin' || (profile.email && ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(profile.email))) {
+        navigate('/scholarresortadmin@benedict', { replace: true });
       } else if (profile.onboarding_completed) {
         navigate('/dashboard', { replace: true });
       }
@@ -143,7 +143,7 @@ const Onboarding = () => {
                   You're about to begin your journey to a 300+ JAMB score. Let's set up your personalised learning experience in 2 minutes.
                 </p>
               </div>
-              <div className="grid grid-cols-3 gap-4 py-4">
+              <div className="grid grid-cols-3 gap-4 py-2">
                 {[
                   { icon: Brain, label: 'AI-Powered', color: 'text-purple-400' },
                   { icon: Trophy, label: 'Gamified', color: 'text-yellow-400' },
@@ -157,6 +157,18 @@ const Onboarding = () => {
                   </div>
                 ))}
               </div>
+
+              {/* Single Device Policy Information */}
+              <div className="p-3.5 bg-slate-950/60 border border-slate-800 rounded-xl text-left space-y-1.5 text-xs">
+                <div className="flex items-center gap-2 text-blue-400 font-semibold text-xs">
+                  <ShieldCheck className="w-4 h-4 text-blue-400 shrink-0" />
+                  <span>Single-Device Protection Policy</span>
+                </div>
+                <p className="text-slate-400 leading-relaxed text-[11px]">
+                  Your account is protected and tied to <strong>1 active device</strong> to ensure UTME mock exam integrity and leaderboard fairness. If you ever switch devices or phones, you can request an instant 1-click reset.
+                </p>
+              </div>
+
               <Button className="w-full h-12 text-lg" onClick={() => setStep(2)}>
                 Get Started <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
@@ -312,6 +324,7 @@ const Onboarding = () => {
                   { label: 'Dream University', value: targetUni || 'Not set', icon: School },
                   { label: 'UTME Subjects', value: selectedSubjects.join(', '), icon: BookOpen },
                   { label: 'Daily Goal', value: `${dailyGoal} minutes`, icon: Clock },
+                  { label: 'Device Pairing', value: '1 Active Device (Hardware Locked)', icon: Smartphone },
                 ].map(({ label, value, icon: Icon }) => (
                   <div key={label} className="flex items-start gap-3">
                     <div className="w-8 h-8 rounded-lg bg-slate-700 flex items-center justify-center shrink-0 mt-0.5">
@@ -324,6 +337,17 @@ const Onboarding = () => {
                   </div>
                 ))}
               </div>
+
+              <div className="p-3 bg-blue-950/30 border border-blue-800/30 rounded-xl text-left text-xs space-y-1">
+                <p className="font-semibold text-blue-300 flex items-center gap-1.5 text-xs">
+                  <Lock className="w-3.5 h-3.5" />
+                  Hardware Security Active
+                </p>
+                <p className="text-slate-400 text-[11px] leading-relaxed">
+                  Launching your dashboard will register this device. If you ever switch to a new phone or tablet, you can easily request a 1-click device reset from the login screen.
+                </p>
+              </div>
+
               <div className="flex gap-3">
                 <Button variant="outline" className="w-1/3" onClick={() => setStep(4)}>Back</Button>
                 <Button 

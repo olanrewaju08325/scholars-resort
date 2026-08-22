@@ -245,6 +245,25 @@ export const SupportTab = () => {
                   </CardDescription>
                 </div>
                 <div className="flex gap-2">
+                  {selectedTicket.category === 'device_reset' && selectedTicket.status !== 'resolved' && (
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={async () => {
+                        try {
+                          await supabase.from('profiles').update({ device_uuid: null }).eq('id', selectedTicket.user_id);
+                          await updateStatus(selectedTicket.id, 'resolved');
+                          await sendNotification(selectedTicket.user_id, "Device Reset Approved", "Your device pairing has been reset by an administrator. You may now log in on your new device.");
+                          toast.success("Student device reset approved!");
+                        } catch {
+                          toast.error("Failed to reset student device.");
+                        }
+                      }} 
+                      className="gap-2 text-amber-400 border-amber-900/30 hover:bg-amber-950 hover:text-amber-300"
+                    >
+                      <CheckCircle className="w-4 h-4" /> Approve & Reset Device
+                    </Button>
+                  )}
                   {selectedTicket.status !== 'resolved' && (
                     <Button variant="outline" size="sm" onClick={() => updateStatus(selectedTicket.id, 'resolved')} className="gap-2 text-green-400 border-green-900/30 hover:bg-green-950 hover:text-green-300">
                       <CheckCircle className="w-4 h-4" /> Mark Resolved

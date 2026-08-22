@@ -951,6 +951,48 @@ app.put('/api/questions/:id', async (req, res) => {
   }
 });
 
+// API Route: Admin Device Reset & Exemption Management
+app.post('/api/admin/device/reset', async (req, res) => {
+  const { user_id, email } = req.body;
+  const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+
+  try {
+    if (email && MASTER_ADMINS.includes(email.toLowerCase().trim())) {
+      // Master admin is perpetually exempt
+      await supabase.from('profiles').update({
+        device_uuid: null,
+        role: 'admin',
+        has_paid: true,
+        onboarding_completed: true
+      }).eq('email', email);
+
+      return res.json({ success: true, message: 'Master admin device exemption enforced.' });
+    }
+
+    if (user_id) {
+      const { error } = await supabase.from('profiles').update({
+        device_uuid: null,
+        updated_at: new Date().toISOString()
+      }).eq('id', user_id);
+
+      if (error) {
+        return res.status(500).json({ success: false, error: error.message });
+      }
+
+      // Also resolve any open device_reset tickets for this user
+      await supabase.from('support_tickets').update({
+        status: 'resolved'
+      }).eq('user_id', user_id).eq('category', 'device_reset');
+
+      return res.json({ success: true, message: 'Device reset successfully. User can now pair a new device.' });
+    }
+
+    return res.status(400).json({ success: false, error: 'user_id or email is required.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Vite middleware for development vs static for production
 async function startServer() {
   if (process.env.NODE_ENV !== 'production') {

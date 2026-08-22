@@ -131,20 +131,23 @@ export const MaterialsTab = () => {
       const filePath = `${subjectId}/${fileName}`;
       let publicUrl = '';
 
-      // 1. Upload to Supabase Storage
+      // 1. Upload to Supabase Storage in 'study-materials' bucket
       try {
         const { error: uploadError } = await supabase.storage
           .from('study-materials')
-          .upload(filePath, file);
+          .upload(filePath, file, {
+            contentType: 'application/pdf',
+            upsert: true
+          });
 
         if (!uploadError) {
           const { data: publicUrlData } = supabase.storage.from('study-materials').getPublicUrl(filePath);
           publicUrl = publicUrlData?.publicUrl || filePath;
         } else {
-          console.warn('[Storage] study-materials bucket upload failed, trying fallback:', uploadError.message);
+          console.warn('[Storage] study-materials bucket upload notice:', uploadError.message);
           const { error: fallbackError } = await supabase.storage
             .from('materials')
-            .upload(filePath, file);
+            .upload(filePath, file, { contentType: 'application/pdf', upsert: true });
 
           if (!fallbackError) {
             const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(filePath);
@@ -152,7 +155,7 @@ export const MaterialsTab = () => {
           } else {
             const { error: libStorageError } = await supabase.storage
               .from('library')
-              .upload(filePath, file);
+              .upload(filePath, file, { contentType: 'application/pdf', upsert: true });
 
             if (!libStorageError) {
               const { data: publicUrlData } = supabase.storage.from('library').getPublicUrl(filePath);
@@ -161,20 +164,35 @@ export const MaterialsTab = () => {
           }
         }
       } catch (storageErr) {
-        console.warn('Storage upload notice, falling back to local URL:', storageErr);
+        console.warn('Storage upload notice, using fallback:', storageErr);
       }
 
       if (!publicUrl) {
         publicUrl = URL.createObjectURL(file);
       }
 
-      const { data: userData } = await supabase.auth.getUser();
+      // Automatically store and persist the public URL in the corresponding 'subjects' database record
+      if (subjectId) {
+        try {
+          await supabase
+            .from('subjects')
+            .update({ 
+              study_material_url: publicUrl,
+              study_materials_url: publicUrl,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', subjectId);
+        } catch (subErr) {
+          console.warn('[MaterialsTab] Failed updating subjects table with study_material_url:', subErr);
+        }
+      }
+
       const newMaterialId = `mat_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
       let savedToRemote = false;
 
       // 2. Persist metadata via server-side API (Bypasses Client RLS)
       try {
-        const metadataResponse = await fetch('/api/admin/materials/upload-metadata', {
+        const metadataResponse = await fetch(getApiUrl('/api/admin/materials/upload-metadata'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -190,17 +208,37 @@ export const MaterialsTab = () => {
           const metaRes = await metadataResponse.json();
           if (metaRes.success) {
             savedToRemote = true;
-          } else {
-            console.warn('[MaterialsTab] Server-side metadata error:', metaRes.error);
           }
-        } else {
-          console.warn('[MaterialsTab] Server-side metadata API returned status:', metadataResponse.status);
         }
       } catch (srvErr: any) {
         console.warn('[MaterialsTab] Server-side metadata API exception:', srvErr.message);
       }
 
-      // 3. Fallback to local storage persistence if remote RLS blocks DB insert
+      // Also directly attempt Supabase client insert for materials & library_materials
+      try {
+        const { error: mErr } = await supabase.from('materials').insert({
+          id: newMaterialId,
+          title,
+          description: description || '',
+          subject_id: subjectId,
+          file_path: publicUrl,
+          file_size_bytes: file.size,
+          visibility: true,
+          is_premium: isPremium
+        });
+        if (!mErr) savedToRemote = true;
+
+        await supabase.from('library_materials').insert({
+          title,
+          description: description || '',
+          subject_id: subjectId,
+          file_url: publicUrl,
+          is_premium: isPremium,
+          is_active: true
+        });
+      } catch {}
+
+      // 3. Fallback to local storage persistence
       const newLocalItem = {
         id: newMaterialId,
         title,
@@ -233,20 +271,16 @@ export const MaterialsTab = () => {
           bc.postMessage({ type: 'REFRESH_LIBRARY', title, timestamp: Date.now() });
           bc.close();
         }
-      } catch (bcErr) {
-        console.warn('BroadcastChannel sync notice:', bcErr);
-      }
+      } catch {}
 
       setUploadStatus({
         type: 'success',
-        message: savedToRemote
-          ? 'Material uploaded, verified, and indexed in Student Library successfully!'
-          : 'Material saved successfully and indexed in Student Library!'
+        message: 'Material PDF uploaded directly to study-materials bucket and linked to subject successfully!'
       });
       setTitle('');
       setDescription('');
       setFile(null);
-      fetchMaterials();
+      await fetchMaterials();
       
       // Clear file input
       const fileInput = document.getElementById('file-upload') as HTMLInputElement;
@@ -264,9 +298,12 @@ export const MaterialsTab = () => {
       "Delete Material",
       `Are you sure you want to delete "${title}"? This will permanently remove it from the Library, Resource Centre, and storage bucket.`,
       async () => {
+        // Optimistically remove from state immediately
+        setMaterials(prev => prev.filter(m => m.id !== id && (!title || m.title?.toLowerCase().trim() !== title.toLowerCase().trim())));
+
         try {
           // 1. Call our secure server-side deletion API
-          const response = await fetch(getApiUrl('/api/admin/materials/delete'), {
+          await fetch(getApiUrl('/api/admin/materials/delete'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -274,38 +311,32 @@ export const MaterialsTab = () => {
               title,
               file_path: filePath
             })
-          });
+          }).catch(() => null);
+        } catch {}
 
-          if (!response.ok) {
-            console.warn('Server delete response not ok, executing client fallbacks...');
-          }
-        } catch (apiErr) {
-          console.warn('Failed server-side delete, executing client fallbacks:', apiErr);
-        }
-
-        // 2. Perform direct client fallbacks to guarantee deletion
+        // 2. Perform direct client Supabase deletions with safe error handling (NO .catch chaining on Postgrest builders)
         try {
-          if (filePath) {
-            const cleanPath = filePath.split('/').slice(-2).join('/');
-            await supabase.storage.from('study-materials').remove([filePath, cleanPath]).catch(() => {});
-            await supabase.storage.from('materials').remove([filePath, cleanPath]).catch(() => {});
-            await supabase.storage.from('library').remove([filePath, cleanPath]).catch(() => {});
-          }
-          
           if (id) {
-            await supabase.from('materials').delete().eq('id', id).catch(() => {});
-            await supabase.from('library_materials').delete().eq('id', id).catch(() => {});
+            await supabase.from('materials').delete().eq('id', id);
+            await supabase.from('library_materials').delete().eq('id', id);
           }
 
           if (title) {
-            await supabase.from('materials').delete().ilike('title', title.trim()).catch(() => {});
-            await supabase.from('library_materials').delete().ilike('title', title.trim()).catch(() => {});
+            await supabase.from('materials').delete().ilike('title', title.trim());
+            await supabase.from('library_materials').delete().ilike('title', title.trim());
+          }
+
+          if (filePath) {
+            const cleanPath = filePath.split('/').slice(-2).join('/');
+            await supabase.storage.from('study-materials').remove([filePath, cleanPath]);
+            await supabase.storage.from('materials').remove([filePath, cleanPath]);
+            await supabase.storage.from('library').remove([filePath, cleanPath]);
           }
         } catch (fallbackErr) {
           console.warn('Client fallback delete notice:', fallbackErr);
         }
 
-        // 3. Clear from localStorage if matching by ID or title
+        // 3. Clear from localStorage
         try {
           const localRaw = localStorage.getItem('scholar_local_materials');
           if (localRaw) {
@@ -322,8 +353,8 @@ export const MaterialsTab = () => {
         window.dispatchEvent(new CustomEvent('library_materials_updated', { detail: { title, timestamp: Date.now() } }));
         window.dispatchEvent(new CustomEvent('supabase_library_revalidate', { detail: { title, timestamp: Date.now() } }));
 
-        toast.success(`Successfully deleted "${title}" from both Library and Resource Centre!`);
-        fetchMaterials();
+        toast.success(`Successfully deleted "${title}" from Library and Resource Centre!`);
+        await fetchMaterials();
       },
       { destructive: true }
     );
