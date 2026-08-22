@@ -249,7 +249,8 @@ export const ensureAllJambSubjectsInDatabase = async (): Promise<any[]> => {
       const inserts = missing.map(m => ({
         name: m.name,
         icon: m.icon,
-        is_active: true
+        is_active: true,
+        is_official: true
       }));
 
       await supabase.from('subjects').upsert(inserts, { onConflict: 'name' });
@@ -267,7 +268,7 @@ export const ensureAllJambSubjectsInDatabase = async (): Promise<any[]> => {
 /**
  * Unifies and standardizes all database subject records and questions in Supabase.
  * Maps variations like 'English', 'English Language', 'use-of-english', 'Literature' to canonical IDs & names,
- * and deletes true duplicate subject records from the database table.
+ * and deletes true duplicate subject records from the database table across all questions without 1000 row caps.
  */
 export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; success: boolean }> => {
   try {
@@ -294,15 +295,20 @@ export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; s
 
     let updatedQuestions = 0;
 
-    // 3a. Remap any string-alias subject_ids in `questions` to master subject UUID
+    // 3a. Remap any string-alias or invalid/orphaned subject_ids in `questions` to master subject UUID
     try {
-      const { data: allQuestions } = await supabase.from('questions').select('id, subject_id');
+      const { data: allQuestions } = await supabase
+        .from('questions')
+        .select('id, subject_id, subject_name, subject')
+        .limit(50000);
+
       if (allQuestions && allQuestions.length > 0) {
         for (const q of allQuestions) {
-          if (q.subject_id && !isUUID(q.subject_id)) {
-            const canonical = normalizeSubjectName(q.subject_id);
+          const rawSub = q.subject_id || q.subject_name || q.subject;
+          if (rawSub) {
+            const canonical = normalizeSubjectName(rawSub);
             const masterId = canonicalMap.get(canonical);
-            if (masterId) {
+            if (masterId && q.subject_id !== masterId) {
               await supabase.from('questions').update({ subject_id: masterId }).eq('id', q.id);
               updatedQuestions++;
             }

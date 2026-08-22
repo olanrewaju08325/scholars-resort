@@ -9,6 +9,7 @@ import { useAuth } from '@/context/AuthContext';
 import { analyzeDocumentWithGroq, extractAllQuestionsFromPdfText } from '@/services/aiService';
 import { extractTextFromFile } from '@/lib/pdfExtractor';
 import { saveCustomQuestions } from '@/lib/offlineStore';
+import { normalizeSubjectName } from '@/utils/subjectUtils';
 
 export const ContentStudioTab = () => {
   const { profile } = useAuth();
@@ -52,7 +53,11 @@ export const ContentStudioTab = () => {
       const { count: totalCount } = await supabase.from('questions').select('id', { count: 'exact', head: true });
       setTotalQuestionsCount(totalCount || 0);
 
-      const { data: allQuestions } = await supabase.from('questions').select('subject_id');
+      const { data: allQuestions } = await supabase
+        .from('questions')
+        .select('subject_id, subject_name, subject')
+        .limit(50000);
+
       const counts: { [id: string]: { name: string; count: number } } = {};
       
       loadedSubjects.forEach((s: any) => {
@@ -61,8 +66,15 @@ export const ContentStudioTab = () => {
 
       if (allQuestions) {
         allQuestions.forEach((q: any) => {
-          if (q.subject_id && counts[q.subject_id]) {
-            counts[q.subject_id].count += 1;
+          const rawSub = q.subject_id || q.subject_name || q.subject;
+          const canonical = normalizeSubjectName(rawSub || '');
+
+          const targetSub = loadedSubjects.find(s => 
+            s.id === q.subject_id || normalizeSubjectName(s.name) === canonical
+          );
+
+          if (targetSub && counts[targetSub.id]) {
+            counts[targetSub.id].count += 1;
           }
         });
       }

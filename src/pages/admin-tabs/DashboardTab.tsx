@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import { OrphanedEntriesScanner } from '@/components/admin/OrphanedEntriesScanner';
 import { QuickStats } from '@/components/admin/QuickStats';
+import { GroqLiveQuotaWidget } from '@/components/GroqLiveQuotaWidget';
 
 export const DashboardTab = () => {
   const [stats, setStats] = useState({
@@ -150,6 +151,9 @@ export const DashboardTab = () => {
 
       {/* Real-time QuickStats Repository Counters */}
       <QuickStats />
+
+      {/* Groq Live Quota Real-Time Monitor */}
+      <GroqLiveQuotaWidget />
 
       {/* Recharts Analytics Dashboard Overview */}
       <DashboardOverview />

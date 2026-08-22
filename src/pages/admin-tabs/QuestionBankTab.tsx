@@ -83,7 +83,7 @@ export const QuestionBankTab = () => {
   const fetchData = async () => {
     let dbQuestions: any[] = [];
     try {
-      const { data: qData } = await supabase.from('questions').select('*, subjects(name), topics(name)').order('created_at', { ascending: false });
+      const { data: qData } = await supabase.from('questions').select('*, subjects(name), topics(name)').order('created_at', { ascending: false }).limit(50000);
       if (qData) dbQuestions = qData;
     } catch (err) {
       console.warn('DB Question fetch notice:', err);

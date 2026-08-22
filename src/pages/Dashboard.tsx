@@ -27,6 +27,7 @@ import { DailyStudyTip } from '@/components/dashboard/DailyStudyTip';
 import { StudyStreakCalendar } from '@/components/dashboard/StudyStreakCalendar';
 import { Badges } from '@/components/Badges';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { GroqLiveQuotaWidget } from '@/components/GroqLiveQuotaWidget';
 import { Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -138,6 +139,10 @@ export default function Dashboard() {
           <div className="lg:col-span-4 space-y-6">
             
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+               <GroqLiveQuotaWidget />
+            </motion.div>
+
+            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
                <JAMBCountdown />
             </motion.div>
 
