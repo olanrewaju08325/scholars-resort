@@ -108,12 +108,15 @@ export const reportGroqCallTelemetry = async (logData: {
   remainingRequests?: string;
 }) => {
   try {
-    // 1. Post to server telemetry endpoint
-    await fetch('/api/groq-telemetry/log', {
+    // 1. Post to server telemetry endpoint if available
+    const res = await fetch('/api/groq-telemetry/log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(logData)
-    });
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      // Endpoint not available on static hosting (e.g. Vercel), fail silently
+    }
   } catch {}
 
   try {

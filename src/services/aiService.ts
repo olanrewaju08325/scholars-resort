@@ -2,6 +2,72 @@ import { supabase } from '../lib/supabase';
 import { errorTracker } from '../lib/errorTracker';
 import { reportGroqCallTelemetry } from './groqTelemetryService';
 
+/**
+ * Robust AI JSON Parser & Sanitizer
+ * Handles markdown code block fences, trailing commas, unescaped quotes/newlines, and preamble/postscript text.
+ */
+export function safeParseAIJSON<T = any>(rawText: string, fallbackValue?: T): T {
+  if (!rawText || typeof rawText !== 'string') {
+    if (fallbackValue !== undefined) return fallbackValue;
+    throw new Error('Empty AI response string');
+  }
+
+  // 1. Strip markdown fences
+  let clean = rawText
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .trim();
+
+  // 2. Direct JSON.parse
+  try {
+    return JSON.parse(clean);
+  } catch {}
+
+  // 3. Find outermost array or object brackets
+  const firstBracket = clean.indexOf('[');
+  const firstBrace = clean.indexOf('{');
+
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstBracket !== -1 && (firstBrace === -1 || firstBracket < firstBrace)) {
+    startIdx = firstBracket;
+    endIdx = clean.lastIndexOf(']');
+  } else if (firstBrace !== -1) {
+    startIdx = firstBrace;
+    endIdx = clean.lastIndexOf('}');
+  }
+
+  if (startIdx !== -1 && endIdx > startIdx) {
+    let candidate = clean.substring(startIdx, endIdx + 1);
+
+    try {
+      return JSON.parse(candidate);
+    } catch {}
+
+    // Sanitize common LLM JSON syntax issues:
+    // - Smart quotes
+    // - Trailing commas before ] or }
+    // - Unescaped control characters & newlines
+    candidate = candidate
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/,\s*([\]\}])/g, '$1')
+      .replace(/\r?\n/g, ' ')
+      .replace(/[\u0000-\u001F]+/g, ' ');
+
+    try {
+      return JSON.parse(candidate);
+    } catch {}
+  }
+
+  if (fallbackValue !== undefined) {
+    return fallbackValue;
+  }
+
+  throw new Error(`Failed to parse JSON from AI output: ${rawText.substring(0, 100)}...`);
+}
+
 // Cached API Key
 let cachedGroqKey: string | null = null;
 
@@ -398,7 +464,20 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
   // Generates structured Markdown responses or JSON schemas cleanly so students never see broken errors
   const lastUserMsg = messages.filter(m => m.role === 'user').pop()?.content || '';
   
-  if (lastUserMsg.includes('JSON') || lastUserMsg.includes('json') || lastUserMsg.includes('array')) {
+  if (lastUserMsg.includes('JSON') || lastUserMsg.includes('json') || lastUserMsg.includes('array') || lastUserMsg.includes('flashcard') || lastUserMsg.includes('Flashcard')) {
+    if (lastUserMsg.toLowerCase().includes('flashcard') || lastUserMsg.toLowerCase().includes('front') || lastUserMsg.toLowerCase().includes('pairs')) {
+      const topicMatch = lastUserMsg.match(/topic:\s*"([^"]+)"/i) || lastUserMsg.match(/topic\s*([^\n\.]+)/i);
+      const extractedTopic = topicMatch ? topicMatch[1].trim() : 'UTME Topic';
+
+      return JSON.stringify([
+        { front: `What is the core definition of ${extractedTopic}?`, back: `${extractedTopic} involves fundamental principles, definitions, and high-frequency UTME questions.` },
+        { front: `Primary Principle of ${extractedTopic}`, back: `Mastering key concepts and formulas in ${extractedTopic} drives accuracy in JAMB exams.` },
+        { front: `High-Yield UTME Exam Tip for ${extractedTopic}`, back: `Identify key variables and contextual clues quickly when solving ${extractedTopic} questions.` },
+        { front: `Solving Technique for ${extractedTopic}`, back: `Break complex questions into simpler steps and eliminate wrong options systematically.` },
+        { front: `Revision Strategy`, back: `Regularly practice timed speed drills and review core formulas for ${extractedTopic}.` }
+      ]);
+    }
+
     if (lastUserMsg.includes('recommendation')) {
       return JSON.stringify([
         {
