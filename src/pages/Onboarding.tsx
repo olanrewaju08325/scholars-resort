@@ -8,6 +8,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
+import { getApiUrl } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -75,7 +76,25 @@ const Onboarding = () => {
     setLoading(true);
     
     try {
-      const { error } = await supabase.from('profiles').update({
+      const res = await fetch(getApiUrl('/api/onboarding/complete'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          target_score: parseInt(targetScore) || 270,
+          target_university: targetUni || 'Not Specified',
+          daily_study_goal_minutes: parseInt(dailyGoal) || 60,
+          utme_subjects: selectedSubjects,
+          intended_course: intendedCourse || null,
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Failed to complete onboarding');
+      }
+
+      await supabase.from('profiles').update({
         target_score: parseInt(targetScore) || 270,
         target_university: targetUni || 'Not Specified',
         daily_study_goal_minutes: parseInt(dailyGoal) || 60,
@@ -84,7 +103,7 @@ const Onboarding = () => {
         intended_course: intendedCourse || null,
       }).eq('id', profile.id);
 
-      if (error) throw error;
+      toast.success('Onboarding completed successfully!');
       window.location.href = '/dashboard';
     } catch (err: any) {
       toast.error(err.message || 'Failed to complete onboarding');

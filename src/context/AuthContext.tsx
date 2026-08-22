@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
+import { getApiUrl } from '@/lib/utils';
 import type { User } from '@supabase/supabase-js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -94,23 +95,38 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     try {
       isFetchingProfile.current = true;
-      const fetchPromise = supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
+      
+      // 1. Fetch authoritatively from backend API (which merges database and server-side persistent overrides)
+      let loadedProfile: Profile | null = null;
+      try {
+        const apiRes = await fetch(getApiUrl(`/api/profile/${userId}`));
+        const apiData = await apiRes.json();
+        if (apiData && apiData.success && apiData.profile) {
+          loadedProfile = apiData.profile as Profile;
+        }
+      } catch {}
 
-      const timeoutPromise = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('Profile fetch timeout')), TIMEOUT_MS)
-      );
+      // 2. Fallback to Supabase direct query if API didn't return
+      if (!loadedProfile) {
+        const fetchPromise = supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
 
-      const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as Awaited<typeof fetchPromise>;
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Profile fetch timeout')), TIMEOUT_MS)
+        );
+
+        const { data, error } = await Promise.race([fetchPromise, timeoutPromise]) as Awaited<typeof fetchPromise>;
+        if (data && !error) {
+          loadedProfile = data as Profile;
+        }
+      }
 
       if (!isMounted.current) return;
 
-      if (data && !error) {
-        let loadedProfile = data as Profile;
-        
+      if (loadedProfile) {
         // Master admin auto-elevation check using both profile and authenticated user email sources
         const currentEmail = (user?.email || loadedProfile.email || '').toLowerCase().trim();
         const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === currentEmail);
@@ -130,7 +146,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         commitProfile(loadedProfile);
         setLoading(false);
-      } else if (!data && !error) {
+      } else {
         // Profile row does not exist yet. Auto-create in DB to ensure foreign key constraints pass
         console.warn(`[AuthContext] No profile record found for user ${userId}. Creating default profile...`);
         const userEmail = (user?.email || '').toLowerCase().trim();
@@ -170,38 +186,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             commitProfile(newProfile as Profile);
             setLoading(false);
           }
-        }
-      } else if (error && attempt < MAX_ATTEMPTS) {
-        // Retry on transient errors (connection closed, network blip)
-        const delay = Math.min(1000 * Math.pow(2, attempt - 1), 16000) + Math.random() * 300;
-        console.warn(`[AuthContext] Profile fetch attempt ${attempt} failed (${error.message}). Retrying in ${Math.round(delay)}ms...`);
-        await new Promise(r => setTimeout(r, delay));
-        return fetchProfile(userId, attempt + 1);
-      } else {
-        console.warn('[AuthContext] Profile fetch failed, maintaining existing or fallback profile:', error);
-        if (isMounted.current) {
-          const userEmail = (user?.email || '').toLowerCase().trim();
-          const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
-          const metaRole = user?.user_metadata?.role;
-          const pendingInvite = localStorage.getItem('pending_guardian_code');
-          const fallbackRole: Profile['role'] = isAdminEmail 
-            ? 'admin' 
-            : (metaRole === 'guardian' || metaRole === 'parent' || !!pendingInvite ? 'guardian' : 'student');
-          const isGuardian = fallbackRole === 'guardian';
-
-          if (!profile) {
-            commitProfile({
-              id: userId,
-              role: fallbackRole,
-              full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
-              email: user?.email || '',
-              has_paid: isAdminEmail || isGuardian ? true : false,
-              onboarding_completed: isAdminEmail ? true : false,
-              xp: 0,
-              coins: 0,
-            });
-          }
-          setLoading(false);
         }
       }
     } catch (err: any) {
