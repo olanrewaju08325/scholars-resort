@@ -24,7 +24,6 @@ import { AdminTournamentsTab } from './admin-tabs/AdminTournamentsTab';
 import { AdminAITab } from './admin-tabs/AdminAITab';
 import { AnalyticsTab } from './admin-tabs/AnalyticsTab';
 import { LogsTab } from './admin-tabs/LogsTab';
-import { RolesTab } from './admin-tabs/RolesTab';
 import { BackupsTab } from './admin-tabs/BackupsTab';
 import { AnnouncementsTab } from './admin-tabs/AnnouncementsTab';
 import { BulkEmailTab } from './admin-tabs/BulkEmailTab';
@@ -102,9 +101,8 @@ export default function Admin() {
     { id: 'insights', label: 'Student Insights', icon: Activity },
     { id: 'analytics', label: 'Analytics', icon: BarChart },
     { id: 'security', label: 'Security', icon: ShieldAlert },
-    { id: 'roles', label: 'User Roles & Access', icon: Shield },
     { id: 'students', label: 'Users & Guardians', icon: Users },
-    { id: 'materials', label: '📚 Upload Study Materials', icon: BookOpen },
+    { id: 'materials', label: 'Library Resource Manager', icon: BookOpen },
     { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
     { id: 'subjects', label: 'Subjects & Topics', icon: BookOpen },
     { id: 'content-studio', label: 'Content Studio', icon: FileQuestion },
@@ -152,7 +150,6 @@ export default function Admin() {
       case 'tournaments': return <AdminTournamentsTab />;
       case 'ai': return <AdminAITab />;
       case 'logs': return <LogsTab />;
-      case 'roles': return <RolesTab />;
       case 'backups': return <BackupsTab />;
       default: return <DashboardTab />;
     }

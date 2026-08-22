@@ -56,7 +56,7 @@ export const SubjectsTab = () => {
       // Fetch ALL dynamic questions without row caps (up to 50,000 records)
       const { data: qData, count: totalDbCount } = await supabase
         .from('questions')
-        .select('id, subject_id, subject_name, subject, exam_year, year', { count: 'exact' })
+        .select('id, subject_id, exam_year, subjects(id, name)', { count: 'exact' })
         .limit(50000);
 
       const totalQs = totalDbCount || qData?.length || 0;
@@ -72,9 +72,9 @@ export const SubjectsTab = () => {
 
       if (qData) {
         qData.forEach((q: any) => {
-          const rawSub = q.subject_id || q.subject_name || q.subject;
+          const rawSub = q.subjects?.name || q.subject_id;
           const canonical = normalizeSubjectName(rawSub || '');
-          const exYear = q.exam_year || q.year || '';
+          const exYear = q.exam_year || '';
 
           // Find matching subject by ID or canonical name
           const matchedSub = loadedSubjects.find(s => 
@@ -205,13 +205,14 @@ export const SubjectsTab = () => {
       const canonical = normalizeSubjectName(selectedSubjectForYear.name);
       const { data: qList } = await supabase
         .from('questions')
-        .select('id, subject_id, subject_name, subject')
+        .select('id, subject_id, subjects(id, name)')
         .limit(50000);
 
       const targetIds: string[] = [];
       if (qList) {
         qList.forEach((q: any) => {
-          if (q.subject_id === selectedSubjectForYear.id || normalizeSubjectName(q.subject_id || q.subject_name || q.subject || '') === canonical) {
+          const rawSub = q.subjects?.name || q.subject_id;
+          if (q.subject_id === selectedSubjectForYear.id || normalizeSubjectName(rawSub || '') === canonical) {
             targetIds.push(q.id);
           }
         });
@@ -231,7 +232,7 @@ export const SubjectsTab = () => {
         const chunk = targetIds.slice(i, i + chunkSize);
         await supabase
           .from('questions')
-          .update({ exam_year: targetYearToApply, year: targetYearToApply })
+          .update({ exam_year: targetYearToApply })
           .in('id', chunk);
         updated += chunk.length;
       }
@@ -271,15 +272,16 @@ export const SubjectsTab = () => {
           const sourceCanonical = normalizeSubjectName(sourceObj.name);
           const { data: qList } = await supabase
             .from('questions')
-            .select('id, subject_id, subject_name, subject')
+            .select('id, subject_id, subjects(id, name)')
             .limit(50000);
 
           const qToUpdate: string[] = [];
           if (qList) {
             qList.forEach((q: any) => {
+              const rawSub = q.subjects?.name || q.subject_id;
               if (
                 q.subject_id === sourceSubjectId || 
-                normalizeSubjectName(q.subject_id || q.subject_name || q.subject || '') === sourceCanonical
+                normalizeSubjectName(rawSub || '') === sourceCanonical
               ) {
                 qToUpdate.push(q.id);
               }
@@ -293,8 +295,7 @@ export const SubjectsTab = () => {
               await supabase
                 .from('questions')
                 .update({ 
-                  subject_id: targetSubjectId, 
-                  subject_name: targetObj.name 
+                  subject_id: targetSubjectId
                 })
                 .in('id', chunk);
             }

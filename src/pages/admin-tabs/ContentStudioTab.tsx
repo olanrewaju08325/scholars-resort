@@ -55,7 +55,7 @@ export const ContentStudioTab = () => {
 
       const { data: allQuestions } = await supabase
         .from('questions')
-        .select('subject_id, subject_name, subject')
+        .select('id, subject_id, subjects(id, name)')
         .limit(50000);
 
       const counts: { [id: string]: { name: string; count: number } } = {};
@@ -66,7 +66,7 @@ export const ContentStudioTab = () => {
 
       if (allQuestions) {
         allQuestions.forEach((q: any) => {
-          const rawSub = q.subject_id || q.subject_name || q.subject;
+          const rawSub = q.subjects?.name || q.subject_id;
           const canonical = normalizeSubjectName(rawSub || '');
 
           const targetSub = loadedSubjects.find(s => 

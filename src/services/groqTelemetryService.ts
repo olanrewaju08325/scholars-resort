@@ -55,6 +55,9 @@ export const fetchGroqTelemetry = async (groqApiKey?: string): Promise<GroqTelem
 
     const res = await fetch('/api/groq-telemetry', { headers });
     if (!res.ok) return null;
+    const contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) return null;
+
     const data = await res.json();
     
     // Also merge historical token totals from Supabase `ai_usage` table if available
@@ -110,8 +113,10 @@ export const reportGroqCallTelemetry = async (logData: {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(logData)
-    }).catch(() => null);
+    });
+  } catch {}
 
+  try {
     // 2. Persist to Supabase `ai_usage` table
     await supabase.from('ai_usage').insert({
       provider: 'groq',
@@ -119,8 +124,6 @@ export const reportGroqCallTelemetry = async (logData: {
       prompt_tokens: logData.promptTokens || 0,
       completion_tokens: logData.completionTokens || 0,
       created_at: new Date().toISOString()
-    }).catch(() => null);
-  } catch (err) {
-    console.warn('Failed to record Groq call telemetry:', err);
-  }
+    });
+  } catch {}
 };

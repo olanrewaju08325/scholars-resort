@@ -662,8 +662,8 @@ export const extractQuestionsWithRegex = (docText: string): any[] => {
 export const extractAllQuestionsFromPdfText = async (docText: string, docName: string): Promise<any[]> => {
   if (!docText || docText.trim().length === 0) return [];
 
-  // Chunk text into ~3500 character blocks to avoid AI context window limit
-  const chunkSize = 3500;
+  // Chunk text into ~3000 character blocks to avoid AI context window & payload size limits
+  const chunkSize = 3000;
   const totalLength = docText.length;
   const chunks: string[] = [];
 
@@ -671,11 +671,19 @@ export const extractAllQuestionsFromPdfText = async (docText: string, docName: s
     chunks.push(docText.substring(i, i + chunkSize));
   }
 
+  // Cap maximum AI chunks to 10 to avoid rate limits and excessive latency
+  const chunksToProcess = chunks.slice(0, 10);
   const allQuestions: any[] = [];
-  let aiSuccess = false;
+  let aiSuccessCount = 0;
 
-  for (let idx = 0; idx < chunks.length; idx++) {
-    const chunkText = chunks[idx];
+  for (let idx = 0; idx < chunksToProcess.length; idx++) {
+    const chunkText = chunksToProcess[idx];
+
+    // Introduce 1 second rate-limit pause between consecutive Groq API calls
+    if (idx > 0) {
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
     const messages = [
       {
         role: 'system',
@@ -683,8 +691,8 @@ export const extractAllQuestionsFromPdfText = async (docText: string, docName: s
       },
       {
         role: 'user',
-        content: `Extract ALL multiple-choice questions present in this text block (${idx + 1}/${chunks.length}) from document '${docName}'.
-Return ONLY a STRICT JSON array of objects without conversational preamble:
+        content: `Extract ALL multiple-choice questions present in this text block (${idx + 1}/${chunksToProcess.length}) from document '${docName}'.
+Return ONLY a STRICT JSON array of objects without conversational preamble or markdown backticks:
 [
   {
     "question": "Question text here",
@@ -700,26 +708,47 @@ ${chunkText}`
       }
     ];
 
+    let chunkExtracted = false;
+
     try {
       const responseText = await callGroqAPI(messages, 'openai/gpt-oss-120b', 0.2);
       
-      // Extract array portion cleanly avoiding preamble text
-      const arrayMatch = responseText.match(/\[\s*\{[\s\S]*\}\s*\]/);
-      if (arrayMatch) {
-        const parsedArray = JSON.parse(arrayMatch[0]);
-        if (Array.isArray(parsedArray) && parsedArray.length > 0) {
-          allQuestions.push(...parsedArray);
-          aiSuccess = true;
+      // Clean JSON formatting
+      const cleanText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
+      const jsonStart = cleanText.indexOf('[');
+      const jsonEnd = cleanText.lastIndexOf(']');
+      
+      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        const rawJsonString = cleanText.substring(jsonStart, jsonEnd + 1)
+          .replace(/,\s*([\]\}])/g, '$1'); // sanitize trailing commas
+
+        try {
+          const parsedArray = JSON.parse(rawJsonString);
+          if (Array.isArray(parsedArray) && parsedArray.length > 0) {
+            allQuestions.push(...parsedArray);
+            aiSuccessCount++;
+            chunkExtracted = true;
+          }
+        } catch (jsonErr) {
+          console.warn(`Chunk ${idx + 1} JSON parse warning, attempting fallback regex...`, jsonErr);
         }
       }
     } catch (e) {
       console.warn(`Chunk ${idx + 1} AI extraction notice:`, e);
     }
+
+    // If AI failed or returned no questions for this chunk, use chunk-level Regex fallback
+    if (!chunkExtracted) {
+      const regexChunkQuestions = extractQuestionsWithRegex(chunkText);
+      if (regexChunkQuestions.length > 0) {
+        allQuestions.push(...regexChunkQuestions);
+      }
+    }
   }
 
-  // If AI did not extract questions or failed, execute deterministic Regex extraction fallback
-  if (allQuestions.length === 0 || !aiSuccess) {
-    console.info('Executing deterministic Regex question extraction fallback...');
+  // If entire document returned 0 questions, execute document-wide Regex extraction
+  if (allQuestions.length === 0) {
+    console.info('Executing full document Regex question extraction fallback...');
     const regexQuestions = extractQuestionsWithRegex(docText);
     if (regexQuestions.length > 0) {
       allQuestions.push(...regexQuestions);

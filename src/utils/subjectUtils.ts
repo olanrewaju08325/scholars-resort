@@ -299,12 +299,12 @@ export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; s
     try {
       const { data: allQuestions } = await supabase
         .from('questions')
-        .select('id, subject_id, subject_name, subject')
+        .select('id, subject_id, subjects(id, name)')
         .limit(50000);
 
       if (allQuestions && allQuestions.length > 0) {
         for (const q of allQuestions) {
-          const rawSub = q.subject_id || q.subject_name || q.subject;
+          const rawSub = q.subjects?.name || q.subject_id;
           if (rawSub) {
             const canonical = normalizeSubjectName(rawSub);
             const masterId = canonicalMap.get(canonical);
