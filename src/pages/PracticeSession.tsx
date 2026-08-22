@@ -188,14 +188,18 @@ const PracticeSession = () => {
 
     // Save answer to DB
     if (sessionId) {
-      await supabase.from('session_answers').insert({
-        user_id: profile?.id,
-        practice_session_id: sessionId,
-        question_id: q.id,
-        selected_answer: option,
-        is_correct: isCorrect,
-        time_spent_secs: timeSpent
-      });
+      try {
+        await supabase.from('session_answers').insert({
+          user_id: profile?.id,
+          practice_session_id: sessionId,
+          question_id: q.id,
+          selected_answer: option,
+          is_correct: isCorrect,
+          time_spent_secs: timeSpent
+        });
+      } catch (ansErr) {
+        console.warn('Notice: PracticeSession session_answers insert notice:', ansErr);
+      }
     }
 
     // Automatically trigger AI explanation

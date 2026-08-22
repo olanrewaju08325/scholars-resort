@@ -205,7 +205,11 @@ const CBTExam = () => {
           time_spent_seconds: 0
         }));
         if (answersToSave.length > 0) {
-          await supabase.from('session_answers').insert(answersToSave);
+          try {
+            await supabase.from('session_answers').insert(answersToSave);
+          } catch (ansErr) {
+            console.warn('Notice: session_answers sync fallback:', ansErr);
+          }
         }
         
         // Log study action

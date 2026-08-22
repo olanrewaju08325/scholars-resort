@@ -691,6 +691,130 @@ app.get('/api/groq-telemetry', async (req, res) => {
   });
 });
 
+// API Route: Get real-time accurate counts of active questions grouped by subject_id
+app.get('/api/admin/subject-counts', async (req, res) => {
+  try {
+    const { data: subjects, error: subError } = await supabase
+      .from('subjects')
+      .select('id, name');
+
+    if (subError) {
+      console.warn('[Server Admin Subject Counts Warn] Error fetching subjects:', subError.message);
+      return res.status(200).json({ success: false, error: subError.message, counts: {}, years: {} });
+    }
+
+    const counts: Record<string, number> = {};
+    const canonicalCounts: Record<string, number> = {};
+    const years: Record<string, string[]> = {};
+
+    if (subjects && subjects.length > 0) {
+      await Promise.all(
+        subjects.map(async (sub) => {
+          // Exact count from Database using head: true
+          const { count, error: countError } = await supabase
+            .from('questions')
+            .select('id', { count: 'exact', head: true })
+            .eq('subject_id', sub.id)
+            .eq('is_active', true);
+
+          if (!countError && count !== null) {
+            counts[sub.id] = count;
+            const canonical = sub.name.trim().toLowerCase();
+            canonicalCounts[canonical] = count;
+          } else {
+            counts[sub.id] = 0;
+          }
+
+          // Fetch past years with active questions
+          const { data: yearsData } = await supabase
+            .from('questions')
+            .select('exam_year')
+            .eq('subject_id', sub.id)
+            .eq('is_active', true)
+            .not('exam_year', 'is', null)
+            .limit(100);
+
+          if (yearsData && yearsData.length > 0) {
+            const uniqueYears = Array.from(new Set(yearsData.map(y => String(y.exam_year)))).sort().reverse();
+            years[sub.id] = uniqueYears;
+          } else {
+            years[sub.id] = [];
+          }
+        })
+      );
+    }
+
+    return res.json({ success: true, counts, canonicalCounts, years });
+  } catch (err: any) {
+    console.error('[Server Admin Subject Counts Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to fetch subject counts.' });
+  }
+});
+
+// API Route: Admin Material Ingestion & Association (Bypasses Client-Side RLS)
+app.post('/api/admin/materials/upload-metadata', async (req, res) => {
+  const { title, description, subject_id, topic_id, file_path, is_premium } = req.body;
+  if (!title || !file_path) {
+    return res.status(400).json({ success: false, error: 'Missing required title or file path' });
+  }
+
+  try {
+    const results: string[] = [];
+
+    // 1. Insert into materials table
+    const newMaterialId = `mat_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    const { error: matError } = await supabase.from('materials').insert({
+      id: newMaterialId,
+      title,
+      description: description || '',
+      subject_id: subject_id || null,
+      file_path,
+      file_size_bytes: 1024 * 1024 * 2,
+      visibility: true,
+      is_premium: !!is_premium
+    });
+    if (!matError) results.push('materials_inserted');
+    else console.warn('Server materials insert warn:', matError.message);
+
+    // 2. Insert into library_materials table
+    const { error: libError } = await supabase.from('library_materials').insert({
+      title,
+      description: description || '',
+      subject_id: subject_id || null,
+      file_url: file_path,
+      is_premium: !!is_premium,
+      is_active: true
+    });
+    if (!libError) results.push('library_materials_inserted');
+    else console.warn('Server library_materials insert warn:', libError.message);
+
+    // 3. Update subjects table with study_material_url if requested and no topic is specified
+    if (subject_id && !topic_id) {
+      const { error: subError } = await supabase
+        .from('subjects')
+        .update({ study_material_url: file_path })
+        .eq('id', subject_id);
+      if (!subError) results.push('subject_url_updated');
+      else console.warn('Server subject update warn:', subError.message);
+    }
+
+    // 4. Update topics table with study_material_url if topic_id is specified
+    if (topic_id) {
+      const { error: topError } = await supabase
+        .from('topics')
+        .update({ study_material_url: file_path })
+        .eq('id', topic_id);
+      if (!topError) results.push('topic_url_updated');
+      else console.warn('Server topic update warn:', topError.message);
+    }
+
+    return res.json({ success: true, results });
+  } catch (err: any) {
+    console.error('[Server Admin Material Upload Metadata Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Server error uploading material metadata' });
+  }
+});
+
 // API Route: Question Bank - Bulk & Single Insert (Server Admin Client)
 app.post('/api/questions/insert', async (req, res) => {
   const { questions } = req.body;

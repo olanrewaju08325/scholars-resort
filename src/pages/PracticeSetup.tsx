@@ -48,11 +48,8 @@ const PracticeSetup = () => {
     if (selectedSubject) {
       setVerifyingIntegrity(true);
       
-      // Perform Data Integrity Check
-      const subjObj = subjects.find(s => s.id === selectedSubject);
-      const subjNameOrId = subjObj ? subjObj.name : selectedSubject;
-
-      checkSubjectDataIntegrity(subjNameOrId).then(res => {
+      // Perform Data Integrity Check using direct subject ID to ensure 100% accuracy and avoid name conflicts
+      checkSubjectDataIntegrity(selectedSubject).then(res => {
         setAvailableQCount(res.availableCount);
         setVerifyingIntegrity(false);
       });
@@ -77,11 +74,8 @@ const PracticeSetup = () => {
       return;
     }
     
-    // Final Data Integrity Verification prior to navigation
-    const subjObj = subjects.find(s => s.id === selectedSubject);
-    const subjNameOrId = subjObj ? subjObj.name : selectedSubject;
-    
-    const integrityResult = await checkSubjectDataIntegrity(subjNameOrId);
+    // Final Data Integrity Verification prior to navigation using exact subject ID
+    const integrityResult = await checkSubjectDataIntegrity(selectedSubject);
     console.log('[CBT Engine Session Verification]', integrityResult);
 
     navigate('/practice/session', { 

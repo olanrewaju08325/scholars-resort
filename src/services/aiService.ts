@@ -633,6 +633,123 @@ export const extractTopicsFromSyllabus = async (syllabusText: string): Promise<a
   return [];
 };
 
+/**
+ * Highly robust, JSON-resilient helper that extracts, cleans, heals and parses a JSON string.
+ * It is extremely resilient against markdown wrapper blocks, JavaScript comments, trailing commas,
+ * unclosed quotes, and truncated braces/brackets caused by AI response limitations.
+ */
+export const healAndParseJSON = (str: string, expectedKeys: string[] = []): any => {
+  if (!str || str.trim().length === 0) {
+    throw new Error('Empty JSON string provided to parser');
+  }
+
+  let clean = str.trim();
+  
+  // 1. Strip markdown wrappers (e.g. ```json ... ```)
+  clean = clean.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+  
+  // 2. Locate boundaries of JSON array or object
+  const firstBrace = clean.indexOf('{');
+  const firstBracket = clean.indexOf('[');
+  
+  let startIdx = -1;
+  let endIdx = -1;
+  
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    endIdx = clean.lastIndexOf('}');
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = clean.lastIndexOf(']');
+  }
+  
+  if (startIdx !== -1) {
+    if (endIdx !== -1 && endIdx > startIdx) {
+      clean = clean.substring(startIdx, endIdx + 1);
+    } else {
+      clean = clean.substring(startIdx);
+    }
+  }
+
+  // Attempt standard parsing first
+  try {
+    return JSON.parse(clean);
+  } catch (e) {
+    console.warn('[JSON Healer] Standard JSON parse failed, attempting healing heuristics...', e);
+  }
+
+  // Heuristic JSON healing rules:
+  
+  // Rule A: Remove JS-style comments (single line // and block /* */)
+  clean = clean.replace(/\/\*[\s\S]*?\*\/|([^\\:]|^)\/\/.*$/gm, '$1');
+  
+  // Rule B: Remove trailing commas before closing braces/brackets
+  clean = clean.replace(/,\s*([\]\}])/g, '$1');
+  
+  // Rule C: Balance unclosed string double quotes (often due to truncation)
+  let openQuotes = false;
+  for (let i = 0; i < clean.length; i++) {
+    if (clean[i] === '"' && (i === 0 || clean[i-1] !== '\\')) {
+      openQuotes = !openQuotes;
+    }
+  }
+  if (openQuotes) {
+    clean += '"';
+  }
+
+  // Rule D: Close unclosed braces and brackets (due to truncation)
+  const stack: string[] = [];
+  let inString = false;
+  for (let i = 0; i < clean.length; i++) {
+    const char = clean[i];
+    if (char === '"' && (i === 0 || clean[i-1] !== '\\')) {
+      inString = !inString;
+    }
+    if (!inString) {
+      if (char === '{' || char === '[') {
+        stack.push(char);
+      } else if (char === '}') {
+        if (stack[stack.length - 1] === '{') {
+          stack.pop();
+        }
+      } else if (char === ']') {
+        if (stack[stack.length - 1] === '[') {
+          stack.pop();
+        }
+      }
+    }
+  }
+
+  // Close open brackets/braces in reverse order of discovery
+  while (stack.length > 0) {
+    const last = stack.pop();
+    if (last === '{') {
+      clean += '}';
+    } else if (last === '[') {
+      clean += ']';
+    }
+  }
+
+  // Attempt to parse the healed string
+  try {
+    const parsed = JSON.parse(clean);
+    
+    // Check key presence if requested
+    if (expectedKeys.length > 0) {
+      const keys = Object.keys(parsed);
+      const missing = expectedKeys.filter(k => !keys.includes(k));
+      if (missing.length > 0) {
+        console.warn('[JSON Healer] Warn: missing expected keys:', missing);
+      }
+    }
+    
+    return parsed;
+  } catch (err: any) {
+    console.error('[JSON Healer] Critical: Failed to heal and parse JSON string:', err.message);
+    throw err;
+  }
+};
+
 export const analyzeDocumentWithGroq = async (docText: string, docName: string): Promise<any> => {
   const messages = [
     {
@@ -662,13 +779,7 @@ ${docText.substring(0, 4000)}`
 
   try {
     const contentText = await callGroqAPI(messages);
-    const cleanJson = contentText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const jsonStart = cleanJson.indexOf('{');
-    const jsonEnd = cleanJson.lastIndexOf('}');
-    if (jsonStart !== -1 && jsonEnd !== -1) {
-      return JSON.parse(cleanJson.substring(jsonStart, jsonEnd + 1));
-    }
-    return JSON.parse(cleanJson);
+    return healAndParseJSON(contentText, ['summary', 'topics', 'questions']);
   } catch (err: any) {
     console.warn('Groq document analysis JSON parse fallback:', err);
     return {
@@ -792,25 +903,15 @@ ${chunkText}`
     try {
       const responseText = await callGroqAPI(messages, 'openai/gpt-oss-120b', 0.2);
       
-      // Clean JSON formatting
-      const cleanText = responseText.replace(/```json/gi, '').replace(/```/g, '').trim();
-      const jsonStart = cleanText.indexOf('[');
-      const jsonEnd = cleanText.lastIndexOf(']');
-      
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        const rawJsonString = cleanText.substring(jsonStart, jsonEnd + 1)
-          .replace(/,\s*([\]\}])/g, '$1'); // sanitize trailing commas
-
-        try {
-          const parsedArray = JSON.parse(rawJsonString);
-          if (Array.isArray(parsedArray) && parsedArray.length > 0) {
-            allQuestions.push(...parsedArray);
-            aiSuccessCount++;
-            chunkExtracted = true;
-          }
-        } catch (jsonErr) {
-          console.warn(`Chunk ${idx + 1} JSON parse warning, attempting fallback regex...`, jsonErr);
+      try {
+        const parsedArray = healAndParseJSON(responseText);
+        if (Array.isArray(parsedArray) && parsedArray.length > 0) {
+          allQuestions.push(...parsedArray);
+          aiSuccessCount++;
+          chunkExtracted = true;
         }
+      } catch (jsonErr) {
+        console.warn(`Chunk ${idx + 1} JSON healing and parsing warning, attempting fallback regex...`, jsonErr);
       }
     } catch (e) {
       console.warn(`Chunk ${idx + 1} AI extraction notice:`, e);
@@ -861,11 +962,9 @@ Return STRICT JSON format:
 }`;
 
   const responseText = await callGroqAPI([{ role: 'user', content: prompt }]);
-  const cleanJson = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-  const jsonStart = cleanJson.indexOf('{');
-  const jsonEnd = cleanJson.lastIndexOf('}');
-  if (jsonStart !== -1 && jsonEnd !== -1) {
-    return JSON.parse(cleanJson.substring(jsonStart, jsonEnd + 1));
+  try {
+    return healAndParseJSON(responseText, ['recommendation_summary', 'weekly_goal', 'daily_schedule']);
+  } catch (err: any) {
+    throw new Error(`Could not parse AI study plan output: ${err.message}`);
   }
-  throw new Error("Could not parse AI study plan output.");
 };

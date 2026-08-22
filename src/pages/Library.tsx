@@ -58,8 +58,29 @@ const Library = () => {
         jambNovels = await fetchJambBooks();
       } catch {}
 
+      let localMaterials: any[] = [];
+      try {
+        const localRaw = localStorage.getItem('scholar_local_materials');
+        if (localRaw) localMaterials = JSON.parse(localRaw);
+      } catch {}
+
       const combined: any[] = [];
       const seenTitles = new Set<string>();
+
+      localMaterials.forEach(item => {
+        if (item.title && !seenTitles.has(item.title.toLowerCase().trim())) {
+          seenTitles.add(item.title.toLowerCase().trim());
+          combined.push({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            file_url: item.file_url || item.file_path,
+            is_premium: item.is_premium,
+            subjects: item.subjects || { name: 'General' },
+            created_at: item.created_at || new Date().toISOString()
+          });
+        }
+      });
 
       libData.forEach(item => {
         if (item.title && !seenTitles.has(item.title.toLowerCase().trim())) {

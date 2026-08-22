@@ -427,17 +427,49 @@ export const checkSubjectDataIntegrity = async (subjectIdOrName: string, expecte
   // 1. Server-side count check on the `questions` table directly from Supabase
   let serverCount = 0;
   try {
-    // Attempt count via matched subject IDs
-    const matchedSubjectIds = await resolveSubjectIdsByNameOrAlias(subjectIdOrName);
-    if (matchedSubjectIds.length > 0) {
-      const { count, error } = await supabase
-        .from('questions')
-        .select('id', { count: 'exact', head: true })
-        .eq('is_active', true)
-        .in('subject_id', matchedSubjectIds);
-        
-      if (!error && count !== null) {
-        serverCount = count;
+    // Try to resolve exact server-side count via custom API first
+    try {
+      const response = await fetch('/api/admin/subject-counts');
+      if (response.ok) {
+        const resData = await response.json();
+        if (resData.success && resData.counts) {
+          // Find matched subject IDs and get the sum of counts
+          const matchedSubjectIds = await resolveSubjectIdsByNameOrAlias(subjectIdOrName);
+          let apiCount = 0;
+          matchedSubjectIds.forEach(id => {
+            if (resData.counts[id]) {
+              apiCount += resData.counts[id];
+            }
+          });
+          
+          if (apiCount > 0) {
+            serverCount = apiCount;
+          } else {
+            // Also try canonical match
+            const canonical = normalizeSubjectName(subjectIdOrName).trim().toLowerCase();
+            if (resData.canonicalCounts && resData.canonicalCounts[canonical]) {
+              serverCount = resData.canonicalCounts[canonical];
+            }
+          }
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[CBT Data Integrity] Local server count API offline, falling back to direct count:', apiErr);
+    }
+
+    if (serverCount === 0) {
+      // Attempt count via matched subject IDs directly from Supabase
+      const matchedSubjectIds = await resolveSubjectIdsByNameOrAlias(subjectIdOrName);
+      if (matchedSubjectIds.length > 0) {
+        const { count, error } = await supabase
+          .from('questions')
+          .select('id', { count: 'exact', head: true })
+          .eq('is_active', true)
+          .in('subject_id', matchedSubjectIds);
+          
+        if (!error && count !== null) {
+          serverCount = count;
+        }
       }
     }
     

@@ -53,48 +53,80 @@ export const SubjectsTab = () => {
       const loadedSubjects = subData || [];
       setSubjects(loadedSubjects);
 
-      // Fetch ALL dynamic questions without row caps (up to 50,000 records)
-      const { data: qData, count: totalDbCount } = await supabase
-        .from('questions')
-        .select('id, subject_id, exam_year, subjects(id, name)', { count: 'exact' })
-        .limit(50000);
+      let countsMap: Record<string, number> = {};
+      let yearsMap: Record<string, string[]> = {};
+      let totalQs = 0;
+      let usedServerCounts = false;
 
-      const totalQs = totalDbCount || qData?.length || 0;
-      setTotalQuestionsInDb(totalQs);
-
-      const countsMap: Record<string, number> = {};
-      const yearsMap: Record<string, Set<string>> = {};
-
-      loadedSubjects.forEach(s => {
-        countsMap[s.id] = 0;
-        yearsMap[s.id] = new Set<string>();
-      });
-
-      if (qData) {
-        qData.forEach((q: any) => {
-          const rawSub = q.subjects?.name || q.subject_id;
-          const canonical = normalizeSubjectName(rawSub || '');
-          const exYear = q.exam_year || '';
-
-          // Find matching subject by ID or canonical name
-          const matchedSub = loadedSubjects.find(s => 
-            s.id === q.subject_id || normalizeSubjectName(s.name) === canonical
-          );
-
-          if (matchedSub) {
-            countsMap[matchedSub.id] = (countsMap[matchedSub.id] || 0) + 1;
-            if (exYear) {
-              if (!yearsMap[matchedSub.id]) yearsMap[matchedSub.id] = new Set<string>();
-              yearsMap[matchedSub.id].add(String(exYear));
-            }
+      // Try server-side counts first
+      try {
+        const response = await fetch('/api/admin/subject-counts');
+        if (response.ok) {
+          const resData = await response.json();
+          if (resData.success && resData.counts) {
+            countsMap = resData.counts;
+            yearsMap = resData.years || {};
+            totalQs = Object.values(countsMap).reduce((a, b) => a + b, 0);
+            usedServerCounts = true;
+            console.log('[SubjectsTab] Successfully fetched accurate server-side question counts!');
           }
+        }
+      } catch (apiErr) {
+        console.warn('[SubjectsTab] Server-side counts API unavailable, falling back to client-side counting:', apiErr);
+      }
+
+      // Fallback: Fetch questions and calculate counts client-side (legacy code)
+      if (!usedServerCounts) {
+        // Fetch ALL dynamic questions without row caps (up to 50,000 records)
+        const { data: qData, count: totalDbCount } = await supabase
+          .from('questions')
+          .select('id, subject_id, exam_year, subjects(id, name)', { count: 'exact' })
+          .limit(50000);
+
+        totalQs = totalDbCount || qData?.length || 0;
+
+        loadedSubjects.forEach(s => {
+          countsMap[s.id] = 0;
+        });
+
+        const tempYearsMap: Record<string, Set<string>> = {};
+        loadedSubjects.forEach(s => {
+          tempYearsMap[s.id] = new Set<string>();
+        });
+
+        if (qData) {
+          qData.forEach((q: any) => {
+            const rawSub = q.subjects?.name || q.subject_id;
+            const canonical = normalizeSubjectName(rawSub || '');
+            const exYear = q.exam_year || '';
+
+            // Find matching subject by ID or canonical name
+            const matchedSub = loadedSubjects.find(s => 
+              s.id === q.subject_id || normalizeSubjectName(s.name) === canonical
+            );
+
+            if (matchedSub) {
+              countsMap[matchedSub.id] = (countsMap[matchedSub.id] || 0) + 1;
+              if (exYear) {
+                if (!tempYearsMap[matchedSub.id]) tempYearsMap[matchedSub.id] = new Set<string>();
+                tempYearsMap[matchedSub.id].add(String(exYear));
+              }
+            }
+          });
+        }
+
+        // Convert sets to arrays
+        Object.entries(tempYearsMap).forEach(([subId, set]) => {
+          yearsMap[subId] = Array.from(set).sort().reverse();
         });
       }
+
+      setTotalQuestionsInDb(totalQs);
 
       const stats = loadedSubjects.map((s: any) => {
         const count = countsMap[s.id] || 0;
         const percentage = totalQs > 0 ? Math.round((count / totalQs) * 100) : 0;
-        const yearsArray = Array.from(yearsMap[s.id] || []).sort().reverse();
+        const yearsArray = yearsMap[s.id] || [];
         return { 
           id: s.id, 
           name: s.name, 
