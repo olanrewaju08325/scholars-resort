@@ -39,13 +39,7 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-let cachedWorkingSmtpConfig: any = {
-  host: 'smtp.gmail.com',
-  port: 587,
-  user: 'admitwise2@gmail.com',
-  pass: 'fliwopndlqxipara',
-  from: 'admitwise2@gmail.com'
-};
+let cachedWorkingSmtpConfig: any = null;
 
 // Helper to resolve SMTP settings from DB or env or request
 async function getSmtpConfig(customConfig?: any) {
@@ -313,6 +307,13 @@ app.post('/api/payment-notification', async (req, res) => {
     const config = await getSmtpConfig();
     let transporter: nodemailer.Transporter;
 
+    if (!config.host && process.env.SMTP_HOST) {
+      config.host = process.env.SMTP_HOST;
+      config.port = Number(process.env.SMTP_PORT) || 587;
+      config.user = process.env.SMTP_USER || process.env.GMAIL_USER || '';
+      config.pass = process.env.SMTP_PASS || process.env.GMAIL_PASS || '';
+    }
+
     if (config.host) {
       transporter = nodemailer.createTransport({
         host: config.host,
@@ -324,16 +325,20 @@ app.post('/api/payment-notification', async (req, res) => {
     } else {
       transporter = nodemailer.createTransport({
         service: 'gmail',
-        auth: { user: 'admitwise2@gmail.com', pass: 'fliwopndlqxipara' }
+        auth: { 
+          user: process.env.SMTP_USER || process.env.GMAIL_USER || 'admitwise2@gmail.com', 
+          pass: process.env.SMTP_PASS || process.env.GMAIL_PASS || '' 
+        }
       });
     }
 
     const senderEmail = config.from || 'admitwise2@gmail.com';
+    const recipientAdmins = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
 
     // 1. Send Admin Notification Email
     await transporter.sendMail({
       from: `"Scholars Resort System" <${senderEmail}>`,
-      to: 'admitwise2@gmail.com',
+      to: recipientAdmins,
       subject: `New Manual Payment Upload - ₦${amount}`,
       html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
                <h2 style="color: #4F46E5;">New Manual Payment Uploaded</h2>
@@ -950,7 +955,9 @@ function mergeProfileWithOverrides(dbProfile: any, userId?: string) {
   const id = dbProfile?.id || userId;
   if (!id) return dbProfile;
   const overrides = persistentUserOverrides.get(id) || {};
-  const isMasterAdmin = (dbProfile?.email || overrides.email || '').toLowerCase().trim() === 'admitwise2@gmail.com';
+  const emailVal = (dbProfile?.email || overrides.email || '').toLowerCase().trim();
+  const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const isMasterAdmin = emailVal && MASTER_ADMINS.includes(emailVal);
   
   return {
     ...dbProfile,
@@ -1210,7 +1217,7 @@ app.put('/api/questions/:id', async (req, res) => {
 // API Route: Admin Device Reset & Exemption Management
 app.post('/api/admin/device/reset', async (req, res) => {
   const { user_id, email } = req.body;
-  const MASTER_ADMINS = ['admitwise2@gmail.com'];
+  const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
 
   try {
     if (email && MASTER_ADMINS.includes(email.toLowerCase().trim())) {

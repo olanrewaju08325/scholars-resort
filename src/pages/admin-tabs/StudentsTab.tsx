@@ -882,7 +882,8 @@ export const StudentsTab = () => {
                 ) : paginatedProfiles.length === 0 ? (
                   <tr><td colSpan={8} className="px-4 py-16 text-center text-slate-500">No accounts match the current filter criteria.</td></tr>
                 ) : paginatedProfiles.map(user => {
-                  const isMasterAdmin = user.email?.toLowerCase().trim() === 'admitwise2@gmail.com';
+                  const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+                  const isMasterAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim());
                   const guardians = studentToGuardians[user.id] || [];
                   const wards = guardianToStudents[user.id] || [];
                   const isBanned = user.status === 'banned' || user.is_banned;
@@ -1246,7 +1247,7 @@ export const StudentsTab = () => {
                   <div className="flex items-center gap-2 mt-1">
                     <select
                       value={selectedUser.role}
-                      disabled={selectedUser.email?.toLowerCase().trim() === 'admitwise2@gmail.com'}
+                      disabled={['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(selectedUser.email?.toLowerCase().trim() || '')}
                       onChange={(e) => handleRoleChange(selectedUser.id, e.target.value)}
                       className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none"
                     >
@@ -1367,7 +1368,7 @@ export const StudentsTab = () => {
                   </Button>
                 )}
 
-                {selectedUser.email?.toLowerCase().trim() !== 'admitwise2@gmail.com' && (
+                {!['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(selectedUser.email?.toLowerCase().trim() || '') && (
                   <Button 
                     variant="destructive"
                     size="sm" 
