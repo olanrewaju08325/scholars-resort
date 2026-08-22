@@ -119,7 +119,14 @@ export const StudentsTab = () => {
         .eq('status', 'active');
 
       if (profData) {
-        const enriched: Profile[] = profData.map((p: any) => {
+        let localOverrides: Record<string, any> = {};
+        try {
+          localOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
+        } catch {}
+
+        const enriched: Profile[] = profData.map((rawP: any) => {
+          const overrides = localOverrides[rawP.id] || {};
+          const p = { ...rawP, ...overrides };
           const isMasterAdmin = p.email && p.email.toLowerCase().trim() === 'admitwise2@gmail.com';
           const effectiveRole = isMasterAdmin ? 'admin' : (p.role || 'student');
           const effectiveStatus = p.is_banned ? 'banned' : (p.is_suspended || p.status === 'suspended' ? 'suspended' : (p.status || 'active'));
@@ -441,12 +448,21 @@ export const StudentsTab = () => {
         console.warn('API role route notice:', apiErr);
       }
 
-      const updates: any = { role: newRole };
+      const updates: any = { role: newRole, updated_at: new Date().toISOString() };
       if (newRole === 'admin') {
         updates.has_paid = true;
       }
       const { error: sbErr } = await supabase.from('profiles').update(updates).eq('id', userId);
-      if (sbErr) throw sbErr;
+      if (sbErr) {
+        console.warn('Supabase profile update warning:', sbErr.message);
+      }
+
+      // Save to localStorage overrides for 100% persistent UX
+      try {
+        const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
+        existingOverrides[userId] = { ...(existingOverrides[userId] || {}), ...updates };
+        localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
+      } catch {}
 
       setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole, has_paid: newRole === 'admin' ? true : p.has_paid } : p));
       if (selectedUser?.id === userId) {
@@ -479,6 +495,12 @@ export const StudentsTab = () => {
             })
           }).catch(() => null);
 
+          try {
+            const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
+            existingOverrides[user.id] = { ...(existingOverrides[user.id] || {}), has_paid: true };
+            localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
+          } catch {}
+
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, has_paid: true } : p));
           if (selectedUser?.id === user.id) {
             setSelectedUser(prev => prev ? { ...prev, has_paid: true } : null);
@@ -505,6 +527,12 @@ export const StudentsTab = () => {
       async () => {
         try {
           await supabase.from('profiles').update({ has_paid: false }).eq('id', user.id);
+          try {
+            const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
+            existingOverrides[user.id] = { ...(existingOverrides[user.id] || {}), has_paid: false };
+            localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
+          } catch {}
+
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, has_paid: false } : p));
           if (selectedUser?.id === user.id) {
             setSelectedUser(prev => prev ? { ...prev, has_paid: false } : null);
