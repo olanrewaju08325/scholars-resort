@@ -70,9 +70,7 @@ export const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ chil
 
   const isAdmin = 
     profile?.role === 'admin' || 
-    user?.email === 'olanrewajuhamilot@gmail.com' ||
     user?.email === 'admitwise2@gmail.com' ||
-    profile?.email === 'olanrewajuhamilot@gmail.com' ||
     profile?.email === 'admitwise2@gmail.com';
 
   // Allow accessing login or admin path directly so master admin can log in during maintenance

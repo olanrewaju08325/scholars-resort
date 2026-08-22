@@ -191,8 +191,39 @@ export const ContentStudioTab = () => {
           quality_score: 95,
         }));
 
-        await batchInsertQuestions(questionsToInsert);
-        saveCustomQuestions(questionsToInsert);
+        // Deduplicate against existing questions in DB for the selected subject
+        let finalQuestionsToInsert = questionsToInsert;
+        let skippedCount = 0;
+        try {
+          const { data: existingQs } = await supabase
+            .from('questions')
+            .select('question_text')
+            .eq('subject_id', targetSubId);
+
+          if (existingQs && existingQs.length > 0) {
+            const normalizedExisting = new Set(
+              existingQs.map(q => q.question_text.trim().toLowerCase().replace(/[^a-z0-9]/g, ''))
+            );
+            finalQuestionsToInsert = questionsToInsert.filter(q => {
+              const normalizedQ = q.question_text.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+              const isUnique = !normalizedExisting.has(normalizedQ);
+              if (!isUnique) skippedCount++;
+              return isUnique;
+            });
+          }
+        } catch (dedupErr) {
+          console.warn('[Deduplication] Failed to fetch existing questions, inserting all:', dedupErr);
+        }
+
+        if (finalQuestionsToInsert.length === 0) {
+          toast.info('All extracted questions are already present in your Question Bank (duplicates skipped)!');
+          setSelectedFile(null);
+          setUploading(false);
+          return;
+        }
+
+        await batchInsertQuestions(finalQuestionsToInsert);
+        saveCustomQuestions(finalQuestionsToInsert);
 
         try {
           await supabase.from('content_ingestion_jobs').insert({
@@ -209,7 +240,11 @@ export const ContentStudioTab = () => {
         }
 
         const subName = subjects.find(s => s.id === targetSubId)?.name || 'Subject';
-        toast.success(`Extracted & saved ALL ${extractedQuestions.length} questions into Question Bank for ${subName}!`);
+        if (skippedCount > 0) {
+          toast.success(`Saved ${finalQuestionsToInsert.length} unique questions into ${subName} (${skippedCount} duplicates skipped)!`);
+        } else {
+          toast.success(`Extracted & saved ALL ${extractedQuestions.length} questions into Question Bank for ${subName}!`);
+        }
         setSelectedFile(null);
         fetchInitialData();
         setUploading(false);
@@ -242,10 +277,45 @@ export const ContentStudioTab = () => {
           quality_score: 95,
         }));
 
-        await batchInsertQuestions(questionsToInsert);
+        // Deduplicate against existing questions in DB for the selected subject
+        let finalQuestionsToInsert = questionsToInsert;
+        let skippedCount = 0;
+        try {
+          const { data: existingQs } = await supabase
+            .from('questions')
+            .select('question_text')
+            .eq('subject_id', targetSubId);
+
+          if (existingQs && existingQs.length > 0) {
+            const normalizedExisting = new Set(
+              existingQs.map(q => q.question_text.trim().toLowerCase().replace(/[^a-z0-9]/g, ''))
+            );
+            finalQuestionsToInsert = questionsToInsert.filter(q => {
+              const normalizedQ = q.question_text.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+              const isUnique = !normalizedExisting.has(normalizedQ);
+              if (!isUnique) skippedCount++;
+              return isUnique;
+            });
+          }
+        } catch (dedupErr) {
+          console.warn('[Deduplication] Failed to fetch existing questions, inserting all:', dedupErr);
+        }
+
+        if (finalQuestionsToInsert.length === 0) {
+          toast.info('All extracted questions are already present in your Question Bank (duplicates skipped)!');
+          setRawText('');
+          setProcessingText(false);
+          return;
+        }
+
+        await batchInsertQuestions(finalQuestionsToInsert);
 
         const subName = subjects.find(s => s.id === targetSubId)?.name || 'Subject';
-        toast.success(`Extracted & inserted ${extractedQuestions.length} questions into ${subName}!`);
+        if (skippedCount > 0) {
+          toast.success(`Saved ${finalQuestionsToInsert.length} unique questions into ${subName} (${skippedCount} duplicates skipped)!`);
+        } else {
+          toast.success(`Extracted & inserted ${extractedQuestions.length} questions into ${subName}!`);
+        }
         setRawText('');
         fetchInitialData();
       } else {

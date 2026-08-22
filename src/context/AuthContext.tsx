@@ -89,17 +89,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (data && !error) {
         let loadedProfile = data as Profile;
-        // Master admin auto-elevation check
-        if ((loadedProfile.email === 'admitwise2@gmail.com' || loadedProfile.email === 'olanrewajuhamilot@gmail.com') && loadedProfile.role !== 'admin') {
+        // Master admin auto-elevation check using both profile and authenticated user email sources
+        const currentEmail = user?.email || loadedProfile.email || '';
+        const isMasterAdmin = currentEmail === 'admitwise2@gmail.com';
+        
+        if (isMasterAdmin && (loadedProfile.role !== 'admin' || !loadedProfile.email)) {
           loadedProfile.role = 'admin';
-          supabase.from('profiles').update({ role: 'admin' }).eq('id', userId).then();
+          loadedProfile.email = currentEmail;
+          supabase.from('profiles').update({ role: 'admin', email: currentEmail }).eq('id', userId).then();
         }
         setProfile(loadedProfile);
         setLoading(false);
       } else if (!data && !error) {
         // Profile row does not exist yet. Auto-create in DB to ensure foreign key constraints pass
         console.warn(`[AuthContext] No profile record found for user ${userId}. Creating default profile...`);
-        const isAdminEmail = user?.email === 'admitwise2@gmail.com' || user?.email === 'olanrewajuhamilot@gmail.com';
+        const isAdminEmail = user?.email === 'admitwise2@gmail.com';
         const metaRole = user?.user_metadata?.role;
         const pendingInvite = localStorage.getItem('pending_guardian_code');
         const assignedRole: Profile['role'] = isAdminEmail 
@@ -143,7 +147,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         console.warn('[AuthContext] Profile fetch failed, using fallback profile:', error);
         if (isMounted.current) {
-          const isAdminEmail = user?.email === 'admitwise2@gmail.com' || user?.email === 'olanrewajuhamilot@gmail.com';
+          const isAdminEmail = user?.email === 'admitwise2@gmail.com';
           const metaRole = user?.user_metadata?.role;
           const pendingInvite = localStorage.getItem('pending_guardian_code');
           const fallbackRole: Profile['role'] = isAdminEmail 
@@ -172,7 +176,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
       console.warn('[AuthContext] Profile fetch threw error, using fallback profile:', err);
       if (isMounted.current) {
-        const isAdminEmail = user?.email === 'admitwise2@gmail.com' || user?.email === 'olanrewajuhamilot@gmail.com';
+        const isAdminEmail = user?.email === 'admitwise2@gmail.com';
         const metaRole = user?.user_metadata?.role;
         const fallbackRole: Profile['role'] = isAdminEmail 
           ? 'admin' 
@@ -258,7 +262,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     if (
       profile.role === 'admin' || 
       profile.email === 'admitwise2@gmail.com' || 
-      profile.email === 'olanrewajuhamilot@gmail.com' || 
       user?.email === 'admitwise2@gmail.com'
     ) {
       setIsDeviceLocked(false);

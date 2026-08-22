@@ -19,6 +19,29 @@ export const MaterialsTab = () => {
   const [subjectId, setSubjectId] = useState('');
   const [isPremium, setIsPremium] = useState(false);
   const [file, setFile] = useState<File | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = () => {
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const droppedFile = e.dataTransfer.files[0];
+      if (droppedFile.name.toLowerCase().endsWith('.pdf')) {
+        setFile(droppedFile);
+      } else {
+        setUploadStatus({ type: 'error', message: 'Only PDF files are supported.' });
+      }
+    }
+  };
 
   const fetchMaterials = async () => {
     let remoteMaterials: any[] = [];
@@ -109,21 +132,30 @@ export const MaterialsTab = () => {
       // 1. Upload to Supabase Storage
       try {
         const { error: uploadError } = await supabase.storage
-          .from('materials')
+          .from('study-materials')
           .upload(filePath, file);
 
         if (!uploadError) {
-          const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(filePath);
+          const { data: publicUrlData } = supabase.storage.from('study-materials').getPublicUrl(filePath);
           publicUrl = publicUrlData?.publicUrl || filePath;
         } else {
-          // Fallback storage bucket
-          const { error: libStorageError } = await supabase.storage
-            .from('library')
+          console.warn('[Storage] study-materials bucket upload failed, trying fallback:', uploadError.message);
+          const { error: fallbackError } = await supabase.storage
+            .from('materials')
             .upload(filePath, file);
 
-          if (!libStorageError) {
-            const { data: publicUrlData } = supabase.storage.from('library').getPublicUrl(filePath);
+          if (!fallbackError) {
+            const { data: publicUrlData } = supabase.storage.from('materials').getPublicUrl(filePath);
             publicUrl = publicUrlData?.publicUrl || filePath;
+          } else {
+            const { error: libStorageError } = await supabase.storage
+              .from('library')
+              .upload(filePath, file);
+
+            if (!libStorageError) {
+              const { data: publicUrlData } = supabase.storage.from('library').getPublicUrl(filePath);
+              publicUrl = publicUrlData?.publicUrl || filePath;
+            }
           }
         }
       } catch (storageErr) {
@@ -292,7 +324,40 @@ export const MaterialsTab = () => {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">File (PDF) *</label>
-                <Input id="file-upload" type="file" accept=".pdf" onChange={handleFileChange} required className="bg-background border-border" />
+                <div 
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  onClick={() => document.getElementById('file-upload')?.click()}
+                  className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all duration-200 flex flex-col items-center justify-center space-y-2 ${
+                    isDragging 
+                      ? 'border-primary bg-primary/5 scale-[0.99]' 
+                      : file 
+                        ? 'border-green-500/50 bg-green-500/5' 
+                        : 'border-border hover:border-muted-foreground/30 hover:bg-muted/10'
+                  }`}
+                >
+                  <input 
+                    id="file-upload" 
+                    type="file" 
+                    accept=".pdf" 
+                    onChange={handleFileChange} 
+                    className="hidden" 
+                  />
+                  <Upload className={`w-8 h-8 ${file ? 'text-green-500' : 'text-muted-foreground'}`} />
+                  
+                  {file ? (
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-foreground truncate max-w-xs">{file.name}</p>
+                      <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB • Click or drag to replace</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Drag & drop your study material PDF here</p>
+                      <p className="text-xs text-muted-foreground mt-1">or click to browse local files</p>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex items-center gap-2">

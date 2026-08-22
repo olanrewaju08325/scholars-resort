@@ -7,8 +7,39 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SU
 const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'POST') {
+    // Handle logging via POST to /api/groq-telemetry
+    const {
+      model,
+      promptTokens = 0,
+      completionTokens = 0,
+      totalTokens = 0,
+      latencyMs = 0,
+      status = 'success'
+    } = req.body || {};
+
+    try {
+      const { data, error } = await supabase.from('ai_usage').insert({
+        provider: 'groq',
+        feature: 'groq_inference',
+        prompt_tokens: Number(promptTokens) || 0,
+        completion_tokens: Number(completionTokens) || 0,
+        total_tokens: Number(totalTokens) || (Number(promptTokens) + Number(completionTokens)),
+        created_at: new Date().toISOString()
+      }).select();
+
+      if (error) {
+        return res.status(200).json({ success: false, error: error.message });
+      }
+
+      return res.status(200).json({ success: true, message: 'Logged to database successfully', data });
+    } catch (err: any) {
+      return res.status(200).json({ success: false, error: err.message });
+    }
+  }
+
   if (req.method !== 'GET') {
-    return res.status(455).json({ success: false, error: 'Method Not Allowed' });
+    return res.status(405).json({ success: false, error: 'Method Not Allowed' });
   }
 
   try {

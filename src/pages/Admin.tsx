@@ -49,7 +49,7 @@ import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
 import { AdminSessionTimeout } from '@/components/admin/AdminSessionTimeout';
 
 export default function Admin() {
-  const { profile, signOut } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const navigate = useNavigate();
   const [activeModule, setActiveModule] = useState('dashboard');
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
@@ -72,7 +72,9 @@ export default function Admin() {
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  const isAdmin = profile?.role === 'admin' || profile?.email === 'admitwise2@gmail.com' || profile?.email === 'olanrewajuhamilot@gmail.com';
+  const isAdmin = profile?.role === 'admin' || 
+                  profile?.email === 'admitwise2@gmail.com' || 
+                  user?.email === 'admitwise2@gmail.com';
 
   if (!isAdmin) {
     return (

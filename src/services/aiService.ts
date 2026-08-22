@@ -189,14 +189,14 @@ export const callGeminiAPI = async (messages: Array<{ role: string; content: str
       const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) {
         try {
-          supabase.from('ai_usage').insert({
+          await supabase.from('ai_usage').insert({
             provider: 'gemini',
             feature: 'gemini_inference',
             prompt_tokens: 150,
             completion_tokens: 250,
             total_tokens: 400,
             created_at: new Date().toISOString()
-          }).then(() => {}, () => {});
+          });
         } catch {}
         return text;
       }
@@ -670,6 +670,11 @@ export const healAndParseJSON = (str: string, expectedKeys: string[] = []): any 
       clean = clean.substring(startIdx);
     }
   }
+
+  // Pre-sanitize: Escape raw, unescaped newlines and carriage returns inside double-quoted string literals
+  clean = clean.replace(/"([^"\\]*(?:\\.[^"\\]*)*)"/g, (match, p1) => {
+    return '"' + p1.replace(/\n/g, '\\n').replace(/\r/g, '\\r') + '"';
+  });
 
   // Attempt standard parsing first
   try {
