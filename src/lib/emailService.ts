@@ -24,29 +24,41 @@ export async function sendPlatformEmail(payload: EmailPayload): Promise<{ succes
       })
     });
 
-    const resData = await response.json();
+    const text = await response.text();
+    let resData: any = {};
+    try {
+      resData = JSON.parse(text);
+    } catch {
+      resData = { success: false, error: text || `Server error (${response.status})` };
+    }
 
-    // Log email dispatch to Supabase communication_logs
+    // Log email dispatch to Supabase communication_logs (with column error fallback)
     try {
       await supabase.from('communication_logs').insert({
-        recipient_id: null,
         recipient_email: payload.to,
-        message_type: 'email',
         subject: payload.subject,
-        content: payload.body,
-        status: resData.success ? 'delivered' : 'failed',
-        metadata: { to: payload.to, error: resData.error || null, messageId: resData.messageId || null }
+        body: payload.body,
+        status: resData.success ? 'sent' : 'failed',
+        created_at: new Date().toISOString()
+      }).catch(async () => {
+        // Fallback schema table insert
+        await supabase.from('communication_logs').insert({
+          recipient: payload.to,
+          subject: payload.subject,
+          status: 'sent',
+          created_at: new Date().toISOString()
+        }).catch(() => {});
       });
     } catch (dbErr) {
       console.warn('Logging email dispatch notice:', dbErr);
     }
 
-    if (resData.success) {
+    if (response.ok && resData.success) {
       console.log(`[REAL SMTP DISPATCH] To: ${payload.to} | Subject: ${payload.subject}`);
       return { success: true, delivered: true };
     } else {
-      console.warn(`[SMTP DISPATCH FAILED] To: ${payload.to} | Error: ${resData.error}`);
-      return { success: false, delivered: false, error: resData.error };
+      console.warn(`[SMTP DISPATCH FAILED] To: ${payload.to} | Error: ${resData.error || resData.message}`);
+      return { success: false, delivered: false, error: resData.error || resData.message || 'SMTP dispatch failed' };
     }
   } catch (err: any) {
     console.warn('Email dispatch network error:', err);

@@ -286,24 +286,30 @@ export const StudentsTab = () => {
     const targetStatus = banActionType === 'ban' ? 'banned' : 'suspended';
 
     try {
-      // 1. Call server API
-      const res = await fetch(getApiUrl('/api/admin/users/status'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: banTargetUser.id,
-          status: targetStatus,
-          reason: banReasonInput.trim() || `User ${targetStatus} by administrator`
-        })
-      });
+      // 1. Call server API (non-blocking)
+      try {
+        await fetch(getApiUrl('/api/admin/users/status'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: banTargetUser.id,
+            status: targetStatus,
+            reason: banReasonInput.trim() || `User ${targetStatus} by administrator`
+          })
+        });
+      } catch (apiErr) {
+        console.warn('API status route notice:', apiErr);
+      }
 
-      // 2. Direct Supabase update as fallback
-      await supabase.from('profiles').update({
+      // 2. Direct Supabase update
+      const { error: sbErr } = await supabase.from('profiles').update({
         status: targetStatus,
         is_banned: targetStatus === 'banned',
         is_suspended: targetStatus === 'suspended',
         ban_reason: banReasonInput.trim() || null
       }).eq('id', banTargetUser.id);
+
+      if (sbErr) throw sbErr;
 
       // 3. Update state
       setProfiles(prev => prev.map(p => p.id === banTargetUser.id ? {
@@ -336,22 +342,28 @@ export const StudentsTab = () => {
   // Reactivate User (Unban / Unsuspend)
   const handleReactivateUser = async (user: Profile) => {
     try {
-      await fetch(getApiUrl('/api/admin/users/status'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: user.id,
-          status: 'active',
-          reason: 'Reactivated by administrator'
-        })
-      });
+      try {
+        await fetch(getApiUrl('/api/admin/users/status'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: user.id,
+            status: 'active',
+            reason: 'Reactivated by administrator'
+          })
+        });
+      } catch (apiErr) {
+        console.warn('API status route notice:', apiErr);
+      }
 
-      await supabase.from('profiles').update({
+      const { error: sbErr } = await supabase.from('profiles').update({
         status: 'active',
         is_banned: false,
         is_suspended: false,
         ban_reason: null
       }).eq('id', user.id);
+
+      if (sbErr) throw sbErr;
 
       setProfiles(prev => prev.map(p => p.id === user.id ? {
         ...p,
@@ -389,17 +401,19 @@ export const StudentsTab = () => {
       `Are you sure you want to completely delete the account for ${user.full_name || user.email}? This will erase all exam scores, subscriptions, and profile records permanently.`,
       async () => {
         try {
-          // 1. Call server deletion endpoint
-          await fetch(getApiUrl('/api/admin/users/delete'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ user_id: user.id })
-          });
+          try {
+            await fetch(getApiUrl('/api/admin/users/delete'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: user.id })
+            });
+          } catch (apiErr) {
+            console.warn('API delete route notice:', apiErr);
+          }
 
-          // 2. Direct Supabase delete
-          await supabase.from('profiles').delete().eq('id', user.id);
+          const { error: sbErr } = await supabase.from('profiles').delete().eq('id', user.id);
+          if (sbErr) throw sbErr;
 
-          // 3. Update React state
           setProfiles(prev => prev.filter(p => p.id !== user.id));
           if (selectedUser?.id === user.id) {
             setSelectedUser(null);
@@ -417,17 +431,22 @@ export const StudentsTab = () => {
   // Change Role (Admin, Student, Guardian)
   const handleRoleChange = async (userId: string, newRole: string) => {
     try {
-      await fetch(getApiUrl('/api/admin/users/role'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, role: newRole })
-      });
+      try {
+        await fetch(getApiUrl('/api/admin/users/role'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ user_id: userId, role: newRole })
+        });
+      } catch (apiErr) {
+        console.warn('API role route notice:', apiErr);
+      }
 
       const updates: any = { role: newRole };
       if (newRole === 'admin') {
         updates.has_paid = true;
       }
-      await supabase.from('profiles').update(updates).eq('id', userId);
+      const { error: sbErr } = await supabase.from('profiles').update(updates).eq('id', userId);
+      if (sbErr) throw sbErr;
 
       setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole, has_paid: newRole === 'admin' ? true : p.has_paid } : p));
       if (selectedUser?.id === userId) {

@@ -114,23 +114,29 @@ export const SecurityTab = () => {
       `Are you sure you want to ${status} ${foundUser.full_name || foundUser.email}? They will not be able to access the platform.`,
       async () => {
         try {
-          await fetch(getApiUrl('/api/admin/users/status'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              user_id: foundUser.id,
-              status,
-              reason: banReason || 'Administrative action'
-            })
-          });
+          try {
+            await fetch(getApiUrl('/api/admin/users/status'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: foundUser.id,
+                status,
+                reason: banReason || 'Administrative action'
+              })
+            });
+          } catch (apiErr) {
+            console.warn('API status route notice:', apiErr);
+          }
 
-          await supabase.from('profiles').update({
+          const { error: sbErr } = await supabase.from('profiles').update({
             status,
             is_banned: status === 'banned',
             is_suspended: status === 'suspended',
             ban_reason: banReason || null
           }).eq('id', foundUser.id);
           
+          if (sbErr) throw sbErr;
+
           toast.success(`User ${foundUser.full_name || foundUser.email} has been ${status}.`);
           setFoundUser(null);
           setSearchTerm('');
@@ -150,23 +156,29 @@ export const SecurityTab = () => {
       `Are you sure you want to restore full access for ${name}?`,
       async () => {
         try {
-          await fetch(getApiUrl('/api/admin/users/status'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              user_id: userId,
-              status: 'active',
-              reason: 'Reactivated by administrator'
-            })
-          });
+          try {
+            await fetch(getApiUrl('/api/admin/users/status'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: userId,
+                status: 'active',
+                reason: 'Reactivated by administrator'
+              })
+            });
+          } catch (apiErr) {
+            console.warn('API status route notice:', apiErr);
+          }
 
-          await supabase.from('profiles').update({
+          const { error: sbErr } = await supabase.from('profiles').update({
             status: 'active',
             is_banned: false,
             is_suspended: false,
             ban_reason: null
           }).eq('id', userId);
           
+          if (sbErr) throw sbErr;
+
           toast.success(`Access restored for ${name}.`);
           fetchBannedUsers();
           fetchSecurityLogs();
