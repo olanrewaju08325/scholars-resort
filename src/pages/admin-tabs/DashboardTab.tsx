@@ -35,12 +35,6 @@ export const DashboardTab = () => {
   const [liveUsers, setLiveUsers] = useState(0);
   const [recentLogs, setRecentLogs] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchDashboardData();
-    const interval = setInterval(fetchLiveUsers, 30000);
-    return () => clearInterval(interval);
-  }, []);
-
   const fetchLiveUsers = async () => {
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60000).toISOString();
     const { data } = await supabase
@@ -133,6 +127,12 @@ export const DashboardTab = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchDashboardData();
+    const interval = setInterval(fetchLiveUsers, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="space-y-6 pb-20">

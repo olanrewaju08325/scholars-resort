@@ -23,11 +23,6 @@ export const SecurityTab = () => {
   // Security Logs
   const [securityLogs, setSecurityLogs] = useState<any[]>([]);
 
-  useEffect(() => {
-    fetchBannedUsers();
-    fetchSecurityLogs();
-  }, []);
-
   const fetchBannedUsers = async () => {
     setLoading(true);
     try {
@@ -74,6 +69,11 @@ export const SecurityTab = () => {
       setSecurityLogs([]);
     }
   };
+
+  useEffect(() => {
+    fetchBannedUsers();
+    fetchSecurityLogs();
+  }, []);
 
   const searchUser = async (e: React.FormEvent) => {
     e.preventDefault();

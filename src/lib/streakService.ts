@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { checkStreakBadges } from './gamification';
+import { awardDailyStreakXp, checkStreakBadges } from './gamification';
 
 export const recordStudyAction = async (userId: string, actionType: 'exam' | 'practice' | 'library') => {
   try {
@@ -67,8 +67,8 @@ export const recordStudyAction = async (userId: string, actionType: 'exam' | 'pr
       longest_streak: newLongest
     }).eq('id', userId);
 
-    // 4. Check if any streak-based badges should be awarded
-    await checkStreakBadges(userId, newStreak);
+    // 4. Award Daily Streak XP and badges
+    await awardDailyStreakXp(userId, newStreak);
 
   } catch (err) {
     console.error("Error updating streak:", err);

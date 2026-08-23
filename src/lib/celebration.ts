@@ -138,3 +138,47 @@ export function playWarningBeep() {
     console.warn('Audio beep error:', e);
   }
 }
+
+/**
+ * Play a rich celebratory fanfare for Level Up events
+ */
+export function playLevelUpFanfare() {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    const now = ctx.currentTime;
+    // Fanfare chords: C4, E4, G4 -> C5 (Triumphant trumpet style)
+    const notes = [
+      { freq: 261.63, start: 0, dur: 0.15 },    // C4
+      { freq: 329.63, start: 0.12, dur: 0.15 }, // E4
+      { freq: 392.00, start: 0.24, dur: 0.2 },  // G4
+      { freq: 523.25, start: 0.42, dur: 0.6 },  // C5
+      { freq: 659.25, start: 0.42, dur: 0.6 }   // E5 harmony
+    ];
+
+    notes.forEach(note => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(note.freq, now + note.start);
+
+      gain.gain.setValueAtTime(0, now + note.start);
+      gain.gain.linearRampToValueAtTime(0.18, now + note.start + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now + note.start);
+      osc.stop(now + note.start + note.dur);
+    });
+  } catch (e) {
+    console.warn('Audio Level-Up fanfare error:', e);
+  }
+}

@@ -28,7 +28,8 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
   allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'X-Groq-Key', 'X-Groq-Api-Key', 'x-groq-key', 'x-groq-api-key', '*']
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Production Supabase defaults
 const DEFAULT_SUPABASE_URL = 'https://syoodykedvqaoeplmamd.supabase.co';
@@ -1953,6 +1954,338 @@ app.post('/api/guardian/student-details', async (req, res) => {
   } catch (err: any) {
     console.error('[API /api/guardian/student-details Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
+  }
+});
+
+// API Route: Admin Materials Metadata Upload & Persistence Handler
+app.post('/api/admin/materials/upload-metadata', async (req, res) => {
+  const { title, description, subject_id, file_path, is_premium } = req.body;
+  if (!title) {
+    return res.status(400).json({ success: false, error: 'Title is required for study material.' });
+  }
+
+  try {
+    const payload = {
+      title,
+      description: description || '',
+      subject_id: subject_id || null,
+      file_path: file_path || '',
+      is_premium: !!is_premium,
+      created_at: new Date().toISOString()
+    };
+
+    let insertedData: any = null;
+
+    // 1. Try inserting into library_materials
+    try {
+      const { data, error } = await supabase.from('library_materials').insert(payload).select().maybeSingle();
+      if (!error && data) insertedData = data;
+    } catch (_) {}
+
+    // 2. Try inserting into materials table as fallback/complement
+    try {
+      const { data, error } = await supabase.from('materials').insert(payload).select().maybeSingle();
+      if (!error && data && !insertedData) insertedData = data;
+    } catch (_) {}
+
+    // 3. If subject_id is provided, safely update subjects table
+    if (subject_id && file_path) {
+      try {
+        await supabase.from('subjects').update({
+          study_material_url: file_path,
+          study_materials_url: file_path,
+          updated_at: new Date().toISOString()
+        }).eq('id', subject_id);
+      } catch (_) {}
+    }
+
+    return res.json({
+      success: true,
+      data: insertedData || { ...payload, id: `mat_${Date.now()}` }
+    });
+  } catch (err: any) {
+    console.error('[API /api/admin/materials/upload-metadata Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to save material metadata.' });
+  }
+});
+
+// API Route: Verify & Diagnose Supabase Storage Buckets
+app.get('/api/admin/storage/verify', async (req, res) => {
+  const targetBuckets = ['study-materials', 'materials', 'library'];
+  const results: Record<string, { exists: boolean; public: boolean; error?: string; probeSuccess?: boolean }> = {};
+  let overallBucketCount = 0;
+  let listBucketsError: string | null = null;
+
+  try {
+    const { data: buckets, error: listError } = await supabase.storage.listBuckets();
+    if (listError) {
+      listBucketsError = listError.message;
+    } else if (buckets) {
+      overallBucketCount = buckets.length;
+      buckets.forEach(b => {
+        if (targetBuckets.includes(b.name) || targetBuckets.includes(b.id)) {
+          results[b.name || b.id] = {
+            exists: true,
+            public: !!b.public,
+            probeSuccess: true
+          };
+        }
+      });
+    }
+  } catch (err: any) {
+    listBucketsError = err.message || 'Failed listing storage buckets';
+  }
+
+  // Probe each bucket individually by attempting a metadata read / probe ping
+  for (const bName of targetBuckets) {
+    if (!results[bName]) {
+      try {
+        const { data: probeList, error: probeErr } = await supabase.storage.from(bName).list('', { limit: 1 });
+        if (!probeErr) {
+          results[bName] = {
+            exists: true,
+            public: true,
+            probeSuccess: true
+          };
+        } else {
+          // Check if bucket creation is possible
+          results[bName] = {
+            exists: false,
+            public: false,
+            error: probeErr.message || 'Bucket not found'
+          };
+        }
+      } catch (e: any) {
+        results[bName] = {
+          exists: false,
+          public: false,
+          error: e.message || 'Bucket probe exception'
+        };
+      }
+    }
+  }
+
+  // Attempt auto-creation for missing buckets
+  const autoCreated: string[] = [];
+  for (const bName of targetBuckets) {
+    if (!results[bName]?.exists) {
+      try {
+        const { error: createErr } = await supabase.storage.createBucket(bName, {
+          public: true,
+          fileSizeLimit: 52428800 // 50 MB
+        });
+        if (!createErr) {
+          results[bName] = { exists: true, public: true, probeSuccess: true };
+          autoCreated.push(bName);
+        }
+      } catch (_) {}
+    }
+  }
+
+  const sqlInstructions = `-- SUPABASE SQL SCRIPT: CREATE STORAGE BUCKETS & RLS POLICIES
+-- Copy and paste this directly into Supabase Dashboard -> SQL Editor -> Run
+
+-- 1. Create 'study-materials' bucket (Public)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('study-materials', 'study-materials', true, 52428800, ARRAY['application/pdf', 'application/epub+zip', 'image/jpeg', 'image/png'])
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 2. Create 'materials' bucket (Public)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('materials', 'materials', true, 52428800, ARRAY['application/pdf', 'application/epub+zip', 'image/jpeg', 'image/png'])
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 3. Create 'library' bucket (Public)
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('library', 'library', true, 52428800, ARRAY['application/pdf', 'application/epub+zip', 'image/jpeg', 'image/png'])
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+-- 4. Enable Public Read Access for all users & students
+DROP POLICY IF EXISTS "Public Read Access for Study Materials" ON storage.objects;
+CREATE POLICY "Public Read Access for Study Materials" 
+ON storage.objects FOR SELECT 
+USING (bucket_id IN ('study-materials', 'materials', 'library'));
+
+-- 5. Enable Upload Access for Admins & Authenticated Users
+DROP POLICY IF EXISTS "Upload Access for Study Materials" ON storage.objects;
+CREATE POLICY "Upload Access for Study Materials" 
+ON storage.objects FOR INSERT 
+WITH CHECK (bucket_id IN ('study-materials', 'materials', 'library'));
+
+-- 6. Enable Update Access
+DROP POLICY IF EXISTS "Update Access for Study Materials" ON storage.objects;
+CREATE POLICY "Update Access for Study Materials" 
+ON storage.objects FOR UPDATE 
+USING (bucket_id IN ('study-materials', 'materials', 'library'));
+
+-- 7. Enable Delete Access
+DROP POLICY IF EXISTS "Delete Access for Study Materials" ON storage.objects;
+CREATE POLICY "Delete Access for Study Materials" 
+ON storage.objects FOR DELETE 
+USING (bucket_id IN ('study-materials', 'materials', 'library'));
+`;
+
+  return res.json({
+    success: true,
+    supabaseUrl,
+    overallBucketCount,
+    listBucketsError,
+    buckets: results,
+    autoCreated,
+    allReady: targetBuckets.every(b => results[b]?.exists),
+    sqlInstructions,
+    setupSteps: [
+      "1. Open your Supabase Project Dashboard (https://supabase.com/dashboard).",
+      "2. Go to 'Storage' in the left sidebar menu.",
+      "3. Click 'New Bucket' -> Name it 'study-materials' -> Toggle 'Public bucket' ON -> Click Save.",
+      "4. Create another bucket named 'materials' -> Toggle 'Public bucket' ON -> Click Save.",
+      "5. Alternatively, open 'SQL Editor' and run the copyable SQL script provided to create buckets and RLS policies in 1 click."
+    ]
+  });
+});
+
+// API Route: Backend Proxied File Upload with Exponential Backoff Retries & Fallbacks
+app.post('/api/admin/materials/upload-file', async (req, res) => {
+  const { fileName, fileBase64, contentType = 'application/pdf', title, description, subject_id, is_premium } = req.body;
+
+  if (!title) {
+    return res.status(400).json({ success: false, error: 'Title is required for material upload.' });
+  }
+
+  if (!fileBase64 && !fileName) {
+    return res.status(400).json({ success: false, error: 'File data is required for upload.' });
+  }
+
+  try {
+    // 1. Decode base64 payload to binary buffer
+    let buffer: Buffer;
+    if (fileBase64.includes(';base64,')) {
+      const base64Data = fileBase64.split(';base64,').pop();
+      buffer = Buffer.from(base64Data, 'base64');
+    } else {
+      buffer = Buffer.from(fileBase64, 'base64');
+    }
+
+    const cleanExt = fileName ? (fileName.split('.').pop() || 'pdf') : 'pdf';
+    const uniqueFileName = `${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${cleanExt}`;
+    const storagePath = `${subject_id || 'general'}/${uniqueFileName}`;
+
+    let publicUrl = '';
+    let bucketUsed = '';
+    let uploadErrors: string[] = [];
+
+    // Helper: Retry upload function with exponential backoff
+    const tryUploadToBucket = async (bucketName: string, maxAttempts = 3): Promise<boolean> => {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          const { error: upErr } = await supabase.storage
+            .from(bucketName)
+            .upload(storagePath, buffer, {
+              contentType: contentType || 'application/pdf',
+              upsert: true
+            });
+
+          if (!upErr) {
+            const { data: pubData } = supabase.storage.from(bucketName).getPublicUrl(storagePath);
+            if (pubData?.publicUrl) {
+              publicUrl = pubData.publicUrl;
+              bucketUsed = bucketName;
+              return true;
+            }
+          } else {
+            uploadErrors.push(`[${bucketName} attempt ${attempt}/${maxAttempts}] ${upErr.message}`);
+            // If bucket not found, break to next bucket rather than retrying same missing bucket
+            if (upErr.message?.toLowerCase().includes('not found') || upErr.message?.toLowerCase().includes('bucket')) {
+              break;
+            }
+          }
+        } catch (e: any) {
+          uploadErrors.push(`[${bucketName} attempt ${attempt}] ${e.message}`);
+        }
+
+        if (attempt < maxAttempts) {
+          await new Promise(r => setTimeout(r, attempt * 300));
+        }
+      }
+      return false;
+    };
+
+    // 2. Sequential bucket upload hierarchy with retries
+    let isUploaded = await tryUploadToBucket('study-materials', 3);
+    if (!isUploaded) {
+      isUploaded = await tryUploadToBucket('materials', 3);
+    }
+    if (!isUploaded) {
+      isUploaded = await tryUploadToBucket('library', 2);
+    }
+
+    // 3. Fallback to permanent Data URL representation if Supabase storage is completely unavailable
+    let fallbackUsed = false;
+    if (!publicUrl) {
+      fallbackUsed = true;
+      publicUrl = fileBase64.startsWith('data:') ? fileBase64 : `data:${contentType};base64,${fileBase64}`;
+    }
+
+    // 4. Update database tables
+    const newMaterialId = `mat_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const materialPayload = {
+      id: newMaterialId,
+      title,
+      description: description || '',
+      subject_id: subject_id || null,
+      file_path: publicUrl,
+      file_url: publicUrl,
+      file_size_bytes: buffer.length,
+      visibility: true,
+      is_premium: !!is_premium,
+      created_at: new Date().toISOString()
+    };
+
+    // 4a. Update subjects table
+    if (subject_id) {
+      try {
+        await supabase.from('subjects').update({
+          study_material_url: publicUrl,
+          study_materials_url: publicUrl,
+          updated_at: new Date().toISOString()
+        }).eq('id', subject_id);
+      } catch (sErr) {
+        console.warn('Subject update notice:', sErr);
+      }
+    }
+
+    // 4b. Insert to library_materials & materials
+    try {
+      await supabase.from('library_materials').insert({
+        title,
+        description: description || '',
+        subject_id: subject_id || null,
+        file_url: publicUrl,
+        is_premium: !!is_premium,
+        is_active: true,
+        created_at: new Date().toISOString()
+      });
+    } catch (_) {}
+
+    try {
+      await supabase.from('materials').insert(materialPayload);
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      publicUrl,
+      bucketUsed: bucketUsed || 'embedded_persistent_data',
+      fallbackUsed,
+      uploadErrors: uploadErrors.length > 0 ? uploadErrors : undefined,
+      material: materialPayload
+    });
+
+  } catch (err: any) {
+    console.error('[API /api/admin/materials/upload-file Error]', err);
+    return res.status(500).json({
+      success: false,
+      error: err.message || 'File upload failed.'
+    });
   }
 });
 

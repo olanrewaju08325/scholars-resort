@@ -4,8 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Power, ShieldAlert, Key, Mail, RefreshCw, Save, Send, CheckCircle2, AlertCircle, Zap, ShieldCheck } from 'lucide-react';
-import { testSMTPEmail } from '@/services/emailService';
+import { Power, ShieldAlert, Key, Mail, RefreshCw, Save } from 'lucide-react';
 import { SMTPHealthCheck } from '@/components/admin/SMTPHealthCheck';
 
 export const SettingsTab = () => {
@@ -49,10 +48,6 @@ export const SettingsTab = () => {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    fetchSettings();
-  }, []);
 
   const fetchSettings = async () => {
     setLoading(true);
@@ -110,6 +105,10 @@ export const SettingsTab = () => {
     setLoading(false);
   };
 
+  useEffect(() => {
+    fetchSettings();
+  }, []);
+
   const saveSettings = async () => {
     setSaving(true);
     try {
@@ -163,7 +162,7 @@ export const SettingsTab = () => {
       ], { onConflict: 'setting_key' });
       
       toast.success("All System Controls & SMTP Settings saved successfully!");
-    } catch (e) {
+    } catch (_e) {
       toast.error("Failed to save settings.");
     }
     setSaving(false);

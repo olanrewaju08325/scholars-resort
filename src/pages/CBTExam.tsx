@@ -9,7 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/hooks/useConfirm';
 import { recordStudyAction } from '@/lib/streakService';
-import { checkAndAwardBadges } from '@/lib/gamification';
+import { awardMockExamCompletionXp, checkAndAwardBadges } from '@/lib/gamification';
 import { saveExamSnapshot, clearExamSnapshot } from '@/lib/offlineDb';
 import { persistActiveExamSession, getInterruptedExamSession, clearInterruptedExamSession } from '@/lib/examSessionStorage';
 import { enqueueOfflineWrite } from '@/lib/syncQueue';
@@ -275,17 +275,16 @@ const CBTExam = () => {
         console.warn('Streak logging fallback:', streakErr);
       }
 
-      // Gamification (if online)
+      // Award XP, Level calculation and Badges for completing CBT mock exam
       try {
-        const { count } = await supabase.from('exam_sessions').select('id', { count: 'exact', head: true }).eq('user_id', profile.id);
-        await checkAndAwardBadges(profile.id, {
-          score: percentageScore,
-          timeSpentSecs: timeSpentSeconds,
-          totalTimeSecs: 7200,
-          isFirstExam: count === 1
+        await awardMockExamCompletionXp(profile.id, {
+          score,
+          totalQuestions: questions.length,
+          timeSpentSeconds,
+          totalTimeSeconds: 7200
         });
       } catch (gamifyErr) {
-        console.warn('Gamification badge check offline notice:', gamifyErr);
+        console.warn('Gamification badge & XP award offline notice:', gamifyErr);
       }
     }
     

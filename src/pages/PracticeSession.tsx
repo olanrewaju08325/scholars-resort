@@ -6,7 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { recordStudyAction } from '@/lib/streakService';
-import { checkAndAwardBadges } from '@/lib/gamification';
+import { awardXp, checkAndAwardBadges } from '@/lib/gamification';
 import { withRetry } from '@/lib/apiWithRetry';
 import { toast } from 'sonner';
 import { callGroqAPI } from '@/services/aiService';
@@ -272,6 +272,9 @@ const PracticeSession = () => {
       const percentageScore = questions.length > 0 ? (score / questions.length) * 100 : 0;
       
       if (profile) {
+        const practiceXp = 30 + Math.round((percentageScore / 100) * 40);
+        await awardXp(profile.id, practiceXp, `Completed ${state?.learningStyle || 'Practice'} Session (${score}/${questions.length})`);
+
         await checkAndAwardBadges(profile.id, {
           score: percentageScore,
           timeSpentSecs: totalTime,
