@@ -37,6 +37,43 @@ export const MaterialsTab = () => {
   const [file, setFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Diagnostics & RLS & Modal State
+  const [rlsChecking, setRlsChecking] = useState(false);
+  const [rlsStatus, setRlsStatus] = useState<any>(null);
+  const [diagnosticsLoading, setDiagnosticsLoading] = useState(false);
+  const [bucketDiagnostics, setBucketDiagnostics] = useState<any>(null);
+  const [batchDefaultSubjectId, setBatchDefaultSubjectId] = useState<string>('');
+  const [sqlModalOpen, setSqlModalOpen] = useState(false);
+  const [copiedSql, setCopiedSql] = useState(false);
+
+  const handleCopySql = () => {
+    const sqlScript = bucketDiagnostics?.sqlInstructions || `-- Create Buckets & RLS
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('study-materials', 'study-materials', true, 52428800)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('materials', 'materials', true, 52428800)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit)
+VALUES ('library', 'library', true, 52428800)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+CREATE POLICY "Public Read Access for Study Materials" 
+ON storage.objects FOR SELECT 
+USING (bucket_id IN ('study-materials', 'materials', 'library'));
+
+CREATE POLICY "Upload Access for Study Materials" 
+ON storage.objects FOR INSERT 
+WITH CHECK (bucket_id IN ('study-materials', 'materials', 'library'));`;
+
+    navigator.clipboard.writeText(sqlScript);
+    setCopiedSql(true);
+    toast.success('SQL Script copied to clipboard!');
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
+
   // Helper: Convert File to Base64 String
   const fileToBase64 = (fileObj: File): Promise<string> => {
     return new Promise((resolve, reject) => {

@@ -25,11 +25,13 @@ import {
   type ParsedQuestionItem, 
   type CsvParseResult 
 } from '@/lib/csvQuestionParser';
+import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 
 export const QuestionBankTab = () => {
   const [questions, setQuestions] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
+  const [subjectCounts, setSubjectCounts] = useState<Record<string, number>>({});
   
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
@@ -114,6 +116,16 @@ export const QuestionBankTab = () => {
       setSubjects(sData);
       if (sData.length > 0 && !subjectId) setSubjectId(sData[0].id);
     }
+
+    try {
+      const aggResult = await getSubjectQuestionCountsAggregation();
+      if (aggResult && aggResult.totalCounts) {
+        setSubjectCounts(aggResult.totalCounts);
+      }
+    } catch (aggErr) {
+      console.warn('Failed to load subject counts aggregation in QuestionBankTab:', aggErr);
+    }
+
     setLoading(false);
   };
 
@@ -1001,8 +1013,8 @@ export const QuestionBankTab = () => {
                  >
                    <option value="all">All Subjects ({questions.length})</option>
                    {subjects.map(s => (
-                     <option key={s.id} value={s.id}>{s.name}</option>
-                   ))}
+                      <option key={s.id} value={s.id}>{s.name} ({subjectCounts[s.id] ?? 0})</option>
+                    ))}
                  </select>
                </div>
              </div>
