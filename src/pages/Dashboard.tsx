@@ -22,6 +22,8 @@ import { XPProgressPanel } from '@/components/dashboard/XPProgressPanel';
 import { BurnoutDetector } from '@/components/dashboard/BurnoutDetector';
 import { PomodoroTimer } from '@/components/dashboard/PomodoroTimer';
 import { PerformanceTrendChart } from '@/components/dashboard/PerformanceTrendChart';
+import { DashboardWidget } from '@/components/dashboard/DashboardWidget';
+import { DailyGoalTracker } from '@/components/dashboard/DailyGoalTracker';
 import { SubjectMasteryRadarChart } from '@/components/SubjectMasteryRadarChart';
 import { JambScorePredictorCard } from '@/components/dashboard/JambScorePredictorCard';
 import { DailyStudyTip } from '@/components/dashboard/DailyStudyTip';
@@ -29,10 +31,12 @@ import { StudyStreakCalendar } from '@/components/dashboard/StudyStreakCalendar'
 import { Badges } from '@/components/Badges';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { GroqLiveQuotaWidget } from '@/components/GroqLiveQuotaWidget';
-import { Loader2 } from 'lucide-react';
+import { DashboardSkeleton } from '@/components/dashboard/skeletons/DashboardSkeleton';
+import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { motion } from 'framer-motion';
 
 export default function Dashboard() {
+  usePerfMonitoring('Dashboard');
   const { profile } = useAuth();
   const { examsTaken, averageScore, streak, history, loading: statsLoading } = useStudentStats();
   const stats = { examsTaken, averageScore, streak, history };
@@ -45,11 +49,7 @@ export default function Dashboard() {
   }, [profile, navigate]);
 
   if (statsLoading || !profile) {
-    return (
-      <div className="flex h-screen items-center justify-center bg-background text-foreground">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (
@@ -96,6 +96,11 @@ export default function Dashboard() {
               <DailyMission />
             </motion.div>
 
+            {/* Daily Practice Goal Tracker Component */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
+              <DailyGoalTracker />
+            </motion.div>
+
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
               <QuickActions />
             </motion.div>
@@ -107,6 +112,11 @@ export default function Dashboard() {
             
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
                <StatsOverview stats={stats} />
+            </motion.div>
+
+            {/* Dashboard Performance Trends & Score Improvement Widget */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.23 }}>
+               <DashboardWidget history={stats.history} studentName={profile?.full_name} />
             </motion.div>
 
             {/* Performance Trend Recharts Line Chart */}

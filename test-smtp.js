@@ -1,19 +1,19 @@
-const http = require('http');
+import http from 'http';
 
 const data = JSON.stringify({
   to: 'olanrewajuhamilot@gmail.com',
-  subject: 'Test Email from System Admin',
-  body: '<p>If you are receiving this, the SMTP server configuration is working successfully.</p>'
+  subject: 'Test Email from System Admin - Scholars Resort',
+  html: '<p>If you are receiving this, the SMTP server configuration is working successfully across all scenarios.</p>'
 });
 
 const options = {
-  hostname: 'localhost',
+  hostname: '127.0.0.1',
   port: 3000,
   path: '/api/send-email',
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Content-Length': data.length
+    'Content-Length': Buffer.byteLength(data)
   }
 };
 
@@ -24,12 +24,12 @@ const req = http.request(options, res => {
     d += chunk;
   });
   res.on('end', () => {
-    console.log(d);
+    console.log('Response:', d);
   });
 });
 
 req.on('error', error => {
-  console.error(error);
+  console.error('Request Error:', error.message);
 });
 
 req.write(data);

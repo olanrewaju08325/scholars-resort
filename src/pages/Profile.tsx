@@ -3,17 +3,30 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { User, Mail, Phone, CheckCircle2, ShieldCheck, Crown, BookOpen } from 'lucide-react';
+import { User, Mail, Phone, CheckCircle2, ShieldCheck, Crown, BookOpen, BatteryCharging, BatteryLow, Download, FileJson, Zap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Badges } from '@/components/Badges';
+import { useBatterySaver } from '@/lib/batterySaver';
+import { exportOfflineDataAsJson } from '@/lib/offlineExport';
 
 export default function Profile() {
   const { profile, user } = useAuth();
+  const { isBatterySaver, toggleBatterySaver } = useBatterySaver();
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
   const [utmeSubjects, setUtmeSubjects] = useState<string[]>(profile?.utme_subjects || ['Use of English']);
   const [loading, setLoading] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportBackup = async () => {
+    setExporting(true);
+    try {
+      await exportOfflineDataAsJson(user?.id);
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!fullName.trim() || !user || utmeSubjects.length !== 4) return;
@@ -186,6 +199,78 @@ export default function Profile() {
                   </Button>
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Battery Saver Setting Card */}
+          <Card className="border border-border bg-card shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <BatteryCharging className="w-4 h-4 text-amber-500" />
+                  Battery Saver
+                </span>
+                <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isBatterySaver ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-muted text-muted-foreground'}`}>
+                  {isBatterySaver ? 'ENABLED' : 'OFF'}
+                </span>
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Throttles UI animations and increases background sync intervals to save battery during long study marathons.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                id="toggle-battery-saver-btn"
+                variant={isBatterySaver ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => {
+                  const active = toggleBatterySaver();
+                  if (active) {
+                    toast.success('Battery Saver Mode Activated', { icon: '🔋' });
+                  } else {
+                    toast.info('Battery Saver Mode Deactivated');
+                  }
+                }}
+                className={`w-full text-xs font-semibold ${isBatterySaver ? 'bg-amber-600 hover:bg-amber-700 text-white' : ''}`}
+              >
+                {isBatterySaver ? (
+                  <>
+                    <BatteryLow className="w-3.5 h-3.5 mr-1.5" />
+                    Disable Battery Saver
+                  </>
+                ) : (
+                  <>
+                    <Zap className="w-3.5 h-3.5 mr-1.5 text-amber-500" />
+                    Enable Battery Saver
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Offline Data Backup / JSON Export Card */}
+          <Card className="border border-border bg-card shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2">
+                <FileJson className="w-4 h-4 text-primary" />
+                Offline Data Backup
+              </CardTitle>
+              <CardDescription className="text-xs">
+                Export all your locally saved exam history, study progress, and queue as a JSON backup file.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                id="export-offline-json-btn"
+                variant="outline"
+                size="sm"
+                onClick={handleExportBackup}
+                disabled={exporting}
+                className="w-full text-xs font-semibold hover:bg-primary/10 hover:text-primary hover:border-primary/40"
+              >
+                <Download className="w-3.5 h-3.5 mr-1.5" />
+                {exporting ? 'Generating Backup...' : 'Export Offline Data (JSON)'}
+              </Button>
             </CardContent>
           </Card>
 

@@ -84,13 +84,38 @@ const Pricing = () => {
       const fileName = `${user.id}-${Date.now()}.${fileExt}`;
       const filePath = `receipts/${fileName}`;
 
-      const { error: uploadError } = await supabase.storage
-        .from('materials')
-        .upload(filePath, file, { upsert: false });
+      let receiptUrl = '';
+      try {
+        const { error: uploadError } = await supabase.storage
+          .from('materials')
+          .upload(filePath, file, { upsert: true });
 
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
+        if (!uploadError) {
+          const { data: urlData } = supabase.storage.from('materials').getPublicUrl(filePath);
+          receiptUrl = urlData.publicUrl;
+        } else {
+          console.warn('[Storage] materials upload error, trying fallback:', uploadError.message);
+          const { error: fallbackError } = await supabase.storage
+            .from('study-materials')
+            .upload(filePath, file, { upsert: true });
+          if (!fallbackError) {
+            const { data: urlData } = supabase.storage.from('study-materials').getPublicUrl(filePath);
+            receiptUrl = urlData.publicUrl;
+          }
+        }
+      } catch (storageErr) {
+        console.warn('Storage bucket upload notice:', storageErr);
+      }
 
-      const { data: urlData } = supabase.storage.from('materials').getPublicUrl(filePath);
+      // If storage upload failed or returned empty, read as Data URL
+      if (!receiptUrl) {
+        receiptUrl = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string || '');
+          reader.onerror = () => resolve('');
+          reader.readAsDataURL(file);
+        });
+      }
 
       // ── 5. Ensure profile row exists to prevent foreign key constraint errors ──
       const targetUserId = studentId || user.id;
@@ -109,14 +134,14 @@ const Pricing = () => {
       const { error: dbError } = await supabase.from('manual_payments').insert({
         user_id: targetUserId,
         amount: plans[selectedPlan].price,
-        proof_image_url: urlData.publicUrl,
+        proof_image_url: receiptUrl,
         status: 'pending',
         plan_id: selectedPlan,
       });
 
       if (dbError) throw new Error(`Failed to save payment record: ${dbError.message}`);
 
-      // ── 6. Notify admin & student via email API route ─────────────────────
+      // ── 7. Notify admin & student via email API route ─────────────────────
       fetch('/api/payment-notification', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -125,7 +150,7 @@ const Pricing = () => {
           userEmail: user.email,
           userName: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Scholar Student',
           amount: plans[selectedPlan].price,
-          proofUrl: urlData.publicUrl,
+          proofUrl: receiptUrl,
           planId: selectedPlan,
         }),
       }).catch(err => console.warn('Payment email dispatch warning:', err));

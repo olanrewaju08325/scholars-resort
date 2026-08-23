@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { toast } from 'sonner';
+import { sendWelcomeEmail } from '@/services/emailService';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -70,6 +71,9 @@ const Signup = () => {
           setError(signUpError.message);
         }
       } else {
+        // Automatically dispatch welcome email via SMTP in background
+        sendWelcomeEmail(email.trim(), fullName.trim(), accountRole).catch(e => console.warn('Welcome email error:', e));
+
         // If session was returned right away
         if (data.session) {
           const pendingCode = localStorage.getItem('pending_guardian_code');

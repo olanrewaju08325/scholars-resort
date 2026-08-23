@@ -78,6 +78,11 @@ export const MaterialsTab = () => {
     const addMaterial = (m: any) => {
       const key = (m.id || m.title || '').toString().toLowerCase().trim();
       if (!key || seen.has(key)) return;
+
+      const url = (m.file_path || m.file_url || '').trim();
+      // Filter out old placeholder fake items
+      if (url === 'https://example.com/math.pdf' || url === 'https://example.com/physics.pdf') return;
+
       seen.add(key);
 
       const subjectName = m.subjects?.name || subjectMap.get(m.subject_id) || 'General';

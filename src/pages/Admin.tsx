@@ -111,7 +111,7 @@ export default function Admin() {
     { id: 'content-studio', label: 'Content Studio', icon: FileQuestion },
     { id: 'questions', label: 'Question Bank', icon: FileQuestion },
     { id: 'tournaments', label: 'Tournaments', icon: Trophy },
-    { id: 'payments', label: 'Financials', icon: CreditCard },
+    { id: 'payments', label: 'Admin Payments', icon: CreditCard },
     { id: 'support', label: 'Support Center', icon: MessageSquare },
     { id: 'ai', label: 'AI Assistant', icon: Sparkles },
     { id: 'logs', label: 'Audit Logs', icon: List },

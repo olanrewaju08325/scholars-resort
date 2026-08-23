@@ -2,15 +2,18 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
-import { CheckCircle, XCircle, CreditCard, Activity, Link as LinkIcon, Download } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { CheckCircle, XCircle, CreditCard, Activity, Link as LinkIcon, Download, Eye, ExternalLink, FileText, Image as ImageIcon } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
+import { sendPaymentApprovedEmail } from '@/services/emailService';
 
 export const PaymentsTab = () => {
   const [pendingPayments, setPendingPayments] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedReceipt, setSelectedReceipt] = useState<any | null>(null);
   const { confirmAction, ConfirmElement } = useConfirm();
   
   const [stats, setStats] = useState({ pendingAmount: 0, approvedAmount: 0 });
@@ -31,7 +34,7 @@ export const PaymentsTab = () => {
         .select('*')
         .in('status', ['approved', 'rejected'])
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(15);
 
       // Collect user IDs
       const userIds = Array.from(new Set([
@@ -94,6 +97,7 @@ export const PaymentsTab = () => {
           ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString()
           : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
 
+        // 1. Update Subscriptions
         await supabase.from('subscriptions').upsert({
           user_id: userId,
           plan: planType || 'premium',
@@ -102,40 +106,36 @@ export const PaymentsTab = () => {
           expires_at: expiresAt
         }, { onConflict: 'user_id' });
         
+        // 2. Update Profile status
         await supabase.from('profiles').update({ has_paid: true }).eq('id', userId);
         
-        // Get student email for notification
+        // 3. Get student profile for automated SMTP dispatch
         const { data: studentProfile } = await supabase
           .from('profiles')
           .select('email, full_name')
           .eq('id', userId)
           .maybeSingle();
         
-        // Send approval email
         if (studentProfile?.email) {
-          await supabase.functions.invoke('communication-center', {
-            body: {
-              to: studentProfile.email,
-              templateName: 'payment_approved',
-              payload: { name: studentProfile.full_name || 'Scholar' }
-            }
-          }).catch(err => console.warn('Email send failed:', err));
+          const planLabel = planType === 'lifetime' ? 'Lifetime Access' : 'Annual Pass';
+          await sendPaymentApprovedEmail(studentProfile.email, studentProfile.full_name || 'Scholar', amount, planLabel).catch(() => {});
         }
         
-        // Log it
+        // 4. Activity log
         await supabase.from('activity_logs').insert({
           user_id: userId,
           action: 'payment_approved',
           metadata: { amount, plan_type: planType, payment_id: paymentId }
-        });
+        }).catch(() => {});
 
         toast.success("Payment verified! Student account is now unlocked.");
+        setSelectedReceipt(null);
         fetchPayments();
       } else {
         throw new Error("Error updating payment status.");
       }
-    } catch (error) {
-      toast.error("Error updating payment status.");
+    } catch (error: any) {
+      toast.error("Error updating payment status: " + error.message);
     }
   };
 
@@ -147,6 +147,7 @@ export const PaymentsTab = () => {
         const { error } = await supabase.from('manual_payments').update({ status: 'rejected' }).eq('id', paymentId);
         if (!error) {
           toast.success("Payment rejected.");
+          setSelectedReceipt(null);
           fetchPayments();
 
           // Get student email
@@ -157,20 +158,30 @@ export const PaymentsTab = () => {
             .maybeSingle();
 
           if (studentProfile?.email) {
-            await supabase.functions.invoke('communication-center', {
-              body: {
-                to: studentProfile.email,
-                templateName: 'payment_rejected',
-                payload: { name: studentProfile.full_name || 'Scholar' }
-              }
-            }).catch(err => console.warn('Email send failed:', err));
+            try {
+              await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  to: studentProfile.email,
+                  subject: 'Update Regarding Your Payment Verification - Scholars Resort',
+                  html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+                    <h2 style="color: #dc2626;">Payment Verification Unsuccessful</h2>
+                    <p>Dear ${studentProfile.full_name || 'Scholar'},</p>
+                    <p>We could not verify your recent payment receipt submission. This may be due to an unclear image, unconfirmed transaction reference, or mismatched amount.</p>
+                    <p>Please double-check your transaction receipt and re-upload it on the Scholars Resort Pricing page, or contact support if you have already been debited.</p>
+                    <p>Support Email: <a href="mailto:admitwise2@gmail.com">admitwise2@gmail.com</a></p>
+                  </div>`
+                })
+              });
+            } catch {}
           }
 
           await supabase.from('activity_logs').insert({
             user_id: userId,
             action: 'payment_rejected',
             metadata: { payment_id: paymentId }
-          });
+          }).catch(() => {});
         } else {
           toast.error("Failed to reject payment.");
         }
@@ -221,18 +232,18 @@ export const PaymentsTab = () => {
         {/* Webhooks config display */}
         <Card className="bg-slate-900 border-slate-800 text-slate-100">
           <CardHeader className="pb-2">
-            <CardTitle className="text-sm flex items-center gap-2"><LinkIcon className="w-4 h-4 text-blue-400"/> Payment Webhooks</CardTitle>
+            <CardTitle className="text-sm flex items-center gap-2"><LinkIcon className="w-4 h-4 text-blue-400"/> Payment Receipts & Webhooks</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] uppercase font-bold text-slate-500">Paystack Endpoint URL</label>
+                <label className="text-[10px] uppercase font-bold text-slate-500">Bank Transfer Processing</label>
                 <div className="flex items-center gap-2 mt-1">
-                  <input readOnly value="https://[YOUR-PROJECT].supabase.co/functions/v1/paystack-webhook" className="w-full bg-slate-950 text-slate-300 text-xs p-2 rounded border border-slate-800 font-mono" />
+                  <input readOnly value="Manual Bank Receipts & Auto-Verification Active" className="w-full bg-slate-950 text-slate-300 text-xs p-2 rounded border border-slate-800 font-mono" />
                 </div>
               </div>
               <div className="text-xs text-slate-400 border-t border-slate-800 pt-2">
-                Automatic payments bypass the manual queue. Configure your gateway to hit the webhook above.
+                Students can upload bank transfer screenshots or receipts for instant admin review and automated email dispatch.
               </div>
             </div>
           </CardContent>
@@ -253,48 +264,62 @@ export const PaymentsTab = () => {
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Student</th>
                   <th className="px-4 py-3">Amount</th>
-                  <th className="px-4 py-3">Ref/Receipt</th>
+                  <th className="px-4 py-3">Receipt / Proof</th>
                   <th className="px-4 py-3">Plan</th>
                   <th className="px-4 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800">
+              <tbody className="divide-y border-t border-slate-800 divide-slate-800">
                 {loading ? (
                   <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Loading queue...</td></tr>
                 ) : pendingPayments.length === 0 ? (
                   <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Queue is empty. All caught up!</td></tr>
                 ) : (
-                  pendingPayments.map(payment => (
-                    <tr key={payment.id} className="hover:bg-slate-800/50">
-                      <td className="px-4 py-3 text-slate-400">{new Date(payment.created_at).toLocaleString()}</td>
-                      <td className="px-4 py-3">
-                        <div className="font-bold text-slate-200">{payment.profiles?.full_name}</div>
-                        <div className="text-xs text-slate-500">{payment.profiles?.email}</div>
-                      </td>
-                      <td className="px-4 py-3 font-bold text-amber-400">{formatCurrency(payment.amount)}</td>
-                      <td className="px-4 py-3 font-mono text-xs">{payment.reference || 'No Ref'}</td>
-                      <td className="px-4 py-3 capitalize">{payment.plan_type || 'Unknown'}</td>
-                      <td className="px-4 py-3 flex gap-2 justify-end">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => handleReject(payment.id, payment.user_id)} className="h-8 text-red-400 border-red-900/30 hover:bg-red-950">
-                              <XCircle className="w-4 h-4 mr-1"/> Reject
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Decline payment proof and issue email notification</TooltipContent>
-                        </Tooltip>
+                  pendingPayments.map(payment => {
+                    const receiptUrl = payment.proof_image_url || payment.proof_url;
+                    return (
+                      <tr key={payment.id} className="hover:bg-slate-800/50">
+                        <td className="px-4 py-3 text-slate-400">{new Date(payment.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-200">{payment.profiles?.full_name}</div>
+                          <div className="text-xs text-slate-500">{payment.profiles?.email}</div>
+                        </td>
+                        <td className="px-4 py-3 font-bold text-amber-400">{formatCurrency(payment.amount)}</td>
+                        <td className="px-4 py-3">
+                          {receiptUrl ? (
+                            <button
+                              onClick={() => setSelectedReceipt(payment)}
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold border border-primary/30 transition-colors"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> View Receipt
+                            </button>
+                          ) : (
+                            <span className="text-slate-500 text-xs font-mono">{payment.reference || 'No proof'}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 capitalize">{payment.plan_type || payment.plan_id || 'Premium Access'}</td>
+                        <td className="px-4 py-3 flex gap-2 justify-end">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" onClick={() => handleReject(payment.id, payment.user_id)} className="h-8 text-red-400 border-red-900/30 hover:bg-red-950">
+                                <XCircle className="w-4 h-4 mr-1"/> Reject
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Decline payment proof and issue email notification</TooltipContent>
+                          </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="sm" onClick={() => handleVerify(payment.id, payment.user_id, payment.amount, payment.plan_type)} className="h-8 bg-green-600 hover:bg-green-700">
-                              <CheckCircle className="w-4 h-4 mr-1"/> Verify
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Verify payment receipt, activate subscription plan, and notify student</TooltipContent>
-                        </Tooltip>
-                      </td>
-                    </tr>
-                  ))
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" onClick={() => handleVerify(payment.id, payment.user_id, payment.amount, payment.plan_type || payment.plan_id)} className="h-8 bg-green-600 hover:bg-green-700">
+                                <CheckCircle className="w-4 h-4 mr-1"/> Verify
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Verify payment receipt, activate subscription plan, and notify student</TooltipContent>
+                          </Tooltip>
+                        </td>
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
@@ -306,6 +331,7 @@ export const PaymentsTab = () => {
       <Card className="bg-slate-900 border-slate-800 text-slate-100">
         <CardHeader>
           <CardTitle>Recent Processed Transactions</CardTitle>
+          <CardDescription className="text-slate-400">View audit history and submitted payment receipts.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="border border-slate-800 rounded-md overflow-x-auto">
@@ -315,34 +341,154 @@ export const PaymentsTab = () => {
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3">Student</th>
                   <th className="px-4 py-3">Amount</th>
+                  <th className="px-4 py-3">Receipt</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800">
-                {loading ? (
-                   <tr><td colSpan={4} className="px-4 py-4 text-center text-slate-500">Loading...</td></tr>
-                ) : history.length === 0 ? (
-                   <tr><td colSpan={4} className="px-4 py-4 text-center text-slate-500">No history found.</td></tr>
-                ) : history.map(item => (
-                  <tr key={item.id} className="hover:bg-slate-800/50">
-                    <td className="px-4 py-3 text-slate-400">{new Date(item.created_at).toLocaleString()}</td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-slate-300">{item.profiles?.full_name}</div>
-                      <div className="text-xs text-slate-500">{item.profiles?.email}</div>
-                    </td>
-                    <td className="px-4 py-3 font-medium">{formatCurrency(item.amount)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${item.status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {item.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
+                {history.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-6 text-center text-slate-500">No recent processed transactions.</td></tr>
+                ) : (
+                  history.map(item => {
+                    const receiptUrl = item.proof_image_url || item.proof_url;
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-800/40">
+                        <td className="px-4 py-3 text-slate-400">{new Date(item.created_at).toLocaleString()}</td>
+                        <td className="px-4 py-3">
+                          <div className="font-bold text-slate-200">{item.profiles?.full_name}</div>
+                          <div className="text-xs text-slate-500">{item.profiles?.email}</div>
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-slate-200">{formatCurrency(item.amount)}</td>
+                        <td className="px-4 py-3">
+                          {receiptUrl ? (
+                            <button
+                              onClick={() => setSelectedReceipt(item)}
+                              className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+                            >
+                              <Eye className="w-3.5 h-3.5" /> View Proof
+                            </button>
+                          ) : (
+                            <span className="text-slate-600 text-xs">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2.5 py-1 text-xs font-semibold rounded-full ${
+                            item.status === 'approved' 
+                              ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+                              : 'bg-red-500/20 text-red-400 border border-red-500/30'
+                          }`}>
+                            {item.status}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
               </tbody>
             </table>
           </div>
         </CardContent>
       </Card>
+
+      {/* Receipt Viewer Modal */}
+      {selectedReceipt && (
+        <Dialog open={Boolean(selectedReceipt)} onOpenChange={(open) => !open && setSelectedReceipt(null)}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-700 text-slate-100 p-6">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold flex items-center gap-2">
+                <FileText className="w-5 h-5 text-primary" /> Payment Receipt Review
+              </DialogTitle>
+              <DialogDescription className="text-slate-400 text-xs">
+                Inspect the uploaded transfer proof and verify the student's transaction.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 my-4">
+              {/* Student Summary Bar */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-950/70 p-3 rounded-lg border border-slate-800 text-xs">
+                <div>
+                  <span className="text-slate-500 block uppercase font-semibold text-[10px]">Student</span>
+                  <span className="font-bold text-slate-200">{selectedReceipt.profiles?.full_name || 'Scholar'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block uppercase font-semibold text-[10px]">Email</span>
+                  <span className="font-bold text-slate-300 truncate block">{selectedReceipt.profiles?.email || 'N/A'}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block uppercase font-semibold text-[10px]">Amount Paid</span>
+                  <span className="font-bold text-amber-400">{formatCurrency(selectedReceipt.amount)}</span>
+                </div>
+                <div>
+                  <span className="text-slate-500 block uppercase font-semibold text-[10px]">Plan</span>
+                  <span className="font-bold text-primary capitalize">{selectedReceipt.plan_type || selectedReceipt.plan_id || 'Full Access'}</span>
+                </div>
+              </div>
+
+              {/* Receipt Image / PDF Viewer */}
+              <div className="border border-slate-800 rounded-xl overflow-hidden bg-slate-950 flex flex-col items-center justify-center p-2 min-h-[300px]">
+                {selectedReceipt.proof_image_url || selectedReceipt.proof_url ? (
+                  (selectedReceipt.proof_image_url || selectedReceipt.proof_url).toLowerCase().includes('.pdf') ? (
+                    <div className="p-8 text-center space-y-3">
+                      <FileText className="w-16 h-16 text-red-400 mx-auto" />
+                      <p className="text-sm font-medium text-slate-300">PDF Document Attached</p>
+                      <a
+                        href={selectedReceipt.proof_image_url || selectedReceipt.proof_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-semibold hover:bg-primary/90 transition-colors"
+                      >
+                        <ExternalLink className="w-4 h-4" /> Open PDF in New Tab
+                      </a>
+                    </div>
+                  ) : (
+                    <img
+                      src={selectedReceipt.proof_image_url || selectedReceipt.proof_url}
+                      alt="Payment Receipt Screenshot"
+                      className="max-h-[420px] w-auto max-w-full object-contain rounded-lg shadow-md"
+                    />
+                  )
+                ) : (
+                  <div className="p-8 text-center text-slate-500">No image attachment found.</div>
+                )}
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-slate-800 flex-wrap">
+                <a
+                  href={selectedReceipt.proof_image_url || selectedReceipt.proof_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-white transition-colors"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" /> Open Full Resolution
+                </a>
+
+                <div className="flex gap-2">
+                  {selectedReceipt.status === 'pending' && (
+                    <>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleReject(selectedReceipt.id, selectedReceipt.user_id)}
+                        className="text-red-400 border-red-900/40 hover:bg-red-950"
+                      >
+                        <XCircle className="w-4 h-4 mr-1" /> Reject
+                      </Button>
+                      <Button
+                        size="sm"
+                        onClick={() => handleVerify(selectedReceipt.id, selectedReceipt.user_id, selectedReceipt.amount, selectedReceipt.plan_type || selectedReceipt.plan_id)}
+                        className="bg-green-600 hover:bg-green-700 text-white font-semibold"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-1" /> Verify & Unlock Pro
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

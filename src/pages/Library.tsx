@@ -8,8 +8,9 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { recordStudyAction } from '@/lib/streakService';
-import { fetchJambBooks } from '@/services/novelService';
 import { motion, AnimatePresence } from 'framer-motion';
+import { LibrarySkeleton } from '@/components/library/LibrarySkeleton';
+import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 
 const getFileIcon = (url: string) => {
   if (!url) return <FileText className="w-8 h-8 text-blue-500" />;
@@ -20,6 +21,7 @@ const getFileIcon = (url: string) => {
 };
 
 const Library = () => {
+  usePerfMonitoring('Library');
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [materials, setMaterials] = useState<any[]>([]);
@@ -54,10 +56,6 @@ const Library = () => {
         if (data) matData = data;
       } catch {}
 
-      try {
-        jambNovels = await fetchJambBooks();
-      } catch {}
-
       let localMaterials: any[] = [];
       try {
         const localRaw = localStorage.getItem('scholar_local_materials');
@@ -67,8 +65,15 @@ const Library = () => {
       const combined: any[] = [];
       const seenTitles = new Set<string>();
 
+      // Filter out known fake seed URLs like example.com
+      const isValidMaterial = (item: any) => {
+        const url = (item.file_url || item.file_path || '').trim();
+        if (!url || url === 'https://example.com/math.pdf' || url === 'https://example.com/physics.pdf') return false;
+        return true;
+      };
+
       localMaterials.forEach(item => {
-        if (item.title && !seenTitles.has(item.title.toLowerCase().trim())) {
+        if (item.title && isValidMaterial(item) && !seenTitles.has(item.title.toLowerCase().trim())) {
           seenTitles.add(item.title.toLowerCase().trim());
           combined.push({
             id: item.id,
@@ -83,7 +88,7 @@ const Library = () => {
       });
 
       libData.forEach(item => {
-        if (item.title && !seenTitles.has(item.title.toLowerCase().trim())) {
+        if (item.title && isValidMaterial(item) && !seenTitles.has(item.title.toLowerCase().trim())) {
           seenTitles.add(item.title.toLowerCase().trim());
           combined.push({
             id: item.id,
@@ -98,7 +103,7 @@ const Library = () => {
       });
 
       matData.forEach(item => {
-        if (item.title && !seenTitles.has(item.title.toLowerCase().trim())) {
+        if (item.title && isValidMaterial(item) && !seenTitles.has(item.title.toLowerCase().trim())) {
           seenTitles.add(item.title.toLowerCase().trim());
           const publicUrl = item.file_path?.startsWith('http')
             ? item.file_path
@@ -112,21 +117,6 @@ const Library = () => {
             is_premium: item.is_premium,
             subjects: item.subjects,
             created_at: item.created_at
-          });
-        }
-      });
-
-      jambNovels.forEach(book => {
-        if (book.title && !seenTitles.has(book.title.toLowerCase().trim())) {
-          seenTitles.add(book.title.toLowerCase().trim());
-          combined.push({
-            id: book.id,
-            title: book.title,
-            description: `${book.author} - Prescribed UTME Text (${book.year})`,
-            file_url: book.pdf_url || '',
-            is_premium: false,
-            subjects: { name: 'Use of English' },
-            created_at: new Date().toISOString()
           });
         }
       });
@@ -295,11 +285,7 @@ const Library = () => {
 
         {/* Content Grid */}
         {loading ? (
-           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-             {[1,2,3,4,5,6].map(i => (
-               <Card key={i} className="bg-card/50 border-border animate-pulse h-48 rounded-2xl" />
-             ))}
-           </div>
+           <LibrarySkeleton />
         ) : filteredMaterials.length === 0 ? (
            <div className="text-center py-20 bg-card/30 border border-dashed border-border rounded-3xl backdrop-blur-sm">
              <div className="w-20 h-20 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">

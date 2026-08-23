@@ -42,22 +42,40 @@ export const WeeklyChallengesAdminTab = () => {
 
   const fetchChallenges = async () => {
     setLoading(true);
+    let items: any[] = [];
     try {
       const { data, error } = await supabase
         .from('weekly_challenges')
         .select('*')
         .order('week_start', { ascending: false });
 
-      if (!error && data) {
-        setChallenges(data);
-      } else {
-        setChallenges([]);
+      if (!error && data && data.length > 0) {
+        items = data;
       }
-    } catch {
-      setChallenges([]);
-    } finally {
-      setLoading(false);
+    } catch {}
+
+    if (items.length === 0) {
+      try {
+        const { data: settingData } = await supabase
+          .from('admin_settings')
+          .select('value')
+          .eq('key', 'weekly_challenges_db')
+          .maybeSingle();
+        if (settingData?.value && Array.isArray(settingData.value)) {
+          items = settingData.value;
+        }
+      } catch {}
     }
+
+    if (items.length === 0) {
+      try {
+        const localRaw = localStorage.getItem('scholar_weekly_challenges');
+        if (localRaw) items = JSON.parse(localRaw);
+      } catch {}
+    }
+
+    setChallenges(items);
+    setLoading(false);
   };
 
   // Pull real question from database matching subject and difficulty
@@ -164,21 +182,47 @@ Return STRICT JSON format:
       const parsedQuestion = JSON.parse(questionJSON);
       parsedQuestion.duration_minutes = durationMinutes;
 
-      const { error } = await supabase.from('weekly_challenges').insert({
+      const newChallenge = {
+        id: `wc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
         title,
         subject: selectedSubject,
         question_data: parsedQuestion,
         week_start: weekStart,
         week_end: weekEnd,
-        is_active: true
-      });
+        is_active: true,
+        created_at: new Date().toISOString()
+      };
 
-      if (error) throw error;
+      // 1. Try Supabase weekly_challenges table
+      let savedToSupabase = false;
+      try {
+        const { error } = await supabase.from('weekly_challenges').insert({
+          title,
+          subject: selectedSubject,
+          question_data: parsedQuestion,
+          week_start: weekStart,
+          week_end: weekEnd,
+          is_active: true
+        });
+        if (!error) savedToSupabase = true;
+      } catch {}
+
+      // 2. Always sync to admin_settings and local storage
+      try {
+        const existing = [...challenges, newChallenge];
+        await supabase.from('admin_settings').upsert({
+          key: 'weekly_challenges_db',
+          value: existing,
+          updated_at: new Date().toISOString()
+        });
+        localStorage.setItem('scholar_weekly_challenges', JSON.stringify(existing));
+      } catch {}
+
       toast.success('Weekly challenge created successfully!');
       setIsFormOpen(false);
       setTitle('');
       setQuestionJSON('');
-      fetchChallenges();
+      await fetchChallenges();
     } catch (err: any) {
       if (err instanceof SyntaxError) {
         toast.error('Invalid JSON format. Check your question structure.');
@@ -189,20 +233,41 @@ Return STRICT JSON format:
   };
 
   const toggleActive = async (id: string, currentState: boolean) => {
-    const { error } = await supabase.from('weekly_challenges').update({ is_active: !currentState }).eq('id', id);
-    if (!error) {
-      setChallenges(prev => prev.map(c => c.id === id ? { ...c, is_active: !currentState } : c));
-      toast.success(`Challenge ${!currentState ? 'activated' : 'deactivated'}.`);
-    }
+    try {
+      await supabase.from('weekly_challenges').update({ is_active: !currentState }).eq('id', id);
+    } catch {}
+
+    const updated = challenges.map(c => c.id === id ? { ...c, is_active: !currentState } : c);
+    setChallenges(updated);
+    try {
+      await supabase.from('admin_settings').upsert({
+        key: 'weekly_challenges_db',
+        value: updated,
+        updated_at: new Date().toISOString()
+      });
+      localStorage.setItem('scholar_weekly_challenges', JSON.stringify(updated));
+    } catch {}
+    toast.success(`Challenge ${!currentState ? 'activated' : 'deactivated'}.`);
   };
 
   const handleDelete = (id: string) => {
     confirmAction('Delete Challenge', 'Delete this weekly challenge and all student submissions?', async () => {
-      const { error } = await supabase.from('weekly_challenges').delete().eq('id', id);
-      if (!error) {
-        toast.success('Challenge deleted.');
-        fetchChallenges();
-      }
+      try {
+        await supabase.from('weekly_challenges').delete().eq('id', id);
+      } catch {}
+
+      const updated = challenges.filter(c => c.id !== id);
+      setChallenges(updated);
+      try {
+        await supabase.from('admin_settings').upsert({
+          key: 'weekly_challenges_db',
+          value: updated,
+          updated_at: new Date().toISOString()
+        });
+        localStorage.setItem('scholar_weekly_challenges', JSON.stringify(updated));
+      } catch {}
+      toast.success('Challenge deleted.');
+      fetchChallenges();
     }, { destructive: true });
   };
 

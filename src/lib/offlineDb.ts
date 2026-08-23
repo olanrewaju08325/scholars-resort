@@ -31,10 +31,26 @@ export interface OfflineExamSnapshot {
   timeLeft: number;
 }
 
+export interface OfflineSyncItem {
+  id?: number;
+  type: 'exam_result' | 'study_progress' | 'session_answer' | 'daily_goal' | 'profile_update' | 'custom_write';
+  table: string;
+  action: 'insert' | 'upsert' | 'update';
+  payload: any;
+  matchCriteria?: Record<string, any>;
+  userId?: string;
+  timestamp: number;
+  retryCount: number;
+  nextRetryTime?: number;
+  status: 'pending' | 'syncing' | 'failed';
+  lastError?: string;
+}
+
 export class ScholarsResortDB extends Dexie {
   questions!: Table<OfflineQuestion, string>;
   answers!: Table<OfflineAnswer, number>;
   examSnapshots!: Table<OfflineExamSnapshot, string>;
+  syncQueue!: Table<OfflineSyncItem, number>;
 
   constructor() {
     super('ScholarsResortOfflineDB');
@@ -46,6 +62,12 @@ export class ScholarsResortDB extends Dexie {
       questions: 'id, subject_id, topic_id',
       answers: '++id, question_id, synced',
       examSnapshots: 'id, userId'
+    });
+    this.version(3).stores({
+      questions: 'id, subject_id, topic_id',
+      answers: '++id, question_id, synced',
+      examSnapshots: 'id, userId',
+      syncQueue: '++id, type, table, status, userId, timestamp'
     });
   }
 }

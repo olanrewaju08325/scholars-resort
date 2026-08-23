@@ -5,10 +5,11 @@ import { supabase } from '@/lib/supabase';
 
 export const WhatsAppWidget = () => {
   const location = useLocation();
-  const hiddenPaths = ['/exam', '/practice/session'];
+  const hiddenPaths = ['/cbt', '/exam', '/practice/session', '/tournaments/arena', '/weakness/drill'];
   
   const [whatsappNumber, setWhatsappNumber] = useState('2349032517376');
   const [defaultMessage, setDefaultMessage] = useState('Hello Scholars Resort, I need some assistance.');
+  const [isFocusMode, setIsFocusMode] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -19,10 +20,20 @@ export const WhatsAppWidget = () => {
       }
     };
     fetchSettings();
+
+    const handleFocusMode = (e: any) => {
+      setIsFocusMode(!!e.detail?.active);
+    };
+
+    window.addEventListener('scholars:focus-mode', handleFocusMode);
+    return () => window.removeEventListener('scholars:focus-mode', handleFocusMode);
   }, []);
 
+  const isExamRoute = hiddenPaths.some(p => location.pathname.startsWith(p));
+
   if (
-    hiddenPaths.includes(location.pathname) || 
+    isExamRoute ||
+    isFocusMode ||
     location.pathname.startsWith('/admin') || 
     location.pathname.includes('scholarresortadmin') ||
     location.pathname.includes('admin')
@@ -52,3 +63,4 @@ export const WhatsAppWidget = () => {
     </div>
   );
 };
+

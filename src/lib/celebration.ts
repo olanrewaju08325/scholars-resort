@@ -70,6 +70,46 @@ export function playSuccessChime() {
 }
 
 /**
+ * Play subtle exam 5-minute warning chime tone
+ */
+export function playFiveMinuteWarningSound() {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    if (ctx.state === 'suspended') {
+      ctx.resume();
+    }
+
+    const now = ctx.currentTime;
+    // Chime 1: 587.33 Hz (D5) -> Chime 2: 440 Hz (A4) -> Chime 3: 523.25 Hz (C5)
+    const tones = [
+      { freq: 587.33, start: 0, dur: 0.35, gain: 0.15 },
+      { freq: 440.00, start: 0.3, dur: 0.4, gain: 0.12 },
+      { freq: 523.25, start: 0.65, dur: 0.6, gain: 0.18 }
+    ];
+
+    tones.forEach(t => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(t.freq, now + t.start);
+
+      gain.gain.setValueAtTime(0, now + t.start);
+      gain.gain.linearRampToValueAtTime(t.gain, now + t.start + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + t.start + t.dur);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + t.start);
+      osc.stop(now + t.start + t.dur);
+    });
+  } catch (e) {
+    console.warn('Audio 5-minute warning error:', e);
+  }
+}
+
+/**
  * Play subtle exam warning pulse tone
  */
 export function playWarningBeep() {

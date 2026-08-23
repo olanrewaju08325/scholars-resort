@@ -109,6 +109,69 @@ async function getSmtpConfig(customConfig?: any) {
   };
 }
 
+// Helper function for server-side SMTP email dispatch
+async function sendServerSmtpEmail(to: string, subject: string, html: string): Promise<boolean> {
+  try {
+    const config = await getSmtpConfig();
+    if (!config.host) return false;
+
+    const isSecure = config.port === 465;
+    const transporter = nodemailer.createTransport({
+      host: config.host,
+      port: config.port,
+      secure: isSecure,
+      auth: config.user && config.pass ? {
+        user: config.user,
+        pass: config.pass
+      } : undefined,
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+
+    await transporter.sendMail({
+      from: config.from || `Scholars Resort <${config.user || 'noreply@scholarsresort.com'}>`,
+      to,
+      subject,
+      html,
+      text: html.replace(/<[^>]*>?/gm, '')
+    });
+    console.log(`[SMTP System Dispatch] Successfully sent email to ${to}: "${subject}"`);
+
+    // Log success in email_logs table
+    try {
+      await supabase.from('email_logs').insert({
+        recipient: to,
+        subject,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        error_message: null
+      });
+    } catch (logErr) {
+      // Non-blocking log
+    }
+
+    return true;
+  } catch (err: any) {
+    console.warn(`[SMTP System Dispatch Notice] Could not deliver email to ${to}:`, err.message);
+
+    // Log failure in email_logs table
+    try {
+      await supabase.from('email_logs').insert({
+        recipient: to,
+        subject,
+        status: 'failed',
+        sent_at: new Date().toISOString(),
+        error_message: err.message || 'SMTP delivery failed'
+      });
+    } catch (logErr) {
+      // Non-blocking log
+    }
+
+    return false;
+  }
+}
+
 // API Route: Send Email
 app.post('/api/send-email', async (req, res) => {
   const { to, subject, html, text, smtpConfig } = req.body;
@@ -120,6 +183,17 @@ app.post('/api/send-email', async (req, res) => {
   const config = await getSmtpConfig(smtpConfig);
 
   if (!config.host) {
+    // Log failure due to unconfigured SMTP
+    try {
+      await supabase.from('email_logs').insert({
+        recipient: to,
+        subject: subject || 'No Subject',
+        status: 'failed',
+        sent_at: new Date().toISOString(),
+        error_message: 'SMTP Host is not configured'
+      });
+    } catch (_) {}
+
     return res.status(400).json({
       success: false,
       delivered: false,
@@ -153,6 +227,17 @@ app.post('/api/send-email', async (req, res) => {
     const info = await transporter.sendMail(mailOptions);
     console.log(`[SMTP REAL DISPATCH SUCCESS] Message sent to ${to}: ${info.messageId}`);
 
+    // Record success in email_logs
+    try {
+      await supabase.from('email_logs').insert({
+        recipient: to,
+        subject,
+        status: 'sent',
+        sent_at: new Date().toISOString(),
+        error_message: null
+      });
+    } catch (_) {}
+
     return res.json({
       success: true,
       delivered: true,
@@ -161,6 +246,18 @@ app.post('/api/send-email', async (req, res) => {
     });
   } catch (err: any) {
     console.error('[SMTP DISPATCH ERROR]', err);
+
+    // Record failure in email_logs
+    try {
+      await supabase.from('email_logs').insert({
+        recipient: to,
+        subject: subject || 'Untitled Notification',
+        status: 'failed',
+        sent_at: new Date().toISOString(),
+        error_message: err.message || 'SMTP dispatch error'
+      });
+    } catch (_) {}
+
     return res.status(500).json({
       success: false,
       delivered: false,
@@ -1088,6 +1185,33 @@ app.post('/api/admin/subscriptions/grant', async (req, res) => {
       });
     } catch {}
 
+    // 4. Send email notification to user
+    try {
+      const { data: prof } = await supabase.from('profiles').select('email, full_name').eq('id', user_id).maybeSingle();
+      if (prof?.email) {
+        sendServerSmtpEmail(
+          prof.email,
+          `Full Access Granted - Scholars Resort (${plan_name})`,
+          `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+             <h2 style="color: #4F46E5; margin-top: 0;">Congratulations, Full Access Granted!</h2>
+             <p>Dear ${prof.full_name || 'Scholar'},</p>
+             <p>The system administrator has granted you full access to <strong>${plan_name}</strong> on Scholars Resort.</p>
+             <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin: 16px 0;">
+               <strong>Unlocked Features:</strong>
+               <ul style="margin: 6px 0 0 16px; padding: 0;">
+                 <li>Unlimited Full-Length UTME CBT Mock Drills</li>
+                 <li>All Study Materials & Novel Guides</li>
+                 <li>Unrestricted AI Tutor Chat & Analytics</li>
+               </ul>
+             </div>
+             <p style="margin-top: 20px;">
+               <a href="https://scholarsresort.com/cbt" style="background: #4F46E5; color: white; padding: 10px 18px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Start CBT Practice Now</a>
+             </p>
+           </div>`
+        ).catch(() => {});
+      }
+    } catch {}
+
     return res.json({ 
       success: true, 
       message: 'Premium subscription granted successfully.', 
@@ -1304,6 +1428,40 @@ app.post('/api/admin/users/status', async (req, res) => {
     } catch {}
 
     const merged = mergeProfileWithOverrides(data || { id: user_id, ...updates }, user_id);
+
+    // Send email notification to the user regarding their account status change
+    if (merged?.email) {
+      if (isBanned || isSuspended) {
+        sendServerSmtpEmail(
+          merged.email,
+          `Important Notice: Scholars Resort Account ${isBanned ? 'Banned' : 'Suspended'}`,
+          `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+             <h2 style="color: #dc2626; margin-top: 0;">Account ${isBanned ? 'Banned' : 'Suspended'}</h2>
+             <p>Dear ${merged.full_name || 'Scholar'},</p>
+             <p>Your Scholars Resort account has been <strong>${isBanned ? 'permanently banned' : 'temporarily suspended'}</strong> by the system administrator.</p>
+             <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 12px 16px; border-radius: 8px; margin: 16px 0; color: #991b1b;">
+               <strong>Reason:</strong> ${reason || 'Administrative policy enforcement'}
+             </div>
+             <p>If you believe this was done in error or would like to submit an appeal, please reply directly to this email or contact support at <a href="mailto:admitwise2@gmail.com">admitwise2@gmail.com</a>.</p>
+           </div>`
+        ).catch(() => {});
+      } else if (status === 'active') {
+        sendServerSmtpEmail(
+          merged.email,
+          'Your Scholars Resort Account Has Been Reactivated',
+          `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+             <h2 style="color: #16a34a; margin-top: 0;">Account Reinstated</h2>
+             <p>Dear ${merged.full_name || 'Scholar'},</p>
+             <p>Great news! Your Scholars Resort account has been reviewed and successfully <strong>reactivated</strong>.</p>
+             <p>You can now log in and continue your JAMB UTME exam preparation, CBT mock drills, and access study materials.</p>
+             <p style="margin-top: 20px;">
+               <a href="https://scholarsresort.com/login" style="background: #4F46E5; color: white; padding: 10px 18px; text-decoration: none; border-radius: 6px; display: inline-block; font-weight: bold;">Log In to Account</a>
+             </p>
+           </div>`
+        ).catch(() => {});
+      }
+    }
+
     return res.json({ success: true, message: `User status changed to ${status}.`, profile: merged });
   } catch (err: any) {
     console.error('[API /api/admin/users/status Error]', err);

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Download, Wifi, WifiOff, RefreshCw, CheckCircle2, Trash2, HardDrive, Info, Sparkles } from 'lucide-react';
+import { Download, Wifi, WifiOff, RefreshCw, CheckCircle2, Trash2, HardDrive, Info, Sparkles, FileJson } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { getDownloadedPacks, downloadSubjectPack, deleteOfflinePack, checkForPackUpdates, checkForSubjectUpdate } from '@/lib/offlineStore';
 import type { OfflinePack } from '@/lib/offlineStore';
+import { exportOfflineDataAsJson } from '@/lib/offlineExport';
 import { toast } from 'sonner';
 
 import { useNavigate } from "react-router-dom";
@@ -128,6 +129,9 @@ export const OfflinePackManager = () => {
           </Button>
           <Button onClick={handleCheckUpdates} disabled={isOffline || checkingUpdates} variant="outline" className="font-bold gap-2 border-primary/40 text-primary hover:bg-primary/10">
             <RefreshCw className={`w-4 h-4 ${checkingUpdates ? 'animate-spin' : ''}`} /> Check For Updates
+          </Button>
+          <Button onClick={() => exportOfflineDataAsJson()} variant="outline" className="font-bold gap-2 border-border text-foreground hover:bg-muted">
+            <FileJson className="w-4 h-4 text-emerald-500" /> Export Data Backup (JSON)
           </Button>
         </div>
       </div>

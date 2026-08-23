@@ -266,3 +266,102 @@ export const sendPasswordResetEmail = async (
   };
 };
 
+/**
+ * Send Welcome Email upon new user registration
+ */
+export const sendWelcomeEmail = async (
+  email: string,
+  name: string,
+  role: 'student' | 'guardian' = 'student'
+): Promise<{ success: boolean; delivered?: boolean; message: string }> => {
+  const subject = `🎓 Welcome to Scholars Resort, ${name || 'Scholar'}!`;
+  const isGuardian = role === 'guardian';
+  
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="color: #4f46e5; margin: 0;">Scholars Resort</h2>
+        <p style="color: #64748b; font-size: 14px;">UTME/JAMB Exam Prep & Learning Platform</p>
+      </div>
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+      <h3 style="color: #0f172a; margin-top: 0;">Welcome aboard, ${name || 'Scholar'}! 🚀</h3>
+      <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+        ${isGuardian 
+          ? 'Thank you for registering as a Guardian on Scholars Resort. You can now monitor your student\'s study hours, CBT test scores, and performance analytics in real time.'
+          : 'Thank you for creating your account on Scholars Resort. You now have access to high-yield JAMB UTME prep tools designed to boost your score above 300!'}
+      </p>
+      <div style="background: #f8fafc; border-left: 4px solid #4f46e5; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0;">
+        <h4 style="margin: 0 0 8px 0; color: #1e293b;">Your Learning Arsenal:</h4>
+        <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 14px; line-height: 1.6;">
+          <li><strong>Full-Length CBT Mocks:</strong> Authentic 4-subject UTME exam simulation.</li>
+          <li><strong>AI Study Tutor:</strong> 24/7 step-by-step breakdown for complex questions.</li>
+          <li><strong>Curated Study Library:</strong> JAMB novel summaries and past questions.</li>
+        </ul>
+      </div>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="https://scholarsresort.com/login" style="background-color: #4f46e5; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">Start Studying Now</a>
+      </div>
+      <p style="color: #94a3b8; font-size: 12px; margin-top: 30px; text-align: center;">
+        Need help? Contact our support team at <a href="mailto:admitwise2@gmail.com" style="color: #4f46e5;">admitwise2@gmail.com</a>
+      </p>
+    </div>
+  `;
+
+  return sendPlatformEmail({
+    to: email,
+    subject,
+    body: `Welcome to Scholars Resort, ${name}! Log in at https://scholarsresort.com/login to begin your UTME preparation.`,
+    html: htmlBody
+  });
+};
+
+/**
+ * Send Payment Verified / Pro Access Activated Email
+ */
+export const sendPaymentApprovedEmail = async (
+  email: string,
+  name: string,
+  amount: number,
+  planLabel: string = 'Full Access Pass'
+): Promise<{ success: boolean; delivered?: boolean; message: string }> => {
+  const subject = `🎉 Payment Verified - ${planLabel} Activated!`;
+  const formattedAmount = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' }).format(amount);
+
+  const htmlBody = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+      <div style="text-align: center; margin-bottom: 20px;">
+        <h2 style="color: #16a34a; margin: 0;">Payment Verified!</h2>
+        <p style="color: #64748b; font-size: 14px;">Scholars Resort Learning Platform</p>
+      </div>
+      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
+      <h3 style="color: #0f172a; margin-top: 0;">Congratulations, ${name || 'Scholar'}! 🎉</h3>
+      <p style="color: #334155; font-size: 15px; line-height: 1.6;">
+        Your payment of <strong>${formattedAmount}</strong> has been confirmed by the administration. Your <strong>${planLabel}</strong> is now active.
+      </p>
+      <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; margin: 20px 0; border-radius: 8px;">
+        <h4 style="margin: 0 0 8px 0; color: #166534;">Unlocked Pro Benefits:</h4>
+        <ul style="margin: 0; padding-left: 20px; color: #15803d; font-size: 14px; line-height: 1.6;">
+          <li>Unlimited CBT Mock Drills & Timed UTME Practice</li>
+          <li>Complete Study Library, PDF Downloads & Novel In-depth Guides</li>
+          <li>Detailed Topic Analytics & Weakness Breakdown</li>
+          <li>Unrestricted AI Tutor Support</li>
+        </ul>
+      </div>
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="https://scholarsresort.com/cbt" style="background-color: #16a34a; color: #ffffff; padding: 12px 28px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">Take a Practice CBT Drill</a>
+      </div>
+      <p style="color: #94a3b8; font-size: 12px; margin-top: 30px; text-align: center;">
+        Thank you for choosing Scholars Resort. If you have any questions, reach out to us at <a href="mailto:admitwise2@gmail.com" style="color: #16a34a;">admitwise2@gmail.com</a>
+      </p>
+    </div>
+  `;
+
+  return sendPlatformEmail({
+    to: email,
+    subject,
+    body: `Your payment of ${formattedAmount} for ${planLabel} on Scholars Resort has been verified. Access all features now at https://scholarsresort.com/cbt`,
+    html: htmlBody
+  });
+};
+
+

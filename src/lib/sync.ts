@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { syncPendingAnswers } from './offlineDb';
+import { processSyncQueue } from './syncQueue';
 import { toast } from 'sonner';
 
 export const syncWithSupabase = async () => {
@@ -15,11 +16,11 @@ export const syncWithSupabase = async () => {
 
     console.log('Starting background sync with Supabase...');
     
-    // Call the offlineDb's built-in sync function
+    // Call the offlineDb's built-in answer sync function
     await syncPendingAnswers(supabase, session.user.id);
     
-    // Optionally fetch subjects/questions here if we wanted full offline
-    // But Dexie already caches them in offlineDb during normal usage if needed.
+    // Process the generic IndexedDB offline write queue (exam results, progress, streaks, etc.)
+    await processSyncQueue(supabase);
     
     console.log('Background sync complete.');
     return true;

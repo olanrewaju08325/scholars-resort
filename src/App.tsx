@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { syncWithSupabase } from './lib/sync';
+import { initSyncQueueListeners } from './lib/syncQueue';
 import { AppLayout } from './components/layout/AppLayout';
 import Landing from './pages/Landing';
 import Login from './pages/Login';
@@ -48,6 +49,7 @@ import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { WhatsAppWidget } from './components/WhatsAppWidget';
 import { GlobalSearch } from './components/GlobalSearch';
+import { GlobalShortcutsHandler } from './components/GlobalShortcutsHandler';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { InstallPrompt } from './components/InstallPrompt';
 import { OfflineIndicator } from './components/OfflineIndicator';
@@ -56,13 +58,19 @@ function AppContent() {
   const { loading } = useAuth();
   
   useEffect(() => {
+    // Initialize automatic sync listeners for network reconnection & IndexedDB sync queue
+    const cleanupSync = initSyncQueueListeners();
+
     const handleOnline = () => {
       console.log('App is online. Triggering background sync...');
       syncWithSupabase();
     };
 
     window.addEventListener('online', handleOnline);
-    return () => window.removeEventListener('online', handleOnline);
+    return () => {
+      cleanupSync();
+      window.removeEventListener('online', handleOnline);
+    };
   }, []);
 
   if (loading) return null;
@@ -137,6 +145,7 @@ function AppContent() {
 }
 
 import { MaintenanceGuard } from './components/MaintenanceGuard';
+import { InterruptedExamPrompt } from './components/InterruptedExamPrompt';
 
 function App() {
   return (
@@ -147,8 +156,10 @@ function App() {
             <MaintenanceGuard>
               <Toaster richColors position="top-right" />
               <AppContent />
+              <InterruptedExamPrompt />
               <WhatsAppWidget />
               <GlobalSearch />
+              <GlobalShortcutsHandler />
               <InstallPrompt />
               <OfflineIndicator />
             </MaintenanceGuard>

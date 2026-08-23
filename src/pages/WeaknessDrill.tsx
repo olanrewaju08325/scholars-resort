@@ -1,18 +1,43 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, AlertTriangle, Clock, History, BrainCircuit } from 'lucide-react';
+import { Target, AlertTriangle, Clock, History, BrainCircuit, Download, FileText, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { downloadPerformanceSummaryPdf } from '@/lib/performanceSummaryPdf';
 
 const WeaknessDrill = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [weakTopics, setWeakTopics] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportWeakTopicsPdf = async () => {
+    setIsExporting(true);
+    try {
+      await downloadPerformanceSummaryPdf({
+        studentName: profile?.full_name || 'Scholar Candidate',
+        email: profile?.email || '',
+        targetScore: profile?.target_score || 300,
+        weakTopics: weakTopics.map(w => ({
+          name: w.name,
+          subjectName: w.subjects?.name || 'General',
+          accuracy: w.accuracy,
+          attempts: 10
+        }))
+      });
+      toast.success('Weak Topics & Performance Summary PDF downloaded!');
+    } catch (err: any) {
+      console.error('PDF export error:', err);
+      toast.error('Failed to generate summary PDF.');
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   useEffect(() => {
     const fetchWeaknesses = async () => {
@@ -118,14 +143,26 @@ const WeaknessDrill = () => {
     <div className="min-h-screen bg-background text-foreground flex flex-col pt-10 px-4 md:px-10 pb-20">
       <div className="max-w-4xl mx-auto w-full">
         
-        <div className="flex items-center gap-4 mb-8">
-          <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <BrainCircuit className="w-6 h-6 text-primary" />
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
+              <BrainCircuit className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-display font-bold">Targeted Drills</h1>
+              <p className="text-muted-foreground">Focus your practice to rapidly increase your score.</p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-3xl font-display font-bold">Targeted Drills</h1>
-            <p className="text-muted-foreground">Focus your practice to rapidly increase your score.</p>
-          </div>
+
+          <Button
+            variant="outline"
+            onClick={handleExportWeakTopicsPdf}
+            disabled={isExporting}
+            className="flex items-center gap-2 border-primary/30 hover:bg-primary/10 text-primary self-start sm:self-auto"
+          >
+            <Download className="w-4 h-4" />
+            {isExporting ? 'Generating PDF...' : 'Download Weak Topics PDF'}
+          </Button>
         </div>
 
         <Tabs defaultValue="weakness" className="w-full">
