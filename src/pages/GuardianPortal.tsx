@@ -15,6 +15,7 @@ import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { sendEmailMessage } from '@/services/emailService';
 import { sendNotification } from '@/lib/notifications';
+import { callGroqAPI, stripThinkTags } from '@/services/aiService';
 
 const GuardianPortal = () => {
   const { profile, user, signOut } = useAuth();
@@ -842,18 +843,27 @@ Scholars Resort Academic Team`
                      <Button 
                         onClick={async () => {
                           if (activeStudentData?.id) {
-                            await sendNotification(
-                              activeStudentData.id,
-                              'Motivation from Guardian! 🌟',
-                              `${profile?.full_name || 'Your Guardian'} sent you a study boost! Keep pushing toward your target JAMB score of ${activeStudentData.target}!`,
-                              'success'
-                            );
+                            const toastId = toast.loading('Generating personalized AI motivation...');
+                            try {
+                                const prompt = `You are an academic counselor. Write a very short (1-2 sentences), highly motivating push notification for a student named ${activeStudentData.name}. Their target JAMB score is ${activeStudentData.target}. Current score average is ${activeStudentData.score}. Make it encouraging and personal. Do NOT use emojis.`;
+                                const aiMessage = await callGroqAPI([{ role: 'user', content: prompt }]);
+                                const cleanMessage = stripThinkTags(aiMessage).replace(/"/g, '').trim();
+                                
+                                await sendNotification(
+                                  activeStudentData.id,
+                                  'Motivation from Guardian! 🌟',
+                                  `${cleanMessage} - Sent by ${profile?.full_name || 'Your Guardian'}`,
+                                  'success'
+                                );
+                                toast.success(`AI Motivation Nudge sent to ${activeStudentData.name}!`, { id: toastId });
+                            } catch (e) {
+                                toast.error('Failed to generate motivation nudge.', { id: toastId });
+                            }
                           }
-                          toast.success(`Motivation Nudge sent to ${activeStudentData.name}!`);
                         }}
                         className="w-full justify-start gap-3 h-12"
                      >
-                        <BellRing className="w-4 h-4" /> Send Motivation Nudge
+                        <BellRing className="w-4 h-4" /> Send AI Motivation Nudge
                      </Button>
                      <Button onClick={downloadPDF} disabled={loading} variant="outline" className="w-full justify-start gap-3 h-12">
                         <FileDown className="w-4 h-4" /> Download PDF Report

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { BrainCircuit, ArrowRight, RefreshCw } from 'lucide-react';
-import { callGroqAPI } from '@/services/aiService';
+import { callGroqAPI, safeParseAIJSON } from '@/services/aiService';
 
 interface AIRecommendationsProps {
   profileId: string;
@@ -51,68 +51,7 @@ export const AIRecommendations = ({ profileId: _profileId, examsData }: AIRecomm
     const latestScore = scores[scores.length - 1] || 0;
     const avgScore = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length);
 
-    let heuristicRecs: Recommendation[] = [];
-
-    if (avgScore < 200) {
-      heuristicRecs = [
-        {
-          priority: 'Priority 1',
-          title: `Boost Foundation (${avgScore}/400 avg)`,
-          description: 'Focus on high-weight UTME topics and core subject principles before taking full mock exams.',
-          cta: 'Practice Weak Topics',
-          link: '/weakness',
-          color: 'bg-primary/5 border-primary/20 text-primary'
-        },
-        {
-          priority: 'Priority 2',
-          title: 'Daily 25-Question Sprints',
-          description: 'Build confidence and pace with bite-sized daily practice questions across your 4 registered subjects.',
-          cta: 'Start Practice',
-          link: '/practice',
-          color: 'bg-card border-border text-muted-foreground'
-        }
-      ];
-    } else if (avgScore < 280) {
-      heuristicRecs = [
-        {
-          priority: 'Priority 1',
-          title: `Target 300+ Benchmark (Recent: ${latestScore})`,
-          description: 'Work on timed question drills to increase your speed to 35 seconds per calculation question.',
-          cta: 'Timed CBT Mock',
-          link: '/exam',
-          color: 'bg-primary/5 border-primary/20 text-primary'
-        },
-        {
-          priority: 'Priority 2',
-          title: 'High-Yield Topic Mastery',
-          description: 'Review JAMB frequent past questions and flashcards for your registered subject combinations.',
-          cta: 'Explore Flashcards',
-          link: '/flashcards',
-          color: 'bg-card border-border text-muted-foreground'
-        }
-      ];
-    } else {
-      heuristicRecs = [
-        {
-          priority: 'Priority 1',
-          title: `Elite Score Defense (${avgScore}/400 avg)`,
-          description: 'Simulate full exam conditions with strict 120-minute timer to solidify your competitive advantage.',
-          cta: 'Full UTME Mock',
-          link: '/exam',
-          color: 'bg-primary/5 border-primary/20 text-primary'
-        },
-        {
-          priority: 'Priority 2',
-          title: 'Master Novel & Comprehension',
-          description: 'Ensure 100% accuracy in The Life Changer questions and English comprehension passages.',
-          cta: 'JAMB Novel Hub',
-          link: '/novel',
-          color: 'bg-card border-border text-muted-foreground'
-        }
-      ];
-    }
-
-    setRecs(heuristicRecs);
+    
 
     try {
       const examSummary = examsData.slice(-5).map(e => `${e.name}: ${e.score}/400`).join(', ');

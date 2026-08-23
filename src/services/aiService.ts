@@ -13,7 +13,7 @@ export function safeParseAIJSON<T = any>(rawText: string, fallbackValue?: T): T 
   }
 
   // 1. Strip markdown fences
-  let clean = rawText
+  let clean = rawText.replace(/<think>[\s\S]*?<\/think>/gi, "")
     .replace(/```json/gi, '')
     .replace(/```/g, '')
     .trim();
@@ -337,6 +337,12 @@ Structure your analysis with bold section headings, Markdown tables, and concret
 `;
 
 // Direct Groq API Execution using configured Groq API Key, Server Proxy, Supabase Edge Function, and Smart Local Heuristics
+
+export function stripThinkTags(text: string): string {
+  if (!text) return text;
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+}
+
 export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'qwen/qwen3.6-27b', temperature = 0.7): Promise<string> => {
   const rawKey = await getGroqApiKey();
   const apiKey = (rawKey || '').trim().replace(/^["']|["']$/g, '').trim();
@@ -417,7 +423,7 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
               remainingRequests: remReqs || undefined
             });
 
-            return content;
+            return stripThinkTags(content);
           }
         }
       } catch (err: any) {

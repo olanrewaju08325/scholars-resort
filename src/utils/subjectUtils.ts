@@ -487,7 +487,7 @@ export const checkSubjectDataIntegrity = async (subjectIdOrName: string, expecte
 
   // 2. Real-time fetch of active questions from Supabase
   const questions = await fetchQuestionsForSubject(subjectIdOrName, 500);
-  const availableCount = questions.length;
+  const availableCount = serverCount > 0 ? serverCount : questions.length;
   
   // Discrepancy check between setup count/expectation and real-time database count
   const discrepancyDetected = expectedCount !== undefined && expectedCount !== availableCount;

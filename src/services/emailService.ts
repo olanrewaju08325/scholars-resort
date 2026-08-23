@@ -53,7 +53,7 @@ export const testSMTPEmail = async (
     };
 
     // Try endpoints: /api/test-smtp, /api/send-email, /.netlify/functions/send-email
-    const endpoints = ['/api/test-smtp', '/.netlify/functions/send-email', '/api/send-email'];
+    const endpoints = ['/api/send-email', '/api/test-smtp'];
     let lastError = '';
 
     for (const url of endpoints) {
@@ -146,9 +146,9 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
     // 2. Direct fallback: Fetch recipients & publish to announcements
     let profilesQuery = supabase.from('profiles').select('id, email, full_name');
     if (payload.target === 'paid') {
-      profilesQuery = profilesQuery.eq('is_paid', true);
+      profilesQuery = profilesQuery.eq('has_paid', true);
     } else if (payload.target === 'unpaid') {
-      profilesQuery = profilesQuery.eq('is_paid', false);
+      profilesQuery = profilesQuery.eq('has_paid', false);
     }
 
     const { data: recipients } = await profilesQuery;

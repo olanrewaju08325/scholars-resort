@@ -7,7 +7,11 @@ import { getDownloadedPacks, downloadSubjectPack, deleteOfflinePack, checkForPac
 import type { OfflinePack } from '@/lib/offlineStore';
 import { toast } from 'sonner';
 
+import { useNavigate } from "react-router-dom";
+import { PlayCircle } from "lucide-react";
+
 export const OfflinePackManager = () => {
+  const navigate = useNavigate();
   const [subjects, setSubjects] = useState<any[]>([]);
   const [downloadedPacks, setDownloadedPacks] = useState<Record<string, OfflinePack>>({});
   const [loading, setLoading] = useState(true);
@@ -177,9 +181,14 @@ export const OfflinePackManager = () => {
 
                     <div className="flex items-center gap-2">
                       {isDownloaded && !hasUpdate && (
-                        <Button size="sm" variant="outline" onClick={() => handleDelete(sub.id, sub.name)} className="text-red-500 border-red-500/30 hover:bg-red-500/10">
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        <>
+                          <Button size="sm" variant="outline" onClick={() => navigate(`/practice?mode=subject&subjectId=${sub.id}`)} className="font-bold gap-1 bg-green-500/10 hover:bg-green-500/20 text-green-500 border-green-500/30">
+                            <PlayCircle className="w-4 h-4" /> Start Offline
+                          </Button>
+                          <Button size="sm" variant="outline" onClick={() => handleDelete(sub.id, sub.name)} className="text-red-500 border-red-500/30 hover:bg-red-500/10">
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </>
                       )}
                       
                       {isDownloaded && hasUpdate && (

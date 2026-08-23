@@ -1,3 +1,5 @@
+import { callGroqAPI } from '@/services/aiService';
+import { fetchQuestionsForSubject } from '@/utils/subjectUtils';
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -5,7 +7,6 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Swords, Trophy, CheckCircle, XCircle, Clock, Users, Sparkles } from 'lucide-react';
-import { callGroqAPI } from '@/services/aiService';
 
 export const WeeklyChallenge = () => {
   const { profile } = useAuth();
@@ -109,11 +110,7 @@ Return strictly JSON object format without markdown block backticks:
         } catch {}
       }
 
-      const { data: qData } = await supabase
-        .from('questions')
-        .select('*, subjects(name)')
-        .eq('is_active', true)
-        .limit(10);
+      const qData = await fetchQuestionsForSubject(userSubj, 10);
 
       if (qData && qData.length > 0) {
         const dbQ = qData[Math.floor(Math.random() * qData.length)];

@@ -8,31 +8,6 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI, safeParseAIJSON } from '@/services/aiService';
 
-const generateFallbackFlashcards = (topic: string, count: number): { front: string; back: string }[] => {
-  const t = topic.toLowerCase();
-  
-  if (t.includes('alkanol') || t.includes('alcohol')) {
-    return [
-      { front: "What is an Alkanol?", back: "An organic compound containing a hydroxyl (-OH) group attached to a saturated carbon atom. General formula: CnH2n+1OH." },
-      { front: "Primary Alkanol Oxidation", back: "Primary alkanols oxidize first to alkanals (aldehydes) and then to alkanoic acids (carboxylic acids)." },
-      { front: "Secondary Alkanol Oxidation", back: "Secondary alkanols oxidize to alkanones (ketones) using acidified K2Cr2O7 or KMnO4." },
-      { front: "Tertiary Alkanols & Oxidation", back: "Tertiary alkanols resist mild oxidation because there is no hydrogen atom on the hydroxyl-bearing carbon." },
-      { front: "Esterification Reaction", back: "Alkanol + Alkanoic acid ⇌ Ester + Water (in the presence of concentrated H2SO4 catalyst)." },
-      { front: "Lucas Test Distinction", back: "Distinguishes 1°, 2°, and 3° alkanols based on speed of cloudiness with conc. HCl / ZnCl2 (3° instant, 2° 5 mins, 1° none)." },
-      { front: "Dehydration of Alkanols", back: "Heating alkanols with excess conc. H2SO4 at 170°C yields alkenes via elimination of water." }
-    ].slice(0, count);
-  }
-
-  const defaults = [
-    { front: `Core Definition: ${topic}`, back: `${topic} is a key topic in the UTME syllabus testing core principles, formulas, and definitions.` },
-    { front: `Primary Principle of ${topic}`, back: `Mastering foundational properties and relationships in ${topic} drives speed and accuracy in CBT exams.` },
-    { front: `High-Yield UTME Exam Tip`, back: `Always identify key variables, definitions, and contextual clues before selecting an answer.` },
-    { front: `Common Misconception in ${topic}`, back: `Differentiate between closely related terms and avoid confusing similar properties or units.` },
-    { front: `Solving Strategy for ${topic}`, back: `Break down complex questions into simpler steps and eliminate wrong options systematically.` }
-  ];
-
-  return defaults.slice(0, count);
-};
 
 interface Flashcard {
   id: string;
@@ -185,7 +160,7 @@ Do not wrap in markdown or backticks, just raw valid JSON.`;
       setIsBuildingDeck(false);
       fetchCards();
     } catch (err: any) {
-      toast.error('AI Flashcard Notice: ' + (err.message || 'Saved cards to deck.'));
+      toast.error('AI Generation Failed: ' + (err.message || 'Unknown error'));
       fetchCards();
     } finally {
       setGeneratingAI(false);

@@ -62,9 +62,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } else {
       let query = supabase.from('profiles').select('email');
       if (target === 'paid') {
-        query = query.eq('is_paid', true);
+        query = query.eq('has_paid', true);
       } else if (target === 'unpaid') {
-        query = query.eq('is_paid', false);
+        query = query.eq('has_paid', false);
       }
       const { data: profileRows } = await query;
       if (profileRows) {
