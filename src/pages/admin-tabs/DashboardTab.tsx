@@ -8,6 +8,7 @@ import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import { OrphanedEntriesScanner } from '@/components/admin/OrphanedEntriesScanner';
 import { QuickStats } from '@/components/admin/QuickStats';
 import { GroqLiveQuotaWidget } from '@/components/GroqLiveQuotaWidget';
+import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 
 export const DashboardTab = () => {
   const [stats, setStats] = useState({
@@ -77,13 +78,13 @@ export const DashboardTab = () => {
 
       // Operational Telemetry
       const [
-        { count: questionsCount },
+        aggResult,
         { count: examsCount },
         { count: tLiveCount },
         { count: pendingPayCount },
         { count: ticketsCount }
       ] = await Promise.all([
-        supabase.from('questions').select('*', { count: 'exact', head: true }).eq('is_active', true),
+        getSubjectQuestionCountsAggregation(),
         supabase.from('exam_sessions').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
         supabase.from('tournaments').select('*', { count: 'exact', head: true }).eq('status', 'active'),
         supabase.from('manual_payments').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
@@ -95,7 +96,7 @@ export const DashboardTab = () => {
         studentGrowth: stGrowth,
         revenue: totalRev,
         revenueGrowth: revGrowth,
-        questions: questionsCount || 0,
+        questions: aggResult.totalQuestions || 0,
         examsTaken: examsCount || 0,
         tournamentsLive: tLiveCount || 0,
         pendingPayments: pendingPayCount || 0,

@@ -7,6 +7,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { fetchJambBooks } from '@/services/novelService';
+import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 
 export interface QuickStatsData {
   totalQuestions: number;
@@ -29,10 +30,11 @@ export function QuickStats() {
   const fetchQuickStats = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch Total Questions
-      const { count: questionsCount } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true });
+      // 1. Fetch Total Questions via aggregation service utility grouped by subject_id
+      const aggregation = await getSubjectQuestionCountsAggregation();
+      const questionsCount = aggregation.totalQuestions > 0 
+        ? aggregation.totalQuestions 
+        : (await supabase.from('questions').select('*', { count: 'exact', head: true })).count || 0;
 
       // 2. Fetch Total Literary Entries (Books + Chapters + Sample Questions)
       let literaryEntriesCount = 0;

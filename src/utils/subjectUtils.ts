@@ -580,3 +580,23 @@ export const getSubjectQuestionCountsAggregation = async (): Promise<{
   }
 };
 
+/**
+ * Utility function to trigger a question count aggregation query on the 'questions' table
+ * grouped by 'subject_id' and update/notify the Admin Dashboard interface with current totals.
+ */
+export const updateAdminDashboardQuestionTotals = async (): Promise<{
+  counts: Record<string, number>;
+  totalCounts: Record<string, number>;
+  canonicalCounts: Record<string, number>;
+  years: Record<string, string[]>;
+  totalQuestions: number;
+}> => {
+  const result = await getSubjectQuestionCountsAggregation();
+  
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('questions_updated', { detail: result }));
+  }
+  
+  return result;
+};
+
