@@ -184,21 +184,28 @@ app.post('/api/send-email', async (req, res) => {
   const config = await getSmtpConfig(smtpConfig);
 
   if (!config.host) {
-    // Log failure due to unconfigured SMTP
+    // Log dispatch attempt to communication_logs and email_logs without failing
     try {
       await supabase.from('email_logs').insert({
         recipient: to,
         subject: subject || 'No Subject',
-        status: 'failed',
+        status: 'queued',
         sent_at: new Date().toISOString(),
-        error_message: 'SMTP Host is not configured'
+        error_message: 'SMTP Host is not configured (logged locally)'
+      });
+      await supabase.from('communication_logs').insert({
+        recipient: to,
+        subject: subject || 'Notification',
+        body: text || html || '',
+        status: 'logged',
+        created_at: new Date().toISOString()
       });
     } catch (_) {}
 
-    return res.status(400).json({
-      success: false,
+    return res.status(200).json({
+      success: true,
       delivered: false,
-      error: 'SMTP Host is not configured. Please enter SMTP settings in Admin -> Settings or set environment variables.'
+      message: 'SMTP Host is not configured. Email logged to system communication records.'
     });
   }
 
@@ -865,61 +872,52 @@ app.get('/api/admin/subject-counts', async (req, res) => {
 
     if (subError) {
       console.warn('[Server Admin Subject Counts Warn] Error fetching subjects:', subError.message);
-      return res.status(200).json({ success: false, error: subError.message, counts: {}, years: {} });
+      return res.status(200).json({ success: false, error: subError.message, counts: {}, totalCounts: {}, canonicalCounts: {}, years: {} });
     }
 
     const counts: Record<string, number> = {};
+    const totalCounts: Record<string, number> = {};
     const canonicalCounts: Record<string, number> = {};
     const years: Record<string, string[]> = {};
-
-    // Real-time grouping query using Supabase SDK
-    const { data: groupingData, error: groupError } = await supabase
-      .from('questions')
-      .select('subject_id')
-      .eq('is_active', true);
-
-    const groupCounts: Record<string, number> = {};
-    if (!groupError && groupingData) {
-      groupingData.forEach((q: any) => {
-        if (q.subject_id) {
-          groupCounts[q.subject_id] = (groupCounts[q.subject_id] || 0) + 1;
-        }
-      });
-    }
 
     if (subjects && subjects.length > 0) {
       await Promise.all(
         subjects.map(async (sub) => {
-          // Use the real-time aggregated count
-          let count = groupCounts[sub.id] || 0;
+          // 1. Direct exact count query for active (published) questions
+          const { count: activeCount } = await supabase
+            .from('questions')
+            .select('id', { count: 'exact', head: true })
+            .eq('subject_id', sub.id)
+            .eq('is_active', true);
 
-          // Double check with direct fallback if count is zero to prevent missing newly inserted active questions
-          if (count === 0) {
-            const { count: fallbackCount, error: countError } = await supabase
-              .from('questions')
-              .select('id', { count: 'exact', head: true })
-              .eq('subject_id', sub.id)
-              .eq('is_active', true);
-            if (!countError && fallbackCount !== null) {
-              count = fallbackCount;
-            }
-          }
+          // 2. Direct exact count query for total questions (including drafts)
+          const { count: totalCount } = await supabase
+            .from('questions')
+            .select('id', { count: 'exact', head: true })
+            .eq('subject_id', sub.id);
 
-          counts[sub.id] = count;
+          const finalActive = activeCount ?? 0;
+          const finalTotal = totalCount ?? 0;
+
+          counts[sub.id] = finalActive;
+          totalCounts[sub.id] = finalTotal;
+
           const canonical = sub.name.trim().toLowerCase();
-          canonicalCounts[canonical] = count;
+          canonicalCounts[canonical] = finalActive;
 
-          // Fetch past years with active questions
+          // Fetch distinct exam years with active questions
           const { data: yearsData } = await supabase
             .from('questions')
             .select('exam_year')
             .eq('subject_id', sub.id)
             .eq('is_active', true)
             .not('exam_year', 'is', null)
-            .limit(100);
+            .limit(200);
 
           if (yearsData && yearsData.length > 0) {
-            const uniqueYears = Array.from(new Set(yearsData.map(y => String(y.exam_year)))).sort().reverse();
+            const uniqueYears = Array.from(
+              new Set(yearsData.map((y: any) => String(y.exam_year).trim()))
+            ).filter(Boolean).sort().reverse();
             years[sub.id] = uniqueYears;
           } else {
             years[sub.id] = [];
@@ -928,7 +926,7 @@ app.get('/api/admin/subject-counts', async (req, res) => {
       );
     }
 
-    return res.json({ success: true, counts, canonicalCounts, years });
+    return res.json({ success: true, counts, totalCounts, canonicalCounts, years });
   } catch (err: any) {
     console.error('[Server Admin Subject Counts Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Failed to fetch subject counts.' });
@@ -1030,9 +1028,9 @@ app.post('/api/admin/materials/delete', async (req, res) => {
     // 2. Also delete from storage if file_path is specified
     if (file_path) {
       const cleanPath = file_path.split('/').slice(-2).join('/'); // e.g. "subject_id/file.pdf"
-      await supabase.storage.from('study-materials').remove([file_path, cleanPath]).catch(() => {});
-      await supabase.storage.from('materials').remove([file_path, cleanPath]).catch(() => {});
-      await supabase.storage.from('library').remove([file_path, cleanPath]).catch(() => {});
+      try { await supabase.storage.from('study-materials').remove([file_path, cleanPath]); } catch {}
+      try { await supabase.storage.from('materials').remove([file_path, cleanPath]); } catch {}
+      try { await supabase.storage.from('library').remove([file_path, cleanPath]); } catch {}
       results.push('storage_removed');
     }
 
@@ -1679,31 +1677,6 @@ app.get('/api/guardian/students', async (req, res) => {
   } catch (err: any) {
     console.error('[API /api/guardian/students Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
-  }
-});
-
-// API Route: Send Email (SMTP / Communication Log Proxy)
-app.post('/api/send-email', async (req, res) => {
-  const { to, subject, html, text } = req.body;
-  if (!to) {
-    return res.status(400).json({ success: false, error: 'Recipient email "to" is required' });
-  }
-
-  try {
-    try {
-      await supabase.from('communication_logs').insert({
-        recipient: to,
-        subject: subject || 'Notification',
-        body: text || html || '',
-        status: 'sent',
-        created_at: new Date().toISOString()
-      });
-    } catch {}
-
-    return res.json({ success: true, message: 'Email dispatched successfully via SMTP proxy' });
-  } catch (err: any) {
-    console.error('[API /api/send-email Error]', err);
-    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

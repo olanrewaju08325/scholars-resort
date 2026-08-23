@@ -560,7 +560,7 @@ export const MaterialsTab = () => {
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
-                <Files className="w-3.5 h-3.5 text-primary" /> Bulk Drag & Drop ({bulkQueue.length})
+                <Files className="w-3.5 h-3.5 text-primary" /> Bulk Drag & Drop
               </button>
             </div>
           </CardHeader>

@@ -29,17 +29,19 @@ export class ErrorBoundary extends React.Component<
 
     // Try logging to Supabase platform_error_logs safely
     try {
-      supabase.from('platform_error_logs').insert({
-        error_type: 'react_boundary',
-        error_message: error.message,
-        error_context: {
-          error_id: errorId,
-          stack: error.stack?.substring(0, 500),
-          component_stack: info.componentStack?.substring(0, 500),
-          url: window.location.pathname,
-          user_agent: navigator.userAgent,
-        }
-      }).then(({ error: dbErr }) => {
+      Promise.resolve(
+        supabase.from('platform_error_logs').insert({
+          error_type: 'react_boundary',
+          error_message: error.message,
+          error_context: {
+            error_id: errorId,
+            stack: error.stack?.substring(0, 500),
+            component_stack: info.componentStack?.substring(0, 500),
+            url: window.location.pathname,
+            user_agent: navigator.userAgent,
+          }
+        })
+      ).then(({ error: dbErr }: any) => {
         if (dbErr) console.warn('Error log DB write failed:', dbErr);
       }).catch(() => {});
     } catch {

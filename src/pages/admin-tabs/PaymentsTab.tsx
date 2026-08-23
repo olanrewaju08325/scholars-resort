@@ -122,11 +122,13 @@ export const PaymentsTab = () => {
         }
         
         // 4. Activity log
-        await supabase.from('activity_logs').insert({
-          user_id: userId,
-          action: 'payment_approved',
-          metadata: { amount, plan_type: planType, payment_id: paymentId }
-        }).catch(() => {});
+        try {
+          await supabase.from('activity_logs').insert({
+            user_id: userId,
+            action: 'payment_approved',
+            metadata: { amount, plan_type: planType, payment_id: paymentId }
+          });
+        } catch {}
 
         toast.success("Payment verified! Student account is now unlocked.");
         setSelectedReceipt(null);
@@ -177,11 +179,13 @@ export const PaymentsTab = () => {
             } catch {}
           }
 
-          await supabase.from('activity_logs').insert({
-            user_id: userId,
-            action: 'payment_rejected',
-            metadata: { payment_id: paymentId }
-          }).catch(() => {});
+          try {
+            await supabase.from('activity_logs').insert({
+              user_id: userId,
+              action: 'payment_rejected',
+              metadata: { payment_id: paymentId }
+            });
+          } catch {}
         } else {
           toast.error("Failed to reject payment.");
         }

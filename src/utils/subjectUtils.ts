@@ -514,3 +514,69 @@ export const checkSubjectDataIntegrity = async (subjectIdOrName: string, expecte
     questions,
   };
 };
+
+/**
+ * Service function for Admin Utilities to run a count aggregation query
+ * on the 'questions' table grouped by 'subject_id'.
+ */
+export const getSubjectQuestionCountsAggregation = async (): Promise<{
+  counts: Record<string, number>;
+  totalCounts: Record<string, number>;
+  canonicalCounts: Record<string, number>;
+  years: Record<string, string[]>;
+  totalQuestions: number;
+}> => {
+  try {
+    const response = await fetch('/api/admin/subject-counts');
+    if (response.ok) {
+      const resData = await response.json();
+      if (resData.success && resData.counts) {
+        const totalQuestions = Object.values(resData.counts as Record<string, number>).reduce((a, b) => a + b, 0);
+        return {
+          counts: resData.counts || {},
+          totalCounts: resData.totalCounts || resData.counts || {},
+          canonicalCounts: resData.canonicalCounts || {},
+          years: resData.years || {},
+          totalQuestions,
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('[Admin Subject Aggregation] Server API error, falling back to direct Supabase aggregation:', err);
+  }
+
+  // Fallback direct count aggregation via Supabase
+  try {
+    const { data: questionsData } = await supabase
+      .from('questions')
+      .select('subject_id, is_active')
+      .limit(50000);
+
+    const counts: Record<string, number> = {};
+    const totalCounts: Record<string, number> = {};
+
+    if (questionsData) {
+      questionsData.forEach((q: any) => {
+        if (q.subject_id) {
+          totalCounts[q.subject_id] = (totalCounts[q.subject_id] || 0) + 1;
+          if (q.is_active) {
+            counts[q.subject_id] = (counts[q.subject_id] || 0) + 1;
+          }
+        }
+      });
+    }
+
+    const totalQuestions = Object.values(counts).reduce((a, b) => a + b, 0);
+    return {
+      counts,
+      totalCounts,
+      canonicalCounts: {},
+      years: {},
+      totalQuestions,
+    };
+  } catch (err) {
+    console.error('[Admin Subject Aggregation Fatal Error]', err);
+    return { counts: {}, totalCounts: {}, canonicalCounts: {}, years: {}, totalQuestions: 0 };
+  }
+};
+

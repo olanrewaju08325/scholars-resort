@@ -41,20 +41,22 @@ export async function sendPlatformEmail(payload: EmailPayload): Promise<{ succes
 
     // Log email dispatch to Supabase communication_logs (with column error fallback)
     try {
-      await supabase.from('communication_logs').insert({
+      const { error: insertErr } = await supabase.from('communication_logs').insert({
         recipient_email: payload.to,
         subject: payload.subject,
         body: payload.body,
         status: 'sent',
         created_at: new Date().toISOString()
-      }).catch(async () => {
+      });
+
+      if (insertErr) {
         await supabase.from('communication_logs').insert({
           recipient: payload.to,
           subject: payload.subject,
           status: 'sent',
           created_at: new Date().toISOString()
-        }).catch(() => {});
-      });
+        });
+      }
     } catch (dbErr) {
       console.warn('Logging email dispatch notice:', dbErr);
     }

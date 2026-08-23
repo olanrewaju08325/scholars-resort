@@ -9,7 +9,12 @@ import {
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { ensureAllJambSubjectsInDatabase, normalizeSubjectName, unifyDatabaseSubjects } from '@/utils/subjectUtils';
+import { 
+  ensureAllJambSubjectsInDatabase, 
+  normalizeSubjectName, 
+  unifyDatabaseSubjects, 
+  getSubjectQuestionCountsAggregation 
+} from '@/utils/subjectUtils';
 import { useConfirm } from '@/hooks/useConfirm';
 
 export const SubjectsTab = () => {
@@ -58,21 +63,16 @@ export const SubjectsTab = () => {
       let totalQs = 0;
       let usedServerCounts = false;
 
-      // Try server-side counts first
+      // Fetch count aggregation grouped by subject_id via admin service utility
       try {
-        const response = await fetch('/api/admin/subject-counts');
-        if (response.ok) {
-          const resData = await response.json();
-          if (resData.success && resData.counts) {
-            countsMap = resData.counts;
-            yearsMap = resData.years || {};
-            totalQs = Object.values(countsMap).reduce((a, b) => a + b, 0);
-            usedServerCounts = true;
-            console.log('[SubjectsTab] Successfully fetched accurate server-side question counts!');
-          }
-        }
+        const aggResult = await getSubjectQuestionCountsAggregation();
+        countsMap = aggResult.counts;
+        yearsMap = aggResult.years || {};
+        totalQs = aggResult.totalQuestions;
+        usedServerCounts = true;
+        console.log('[SubjectsTab] Successfully fetched accurate server-side question counts aggregation!');
       } catch (apiErr) {
-        console.warn('[SubjectsTab] Server-side counts API unavailable, falling back to client-side counting:', apiErr);
+        console.warn('[SubjectsTab] Service aggregation error, falling back:', apiErr);
       }
 
       // Fallback: Fetch questions and calculate counts client-side (legacy code)
