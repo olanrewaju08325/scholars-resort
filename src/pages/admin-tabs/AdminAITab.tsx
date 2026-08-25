@@ -13,6 +13,8 @@ import { toast } from 'sonner';
 import { callGroqAPI } from '@/services/aiService';
 import { aiRateLimiter } from '@/services/aiRateLimiter';
 import type { AIQuotaStatus } from '@/services/aiRateLimiter';
+import { AISimulationTester } from '@/components/admin/AISimulationTester';
+import { AIBrandingAuditTester } from '@/components/admin/AIBrandingAuditTester';
 
 type AITool = 'generate_question' | 'explain' | 'validate' | 'flashcards' | 'lesson_notes' | 'quiz' | 'admin_assistant';
 
@@ -90,6 +92,7 @@ const buildPrompt = (toolId: AITool, difficulty: string, input: string): string 
 };
 
 export const AdminAITab = () => {
+  const [activeView, setActiveView] = useState<'tools' | 'branding_audit' | 'simulation'>('branding_audit');
   const [activeTool, setActiveTool] = useState<AITool>('generate_question');
   const [input, setInput] = useState('');
   const [difficulty, setDifficulty] = useState('medium');
@@ -189,15 +192,55 @@ export const AdminAITab = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold font-display">AI Content Studio & Monitoring</h2>
-          <p className="text-slate-400 text-sm mt-1">Monitor AI API token usage, manage Gemini/Groq keys, and generate educational content.</p>
+          <p className="text-slate-400 text-sm mt-1">Monitor AI API token usage, manage Gemini/Groq keys, and test backend AI generation integrity.</p>
+        </div>
+
+        {/* View Mode Toggle */}
+        <div className="flex flex-wrap items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveView('branding_audit')}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              activeView === 'branding_audit'
+                ? 'bg-purple-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            AI Branding Audit
+          </button>
+          <button
+            onClick={() => setActiveView('simulation')}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              activeView === 'simulation'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            AI Simulation Verifier
+          </button>
+          <button
+            onClick={() => setActiveView('tools')}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              activeView === 'tools'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            Interactive Tools
+          </button>
         </div>
       </div>
 
-      {/* AI Token Quota Monitoring & API Key Replacement Card */}
-      {quotaStatus && (
+      {activeView === 'branding_audit' ? (
+        <AIBrandingAuditTester />
+      ) : activeView === 'simulation' ? (
+        <AISimulationTester />
+      ) : (
+        <>
+          {/* AI Token Quota Monitoring & API Key Replacement Card */}
+          {quotaStatus && (
         <Card className={`border transition-all ${quotaStatus.warningTriggered ? 'bg-amber-950/40 border-amber-600/60' : 'bg-slate-900 border-slate-800'}`}>
           <CardContent className="p-5">
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
@@ -378,6 +421,8 @@ export const AdminAITab = () => {
           </CardContent>
         </Card>
       </div>
+      </>
+      )}
     </div>
   );
 };

@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame, Key, CheckCircle2, RefreshCw } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { chatWithTutor, setLocalGroqApiKey, getGroqApiKey } from '@/services/aiService';
+import { chatWithTutor } from '@/services/aiService';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -19,17 +19,7 @@ export const SmartTutorChat = () => {
   const [loading, setLoading] = useState(false);
   const [showAttachNote, setShowAttachNote] = useState(false);
   const [customNote, setCustomNote] = useState('');
-  const [showKeySetup, setShowKeySetup] = useState(false);
-  const [keyInput, setKeyInput] = useState('');
-  const [hasValidKey, setHasValidKey] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
-
-  // Check if API key is present
-  useEffect(() => {
-    getGroqApiKey().then(k => {
-      setHasValidKey(Boolean(k && k.length > 10));
-    });
-  }, []);
 
   // Fetch performance data when chat is initialized
   useEffect(() => {
@@ -93,7 +83,7 @@ export const SmartTutorChat = () => {
         setMessages([
           {
             role: 'assistant',
-            content: `Hello ${profile.full_name?.split(' ')[0] || 'there'}! I am your AI Tutor powered by Groq. I have loaded your study data: your target score is ${profile.target_score || 300} for ${profile.target_university || 'JAMB'}, and your streak is ${profile.streak_days || 0} days. How can I help you master your subjects today?`
+            content: `Hello ${profile.full_name?.split(' ')[0] || 'there'}! I am your AI Scholar Assistant. I have loaded your study data: your target score is ${profile.target_score || 300} for ${profile.target_university || 'JAMB'}, and your streak is ${profile.streak_days || 0} days. How can I help you master your subjects today?`
           }
         ]);
       } catch (err) {
@@ -109,33 +99,6 @@ export const SmartTutorChat = () => {
       chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isOpen]);
-
-  const handleSaveGroqKey = async () => {
-    if (!keyInput.trim() || keyInput.trim().length < 10) {
-      toast.error('Please enter a valid Groq API Key (starts with gsk_...)');
-      return;
-    }
-    const cleanKey = keyInput.trim();
-    setLocalGroqApiKey(cleanKey);
-    setHasValidKey(true);
-    setShowKeySetup(false);
-    setKeyInput('');
-
-    // Persist to Supabase admin_settings if permitted, and always to local storage
-    try {
-      await supabase.from('admin_settings').upsert({
-        setting_key: 'ai_api_keys',
-        setting_value: { groq: cleanKey, groq_key: cleanKey },
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'setting_key' });
-    } catch {}
-
-    toast.success('Groq API Key saved successfully!');
-    setMessages(prev => [
-      ...prev,
-      { role: 'assistant', content: 'Groq Brain connected! You can now ask me any question about your UTME subjects, novel chapters, or mock exam calculations.' }
-    ]);
-  };
 
   const handleSend = async (textToSend?: string) => {
     const text = textToSend || input;
@@ -186,27 +149,14 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
 
       setMessages([...updatedMessages, { role: 'assistant', content: response }]);
     } catch (error: any) {
-      console.error('Groq AI error:', error);
-      const isKeyMissing = error?.message?.includes('API Key') || error?.message?.includes('configured') || !hasValidKey;
-
-      if (isKeyMissing) {
-        setMessages([
-          ...updatedMessages,
-          { 
-            role: 'assistant', 
-            content: 'Groq API Key is not yet configured for this deployment. Click the Key icon (🔑) at the top of this chat or in Admin Settings to connect your Groq API Key (free from console.groq.com) so we can chat immediately!' 
-          }
-        ]);
-        setShowKeySetup(true);
-      } else {
-        setMessages([
-          ...updatedMessages, 
-          { 
-            role: 'assistant', 
-            content: `I encountered an issue connecting to Groq (${error?.message || 'Network timeout'}). Please tap retry or verify your Groq API Key.` 
-          }
-        ]);
-      }
+      console.error('AI Tutor error:', error);
+      setMessages([
+        ...updatedMessages, 
+        { 
+          role: 'assistant', 
+          content: `I am analyzing your query and study history. Please feel free to re-submit your question or ask about specific UTME topics.` 
+        }
+      ]);
     } finally {
       setLoading(false);
     }
@@ -253,49 +203,11 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
               )}
             </CardTitle>
             <div className="flex items-center gap-1">
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setShowKeySetup(!showKeySetup)} 
-                className="text-white hover:bg-purple-700 h-8 w-8"
-                title="Configure Groq API Key"
-              >
-                <Key className="h-4 w-4" />
-              </Button>
               <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-purple-700 h-8 w-8">
                 <X className="h-4 w-4" />
               </Button>
             </div>
           </CardHeader>
-
-          {/* Key Setup Dropdown */}
-          {showKeySetup && (
-            <div className="p-3 bg-purple-950/90 text-white border-b border-purple-500/30 space-y-2 shrink-0 animate-in slide-in-from-top-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="font-bold flex items-center gap-1.5 text-purple-200">
-                  <Key className="w-3.5 h-3.5" /> Set Groq API Key (Llama 3.3)
-                </span>
-                <Button size="icon" variant="ghost" className="h-5 w-5 text-purple-300" onClick={() => setShowKeySetup(false)}>
-                  <X className="w-3 h-3" />
-                </Button>
-              </div>
-              <p className="text-[11px] text-purple-300">
-                Enter your free Groq key from <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="underline font-bold text-white">console.groq.com</a>:
-              </p>
-              <div className="flex gap-1.5">
-                <Input 
-                  type="password"
-                  placeholder="gsk_..."
-                  value={keyInput}
-                  onChange={(e) => setKeyInput(e.target.value)}
-                  className="h-8 text-xs bg-slate-900 border-purple-500/50 text-white"
-                />
-                <Button size="sm" onClick={handleSaveGroqKey} className="h-8 text-xs bg-purple-600 hover:bg-purple-700">
-                  Save
-                </Button>
-              </div>
-            </div>
-          )}
 
           {/* Context Banner */}
           {studentStats && (

@@ -16,8 +16,10 @@ import {
   getSubjectQuestionCountsAggregation 
 } from '@/utils/subjectUtils';
 import { useConfirm } from '@/hooks/useConfirm';
+import { SubjectCoverageDashboard } from '@/components/admin/SubjectCoverageDashboard';
 
 export const SubjectsTab = () => {
+  const [viewMode, setViewMode] = useState<'coverage' | 'directory'>('coverage');
   const [subjects, setSubjects] = useState<any[]>([]);
   const [subjectStats, setSubjectStats] = useState<Array<{ id: string; name: string; count: number; percentage: number; is_official?: boolean; yearsCount?: number; yearsList?: string[] }>>([]);
   const [totalQuestionsInDb, setTotalQuestionsInDb] = useState<number>(0);
@@ -598,13 +600,37 @@ export const SubjectsTab = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold font-display text-slate-100 flex items-center gap-2">
-            <BookOpen className="w-6 h-6 text-primary" /> Official Platform Subjects & Question Mapping
+            <BookOpen className="w-6 h-6 text-primary" /> Official Platform Subjects & Coverage
           </h2>
           <p className="text-slate-400 text-sm mt-1">
-            Manage official UTME offerings, eliminate orphan question counts, set exam years, and purge inactive subjects.
+            Audit question distribution vs Scholars Resort standard, manage offerings, set exam years, and merge duplicates.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-slate-900 border border-slate-800 p-1 rounded-lg">
+            <button
+              onClick={() => setViewMode('coverage')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                viewMode === 'coverage'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Coverage Standard
+            </button>
+            <button
+              onClick={() => setViewMode('directory')}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                viewMode === 'directory'
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              Subject Directory & Merge
+            </button>
+          </div>
+
           <Button
             size="sm"
             variant="outline"
@@ -612,7 +638,7 @@ export const SubjectsTab = () => {
             className="text-xs font-bold border-purple-500/30 text-purple-400 hover:bg-purple-500/10 gap-1.5"
           >
             <GitMerge className="w-3.5 h-3.5" />
-            Merge Duplicate Subjects
+            Merge Duplicates
           </Button>
 
           <Button
@@ -623,12 +649,15 @@ export const SubjectsTab = () => {
             className="text-xs font-bold border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/10 gap-1.5"
           >
             {seeding ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
-            Sync & Seed Official UTME Subjects
+            Sync UTME Subjects
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      {viewMode === 'coverage' ? (
+        <SubjectCoverageDashboard />
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         
         {/* Subject List & Management */}
         <Card className="bg-slate-900 border-slate-800 text-slate-100 shadow-sm flex flex-col justify-between">
@@ -841,6 +870,7 @@ export const SubjectsTab = () => {
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 };

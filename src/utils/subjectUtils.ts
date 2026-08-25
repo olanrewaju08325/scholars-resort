@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { ContentNormalizer } from './ContentNormalizer';
 
 export interface JambSubjectInfo {
   id: string;

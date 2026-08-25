@@ -160,7 +160,7 @@ export const AIKeysTab = () => {
     setTestingGroq(true);
     try {
       const trimmedKey = groqKey.trim();
-      let workingModel = 'openai/gpt-oss-120b';
+      let workingModel = 'llama-3.3-70b-versatile';
 
       try {
         const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
@@ -169,15 +169,14 @@ export const AIKeysTab = () => {
         if (modelsRes.ok) {
           const modelsData = await modelsRes.json();
           const ids: string[] = (modelsData?.data || []).map((m: any) => m.id);
-          if (ids.includes('openai/gpt-oss-120b')) workingModel = 'openai/gpt-oss-120b';
-          else if (ids.includes('openai/gpt-oss-20b')) workingModel = 'openai/gpt-oss-20b';
-          else if (ids.includes('groq/compound')) workingModel = 'groq/compound';
-          else if (ids.includes('groq/compound-mini')) workingModel = 'groq/compound-mini';
+          if (ids.includes('llama-3.3-70b-versatile')) workingModel = 'llama-3.3-70b-versatile';
+          else if (ids.includes('llama-3.1-8b-instant')) workingModel = 'llama-3.1-8b-instant';
+          else if (ids.includes('mixtral-8x7b-32768')) workingModel = 'mixtral-8x7b-32768';
           else if (ids.length > 0) workingModel = ids[0];
         }
       } catch {}
 
-      const testModels = [workingModel, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'groq/compound-mini'].filter((m, i, arr) => arr.indexOf(m) === i);
+      const testModels = [workingModel, 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'].filter((m, i, arr) => arr.indexOf(m) === i);
       let reply = '';
       let successModel = '';
 

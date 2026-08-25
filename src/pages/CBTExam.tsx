@@ -19,6 +19,7 @@ import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { cleanQuestionText, cleanOptionText } from '@/utils/questionUtils';
+import { QuestionFlowService } from '@/services/questionFlowService';
 import { toast } from 'sonner';
 import { MathText } from '@/components/MathText';
 import { playFiveMinuteWarningSound } from '@/lib/celebration';
@@ -120,7 +121,7 @@ const CBTExam = () => {
         console.warn("Interrupted session restore error:", e);
       }
 
-      // JAMB 180-Question Master Logic
+      // JAMB 180-Question Master Logic via QuestionFlowService
       let userSubs = profile.utme_subjects || [];
       if (!userSubs || userSubs.length < 4) {
         userSubs = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
@@ -135,31 +136,19 @@ const CBTExam = () => {
 
       setExamSubjectsList(finalSubjects);
       
-      let allQuestions: any[] = [];
-      
-      for (const subj of finalSubjects) {
-        // Data integrity check
-        const integrity = await checkSubjectDataIntegrity(subj);
-        console.log('[CBT Exam Integrity Audit]', integrity);
+      const flowResult = await QuestionFlowService.fetchQuestionsForMode({
+        mode: 'full_mock',
+        subjectIds: finalSubjects,
+        count: 180
+      });
 
-        const limit = subj === 'Use of English' ? 60 : 40;
-        const fetched = await fetchQuestionsForSubject(subj, limit);
-        
-        const tagged = (fetched || []).map(q => ({
-          ...q,
-          question_text: cleanQuestionText(q.question_text || q.question),
-          subject_name: subj,
-          options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
-        }));
+      console.log(`[CBT Exam Question Flow] Full Mock Retrieved: ${flowResult.totalRetrieved} questions across ${Object.keys(flowResult.validation.subjectsCovered).length} subjects in ${flowResult.queryLatencyMs}ms (Zero Mock Enforced)`);
 
-        allQuestions = [...allQuestions, ...tagged];
-      }
-
-      if (allQuestions.length < 10) {
+      if (flowResult.questions.length < 10) {
         toast.error("Insufficient active questions in the database to form a full exam. Please contact support.");
       }
 
-      setQuestions(allQuestions);
+      setQuestions(flowResult.questions);
       setLoading(false);
     };
     

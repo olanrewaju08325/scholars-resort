@@ -11,9 +11,10 @@ import { awardXp, checkAndAwardBadges } from '@/lib/gamification';
 import { withRetry } from '@/lib/apiWithRetry';
 import { toast } from 'sonner';
 import { callGroqAPI, stripThinkTags } from '@/services/aiService';
-import { getCustomQuestions, saveCompletedOfflineSession } from '@/lib/offlineStore';
+import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
-import { cleanQuestionText, cleanOptionText } from '@/utils/questionUtils';
+import { cleanQuestionText, cleanOptionText, ContentNormalizer } from '@/utils/questionUtils';
+import { QuestionFlowService, type ExamMode } from '@/services/questionFlowService';
 import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
 import { useSwipeGesture } from '@/hooks/useSwipeGesture';
 
@@ -155,60 +156,33 @@ const PracticeSession = () => {
       
       if (sessionData) setSessionId(sessionData.id);
 
-      // 2. Fetch Questions dynamically using canonical subject matching
+      // 2. Fetch Questions dynamically using QuestionFlowService directly from Supabase
       const count = state.questionCount || 20;
-      let fetchedQuestions: any[] = [];
-
-      if (state.subjectId && state.subjectId !== 'all') {
-        // Server-side data integrity check & real-time fetch
-        const expectedCount = state.expectedQCount || undefined;
-        const integrity = await checkSubjectDataIntegrity(state.subjectId, expectedCount);
-        console.log('[CBT Practice Server-Side Integrity Audit]', integrity);
-
-        if (integrity.discrepancyDetected) {
-          console.warn(`[CBT Data Integrity Discrepancy] Setup count (${expectedCount}) !== DB count (${integrity.availableCount}). Forcing real-time fetch from Supabase.`);
-        }
-
-        fetchedQuestions = integrity.questions && integrity.questions.length > 0 
-          ? integrity.questions 
-          : await fetchQuestionsForSubject(state.subjectId, Math.max(count * 3, 100));
-      } else {
-        const { data: qData } = await supabase.from('questions').select('*').eq('is_active', true).limit(Math.max(count * 3, 100));
-        fetchedQuestions = qData || [];
+      let targetMode: ExamMode = 'subject_practice';
+      if (state.mode === 'topic' || (state.topicId && state.topicId !== 'all')) {
+        targetMode = 'topic_drill';
+      } else if (state.mode === 'speed' || state.isTimeManagementMode) {
+        targetMode = 'speed_test';
+      } else if (state.mode === 'daily') {
+        targetMode = 'daily_quiz';
       }
 
-      let filteredQuestions = [...fetchedQuestions];
+      const flowResult = await QuestionFlowService.fetchQuestionsForMode({
+        mode: targetMode,
+        subjectId: state.subjectId !== 'all' ? state.subjectId : undefined,
+        topicId: state.topicId !== 'all' ? state.topicId : undefined,
+        count,
+        difficulty: state.difficulty,
+        learningStyle: state.learningStyle
+      });
 
-      if (state.topicId && state.topicId !== 'all') {
-        const topicFiltered = filteredQuestions.filter(q => q.topic_id === state.topicId);
-        if (topicFiltered.length > 0) {
-          filteredQuestions = topicFiltered;
-        } else {
-          console.warn(`[CBT Data Integrity Fallback] Topic "${state.topicId}" returned 0 questions. Falling back to subject-wide question pool.`);
-        }
-      }
+      console.log(`[CBT Question Flow Service] Mode: ${targetMode} | Retrieved: ${flowResult.totalRetrieved} | Latency: ${flowResult.queryLatencyMs}ms | Zero-Mock Enforced: ${flowResult.validation.noMockFallbackUsed}`);
 
-      if (state.difficulty && state.difficulty !== 'mixed' && state.difficulty !== 'adaptive') {
-        const diffFiltered = filteredQuestions.filter(q => q.difficulty === state.difficulty);
-        if (diffFiltered.length > 0) {
-          filteredQuestions = diffFiltered;
-        } else {
-          console.warn(`[CBT Data Integrity Fallback] Difficulty level "${state.difficulty}" returned 0 questions for this subject. Falling back to mixed difficulty questions.`);
-        }
-      }
-      
-      const customQ = getCustomQuestions(state.subjectId !== 'all' ? state.subjectId : undefined);
-
-      let allCombined = [...filteredQuestions, ...customQ];
-      if (allCombined.length > 0) {
-        const parsed = allCombined.map(q => ({
-          ...q,
-          question_text: cleanQuestionText(q.question_text || q.question),
-          options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
-        }));
-        setQuestions(parsed.sort(() => Math.random() - 0.5).slice(0, count));
+      if (flowResult.questions && flowResult.questions.length > 0) {
+        setQuestions(flowResult.questions);
       } else {
         setQuestions([]);
+        toast.error(flowResult.errorMessage || "No active questions found in the database for this selection. Please select another subject or topic.");
       }
       setLoading(false);
 

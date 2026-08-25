@@ -25,8 +25,6 @@ const PracticeSetup = () => {
   const [learningStyle, setLearningStyle] = useState('normal');
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
-  const [availableQCount, setAvailableQCount] = useState<number | null>(null);
-  const [verifyingIntegrity, setVerifyingIntegrity] = useState(false);
 
   useEffect(() => {
     const fetchSubjects = async () => {
@@ -67,32 +65,15 @@ const PracticeSetup = () => {
 
   useEffect(() => {
     if (selectedSubject) {
-      setVerifyingIntegrity(true);
-      
       if (!navigator.onLine) {
-         const packs = getDownloadedPacks();
-         const pack = packs[selectedSubject];
-         if (pack) {
-            setAvailableQCount(pack.questionsCount);
-         } else {
-            setAvailableQCount(0);
-         }
-         setVerifyingIntegrity(false);
-         setTopics([]);
+        setTopics([]);
       } else {
-        // Perform Data Integrity Check using direct subject ID to ensure 100% accuracy and avoid name conflicts
-        checkSubjectDataIntegrity(selectedSubject).then(res => {
-          setAvailableQCount(res.availableCount);
-          setVerifyingIntegrity(false);
-        });
-
         supabase.from('topics').select('*').eq('subject_id', selectedSubject)
           .then(({ data }) => setTopics(data || []));
       }
     } else {
       setTopics([]);
       setSelectedTopic('');
-      setAvailableQCount(null);
     }
   }, [selectedSubject, subjects]);
 
@@ -106,18 +87,14 @@ const PracticeSetup = () => {
       toast.error("Please select a subject to practice.");
       return;
     }
-    
-    // Final Data Integrity Verification prior to navigation using exact subject ID
-    const integrityResult = await checkSubjectDataIntegrity(selectedSubject);
-    console.log('[CBT Engine Session Verification]', integrityResult);
 
     navigate('/practice/session', { 
       state: { 
+        mode,
         subjectId: selectedSubject, 
         topicId: selectedTopic,
         difficulty,
         questionCount: parseInt(questionCount),
-        expectedQCount: availableQCount ?? integrityResult.availableCount,
         learningStyle
       } 
     });
@@ -158,21 +135,6 @@ const PracticeSetup = () => {
                   <label className="text-sm font-medium flex items-center gap-2">
                     <BookOpen className="w-4 h-4 text-primary" /> Subject
                   </label>
-                  {selectedSubject && (
-                    <span className="text-xs font-semibold flex items-center gap-1">
-                      {verifyingIntegrity ? (
-                        <span className="text-muted-foreground animate-pulse">Checking DB...</span>
-                      ) : availableQCount !== null && availableQCount > 0 ? (
-                        <span className="text-emerald-500 flex items-center gap-1">
-                          <CheckCircle2 className="w-3.5 h-3.5" /> {availableQCount} Questions Ready
-                        </span>
-                      ) : (
-                        <span className="text-amber-500 flex items-center gap-1">
-                          <AlertCircle className="w-3.5 h-3.5" /> 0 DB Questions Found
-                        </span>
-                      )}
-                    </span>
-                  )}
                 </div>
                 <select 
                   className="w-full bg-muted border border-border rounded-md p-3"

@@ -354,7 +354,7 @@ export function stripThinkTags(text: string): string {
   return cleaned;
 }
 
-export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'qwen/qwen3.6-27b', temperature = 0.7): Promise<string> => {
+export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'llama-3.3-70b-versatile', temperature = 0.7): Promise<string> => {
   const rawKey = await getGroqApiKey();
   const apiKey = (rawKey || '').trim().replace(/^["']|["']$/g, '').trim();
 
@@ -368,12 +368,10 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
 
   const candidateModels = [
     model,
-    'qwen/qwen3.6-27b',
-    'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
-    'groq/compound',
-    'groq/compound-mini',
-    'llama-3.3-70b-versatile'
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant',
+    'mixtral-8x7b-32768',
+    'gemma2-9b-it'
   ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
   // 1. If Circuit Breaker is active and client has API key, attempt Groq directly
