@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, BookOpen, FileQuestion, CreditCard, 
   Settings, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronRight, 
   Search, Bell, Plus, MessageSquare, Menu, Sparkles, Trophy,
-  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key
+  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,8 @@ import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 import { initAdminOfflineSync } from '@/services/offlineSyncService';
 import { MaterialsTab } from './admin-tabs/MaterialsTab';
 import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
+import { DatabaseDiagnosticsTab } from './admin-tabs/DatabaseDiagnosticsTab';
+import { EnvironmentCleanupTab } from './admin-tabs/EnvironmentCleanupTab';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AdminNotificationSystem } from '@/components/admin/AdminNotificationSystem';
 import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
@@ -116,6 +118,8 @@ export default function Admin() {
     { id: 'ai', label: 'AI Assistant', icon: Sparkles },
     { id: 'logs', label: 'Audit Logs', icon: List },
     { id: 'backups', label: 'Backups', icon: DatabaseBackup },
+    { id: 'db-diagnostics', label: 'Database Diagnostic Suite', icon: Activity },
+    { id: 'env-cleanup', label: 'Environment Cleanup', icon: Trash2 },
     { id: 'smtp-health', label: 'SMTP Health Check', icon: Mail },
     { id: 'health', label: 'System Health', icon: Activity },
     { id: 'platform-health', label: 'Platform Monitor', icon: Activity },
@@ -154,6 +158,8 @@ export default function Admin() {
       case 'ai': return <AdminAITab />;
       case 'logs': return <LogsTab />;
       case 'backups': return <BackupsTab />;
+      case 'db-diagnostics': return <DatabaseDiagnosticsTab />;
+      case 'env-cleanup': return <EnvironmentCleanupTab />;
       default: return <DashboardTab />;
     }
   };
