@@ -1,5 +1,5 @@
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive, LogOut, Users, ShieldAlert } from 'lucide-react';
+import { Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, Timer, GraduationCap, HardDrive, LogOut, Users, ShieldAlert, CloudUpload, RefreshCw, MapPin, GitMerge, Video } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommandPalette } from '@/components/CommandPalette';
 import { NotificationBell } from '@/components/NotificationBell';
@@ -8,6 +8,8 @@ import { PageTransition } from '@/components/PageTransition';
 import { StudentLogoutDialog } from '@/components/StudentLogoutDialog';
 import { useState, useEffect } from 'react';
 import { useSync } from '@/hooks/useSync';
+import { getPendingQueueCount, processSyncQueue } from '@/lib/syncQueue';
+import { toast } from 'sonner';
 
 export const AppLayout = () => {
   const { profile, user } = useAuth();
@@ -15,6 +17,8 @@ export const AppLayout = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncingPending, setIsSyncingPending] = useState(false);
 
   useSync();
 
@@ -31,12 +35,38 @@ export const AppLayout = () => {
     };
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
+    // Check pending sync queue items count
+    const checkPendingQueue = async () => {
+      const count = await getPendingQueueCount();
+      setPendingSyncCount(count);
+    };
+
+    checkPendingQueue();
+    const interval = setInterval(checkPendingQueue, 4000);
+
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      clearInterval(interval);
     };
   }, []);
+
+  const handleManualSync = async () => {
+    if (isOffline) {
+      toast.warning('You are currently offline. Connect to internet to sync pending records.');
+      return;
+    }
+    setIsSyncingPending(true);
+    toast.info('Syncing offline data to Cloud...');
+    await processSyncQueue();
+    const newCount = await getPendingQueueCount();
+    setPendingSyncCount(newCount);
+    setIsSyncingPending(false);
+    if (newCount === 0) {
+      toast.success('All offline records successfully synced to Supabase!');
+    }
+  };
 
   const handleInstallClick = async () => {
     if (!deferredPrompt) return;
@@ -49,6 +79,9 @@ export const AppLayout = () => {
 
   const studentNavItems = [
     { label: 'Dashboard', icon: Home, path: '/dashboard' },
+    { label: 'Journey Map', icon: MapPin, path: '/journey-map' },
+    { label: 'Adaptive Path', icon: GitMerge, path: '/adaptive-path' },
+    { label: 'Peer Study Rooms', icon: Video, path: '/study-rooms' },
     { label: 'Study Plan', icon: CalendarDays, path: '/plan' },
     { label: 'CBT Center', icon: Timer, path: '/cbt' },
     { label: 'JAMB Novel Hub', icon: BookOpen, path: '/novel-hub' },
@@ -85,11 +118,27 @@ export const AppLayout = () => {
       
       {/* Desktop Sidebar */}
       <aside className="w-64 border-r border-border bg-card hidden md:flex flex-col sticky top-0 h-screen z-40">
-        <div className="p-6">
+        <div className="p-6 pb-2 space-y-3">
           <Link to="/" className="flex items-center gap-3 text-xl font-bold font-display text-primary">
             <img src="/scholar.jpg" alt="Scholars Resort" className="w-8 h-8 rounded-lg object-cover border border-primary/20 shadow-sm" />
             <span>Scholars Resort</span>
           </Link>
+
+          {/* Sync Pending Badge (Desktop) */}
+          {pendingSyncCount > 0 && (
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncingPending}
+              className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs font-bold hover:bg-amber-500/25 transition-all shadow-sm group animate-in fade-in"
+              title="Click to process pending offline sync queue"
+            >
+              <div className="flex items-center gap-2">
+                <CloudUpload className={`w-3.5 h-3.5 ${isSyncingPending ? 'animate-bounce' : 'text-amber-500'}`} />
+                <span>Sync Pending ({pendingSyncCount})</span>
+              </div>
+              <RefreshCw className={`w-3 h-3 ${isSyncingPending ? 'animate-spin' : 'group-hover:rotate-180 transition-transform'}`} />
+            </button>
+          )}
         </div>
         
         <nav className="flex-1 px-4 space-y-2 mt-4 overflow-y-auto">
@@ -162,6 +211,17 @@ export const AppLayout = () => {
             <span>Scholars Resort</span>
           </Link>
           <div className="flex items-center gap-2">
+            {pendingSyncCount > 0 && (
+              <button
+                onClick={handleManualSync}
+                disabled={isSyncingPending}
+                className="flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400 text-[11px] font-bold animate-in fade-in"
+                title="Click to sync pending records"
+              >
+                <CloudUpload className={`w-3 h-3 ${isSyncingPending ? 'animate-bounce' : 'text-amber-500'}`} />
+                <span>Sync ({pendingSyncCount})</span>
+              </button>
+            )}
             <NotificationBell />
             <ThemeToggle />
             <button

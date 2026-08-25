@@ -1,10 +1,12 @@
 import express from 'express';
+import http from 'http';
 import cors from 'cors';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
+import { setupStudyRoomWebSocket, getActiveStudyRoomsList } from './src/services/studyRoomSocketServer';
 
 const app = express();
 const PORT = 3000;
@@ -2262,8 +2264,18 @@ app.post('/api/admin/materials/upload-file', async (req, res) => {
   }
 });
 
+// API Route: Peer Study Rooms List
+app.get('/api/study-rooms', (req, res) => {
+  return res.json({ success: true, rooms: getActiveStudyRoomsList() });
+});
+
 // Vite middleware for development vs static for production
 async function startServer() {
+  const httpServer = http.createServer(app);
+
+  // Setup WebSocket server for Peer Study Rooms
+  setupStudyRoomWebSocket(httpServer);
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -2278,8 +2290,8 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`Server running on http://0.0.0.0:${PORT}`);
+  httpServer.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running with WebSocket study room support on http://0.0.0.0:${PORT}`);
   });
 }
 

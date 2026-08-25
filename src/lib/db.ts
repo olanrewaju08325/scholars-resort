@@ -61,4 +61,5 @@ db.version(1).stores({
   download_meta: 'subject_id, last_synced'
 });
 
+export { db };
 export default db;

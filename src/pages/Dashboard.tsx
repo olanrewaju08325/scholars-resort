@@ -27,10 +27,14 @@ import { DailyGoalTracker } from '@/components/dashboard/DailyGoalTracker';
 import { SubjectMasteryRadarChart } from '@/components/SubjectMasteryRadarChart';
 import { JambScorePredictorCard } from '@/components/dashboard/JambScorePredictorCard';
 import { DailyStudyTip } from '@/components/dashboard/DailyStudyTip';
+import { DailyStudyPlannerWidget } from '@/components/dashboard/DailyStudyPlannerWidget';
+import { StudentAchievementsWidget } from '@/components/dashboard/StudentAchievementsWidget';
+import { EducationalJourneyMap } from '@/components/journey/EducationalJourneyMap';
+import { AdaptiveLearningPathWidget } from '@/components/learningpath/AdaptiveLearningPathWidget';
 import { StudyStreakCalendar } from '@/components/dashboard/StudyStreakCalendar';
 import { Badges } from '@/components/Badges';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { GroqLiveQuotaWidget } from '@/components/GroqLiveQuotaWidget';
+import { MotivationEngine } from '@/components/dashboard/MotivationEngine';
 import { DashboardSkeleton } from '@/components/dashboard/skeletons/DashboardSkeleton';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { motion } from 'framer-motion';
@@ -53,7 +57,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-950/50 pb-20">
+    <div className="min-h-screen bg-background text-foreground pb-20">
       {/* Top Navigation / Header Area */}
       <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3 flex items-center justify-between">
         <h1 className="text-xl font-display font-bold text-foreground">My Dashboard</h1>
@@ -96,6 +100,11 @@ export default function Dashboard() {
               <DailyMission />
             </motion.div>
 
+            {/* Daily Study Planner Component */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.11 }}>
+              <DailyStudyPlannerWidget />
+            </motion.div>
+
             {/* Daily Practice Goal Tracker Component */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
               <DailyGoalTracker />
@@ -124,6 +133,16 @@ export default function Dashboard() {
                <PerformanceTrendChart history={stats.history} />
             </motion.div>
 
+            {/* Educational Journey Map */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.27 }}>
+               <EducationalJourneyMap />
+            </motion.div>
+
+            {/* Adaptive Learning Path Generator */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.29 }}>
+               <AdaptiveLearningPathWidget />
+            </motion.div>
+
             {/* Subject Mastery Radar Chart */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
                <SubjectMasteryRadarChart data={[]} />
@@ -132,6 +151,11 @@ export default function Dashboard() {
             {/* Milestone Badges & Achievements */}
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.35 }}>
                <Badges />
+            </motion.div>
+
+            {/* Comprehensive Student Achievements Widget */}
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.38 }}>
+               <StudentAchievementsWidget />
             </motion.div>
 
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
@@ -153,7 +177,7 @@ export default function Dashboard() {
           <div className="lg:col-span-4 space-y-6">
             
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-               <GroqLiveQuotaWidget />
+               <MotivationEngine />
             </motion.div>
 
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>

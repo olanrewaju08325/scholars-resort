@@ -9,6 +9,7 @@ import { callGroqAPI } from '@/services/aiService';
 import { MathText } from '@/components/MathText';
 import { triggerConfetti, playSuccessChime } from '@/lib/celebration';
 import { generateExamResultPdf } from '@/lib/pdfExport';
+import { exportPracticeReportPdf } from '@/lib/practiceReportExporter';
 
 interface ResultsState {
   score?: number;
@@ -43,16 +44,58 @@ const Results = () => {
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
     try {
-      await generateExamResultPdf({
-        studentName: profile?.full_name || 'Candidate',
-        examTitle: `${mode} Result Report`,
-        score: percentage,
-        totalQuestions: total,
-        correctAnswers: score,
-        accuracy: percentage,
-        timeSpentFormatted: formatTime(timeSpentSeconds),
-        date: new Date().toLocaleDateString()
-      }, 'results-container');
+      if (mode.toLowerCase().includes('practice') || questions.length > 0) {
+        // Collect topic breakdown from questions array
+        const topicCounts: Record<string, { total: number; correct: number; subject: string }> = {};
+        questions.forEach((q) => {
+          const tName = q.topic_name || q.topics?.name || 'UTME Core Concept';
+          const sName = q.subject_name || q.subjects?.name || 'General';
+          const userAnswer = answers[q.id];
+          const isCorrect = userAnswer === q.correct_answer;
+
+          if (!topicCounts[tName]) {
+            topicCounts[tName] = { total: 0, correct: 0, subject: sName };
+          }
+          topicCounts[tName].total += 1;
+          if (isCorrect) topicCounts[tName].correct += 1;
+        });
+
+        const breakdown = Object.entries(topicCounts).map(([topicName, stats]) => {
+          const acc = Math.round((stats.correct / stats.total) * 100);
+          return {
+            topicName,
+            subjectName: stats.subject,
+            totalAttempted: stats.total,
+            correctCount: stats.correct,
+            accuracyPercentage: acc,
+            masteryStatus: (acc >= 75 ? 'Mastered' : acc >= 55 ? 'Satisfactory' : 'Needs Focus') as 'Mastered' | 'Satisfactory' | 'Needs Focus'
+          };
+        });
+
+        await exportPracticeReportPdf({
+          studentName: profile?.full_name || 'Candidate',
+          studentEmail: profile?.email || 'student@scholarsresort.com',
+          sessionTitle: `${mode} Diagnostic Report`,
+          mode,
+          date: new Date().toLocaleDateString('en-GB'),
+          score,
+          totalQuestions: total,
+          percentageScore: percentage,
+          timeSpentSeconds,
+          topicBreakdown: breakdown.length > 0 ? breakdown : undefined
+        });
+      } else {
+        await generateExamResultPdf({
+          studentName: profile?.full_name || 'Candidate',
+          examTitle: `${mode} Result Report`,
+          score: percentage,
+          totalQuestions: total,
+          correctAnswers: score,
+          accuracy: percentage,
+          timeSpentFormatted: formatTime(timeSpentSeconds),
+          date: new Date().toLocaleDateString()
+        }, 'results-container');
+      }
     } catch (e) {
       console.warn('PDF export failed:', e);
     } finally {

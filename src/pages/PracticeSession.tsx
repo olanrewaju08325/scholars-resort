@@ -1,17 +1,21 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { recordStudyAction } from '@/lib/streakService';
 import { awardXp, checkAndAwardBadges } from '@/lib/gamification';
 import { withRetry } from '@/lib/apiWithRetry';
 import { toast } from 'sonner';
-import { callGroqAPI } from '@/services/aiService';
-import { getCustomQuestions } from '@/lib/offlineStore';
+import { callGroqAPI, stripThinkTags } from '@/services/aiService';
+import { getCustomQuestions, saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
+import { cleanQuestionText, cleanOptionText } from '@/utils/questionUtils';
+import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
+import { useSwipeGesture } from '@/hooks/useSwipeGesture';
 
 const PracticeSession = () => {
   const { state } = useLocation();
@@ -20,13 +24,15 @@ const PracticeSession = () => {
   
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [selectedAns, setSelectedAns] = useState<string | null>(null);
-  const [isAnswered, setIsAnswered] = useState(false);
+  const [answersMap, setAnswersMap] = useState<Record<string, string>>({});
+  const [correctAnswersMap, setCorrectAnswersMap] = useState<Record<string, boolean>>({});
   const [score, setScore] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
+  const [showNavDrawer, setShowNavDrawer] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   
   // Advanced Practice State
   const [isPaused, setIsPaused] = useState(false);
@@ -38,6 +44,85 @@ const PracticeSession = () => {
   // AI State
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+
+  const currentQ = questions[currentIndex];
+  const selectedAns = currentQ ? answersMap[currentQ.id] || null : null;
+  const isAnswered = !!selectedAns;
+
+  // Next & Prev Question Navigation
+  const handleNext = useCallback(async () => {
+    if (currentIndex < questions.length - 1) {
+      setSwipeDirection('left');
+      setCurrentIndex(c => c + 1);
+      setAiExplanation(null);
+      setTimeSpent(0);
+      if (state?.isTimeManagementMode) setTimeRemaining(40);
+    } else {
+      // End of session
+      sessionStorage.removeItem('practice_session_state');
+      
+      if (sessionId) {
+        await supabase.from('practice_sessions').update({
+          score,
+          total_questions: questions.length,
+          completed_at: new Date().toISOString()
+        }).eq('id', sessionId);
+        
+        if (questions.length >= 5 || score > 0) { 
+          await recordStudyAction(profile?.id || '', 'practice');
+        }
+      }
+      
+      const percentageScore = questions.length > 0 ? (score / questions.length) * 100 : 0;
+      
+      saveCompletedOfflineSession({
+        id: crypto.randomUUID(),
+        mode: 'Practice Drill',
+        score,
+        totalQuestions: questions.length,
+        percentageScore,
+        timeSpentSeconds: totalTime,
+        completedAt: new Date().toISOString(),
+        subjects: state?.subjectName ? [state.subjectName] : [],
+        userId: profile?.id
+      });
+      
+      if (profile) {
+        const practiceXp = 30 + Math.round((percentageScore / 100) * 40);
+        await awardXp(profile.id, practiceXp, `Completed ${state?.learningStyle || 'Practice'} Session (${score}/${questions.length})`);
+
+        await checkAndAwardBadges(profile.id, {
+          score: percentageScore,
+          timeSpentSecs: totalTime,
+          totalTimeSecs: totalTime,
+          isFirstExam: false 
+        });
+      }
+
+      navigate('/results', { state: { score, total: questions.length, mode: state?.learningStyle || 'Practice' } });
+    }
+  }, [currentIndex, questions, sessionId, score, profile, totalTime, state, navigate]);
+
+  const handlePrev = useCallback(() => {
+    if (currentIndex > 0) {
+      setSwipeDirection('right');
+      setCurrentIndex(c => c - 1);
+      setAiExplanation(null);
+    }
+  }, [currentIndex]);
+
+  const swipeHandlers = useSwipeGesture({
+    onSwipeLeft: () => {
+      if (currentIndex < questions.length - 1) {
+        handleNext();
+      }
+    },
+    onSwipeRight: () => {
+      if (currentIndex > 0) {
+        handlePrev();
+      }
+    }
+  });
 
   // Load state from session storage if resuming
   useEffect(() => {
@@ -56,6 +141,8 @@ const PracticeSession = () => {
         setScore(parsed.score);
         setSessionId(parsed.sessionId);
         setTotalTime(parsed.totalTime);
+        if (parsed.answersMap) setAnswersMap(parsed.answersMap);
+        if (parsed.correctAnswersMap) setCorrectAnswersMap(parsed.correctAnswersMap);
         setLoading(false);
         return;
       }
@@ -116,6 +203,7 @@ const PracticeSession = () => {
       if (allCombined.length > 0) {
         const parsed = allCombined.map(q => ({
           ...q,
+          question_text: cleanQuestionText(q.question_text || q.question),
           options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
         }));
         setQuestions(parsed.sort(() => Math.random() - 0.5).slice(0, count));
@@ -164,26 +252,28 @@ const PracticeSession = () => {
         currentIndex,
         score,
         sessionId,
-        totalTime
+        totalTime,
+        answersMap,
+        correctAnswersMap
       }));
     }
-  }, [currentIndex, score, isPaused, totalTime]);
+  }, [currentIndex, score, isPaused, totalTime, answersMap, correctAnswersMap]);
 
   const handleTimeUp = () => {
-    if (isAnswered) return;
-    setIsAnswered(true);
-    setSelectedAns(null); // Time's up, no selection
-    triggerAIExplanation(null);
+    if (!currentQ || answersMap[currentQ.id]) return;
+    setAnswersMap(prev => ({ ...prev, [currentQ.id]: '__TIME_UP__' }));
+    setCorrectAnswersMap(prev => ({ ...prev, [currentQ.id]: false }));
+    triggerAIExplanation(false, '__TIME_UP__');
   };
 
   const handleSelect = async (option: string) => {
-    if (isAnswered) return;
-    setSelectedAns(option);
-    setIsAnswered(true);
+    if (!currentQ || answersMap[currentQ.id]) return;
 
-    const q = questions[currentIndex];
-    const isCorrect = option === q.correct_answer;
+    const isCorrect = option === currentQ.correct_answer;
     
+    setAnswersMap(prev => ({ ...prev, [currentQ.id]: option }));
+    setCorrectAnswersMap(prev => ({ ...prev, [currentQ.id]: isCorrect }));
+
     if (isCorrect) setScore(s => s + 1);
 
     // Save answer to DB
@@ -192,7 +282,7 @@ const PracticeSession = () => {
         await supabase.from('session_answers').insert({
           user_id: profile?.id,
           practice_session_id: sessionId,
-          question_id: q.id,
+          question_id: currentQ.id,
           selected_answer: option,
           is_correct: isCorrect,
           time_spent_secs: timeSpent
@@ -203,19 +293,19 @@ const PracticeSession = () => {
     }
 
     // Automatically trigger AI explanation
-    triggerAIExplanation(isCorrect);
+    triggerAIExplanation(isCorrect, option);
   };
 
-  const triggerAIExplanation = async (isCorrect: boolean | null) => {
+  const triggerAIExplanation = async (isCorrect: boolean | null, optChosen: string) => {
     setIsGeneratingAi(true);
     try {
-      const q = questions[currentIndex];
-      const prompt = `The student just answered a JAMB question. Question: "${q.question}". Correct Answer: "${q.correct_answer}". Student's Answer: "${selectedAns}". Provide a brief, encouraging, and clear explanation of why the correct answer is right. Keep it under 3 sentences.`;
+      const q = currentQ;
+      const prompt = `The student just answered a JAMB question. Question: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Student's Answer: "${optChosen}". Provide a brief, encouraging, and clear explanation of why the correct answer is right. Keep it under 3 sentences.`;
       
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
       setAiExplanation(content || `The correct answer is ${q.correct_answer}.`);
     } catch (err) {
-      const q = questions[currentIndex];
+      const q = currentQ;
       setAiExplanation(`AI Tutor (Fallback): The correct answer is **${q.correct_answer}**. ${q.explanation || ''}`);
     } finally {
       setIsGeneratingAi(false);
@@ -225,15 +315,15 @@ const PracticeSession = () => {
   const handleAIAction = async (action: string) => {
     setIsGeneratingAi(true);
     try {
-      const q = questions[currentIndex];
+      const q = currentQ;
       let prompt = "";
       if (action === 'simpler') {
-        prompt = `Explain the following JAMB question conceptually as if to a 10 year old: "${q.question}". Correct Answer: "${q.correct_answer}". Use an analogy.`;
+        prompt = `Explain the following JAMB question conceptually as if to a 10 year old: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Use an analogy.`;
       } else if (action === 'another') {
-        prompt = `Provide a different perspective or rule of thumb to solve this JAMB question: "${q.question}". Correct Answer: "${q.correct_answer}".`;
+        prompt = `Provide a different perspective or rule of thumb to solve this JAMB question: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}".`;
       } else if (action === 'similar') {
         toast.success("Generating a practice problem...");
-        prompt = `Generate a similar practice JAMB question based on: "${q.question}" with its answer and explanation.`;
+        prompt = `Generate a similar practice JAMB question based on: "${q.question_text || q.question}" with its answer and explanation.`;
       }
       
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
@@ -245,59 +335,17 @@ const PracticeSession = () => {
     }
   };
 
-  const handleNext = async () => {
-    if (currentIndex < questions.length - 1) {
-      setCurrentIndex(c => c + 1);
-      setSelectedAns(null);
-      setIsAnswered(false);
-      setAiExplanation(null);
-      setTimeSpent(0);
-      if (state?.isTimeManagementMode) setTimeRemaining(40);
-    } else {
-      // End of session
-      sessionStorage.removeItem('practice_session_state');
-      
-      if (sessionId) {
-        await supabase.from('practice_sessions').update({
-          score,
-          total_questions: questions.length,
-          completed_at: new Date().toISOString()
-        }).eq('id', sessionId);
-        
-        if (questions.length >= 5 || score > 0) { 
-          await recordStudyAction(profile?.id || '', 'practice');
-        }
-      }
-      
-      const percentageScore = questions.length > 0 ? (score / questions.length) * 100 : 0;
-      
-      if (profile) {
-        const practiceXp = 30 + Math.round((percentageScore / 100) * 40);
-        await awardXp(profile.id, practiceXp, `Completed ${state?.learningStyle || 'Practice'} Session (${score}/${questions.length})`);
-
-        await checkAndAwardBadges(profile.id, {
-          score: percentageScore,
-          timeSpentSecs: totalTime,
-          totalTimeSecs: totalTime,
-          isFirstExam: false 
-        });
-      }
-
-      navigate('/results', { state: { score, total: questions.length, mode: state?.learningStyle || 'Practice' } });
-    }
-  };
-
   const toggleBookmark = async () => {
-    const q = questions[currentIndex];
-    const isBookmarked = bookmarks[q.id];
+    if (!currentQ) return;
+    const isBookmarked = bookmarks[currentQ.id];
     
-    setBookmarks(prev => ({ ...prev, [q.id]: !isBookmarked }));
+    setBookmarks(prev => ({ ...prev, [currentQ.id]: !isBookmarked }));
     
     if (!isBookmarked && profile) {
       await supabase.from('bookmarks').insert({
         user_id: profile.id,
-        question_id: q.id,
-        note: notes[q.id] || ''
+        question_id: currentQ.id,
+        note: notes[currentQ.id] || ''
       });
     }
   };
@@ -316,36 +364,47 @@ const PracticeSession = () => {
     );
   }
 
-  const q = questions[currentIndex];
+  const q = currentQ;
+  const answeredCount = Object.keys(answersMap).length;
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
-      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-4 md:px-8 shadow-sm relative z-20">
-        <div className="font-display font-bold md:text-lg flex items-center gap-2 md:gap-4">
+      <header className="h-16 border-b border-border bg-card flex items-center justify-between px-3 md:px-8 shadow-sm relative z-20 gap-2">
+        <div className="font-display font-bold md:text-lg flex items-center gap-2 md:gap-3">
           <span className="hidden md:inline">Practice Mode</span>
           <span className="text-primary font-bold text-xs md:text-sm bg-primary/10 px-2 py-1 rounded-md uppercase tracking-wider">
             {state?.learningStyle || 'Standard'}
           </span>
-          <span className="text-muted-foreground font-normal ml-2 text-sm">
-            Q {currentIndex + 1} <span className="opacity-50">/ {questions.length}</span>
-          </span>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowNavDrawer(true)}
+            className="h-8 px-2 text-xs font-bold text-primary hover:bg-primary/10 flex items-center gap-1 border border-primary/20 rounded-lg"
+          >
+            <Grid3X3 className="w-3.5 h-3.5" />
+            <span>Q{currentIndex + 1}/{questions.length}</span>
+          </Button>
         </div>
         
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-2 md:gap-3">
           {state?.isTimeManagementMode && (
-             <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-mono font-bold text-sm ${
+             <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono font-bold text-xs md:text-sm ${
                (timeRemaining || 0) <= 10 ? 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse' : 'bg-muted border-border'
              }`}>
-               <Clock className="w-4 h-4" /> 00:{timeRemaining?.toString().padStart(2, '0')}
+               <Clock className="w-3.5 h-3.5" /> 00:{timeRemaining?.toString().padStart(2, '0')}
              </div>
           )}
           
-          <Button variant="outline" size="sm" onClick={() => setIsPaused(!isPaused)}>
-            {isPaused ? <PlayCircle className="w-4 h-4 mr-2" /> : <PauseCircle className="w-4 h-4 mr-2" />}
-            {isPaused ? 'Resume' : 'Pause'}
+          <Button variant="outline" size="sm" onClick={() => setShowNavDrawer(true)} className="hidden sm:flex h-9 text-xs font-semibold gap-1.5">
+            <Grid3X3 className="w-3.5 h-3.5 text-primary" /> Navigator
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Exit Session" className="text-muted-foreground hover:text-red-500">
+          <Button variant="outline" size="sm" onClick={() => setIsPaused(!isPaused)} className="h-9 text-xs">
+            {isPaused ? <PlayCircle className="w-4 h-4 mr-1.5" /> : <PauseCircle className="w-4 h-4 mr-1.5" />}
+            <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
+          </Button>
+
+          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Exit Session" className="text-muted-foreground hover:text-red-500 h-9 w-9">
             <X className="w-5 h-5" />
           </Button>
         </div>
@@ -362,103 +421,181 @@ const PracticeSession = () => {
         </div>
       )}
 
-      <main className="flex-1 p-4 md:p-8 max-w-4xl mx-auto w-full flex flex-col relative z-10">
-        <Card className="flex-1 mb-6 border-border shadow-sm bg-card transition-all duration-300">
-          <CardContent className="p-6 md:p-10">
-            <div className="flex justify-between items-start mb-6">
-              <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Time Spent: {timeSpent}s</span>
-              <Button variant="ghost" size="sm" onClick={toggleBookmark} className={bookmarks[q.id] ? "text-primary" : "text-muted-foreground"}>
-                {bookmarks[q.id] ? <Bookmark className="w-5 h-5 fill-primary" /> : <BookmarkPlus className="w-5 h-5" />}
-              </Button>
+      <main className="flex-1 p-3 md:p-8 max-w-4xl mx-auto w-full flex flex-col relative z-10">
+        {/* Mobile Swipe Gesture Helper */}
+        <div className="mb-2 px-3 py-1.5 bg-muted/30 rounded-xl border border-border/50 text-[11px] text-muted-foreground flex items-center justify-between sm:hidden select-none">
+          <span className="flex items-center gap-1 font-medium">
+            <Sparkles className="w-3.5 h-3.5 text-primary" /> Swipe ⟵ / ⟶ to switch questions
+          </span>
+          <button 
+            onClick={() => setShowNavDrawer(true)}
+            className="text-primary font-bold hover:underline flex items-center gap-0.5"
+          >
+            Grid ({answeredCount}/{questions.length}) <ChevronRight className="w-3 h-3" />
+          </button>
+        </div>
+
+        <Card 
+          {...swipeHandlers}
+          className="flex-1 mb-4 md:mb-6 border-border shadow-sm bg-card transition-all duration-300 touch-pan-y"
+        >
+          <CardContent className="p-4 sm:p-6 md:p-10">
+            <div className="flex justify-between items-center mb-6 pb-3 border-b border-border/40">
+              <div className="flex items-center gap-2">
+                <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-xs border border-primary/20">
+                  Question {currentIndex + 1} of {questions.length}
+                </span>
+                <span className="text-xs font-semibold text-muted-foreground">
+                  Time: {timeSpent}s
+                </span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowNavDrawer(true)}
+                  className="h-8 px-2 text-xs font-bold text-primary hover:bg-primary/10 gap-1"
+                >
+                  <Grid3X3 className="w-3.5 h-3.5" /> Jump
+                </Button>
+                <Button variant="ghost" size="sm" onClick={toggleBookmark} className={bookmarks[q.id] ? "text-primary h-8 w-8 p-0" : "text-muted-foreground h-8 w-8 p-0"}>
+                  {bookmarks[q.id] ? <Bookmark className="w-5 h-5 fill-primary" /> : <BookmarkPlus className="w-5 h-5" />}
+                </Button>
+              </div>
             </div>
 
-            <p className="text-lg md:text-xl mb-10 leading-relaxed font-medium">
-              {q.question_text}
-            </p>
-            
-            <div className="space-y-4">
-              {q.options.map((opt: string, i: number) => {
-                let btnClass = "border-border hover:bg-muted";
-                let Icon = null;
-                
-                if (isAnswered) {
-                  if (opt === q.correct_answer) {
-                    btnClass = "bg-green-500/10 border-green-500 text-green-700 dark:text-green-400";
-                    Icon = <CheckCircle className="w-5 h-5 text-green-500" />;
-                  } else if (opt === selectedAns) {
-                    btnClass = "bg-red-500/10 border-red-500 text-red-700 dark:text-red-400";
-                    Icon = <XCircle className="w-5 h-5 text-red-500" />;
-                  } else {
-                    btnClass = "opacity-50 border-border";
+            <motion.div
+              key={currentIndex}
+              initial={{ opacity: 0, x: swipeDirection === 'left' ? 16 : swipeDirection === 'right' ? -16 : 0 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              <p className="text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium">
+                {cleanQuestionText(q.question_text || q.question)}
+              </p>
+              
+              <div className="space-y-3 md:space-y-4">
+                {q.options.map((opt: string, i: number) => {
+                  let btnClass = "border-border hover:bg-muted";
+                  let Icon = null;
+                  
+                  if (isAnswered) {
+                    if (opt === q.correct_answer) {
+                      btnClass = "bg-green-500/10 border-green-500 text-green-700 dark:text-green-400 font-semibold";
+                      Icon = <CheckCircle className="w-5 h-5 text-green-500" />;
+                    } else if (opt === selectedAns) {
+                      btnClass = "bg-red-500/10 border-red-500 text-red-700 dark:text-red-400 font-semibold";
+                      Icon = <XCircle className="w-5 h-5 text-red-500" />;
+                    } else {
+                      btnClass = "opacity-50 border-border";
+                    }
+                  } else if (selectedAns === opt) {
+                     btnClass = "border-primary bg-primary/5 text-primary";
                   }
-                } else if (selectedAns === opt) {
-                   btnClass = "border-primary bg-primary/5 text-primary";
-                }
 
-                return (
-                  <Button 
-                    key={i}
-                    variant="outline"
-                    className={`w-full justify-start h-auto min-h-[3.5rem] py-3 px-4 text-left whitespace-normal text-base font-normal transition-all ${btnClass}`}
-                    onClick={() => handleSelect(opt)}
-                    disabled={isAnswered || isPaused}
-                  >
-                    <span className="font-bold mr-4 w-6 text-muted-foreground">
-                      {String.fromCharCode(65 + i)}.
-                    </span>
-                    <span className="flex-1">{opt}</span>
-                    {Icon}
-                  </Button>
-                );
-              })}
-            </div>
+                  return (
+                    <Button 
+                      key={i}
+                      variant="outline"
+                      className={`w-full justify-start h-auto min-h-[3.25rem] py-3 px-4 text-left whitespace-normal text-sm sm:text-base font-normal transition-all rounded-xl ${btnClass}`}
+                      onClick={() => handleSelect(opt)}
+                      disabled={isAnswered || isPaused}
+                    >
+                      <span className="font-bold mr-3 w-6 text-muted-foreground">
+                        {String.fromCharCode(65 + i)}.
+                      </span>
+                      <span className="flex-1">{cleanOptionText(opt)}</span>
+                      {Icon}
+                    </Button>
+                  );
+                })}
+              </div>
 
-            {/* AI Explanation Area (Automatically shown on answer) */}
-            {isAnswered && (
-              <div className="mt-8 pt-8 border-t border-border animate-in fade-in slide-in-from-bottom-4 duration-500">
-                <div className="flex items-center gap-2 mb-4">
-                  <Sparkles className="w-5 h-5 text-purple-500" />
-                  <h3 className="font-bold text-lg font-display">AI Explanation</h3>
-                </div>
-                
-                <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-5 mb-4 text-muted-foreground leading-relaxed">
-                  {isGeneratingAi ? (
-                    <div className="flex items-center gap-3">
-                      <div className="w-5 h-5 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                      <span className="animate-pulse">Llama 3 is thinking...</span>
+              {/* AI Explanation Area (Automatically shown on answer) */}
+              {isAnswered && (
+                <div className="mt-8 pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Sparkles className="w-4 h-4 text-purple-500" />
+                    <h3 className="font-bold text-base md:text-lg font-display">AI Tutor Explanation</h3>
+                  </div>
+                  
+                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 md:p-5 mb-4 text-muted-foreground leading-relaxed text-sm md:text-base">
+                    {isGeneratingAi ? (
+                      <div className="flex items-center gap-3">
+                        <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                        <span className="animate-pulse text-xs">AI Tutor is generating tailored breakdown...</span>
+                      </div>
+                    ) : (
+                      aiExplanation
+                    )}
+                  </div>
+
+                  {!isGeneratingAi && (
+                    <div className="flex flex-wrap gap-2">
+                      <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('another')}>
+                        <RotateCcw className="w-3 h-3 mr-1" /> Explain another way
+                      </Button>
+                      <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('simpler')}>
+                        <MessageSquare className="w-3 h-3 mr-1" /> Simpler explanation
+                      </Button>
+                      <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('similar')}>
+                        <Sparkles className="w-3 h-3 mr-1" /> Generate similar question
+                      </Button>
                     </div>
-                  ) : (
-                    aiExplanation
                   )}
                 </div>
-
-                {!isGeneratingAi && (
-                  <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => handleAIAction('another')}>
-                      <RotateCcw className="w-3 h-3 mr-1" /> Explain another way
-                    </Button>
-                    <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => handleAIAction('simpler')}>
-                      <MessageSquare className="w-3 h-3 mr-1" /> Simpler explanation
-                    </Button>
-                    <Button variant="outline" size="sm" className="rounded-full text-xs" onClick={() => handleAIAction('similar')}>
-                      <Sparkles className="w-3 h-3 mr-1" /> Generate similar question
-                    </Button>
-                  </div>
-                )}
-              </div>
-            )}
+              )}
+            </motion.div>
           </CardContent>
         </Card>
 
-        {isAnswered && (
-          <div className="flex justify-end animate-in fade-in duration-300">
-            <Button size="lg" className="shadow-premium px-8" onClick={handleNext}>
-              {currentIndex < questions.length - 1 ? 'Next Question' : 'Finish Session'} 
-              <ChevronRight className="w-5 h-5 ml-2" />
-            </Button>
-          </div>
-        )}
+        {/* Practice Navigation Controls */}
+        <div className="flex items-center justify-between gap-2 mt-2">
+          <Button 
+            variant="outline" 
+            onClick={handlePrev} 
+            disabled={currentIndex === 0}
+            className="h-11 px-4 text-xs sm:text-sm font-semibold"
+          >
+            <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+          </Button>
+
+          <Button 
+            variant="outline" 
+            onClick={() => setShowNavDrawer(true)}
+            className="h-11 px-4 text-xs sm:text-sm font-bold text-primary border-primary/30 hover:bg-primary/10 gap-1.5"
+          >
+            <Grid3X3 className="w-4 h-4" />
+            <span className="hidden sm:inline">Question Grid</span>
+            <span className="sm:hidden">Jump</span>
+          </Button>
+
+          <Button 
+            size="lg" 
+            className="h-11 px-5 text-xs sm:text-sm shadow-md font-bold" 
+            onClick={handleNext}
+          >
+            {currentIndex < questions.length - 1 ? 'Next Question' : 'Finish Session'} 
+            <ChevronRight className="w-4 h-4 ml-1.5" />
+          </Button>
+        </div>
       </main>
+
+      {/* Persistent Accessible Navigation Drawer for Practice Mode */}
+      <CBTNavigationDrawer
+        isOpen={showNavDrawer}
+        onClose={() => setShowNavDrawer(false)}
+        questions={questions}
+        currentIdx={currentIndex}
+        onSelectQuestion={(idx) => {
+          setCurrentIndex(idx);
+          setAiExplanation(null);
+        }}
+        answers={answersMap}
+        isPracticeMode={true}
+        correctAnswersMap={correctAnswersMap}
+      />
     </div>
   );
 };

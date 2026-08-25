@@ -339,8 +339,19 @@ Structure your analysis with bold section headings, Markdown tables, and concret
 // Direct Groq API Execution using configured Groq API Key, Server Proxy, Supabase Edge Function, and Smart Local Heuristics
 
 export function stripThinkTags(text: string): string {
-  if (!text) return text;
-  return text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  if (!text) return '';
+  let cleaned = text
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<thought>[\s\S]*?<\/thought>/gi, '')
+    .replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '')
+    .replace(/<think>[\s\S]*/gi, '')
+    .replace(/<thought>[\s\S]*/gi, '')
+    .replace(/<reasoning>[\s\S]*/gi, '')
+    .replace(/<\/?think>/gi, '')
+    .replace(/<\/?thought>/gi, '')
+    .replace(/<\/?reasoning>/gi, '')
+    .trim();
+  return cleaned;
 }
 
 export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'qwen/qwen3.6-27b', temperature = 0.7): Promise<string> => {
@@ -445,7 +456,7 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
       const proxyContent = proxyData?.choices?.[0]?.message?.content || proxyData?.content;
       if (proxyContent) {
         aiCircuitBreaker.recordSuccess();
-        return proxyContent;
+        return stripThinkTags(proxyContent);
       }
     }
   } catch {
@@ -459,7 +470,7 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     });
     if (!error && (data?.content || data?.text)) {
       aiCircuitBreaker.recordSuccess();
-      return data?.content || data?.text;
+      return stripThinkTags(data?.content || data?.text || '');
     }
   } catch (edgeErr) {
     aiCircuitBreaker.recordFailure();

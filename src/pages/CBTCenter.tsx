@@ -56,7 +56,7 @@ export default function CBTCenter() {
   }, []);
 
   return (
-    <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto space-y-8 bg-slate-950/50 min-h-screen pb-20">
+    <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto space-y-8 bg-background text-foreground min-h-screen pb-20">
       
       {/* Header */}
       <motion.div 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Navbar from '@/components/Navbar';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Search, Book, CreditCard, ShieldCheck, Mail, MessageSquare, ArrowRight } from 'lucide-react';
+import { Search, Book, CreditCard, ShieldCheck, Mail, MessageSquare, ArrowRight, BatteryCharging, Zap, Smartphone, Moon, WifiOff, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Link } from 'react-router-dom';
 
@@ -161,6 +161,63 @@ export default function Help() {
                     <p className="text-xs">Try searching for keywords like "payment", "offline", or "calculator".</p>
                   </div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Battery Saver Pro-Tips Section */}
+          <Card className="bg-card text-card-foreground border-amber-500/30 shadow-lg relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-8 opacity-5 pointer-events-none">
+              <BatteryCharging className="w-48 h-48 text-amber-500" />
+            </div>
+            <CardHeader className="border-b border-border bg-amber-500/5 flex flex-row items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-500 flex items-center justify-center font-bold shrink-0">
+                <Zap className="w-5 h-5" />
+              </div>
+              <div>
+                <CardTitle className="text-xl md:text-2xl font-bold font-display text-foreground flex items-center gap-2">
+                  Battery Saver Pro-Tips for Offline Mode
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  Maximize your phone or tablet's battery life during 2-hour CBT mock sessions in Airplane mode.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <WifiOff className="w-4 h-4 text-emerald-500" /> 1. Turn On Airplane Mode
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Disabling Cellular Data, Wi-Fi, and Bluetooth stops radio antenna power spikes, extending battery life by up to 45% during intensive study sessions.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Moon className="w-4 h-4 text-purple-500" /> 2. Enable Scholars Resort Dark Mode
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  On OLED / AMOLED smartphone screens, dark theme turns off individual screen pixels, reducing display energy draw while preventing eye fatigue.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <Smartphone className="w-4 h-4 text-amber-500" /> 3. Lower Display Brightness (30-50%)
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Screen backlighting is the #1 power consumer on mobile devices. Lowering brightness to a comfortable indoor level significantly conserves energy.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-xl bg-muted/40 border border-border space-y-2">
+                <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                  <CheckCircle2 className="w-4 h-4 text-blue-500" /> 4. Pre-Download Subject Packs First
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Download all subject packs from the <strong>Offline Packs</strong> tab beforehand so zero network requests are needed while answering practice questions.
+                </p>
               </div>
             </CardContent>
           </Card>

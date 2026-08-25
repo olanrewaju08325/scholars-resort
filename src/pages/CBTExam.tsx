@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles, Grid3X3, Layers, Compass } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { JambCalculator } from '@/components/cbt/JambCalculator';
+import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
+import { useSwipeGesture } from '@/hooks/useSwipeGesture';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -13,8 +15,10 @@ import { awardMockExamCompletionXp, checkAndAwardBadges } from '@/lib/gamificati
 import { saveExamSnapshot, clearExamSnapshot } from '@/lib/offlineDb';
 import { persistActiveExamSession, getInterruptedExamSession, clearInterruptedExamSession } from '@/lib/examSessionStorage';
 import { enqueueOfflineWrite } from '@/lib/syncQueue';
+import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
+import { cleanQuestionText, cleanOptionText } from '@/utils/questionUtils';
 import { toast } from 'sonner';
 import { MathText } from '@/components/MathText';
 import { playFiveMinuteWarningSound } from '@/lib/celebration';
@@ -47,7 +51,36 @@ const CBTExam = () => {
   const [hasStarted, setHasStarted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [showNavDrawer, setShowNavDrawer] = useState(false);
+  const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const hasWarnedFiveMinutes = useRef(false);
+
+  const handleNext = useCallback(() => {
+    if (currentQuestionIdx < questions.length - 1) {
+      setSwipeDirection('left');
+      setCurrentQuestionIdx(c => c + 1);
+    }
+  }, [currentQuestionIdx, questions.length]);
+
+  const handlePrev = useCallback(() => {
+    if (currentQuestionIdx > 0) {
+      setSwipeDirection('right');
+      setCurrentQuestionIdx(c => c - 1);
+    }
+  }, [currentQuestionIdx]);
+
+  const swipeHandlers = useSwipeGesture({
+    onSwipeLeft: () => {
+      if (currentQuestionIdx < questions.length - 1) {
+        handleNext();
+      }
+    },
+    onSwipeRight: () => {
+      if (currentQuestionIdx > 0) {
+        handlePrev();
+      }
+    }
+  });
 
   // Broadcast Focus Mode state to suppress WhatsApp widget & floating overlays
   useEffect(() => {
@@ -114,6 +147,7 @@ const CBTExam = () => {
         
         const tagged = (fetched || []).map(q => ({
           ...q,
+          question_text: cleanQuestionText(q.question_text || q.question),
           subject_name: subj,
           options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
         }));
@@ -154,34 +188,58 @@ const CBTExam = () => {
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
   }, [hasStarted]);
 
-  // Timer Effect
+  const targetEndTimeRef = useRef<number | null>(null);
+
+  // Persistent, non-blocking background-resilient Timer Effect
   useEffect(() => {
     if (!hasStarted || questions.length === 0) return;
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          toast.error("Time's up! Submitting your exam automatically.");
-          submitExam();
-          return 0;
-        }
 
-        // 5-Minute Warning Audio Cue and Notification
-        if (prev === 300 || (prev <= 300 && prev > 290 && !hasWarnedFiveMinutes.current)) {
-          hasWarnedFiveMinutes.current = true;
-          if (soundEnabled) {
-            playFiveMinuteWarningSound();
-          }
-          toast.warning('⏰ 5 MINUTES REMAINING! Please review your answers and prepare to conclude your exam.', {
-            duration: 9000,
-            icon: '⚠️'
-          });
-        }
+    // Initialize absolute target end timestamp if not set
+    if (!targetEndTimeRef.current) {
+      targetEndTimeRef.current = Date.now() + timeLeft * 1000;
+    }
 
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
+    const updateTimer = () => {
+      if (!targetEndTimeRef.current) return;
+      const remaining = Math.max(0, Math.floor((targetEndTimeRef.current - Date.now()) / 1000));
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+        toast.error("Time's up! Submitting your exam automatically.");
+        submitExam();
+        return;
+      }
+
+      // 5-Minute Warning Audio Cue and Notification
+      if (remaining === 300 || (remaining <= 300 && remaining > 290 && !hasWarnedFiveMinutes.current)) {
+        hasWarnedFiveMinutes.current = true;
+        if (soundEnabled) {
+          playFiveMinuteWarningSound();
+        }
+        toast.warning('⏰ 5 MINUTES REMAINING! Please review your answers and prepare to conclude your exam.', {
+          duration: 9000,
+          icon: '⚠️'
+        });
+      }
+    };
+
+    const timer = setInterval(updateTimer, 1000);
+
+    // Force immediate recalibration when switching back from another browser window or tab
+    const handleSyncOnVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        updateTimer();
+      }
+    };
+
+    window.addEventListener('focus', handleSyncOnVisibility);
+    document.addEventListener('visibilitychange', handleSyncOnVisibility);
+
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('focus', handleSyncOnVisibility);
+      document.removeEventListener('visibilitychange', handleSyncOnVisibility);
+    };
   }, [hasStarted, questions.length, soundEnabled]);
 
   // Auto-save to both localStorage and Dexie periodically and on state change (crash safety)
@@ -213,6 +271,19 @@ const CBTExam = () => {
     
     const percentageScore = (score / questions.length) * 100;
     const timeSpentSeconds = 7200 - timeLeft;
+
+    // Save locally to offline completed sessions history
+    saveCompletedOfflineSession({
+      id: crypto.randomUUID(),
+      mode: 'CBT Exam',
+      score,
+      totalQuestions: questions.length,
+      percentageScore,
+      timeSpentSeconds,
+      completedAt: new Date().toISOString(),
+      subjects: examSubjectsList,
+      userId: profile?.id
+    });
 
     // Save offline session to Dexie or directly to Supabase with syncQueue fallback
     if (profile) {
@@ -334,19 +405,11 @@ const CBTExam = () => {
     });
   }, [profile, questions, sessionStartedAt, timeLeft]);
 
-  const handleNext = useCallback(() => {
-    if (currentQuestionIdx < questions.length - 1) setCurrentQuestionIdx(c => c + 1);
-  }, [currentQuestionIdx, questions.length]);
-
-  const handlePrev = useCallback(() => {
-    if (currentQuestionIdx > 0) setCurrentQuestionIdx(c => c - 1);
-  }, [currentQuestionIdx]);
-
   const toggleFlag = useCallback(() => {
     setFlagged(prev => ({ ...prev, [currentQuestionIdx]: !prev[currentQuestionIdx] }));
   }, [currentQuestionIdx]);
 
-  // Keyboard Shortcuts (A, B, C, D, 1, 2, 3, 4, N, P, F, C, K, M, S, ?, H)
+  // Keyboard Shortcuts (A, B, C, D, 1, 2, 3, 4, N, P, F, G, C, K, M, S, ?, H)
   useEffect(() => {
     if (!hasStarted) return;
     
@@ -370,6 +433,14 @@ const CBTExam = () => {
       if (e.key === 'Escape') {
         setShowShortcutsModal(false);
         setShowCalculator(false);
+        setShowNavDrawer(false);
+        return;
+      }
+
+      // Question Navigator Drawer Toggle (G or Q)
+      if (key === 'G') {
+        e.preventDefault();
+        setShowNavDrawer(prev => !prev);
         return;
       }
 
@@ -624,6 +695,20 @@ const CBTExam = () => {
           <Button 
             variant="outline" 
             size="sm" 
+            onClick={() => setShowNavDrawer(true)} 
+            className="h-9 px-2.5 sm:px-3 text-xs bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 font-bold flex items-center gap-1.5 shadow-sm"
+            title="Open Question Navigator Grid & Quick Jumps (Shortcut: G)"
+          >
+            <Grid3X3 className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Navigator</span>
+            <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded-full font-mono">
+              {currentQuestionIdx + 1}/{questions.length}
+            </span>
+          </Button>
+
+          <Button 
+            variant="outline" 
+            size="sm" 
             onClick={() => setShowShortcutsModal(true)} 
             className="hidden lg:flex bg-slate-100 text-slate-700 border-slate-300 h-9 px-3 text-xs"
             title="View keyboard shortcuts (or press ?)"
@@ -666,9 +751,12 @@ const CBTExam = () => {
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden relative">
         
         {/* Left Side: Question Area */}
-        <div className="flex-1 flex flex-col relative bg-white m-4 lg:mr-0 rounded-xl shadow-sm border border-slate-200 lg:min-h-0 min-h-[500px]">
+        <div 
+          {...swipeHandlers}
+          className="flex-1 flex flex-col relative bg-card text-card-foreground m-2 md:m-4 lg:mr-0 rounded-xl shadow-sm border border-border lg:min-h-0 min-h-[480px] touch-pan-y"
+        >
           {/* Real JAMB Subject Switcher Tabs */}
-          <div className="bg-slate-800 px-4 py-2 flex items-center gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
+          <div className="bg-slate-900 dark:bg-slate-950 px-3 py-2 flex items-center gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
             {examSubjectsList.map((subjName, idx) => {
               const activeQSubject = q?.subject_name;
               const isSelectedSubject = activeQSubject === subjName;
@@ -687,14 +775,14 @@ const CBTExam = () => {
                       setActiveSubjectTab(subjName);
                     }
                   }}
-                  className={`px-4 py-2 rounded text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-2 ${
+                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded text-[11px] md:text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1.5 md:gap-2 ${
                     isSelectedSubject
-                      ? 'bg-green-600 text-white shadow-md border border-green-400'
-                      : 'bg-slate-700/80 text-slate-300 hover:bg-slate-700 hover:text-white'
+                      ? 'bg-emerald-600 text-white shadow-md border border-emerald-400'
+                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`}
                 >
                   <span>{subjName}</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${isSelectedSubject ? 'bg-green-800 text-green-100' : 'bg-slate-800 text-slate-400'}`}>
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${isSelectedSubject ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-800 text-slate-400'}`}>
                     {answeredSubjCount}/{subjectQs.length || (subjName === 'Use of English' ? 60 : 40)}
                   </span>
                 </button>
@@ -702,25 +790,55 @@ const CBTExam = () => {
             })}
           </div>
 
-          <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-            <div className="flex items-center gap-3">
-               <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-md font-bold text-sm">Question {currentQuestionIdx + 1} of {questions.length}</span>
-               <span className="px-2.5 py-1 bg-slate-200 text-slate-700 rounded text-xs font-bold uppercase">
+          {/* Mobile Swipe Navigation Helper */}
+          <div className="px-3 py-1.5 bg-muted/20 border-b border-border/50 text-[11px] text-muted-foreground flex items-center justify-between sm:hidden select-none">
+            <span className="flex items-center gap-1 font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-primary" /> Swipe ⟵ / ⟶ to switch questions
+            </span>
+            <button 
+              onClick={() => setShowNavDrawer(true)}
+              className="text-primary font-bold hover:underline flex items-center gap-0.5"
+            >
+              Open Grid <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+
+          <div className="p-3 md:p-4 border-b border-border flex flex-wrap justify-between items-center bg-muted/30 gap-2">
+            <div className="flex items-center gap-2 md:gap-3">
+               <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-md font-bold text-xs md:text-sm border border-primary/20">Question {currentQuestionIdx + 1} of {questions.length}</span>
+               <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-[10px] md:text-xs font-bold uppercase">
                  {q?.subject_name || 'Subject'}
                </span>
+               <button 
+                 onClick={() => setShowNavDrawer(true)}
+                 className="hidden sm:flex items-center gap-1 text-xs font-semibold text-primary hover:underline ml-1"
+               >
+                 <Grid3X3 className="w-3 h-3" /> Jump
+               </button>
             </div>
-            <Button variant="outline" size="sm" onClick={toggleFlag} className={flagged[currentQuestionIdx] ? "bg-red-50 text-red-600 border-red-200" : ""}>
-              <Flag className={`w-4 h-4 mr-2 ${flagged[currentQuestionIdx] ? "fill-red-600" : ""}`} />
-              {flagged[currentQuestionIdx] ? 'Flagged' : 'Flag for Review'}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowCalculator(!showCalculator)} className="md:hidden h-8 text-xs gap-1">
+                <Calculator className="w-3.5 h-3.5" /> Calc
+              </Button>
+              <Button variant="outline" size="sm" onClick={toggleFlag} className={`h-8 text-xs ${flagged[currentQuestionIdx] ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" : ""}`}>
+                <Flag className={`w-3.5 h-3.5 mr-1.5 ${flagged[currentQuestionIdx] ? "fill-red-600 text-red-600" : ""}`} />
+                {flagged[currentQuestionIdx] ? 'Flagged' : 'Flag'}
+              </Button>
+            </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-8">
-            <div className="text-xl mb-10 leading-relaxed font-medium text-slate-800">
+          <motion.div 
+            key={currentQuestionIdx}
+            initial={{ opacity: 0, x: swipeDirection === 'left' ? 16 : swipeDirection === 'right' ? -16 : 0 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6"
+          >
+            <div className="text-base md:text-xl leading-relaxed font-medium text-foreground">
               <MathText text={q.question_text} />
             </div>
             
-            <div className="grid grid-cols-1 gap-4 max-w-3xl">
+            <div className="grid grid-cols-1 gap-3 md:gap-4 max-w-3xl">
               {q.options.map((opt: string, i: number) => {
                 const isSelected = answers[q.id] === opt;
                 const letter = String.fromCharCode(65 + i);
@@ -730,59 +848,84 @@ const CBTExam = () => {
                     key={i}
                     whileTap={{ scale: 0.98 }}
                     onClick={() => handleSelectAnswer(q.id, opt)}
-                    className={`flex items-start text-left p-4 rounded-xl border-2 transition-all ${
+                    className={`flex items-start text-left p-3.5 md:p-4 rounded-xl border-2 transition-all ${
                       isSelected 
-                        ? 'border-blue-500 bg-blue-50 shadow-sm' 
-                        : 'border-slate-200 hover:border-blue-300 hover:bg-slate-50'
+                        ? 'border-primary bg-primary/10 dark:bg-primary/20 text-foreground shadow-sm' 
+                        : 'border-border hover:border-primary/50 hover:bg-muted/40 text-foreground'
                     }`}
                   >
-                    <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center font-bold mr-4 shrink-0 transition-colors ${
-                      isSelected ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-500'
+                    <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center font-bold mr-3 md:mr-4 shrink-0 text-xs md:text-sm transition-colors ${
+                      isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 text-muted-foreground'
                     }`}>
                       {letter}
                     </div>
-                    <span className={`text-lg pt-1 ${isSelected ? 'text-blue-900 font-medium' : 'text-slate-700'}`}>
-                      <MathText text={opt} />
+                    <span className={`text-sm md:text-lg pt-0.5 ${isSelected ? 'font-semibold text-primary' : 'text-foreground'}`}>
+                      <MathText text={cleanOptionText(opt)} />
                     </span>
                   </motion.button>
                 );
               })}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="p-4 border-t border-slate-200 bg-slate-50 rounded-b-xl flex justify-between items-center">
-            <Button variant="outline" onClick={handlePrev} disabled={currentQuestionIdx === 0} className="w-32">
-              <ChevronLeft className="w-4 h-4 mr-2" /> Previous
+          <div className="p-3 md:p-4 border-t border-border bg-muted/30 rounded-b-xl flex justify-between items-center">
+            <Button variant="outline" onClick={handlePrev} disabled={currentQuestionIdx === 0} className="w-24 sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm">
+              <ChevronLeft className="w-4 h-4 mr-1 md:mr-2" /> Previous
             </Button>
-            <Button onClick={handleNext} disabled={currentQuestionIdx === questions.length - 1} className="w-32 bg-blue-600 hover:bg-blue-700">
-              Next <ChevronRight className="w-4 h-4 ml-2" />
+            
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowNavDrawer(true)}
+              className="h-9 px-3 text-xs font-bold text-primary hover:bg-primary/10 border-primary/30 flex items-center gap-1.5"
+            >
+              <Grid3X3 className="w-3.5 h-3.5" />
+              <span>Jump</span>
+            </Button>
+
+            <Button onClick={handleNext} disabled={currentQuestionIdx === questions.length - 1} className="w-24 sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm bg-primary hover:bg-primary/90">
+              Next <ChevronRight className="w-4 h-4 ml-1 md:ml-2" />
             </Button>
           </div>
         </div>
 
         {/* Right Side: Navigator */}
-        <div className="w-full lg:w-80 bg-white m-4 lg:ml-4 lg:mr-4 rounded-xl shadow-sm border border-slate-200 flex flex-col lg:max-h-full max-h-[400px]">
-          <div className="p-4 border-b border-slate-200 bg-slate-50 rounded-t-xl">
-            <h3 className="font-bold text-slate-800">Question Navigator</h3>
+        <div className="w-full lg:w-80 bg-card text-card-foreground m-2 md:m-4 lg:ml-4 lg:mr-4 rounded-xl shadow-sm border border-border flex flex-col lg:max-h-full max-h-[380px]">
+          <div className="p-3 md:p-4 border-b border-border bg-muted/30 rounded-t-xl flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-sm md:text-base text-foreground">Question Navigator</h3>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={() => setShowNavDrawer(true)}
+                className="h-6 px-1.5 text-[11px] text-primary font-bold hover:bg-primary/10"
+              >
+                <Layers className="w-3 h-3 mr-1" />
+                Expand
+              </Button>
+            </div>
+            <span className="text-xs text-muted-foreground font-mono">
+              {Object.keys(answers).length}/{questions.length} Answered
+            </span>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-4">
-             <div className="grid grid-cols-5 gap-2">
+          <div className="flex-1 overflow-y-auto p-3 md:p-4">
+             <div className="grid grid-cols-5 md:grid-cols-6 lg:grid-cols-5 gap-2">
                 {questions.map((q, idx) => {
                   const isAnswered = !!answers[q.id];
                   const isFlagged = flagged[idx];
                   const isCurrent = currentQuestionIdx === idx;
                   
-                  let bgColor = "bg-white border-slate-200 text-slate-600";
-                  if (isCurrent) bgColor = "bg-blue-600 border-blue-600 text-white shadow-md transform scale-110";
-                  else if (isFlagged) bgColor = "bg-red-100 border-red-300 text-red-700";
-                  else if (isAnswered) bgColor = "bg-green-100 border-green-300 text-green-800";
+                  let bgColor = "bg-muted/40 border-border text-muted-foreground";
+                  if (isCurrent) bgColor = "bg-primary border-primary text-primary-foreground font-bold shadow-md transform scale-105";
+                  else if (isFlagged) bgColor = "bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400";
+                  else if (isAnswered) bgColor = "bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-medium";
 
                   return (
                     <button
                       key={idx}
                       onClick={() => setCurrentQuestionIdx(idx)}
-                      className={`w-full aspect-square rounded border font-medium text-sm transition-all flex items-center justify-center ${bgColor} hover:opacity-80`}
+                      className={`w-full aspect-square rounded-lg border text-xs transition-all flex items-center justify-center ${bgColor} hover:opacity-80`}
                     >
                       {idx + 1}
                     </button>
@@ -791,14 +934,14 @@ const CBTExam = () => {
              </div>
           </div>
 
-          <div className="p-4 border-t border-slate-200 bg-slate-50 rounded-b-xl space-y-4">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-green-100 border border-green-300 rounded" /> Answered</div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-100 border border-red-300 rounded" /> Flagged</div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-white border border-slate-200 rounded" /> Unanswered</div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 bg-blue-600 border border-blue-600 rounded" /> Current</div>
+          <div className="p-3 md:p-4 border-t border-border bg-muted/30 rounded-b-xl space-y-3">
+            <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-emerald-500/20 border border-emerald-500/40 rounded" /> Answered</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-500/20 border border-red-500/40 rounded" /> Flagged</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-muted/40 border border-border rounded" /> Unanswered</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-primary rounded" /> Current</div>
             </div>
-            <Button onClick={() => submitExam()} variant="destructive" className="w-full font-bold h-12 shadow-sm">
+            <Button onClick={() => submitExam()} variant="destructive" className="w-full font-bold h-11 shadow-sm text-sm">
               SUBMIT EXAM
             </Button>
           </div>
@@ -806,56 +949,113 @@ const CBTExam = () => {
 
       </div>
 
+      {/* Floating Persistent Non-Blocking Timer Widget */}
+      {hasStarted && !submitting && (
+        <div className="fixed bottom-4 right-4 z-40 hidden sm:flex items-center gap-2 px-3 py-2 rounded-full bg-slate-900/90 text-white dark:bg-card/95 dark:text-card-foreground backdrop-blur-md border border-slate-700 dark:border-border shadow-2xl animate-in fade-in slide-in-from-bottom-2">
+          <Clock className={`w-4 h-4 ${timeLeft <= 300 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`} />
+          <span className="font-mono text-xs font-bold tracking-tight">
+            {formatTime(timeLeft)}
+          </span>
+          <span className="text-[10px] text-slate-400 border-l border-slate-700 dark:border-border pl-2 font-sans">
+            {Object.keys(answers).length}/{questions.length} answered
+          </span>
+        </div>
+      )}
+
+      {/* Mobile Floating Quick Navigator Trigger Pill */}
+      {hasStarted && !submitting && (
+        <div className="fixed bottom-4 left-4 z-40 sm:hidden animate-in fade-in slide-in-from-bottom-2">
+          <Button
+            onClick={() => setShowNavDrawer(true)}
+            className="h-10 px-3.5 rounded-full bg-slate-900/95 text-white dark:bg-card/95 dark:text-card-foreground border border-slate-700 dark:border-border shadow-2xl backdrop-blur-md flex items-center gap-2 text-xs font-bold active:scale-95 transition-transform"
+          >
+            <Grid3X3 className="w-4 h-4 text-emerald-400" />
+            <span>Q{currentQuestionIdx + 1}/{questions.length}</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+          </Button>
+        </div>
+      )}
+
+      {/* Persistent Accessible Navigation Drawer */}
+      <CBTNavigationDrawer
+        isOpen={showNavDrawer}
+        onClose={() => setShowNavDrawer(false)}
+        questions={questions}
+        currentIdx={currentQuestionIdx}
+        onSelectQuestion={(idx) => {
+          setCurrentQuestionIdx(idx);
+          if (questions[idx]?.subject_name) {
+            setActiveSubjectTab(questions[idx].subject_name);
+          }
+        }}
+        answers={answers}
+        flagged={flagged}
+        subjects={examSubjectsList}
+        activeSubject={q?.subject_name}
+        onSelectSubject={(subj) => {
+          setActiveSubjectTab(subj);
+          const firstSubjIdx = questions.findIndex(item => item.subject_name === subj);
+          if (firstSubjIdx >= 0) {
+            setCurrentQuestionIdx(firstSubjIdx);
+          }
+        }}
+        onSubmitExam={() => submitExam()}
+      />
+
       {/* CBT Shortcuts Cheat Sheet Modal */}
       {showShortcutsModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white text-slate-900 rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-slate-200 animate-in zoom-in-95">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+          <div className="bg-card text-card-foreground rounded-2xl shadow-2xl max-w-lg w-full p-6 border border-border animate-in zoom-in-95">
+            <div className="flex items-center justify-between pb-4 border-b border-border">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-green-100 text-green-700 flex items-center justify-center font-bold">
+                <div className="w-9 h-9 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center font-bold">
                   <Keyboard className="w-5 h-5" />
                 </div>
-                <h3 className="font-bold text-lg text-slate-800">CBT Exam Keyboard Shortcuts</h3>
+                <h3 className="font-bold text-lg text-foreground">CBT Exam Keyboard Shortcuts</h3>
               </div>
               <Button size="sm" variant="ghost" onClick={() => setShowShortcutsModal(false)}>✕</Button>
             </div>
 
             <div className="grid grid-cols-2 gap-3 my-5 text-sm">
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">Choose Option</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-green-700 shadow-sm">A / B / C / D</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Choose Option</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 shadow-sm">A / B / C / D</kbd>
               </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">Next Question</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-blue-700 shadow-sm">N / ➔</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Next Question</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-blue-600 dark:text-blue-400 shadow-sm">N / ➔</kbd>
               </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">Previous</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-blue-700 shadow-sm">P / ⬅</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Previous</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-blue-600 dark:text-blue-400 shadow-sm">P / ⬅</kbd>
               </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">Bookmark / Flag</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-amber-700 shadow-sm">F</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Navigator Drawer</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-primary shadow-sm">G</kbd>
               </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">Calculator</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-slate-700 shadow-sm">K</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Bookmark / Flag</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-amber-600 dark:text-amber-400 shadow-sm">F</kbd>
               </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">Audio Cues</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-emerald-700 shadow-sm">M</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Calculator</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-foreground shadow-sm">K</kbd>
               </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">Submit Exam</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-red-600 shadow-sm">S</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Audio Cues</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-emerald-600 dark:text-emerald-400 shadow-sm">M</kbd>
               </div>
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center justify-between">
-                <span className="font-medium text-slate-700">This Guide</span>
-                <kbd className="px-2 py-1 bg-white border border-slate-300 rounded font-mono font-bold text-xs text-purple-700 shadow-sm">?</kbd>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">Submit Exam</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-red-600 dark:text-red-400 shadow-sm">S</kbd>
+              </div>
+              <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center justify-between">
+                <span className="font-medium text-foreground">This Guide</span>
+                <kbd className="px-2 py-1 bg-background border border-border rounded font-mono font-bold text-xs text-purple-600 dark:text-purple-400 shadow-sm">?</kbd>
               </div>
             </div>
 
-            <Button className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold" onClick={() => setShowShortcutsModal(false)}>
+            <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" onClick={() => setShowShortcutsModal(false)}>
               Got it, continue exam
             </Button>
           </div>

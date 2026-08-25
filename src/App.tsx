@@ -45,6 +45,9 @@ const Onboarding = lazy(() => import('./pages/Onboarding'));
 const JambNovelHub = lazy(() => import('./pages/JambNovelHub').then(m => ({ default: m.JambNovelHub })));
 const CourseEligibilityChecker = lazy(() => import('./pages/CourseEligibilityChecker').then(m => ({ default: m.CourseEligibilityChecker })));
 const OfflinePackManager = lazy(() => import('./pages/OfflinePackManager').then(m => ({ default: m.OfflinePackManager })));
+const EducationalJourneyMapPage = lazy(() => import('./pages/EducationalJourneyMapPage'));
+const AdaptiveLearningPathPage = lazy(() => import('./pages/AdaptiveLearningPathPage'));
+const PeerStudyRoomPage = lazy(() => import('./pages/PeerStudyRoomPage'));
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { WhatsAppWidget } from './components/WhatsAppWidget';
@@ -107,6 +110,9 @@ function AppContent() {
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/library" element={<Library />} />
               <Route path="/novel-hub" element={<JambNovelHub />} />
+              <Route path="/journey-map" element={<EducationalJourneyMapPage />} />
+              <Route path="/adaptive-path" element={<AdaptiveLearningPathPage />} />
+              <Route path="/study-rooms" element={<PeerStudyRoomPage />} />
               <Route path="/eligibility-checker" element={<CourseEligibilityChecker />} />
               <Route path="/offline-packs" element={<OfflinePackManager />} />
               <Route path="/mocks" element={<WeeklyMocks />} />

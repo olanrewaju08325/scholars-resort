@@ -1,6 +1,7 @@
 import Papa from 'papaparse';
 import { supabase } from './supabase';
 import { callGroqAPI } from '../services/aiService';
+import { cleanQuestionText, cleanOptionText } from '../utils/questionUtils';
 
 export interface ParsedQuestionItem {
   rowNumber: number;
@@ -179,12 +180,15 @@ export const parseQuestionsCsv = async (
               continue;
             }
 
-            // Fill standard 4 options if user gave at least 2
+            // Clean question text and option values to strip indices and metadata
+            const cleanedStem = cleanQuestionText(questionText);
+            
+            // Fill standard 4 options if user gave at least 2, and clean them
             const standardOptions = [
-              optA || 'Option A',
-              optB || 'Option B',
-              optC || (rawOptions[2] || 'Option C'),
-              optD || (rawOptions[3] || 'Option D')
+              cleanOptionText(optA || 'Option A'),
+              cleanOptionText(optB || 'Option B'),
+              cleanOptionText(optC || (rawOptions[2] || 'Option C')),
+              cleanOptionText(optD || (rawOptions[3] || 'Option D'))
             ];
 
             // Resolve correct answer
@@ -201,11 +205,14 @@ export const parseQuestionsCsv = async (
               resolvedCorrect = standardOptions[3];
             } else {
               // Direct string match
-              const match = standardOptions.find(o => o.toLowerCase() === rawCorrect.toLowerCase());
+              const cleanedRawCorrect = cleanOptionText(rawCorrect);
+              const match = standardOptions.find(o => o.toLowerCase() === cleanedRawCorrect.toLowerCase());
               if (match) {
                 resolvedCorrect = match;
               } else if (!rawCorrect) {
                 resolvedCorrect = standardOptions[0]; // fallback
+              } else {
+                resolvedCorrect = cleanedRawCorrect;
               }
             }
 
@@ -214,14 +221,14 @@ export const parseQuestionsCsv = async (
 
             detectedSubjectsSet.add(subjectName);
 
-            const normalizedStem = normalizeQuestionStem(questionText);
+            const normalizedStem = normalizeQuestionStem(cleanedStem);
             const isDuplicateInFile = seenStemsInFile.has(normalizedStem);
 
             const parsedItem: ParsedQuestionItem = {
               rowNumber,
               subjectName,
               topicName: topicName || undefined,
-              questionText,
+              questionText: cleanedStem,
               options: standardOptions,
               correctAnswer: resolvedCorrect,
               explanation: explanation || '',

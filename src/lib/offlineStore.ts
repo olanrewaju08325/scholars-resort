@@ -128,3 +128,38 @@ export const getCustomQuestions = (subjectId?: string): any[] => {
     return [];
   }
 };
+
+export interface CompletedOfflineSession {
+  id: string;
+  mode: 'CBT Exam' | 'Practice Drill' | 'Weakness Drill' | 'Custom Practice';
+  score: number;
+  totalQuestions: number;
+  percentageScore: number;
+  timeSpentSeconds: number;
+  completedAt: string;
+  subjects?: string[];
+  userId?: string;
+}
+
+const COMPLETED_SESSIONS_KEY = 'scholar_offline_completed_sessions';
+
+export const getCompletedOfflineSessions = (): CompletedOfflineSession[] => {
+  try {
+    const raw = localStorage.getItem(COMPLETED_SESSIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const saveCompletedOfflineSession = (session: CompletedOfflineSession) => {
+  try {
+    const existing = getCompletedOfflineSessions();
+    existing.unshift(session);
+    // Keep last 100 offline session logs
+    localStorage.setItem(COMPLETED_SESSIONS_KEY, JSON.stringify(existing.slice(0, 100)));
+  } catch (e) {
+    console.warn('Failed to save completed offline session:', e);
+  }
+};
+
