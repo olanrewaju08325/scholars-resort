@@ -10,11 +10,8 @@ export const GettingStarted = () => {
   const [isVisible, setIsVisible] = useState(true);
   
   const { profile } = useAuth();
-  const [tasks, setTasks] = useState([
-    { id: 1, title: 'Complete your first practice session', icon: <BookOpen className="w-5 h-5 text-blue-400" />, done: false, link: '/practice/setup' },
-    { id: 2, title: 'Link a Guardian Account', icon: <Users className="w-5 h-5 text-green-400" />, done: false, link: '/dashboard/guardian' },
-    { id: 3, title: 'Explore the Help Center', icon: <HelpCircle className="w-5 h-5 text-purple-400" />, done: true, link: '/help' },
-  ]);
+  const [tasks, setTasks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const dismissed = localStorage.getItem('hide_getting_started');
@@ -24,16 +21,25 @@ export const GettingStarted = () => {
     }
 
     const checkRealProgress = async () => {
-      if (!profile) return;
+      if (!profile) {
+        setLoading(false);
+        return;
+      }
       
-      const { count: examCount } = await supabase.from('exam_sessions').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
-      const { count: linkCount } = await supabase.from('guardian_links').select('*', { count: 'exact', head: true }).eq('student_id', profile.id).eq('status', 'active');
-      
-      setTasks([
-        { id: 1, title: 'Complete your first practice session', icon: <BookOpen className="w-5 h-5 text-blue-400" />, done: (examCount || 0) > 0, link: '/practice/setup' },
-        { id: 2, title: 'Link a Guardian Account', icon: <Users className="w-5 h-5 text-green-400" />, done: (linkCount || 0) > 0, link: '/dashboard/guardian' },
-        { id: 3, title: 'Explore the Help Center', icon: <HelpCircle className="w-5 h-5 text-purple-400" />, done: true, link: '/help' },
-      ]);
+      try {
+        const { count: examCount } = await supabase.from('exam_sessions').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
+        const { count: linkCount } = await supabase.from('guardian_links').select('*', { count: 'exact', head: true }).eq('student_id', profile.id).eq('status', 'active');
+        
+        setTasks([
+          { id: 1, title: 'Complete your first practice session', icon: <BookOpen className="w-5 h-5 text-blue-500" />, done: (examCount || 0) > 0, link: '/practice/setup' },
+          { id: 2, title: 'Link a Guardian Account', icon: <Users className="w-5 h-5 text-emerald-500" />, done: (linkCount || 0) > 0, link: '/dashboard/guardian' },
+          { id: 3, title: 'Explore the Help Center', icon: <HelpCircle className="w-5 h-5 text-purple-500" />, done: true, link: '/help' },
+        ]);
+      } catch {
+        setTasks([]);
+      } finally {
+        setLoading(false);
+      }
     };
     checkRealProgress();
   }, [profile]);
@@ -47,38 +53,38 @@ export const GettingStarted = () => {
     setTasks(tasks.map(t => t.id === id ? { ...t, done: !t.done } : t));
   };
 
-  if (!isVisible) return null;
+  if (!isVisible || loading || tasks.length === 0) return null;
 
   const completedCount = tasks.filter(t => t.done).length;
   const progressPercent = Math.round((completedCount / tasks.length) * 100);
 
   return (
-    <Card className="bg-slate-900 border-primary/30 shadow-lg relative overflow-hidden mb-8">
+    <Card className="bg-card border-border shadow-lg relative overflow-hidden mb-8">
       <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none" />
       
       <button 
         onClick={handleDismiss}
-        className="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-full p-1 transition-colors"
+        className="absolute top-4 right-4 text-muted-foreground hover:text-foreground bg-muted hover:bg-muted/80 rounded-full p-1 transition-colors"
         aria-label="Dismiss checklist"
       >
         <X className="w-4 h-4" />
       </button>
 
       <CardHeader className="pb-4">
-        <CardTitle className="text-xl text-white flex items-center gap-2">
+        <CardTitle className="text-xl text-foreground flex items-center gap-2">
           Getting Started
         </CardTitle>
-        <CardDescription className="text-slate-400">
+        <CardDescription className="text-muted-foreground">
           Complete these quick steps to get the most out of Scholars Resort.
         </CardDescription>
         
         {/* Progress bar */}
         <div className="mt-4">
-          <div className="flex justify-between text-xs font-medium text-slate-400 mb-1">
+          <div className="flex justify-between text-xs font-medium text-muted-foreground mb-1">
             <span>Progress</span>
             <span>{progressPercent}%</span>
           </div>
-          <div className="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-muted rounded-full h-2 overflow-hidden">
             <div 
               className="bg-primary h-2 transition-all duration-500 ease-out" 
               style={{ width: `${progressPercent}%` }}
@@ -90,20 +96,20 @@ export const GettingStarted = () => {
       <CardContent>
         <div className="space-y-3">
           {tasks.map(task => (
-            <div key={task.id} className={`flex items-center justify-between p-3 rounded-lg border ${task.done ? 'bg-slate-950/50 border-slate-800 opacity-75' : 'bg-slate-800 border-slate-700 hover:border-slate-600 transition-colors'}`}>
+            <div key={task.id} className={`flex items-center justify-between p-3 rounded-lg border ${task.done ? 'bg-muted/30 border-border opacity-75' : 'bg-muted/60 border-border hover:border-primary/50 transition-colors'}`}>
               <div className="flex items-center gap-3">
                 <button onClick={() => toggleTask(task.id)} className="focus:outline-none transition-transform hover:scale-110 active:scale-95">
                   {task.done ? (
                     <CheckCircle2 className="w-6 h-6 text-primary" />
                   ) : (
-                    <Circle className="w-6 h-6 text-slate-500" />
+                    <Circle className="w-6 h-6 text-muted-foreground" />
                   )}
                 </button>
                 <div className="flex items-center gap-2">
-                  <div className="p-2 bg-slate-900 rounded-md">
+                  <div className="p-2 bg-background rounded-md border border-border">
                     {task.icon}
                   </div>
-                  <span className={`font-medium ${task.done ? 'text-slate-500 line-through' : 'text-slate-200'}`}>
+                  <span className={`font-medium ${task.done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
                     {task.title}
                   </span>
                 </div>
@@ -111,7 +117,7 @@ export const GettingStarted = () => {
               
               {!task.done && (
                 <Link to={task.link}>
-                  <Button variant="ghost" size="sm" className="text-xs hover:bg-slate-700">
+                  <Button variant="ghost" size="sm" className="text-xs hover:bg-muted">
                     Go 
                   </Button>
                 </Link>

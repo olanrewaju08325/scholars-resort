@@ -915,7 +915,7 @@ Scholars Resort Academic Team`
                                   
                                   await sendNotification(
                                     activeStudentData.id,
-                                    'Motivation from Guardian! 🌟',
+                                    'Motivation from Guardian!',
                                     `${cleanMessage} - Sent by ${profile?.full_name || 'Your Guardian'}`,
                                     'success'
                                   );

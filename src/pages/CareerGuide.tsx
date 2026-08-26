@@ -4,6 +4,9 @@ import { Search, Compass, BookOpen, GraduationCap, Target, CheckSquare } from 'l
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { supabase } from '@/lib/supabase';
+import { useLiveFetch } from '@/hooks/useLiveFetch';
+import { DataLoading } from '@/components/DataLoading';
 
 // Mock static data for V2
 const CAREER_DATA = [
@@ -43,19 +46,31 @@ const CareerGuide = () => {
   const [activeView, setActiveView] = useState<'guide' | 'syllabus'>('guide');
   const [searchTerm, setSearchTerm] = useState('');
   
-  // Dummy data for syllabus tracker
-  const [syllabus, setSyllabus] = useState([
-    { topic: 'Atomic Structure', subject: 'Chemistry', done: true },
-    { topic: 'Periodicity', subject: 'Chemistry', done: false },
-    { topic: 'Calculus', subject: 'Mathematics', done: false },
-    { topic: 'Lexis and Structure', subject: 'English', done: true },
-  ]);
+  // Live syllabus state loaded from Supabase topics via useLiveFetch
+  const { data: rawSyllabus, loading: loadingSyllabus } = useLiveFetch<any[]>(
+    async () => {
+      const { data, error } = await supabase
+        .from('topics')
+        .select('id, name, subject_id, subjects(name)')
+        .limit(15);
+      if (error) throw error;
+      return data || [];
+    },
+    { contextName: 'CareerGuideSyllabus', fallbackData: [] }
+  );
 
-  const toggleSyllabusItem = (index: number) => {
-    const newSyllabus = [...syllabus];
-    newSyllabus[index].done = !newSyllabus[index].done;
-    setSyllabus(newSyllabus);
+  const [localChecked, setLocalChecked] = useState<Record<string, boolean>>({});
+
+  const toggleSyllabusItem = (id: string) => {
+    setLocalChecked(prev => ({ ...prev, [id]: !prev[id] }));
   };
+
+  const syllabus = (rawSyllabus || []).map((t: any) => ({
+    id: t.id || t.name,
+    topic: t.name || 'Core Topic',
+    subject: t.subjects?.name || 'General',
+    done: !!localChecked[t.id || t.name]
+  }));
 
   const filteredData = CAREER_DATA.map(category => ({
     ...category,
@@ -163,22 +178,28 @@ const CareerGuide = () => {
                  <CardDescription>Tick off topics as you study to monitor your completion rate.</CardDescription>
                </CardHeader>
                <CardContent>
-                 <div className="space-y-3">
-                   {syllabus.map((item, idx) => (
-                     <div key={idx} className="flex items-center gap-4 p-3 border border-border rounded-md hover:bg-muted/30 transition-colors">
-                       <input 
-                         type="checkbox" 
-                         checked={item.done} 
-                         onChange={() => toggleSyllabusItem(idx)}
-                         className="w-5 h-5 text-primary accent-primary cursor-pointer" 
-                       />
-                       <div>
-                         <p className={`font-semibold ${item.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.topic}</p>
-                         <p className="text-xs text-muted-foreground uppercase">{item.subject}</p>
+                 {loadingSyllabus ? (
+                   <DataLoading message="Loading JAMB Syllabus..." subtext="Fetching core subjects and topics from Supabase..." />
+                 ) : syllabus.length === 0 ? (
+                   <div className="text-center py-12 text-muted-foreground">No syllabus topics found.</div>
+                 ) : (
+                   <div className="space-y-3">
+                     {syllabus.map((item) => (
+                       <div key={item.id} className="flex items-center gap-4 p-3 border border-border rounded-md hover:bg-muted/30 transition-colors">
+                         <input 
+                           type="checkbox" 
+                           checked={item.done} 
+                           onChange={() => toggleSyllabusItem(item.id)}
+                           className="w-5 h-5 text-primary accent-primary cursor-pointer" 
+                         />
+                         <div>
+                           <p className={`font-semibold ${item.done ? 'line-through text-muted-foreground' : 'text-foreground'}`}>{item.topic}</p>
+                           <p className="text-xs text-muted-foreground uppercase">{item.subject}</p>
+                         </div>
                        </div>
-                     </div>
-                   ))}
-                 </div>
+                     ))}
+                   </div>
+                 )}
                </CardContent>
              </Card>
           </div>

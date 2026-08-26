@@ -213,7 +213,7 @@ const Pricing = () => {
             <div className="mt-6 p-5 rounded-2xl border-2 border-amber-500/50 bg-amber-500/10 flex flex-col gap-3">
               <div className="flex items-center gap-2">
                 <LogIn className="w-6 h-6 text-amber-500 shrink-0" />
-                <p className="font-extrabold text-amber-400 text-base">⚠️ Login Required Before Making Payment</p>
+                <p className="font-extrabold text-amber-400 text-base">Login Required Before Making Payment</p>
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Please log in or register a free account first so our payment activation system can link your receipt directly to your profile.
@@ -378,7 +378,7 @@ const Pricing = () => {
                           </>
                         ) : !acceptedTerms ? (
                           <p className="text-xs text-amber-600 dark:text-amber-400 font-bold">
-                            ⚠️ Check the agreement box above to enable receipt upload
+                            Check the agreement box above to enable receipt upload
                           </p>
                         ) : (
                           <>

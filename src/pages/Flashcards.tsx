@@ -9,6 +9,8 @@ import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI, safeParseAIJSON } from '@/services/aiService';
 
 
+import { SafeDataFetcher } from '@/utils/safeDataFetcher';
+
 interface Flashcard {
   id: string;
   front_text: string;
@@ -45,10 +47,12 @@ const Flashcards = () => {
       query = query.eq('user_id', profile.id);
     }
 
-    const { data, error } = await query;
-    if (data && !error) {
-      setCards(data);
-    }
+    const res = await SafeDataFetcher<Flashcard[]>(query, {
+      contextName: 'Flashcards.fetchCards',
+      fallbackData: []
+    });
+
+    setCards(res.data || []);
     setLoading(false);
     setCurrentIndex(0);
     setIsFlipped(false);

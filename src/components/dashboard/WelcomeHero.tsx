@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Target, Sparkles, CalendarDays, Zap, Flame } from 'lucide-react';
+import { Target, CalendarDays, Zap, Flame } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { calculateLevel } from '@/lib/gamification';
 
@@ -26,73 +26,69 @@ export const WelcomeHero = ({ profile, stats: _stats }: WelcomeHeroProps) => {
   const daysLeft = Math.max(0, Math.ceil((examDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
 
   return (
-    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/90 to-purple-900 text-white shadow-xl">
-      {/* Decorative background elements */}
-      <div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 rounded-full bg-white/10 blur-3xl mix-blend-overlay pointer-events-none" />
-      <div className="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 rounded-full bg-blue-500/20 blur-3xl mix-blend-overlay pointer-events-none" />
-      
+    <div className="relative overflow-hidden rounded-3xl bg-primary text-primary-foreground shadow-xl border border-primary-foreground/10 opacity-100">
       <div className="relative z-10 p-6 sm:p-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
         <div className="space-y-4 max-w-xl">
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/20 backdrop-blur-md text-xs font-semibold tracking-wider text-white">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-foreground/15 text-xs font-bold tracking-wider text-primary-foreground border border-primary-foreground/20">
               <span className="text-sm">{levelInfo.icon}</span>
               <span>Level {levelInfo.level}: {levelInfo.title}</span>
             </div>
 
             {streakDays > 0 && (
-              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500/30 border border-amber-300/40 backdrop-blur-md text-xs font-bold text-amber-200">
-                <Flame className="w-3.5 h-3.5 fill-amber-300 text-amber-300" />
+              <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-amber-500 text-slate-950 text-xs font-bold">
+                <Flame className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
                 <span>{streakDays} Day Streak</span>
               </div>
             )}
 
-            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-400/20 border border-yellow-300/30 backdrop-blur-md text-xs font-mono font-bold text-yellow-200">
-              <Zap className="w-3.5 h-3.5 fill-yellow-300 text-yellow-300" />
+            <div className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-yellow-400 text-slate-950 text-xs font-mono font-bold">
+              <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
               <span>{(profile?.xp || 0).toLocaleString()} XP</span>
             </div>
           </div>
           
-          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-extrabold tracking-tight">
+          <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-extrabold tracking-tight text-primary-foreground">
             {getGreeting()}, {name}!
           </h1>
           
-          <p className="text-base sm:text-lg text-white/80 leading-relaxed max-w-md">
+          <p className="text-base sm:text-lg text-primary-foreground/90 leading-relaxed max-w-md font-medium">
             Consistency is the key to excellence. You are {daysLeft} days away from your target. Let's make today count.
           </p>
 
           <div className="pt-2 flex flex-wrap gap-3">
-            <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90 font-bold shadow-lg transition-transform hover:scale-105">
+            <Button asChild size="lg" className="bg-primary-foreground text-primary hover:bg-primary-foreground/90 font-extrabold shadow-md transition-transform hover:scale-105">
               <Link to="/cbt">Start CBT Mock Exam</Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="border-white/30 text-white hover:bg-white/10">
+            <Button asChild size="lg" variant="outline" className="border-primary-foreground/40 bg-primary-foreground/10 text-primary-foreground hover:bg-primary-foreground/20 font-bold">
               <Link to="/plan">View Study Plan</Link>
             </Button>
           </div>
         </div>
 
-        {/* Floating Stat Cards */}
-        <div className="flex gap-3 self-stretch lg:self-auto w-full lg:w-auto overflow-x-auto pb-2 lg:pb-0 hide-scrollbar">
-          <Card className="bg-black/20 backdrop-blur-md border-white/10 text-white min-w-[130px] flex-1 lg:flex-initial shadow-2xl">
-            <CardContent className="p-4 sm:p-5 flex flex-col items-center justify-center text-center h-full">
-              <CalendarDays className="w-7 h-7 text-blue-300 mb-2" />
-              <div className="text-2xl sm:text-3xl font-bold font-display">{daysLeft}</div>
-              <div className="text-[11px] text-white/70 uppercase tracking-wider mt-1">Days to JAMB</div>
+        {/* Floating Stat Cards - Mobile Friendly Flex Grid */}
+        <div className="grid grid-cols-3 gap-3 self-stretch lg:self-auto w-full lg:w-auto">
+          <Card className="bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground min-w-[100px] shadow-md opacity-100">
+            <CardContent className="p-3 sm:p-5 flex flex-col items-center justify-center text-center h-full">
+              <CalendarDays className="w-6 h-6 sm:w-7 sm:h-7 text-primary-foreground mb-1.5" />
+              <div className="text-xl sm:text-3xl font-bold font-display">{daysLeft}</div>
+              <div className="text-[10px] sm:text-[11px] text-primary-foreground/80 uppercase font-bold tracking-wider mt-1">Days to JAMB</div>
             </CardContent>
           </Card>
           
-          <Card className="bg-black/20 backdrop-blur-md border-white/10 text-white min-w-[130px] flex-1 lg:flex-initial shadow-2xl">
-            <CardContent className="p-4 sm:p-5 flex flex-col items-center justify-center text-center h-full">
-              <Target className="w-7 h-7 text-green-300 mb-2" />
-              <div className="text-2xl sm:text-3xl font-bold font-display">{profile?.target_score || 300}</div>
-              <div className="text-[11px] text-white/70 uppercase tracking-wider mt-1">Target Score</div>
+          <Card className="bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground min-w-[100px] shadow-md opacity-100">
+            <CardContent className="p-3 sm:p-5 flex flex-col items-center justify-center text-center h-full">
+              <Target className="w-6 h-6 sm:w-7 sm:h-7 text-primary-foreground mb-1.5" />
+              <div className="text-xl sm:text-3xl font-bold font-display">{profile?.target_score || 300}</div>
+              <div className="text-[10px] sm:text-[11px] text-primary-foreground/80 uppercase font-bold tracking-wider mt-1">Target Score</div>
             </CardContent>
           </Card>
 
-          <Card className="bg-black/20 backdrop-blur-md border-white/10 text-white min-w-[130px] flex-1 lg:flex-initial shadow-2xl">
-            <CardContent className="p-4 sm:p-5 flex flex-col items-center justify-center text-center h-full">
-              <Zap className="w-7 h-7 text-yellow-300 mb-2" />
-              <div className="text-2xl sm:text-3xl font-bold font-display font-mono">{(profile?.xp || 0).toLocaleString()}</div>
-              <div className="text-[11px] text-white/70 uppercase tracking-wider mt-1">XP Points</div>
+          <Card className="bg-primary-foreground/10 border-primary-foreground/20 text-primary-foreground min-w-[100px] shadow-md opacity-100">
+            <CardContent className="p-3 sm:p-5 flex flex-col items-center justify-center text-center h-full">
+              <Zap className="w-6 h-6 sm:w-7 sm:h-7 text-primary-foreground mb-1.5" />
+              <div className="text-xl sm:text-3xl font-bold font-display font-mono">{(profile?.xp || 0).toLocaleString()}</div>
+              <div className="text-[10px] sm:text-[11px] text-primary-foreground/80 uppercase font-bold tracking-wider mt-1">XP Points</div>
             </CardContent>
           </Card>
         </div>
@@ -100,3 +96,4 @@ export const WelcomeHero = ({ profile, stats: _stats }: WelcomeHeroProps) => {
     </div>
   );
 };
+

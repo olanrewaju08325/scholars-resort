@@ -14,14 +14,14 @@ export interface LevelTier {
 }
 
 export const LEVEL_TIERS: LevelTier[] = [
-  { level: 1, title: 'Novice Aspirant', minXp: 0, maxXp: 250, icon: '🎓', color: 'from-slate-500 to-slate-700', perks: 'Basic CBT practice & flashcard access' },
-  { level: 2, title: 'Keen Scholar', minXp: 250, maxXp: 600, icon: '📚', color: 'from-blue-500 to-cyan-600', perks: 'Detailed speed & topic breakdown metrics' },
-  { level: 3, title: 'JAMB Contender', minXp: 600, maxXp: 1200, icon: '⚔️', color: 'from-emerald-500 to-teal-600', perks: 'Custom mock exam builder & weak area drills' },
-  { level: 4, title: 'Master Tactician', minXp: 1200, maxXp: 2200, icon: '🧠', color: 'from-violet-500 to-purple-700', perks: 'AI Explanation Deep-Dive & streak shield bonuses' },
-  { level: 5, title: 'UTME Champion', minXp: 2200, maxXp: 4000, icon: '🏆', color: 'from-amber-500 to-orange-600', perks: 'Exclusive high-yield prediction mocks & VIP badge' },
-  { level: 6, title: 'Academic Elite', minXp: 4000, maxXp: 7000, icon: '👑', color: 'from-rose-500 to-pink-600', perks: 'Full national tournament priority leaderboard placement' },
-  { level: 7, title: 'High Scholar Vanguard', minXp: 7000, maxXp: 11000, icon: '⚡', color: 'from-cyan-500 to-blue-700', perks: 'Personalized AI study regimen & instant mentor access' },
-  { level: 8, title: 'Grandmaster of JAMB', minXp: 11000, maxXp: Infinity, icon: '🌟', color: 'from-amber-400 via-yellow-500 to-orange-500', perks: 'Lifetime Hall of Fame induction & Master distinction' },
+  { level: 1, title: 'Novice Aspirant', minXp: 0, maxXp: 250, icon: 'GraduationCap', color: 'from-slate-500 to-slate-700', perks: 'Basic CBT practice & flashcard access' },
+  { level: 2, title: 'Keen Scholar', minXp: 250, maxXp: 600, icon: 'BookOpen', color: 'from-blue-500 to-cyan-600', perks: 'Detailed speed & topic breakdown metrics' },
+  { level: 3, title: 'JAMB Contender', minXp: 600, maxXp: 1200, icon: 'Swords', color: 'from-emerald-500 to-teal-600', perks: 'Custom mock exam builder & weak area drills' },
+  { level: 4, title: 'Master Tactician', minXp: 1200, maxXp: 2200, icon: 'Brain', color: 'from-violet-500 to-purple-700', perks: 'AI Explanation Deep-Dive & streak shield bonuses' },
+  { level: 5, title: 'UTME Champion', minXp: 2200, maxXp: 4000, icon: 'Trophy', color: 'from-amber-500 to-orange-600', perks: 'Exclusive high-yield prediction mocks & VIP badge' },
+  { level: 6, title: 'Academic Elite', minXp: 4000, maxXp: 7000, icon: 'Crown', color: 'from-rose-500 to-pink-600', perks: 'Full national tournament priority leaderboard placement' },
+  { level: 7, title: 'High Scholar Vanguard', minXp: 7000, maxXp: 11000, icon: 'Zap', color: 'from-cyan-500 to-blue-700', perks: 'Personalized AI study regimen & instant mentor access' },
+  { level: 8, title: 'Grandmaster of JAMB', minXp: 11000, maxXp: Infinity, icon: 'Sparkles', color: 'from-amber-400 via-yellow-500 to-orange-500', perks: 'Lifetime Hall of Fame induction & Master distinction' },
 ];
 
 export interface LevelInfo {
@@ -163,7 +163,7 @@ export async function awardXp(userId: string, amount: number, reason: string): P
       triggerConfetti();
       playLevelUpFanfare();
       
-      toast.success(`🎉 LEVEL UP! Level ${newLevel.level}: ${newLevel.title}`, {
+      toast.success(`LEVEL UP! Level ${newLevel.level}: ${newLevel.title}`, {
         description: `Congratulations! You unlocked: ${newLevel.perks}`,
         duration: 7000,
         style: {
@@ -239,8 +239,7 @@ export async function awardMockExamCompletionXp(
   // Toast celebratory feedback
   toast.success(`Exam Completed: +${totalAward} XP Earned!`, {
     description: breakdown.join(' • '),
-    duration: 6000,
-    icon: '⚡'
+    duration: 6000
   });
 
   // Evaluate and award mock exam badges
@@ -282,10 +281,9 @@ export async function awardDailyStreakXp(userId: string, streakDays: number): Pr
 
   await awardXp(userId, totalAward, `Daily Study Streak: Day ${streakDays}`);
 
-  toast.success(`🔥 Streak Maintained: Day ${streakDays}!`, {
+  toast.success(`Streak Maintained: Day ${streakDays}!`, {
     description: `${bonusDesc} (Total: +${totalAward} XP)`,
-    duration: 6000,
-    icon: '🔥'
+    duration: 6000
   });
 
   // Check streak badges
@@ -432,7 +430,7 @@ export const checkAndAwardBadges = async (
       triggerConfetti();
       playSuccessChime();
 
-      toast.success(`🏆 Achievement Unlocked: ${badge.name}!`, {
+      toast.success(`Achievement Unlocked: ${badge.name}!`, {
         description: `${badge.description} (+100 Bonus XP)`,
         duration: 6000,
         style: {

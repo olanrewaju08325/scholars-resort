@@ -226,7 +226,7 @@ export default function Profile() {
                 onClick={() => {
                   const active = toggleBatterySaver();
                   if (active) {
-                    toast.success('Battery Saver Mode Activated', { icon: '🔋' });
+                    toast.success('Battery Saver Mode Activated');
                   } else {
                     toast.info('Battery Saver Mode Deactivated');
                   }

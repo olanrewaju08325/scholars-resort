@@ -140,12 +140,12 @@ export default function Tournaments() {
             </h2>
             
             {loading ? (
-              <div className="flex justify-center p-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+              <div className="flex justify-center p-20"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>
             ) : liveUpcoming.length === 0 ? (
-              <div className="text-center py-20 bg-slate-900/40 border border-slate-800 rounded-3xl backdrop-blur-md">
-                 <Trophy className="w-16 h-16 text-slate-700 mx-auto mb-4" />
-                 <h3 className="text-xl font-bold text-slate-300">No active tournaments</h3>
-                 <p className="text-slate-500 mt-2">Stay tuned. The next challenge is being prepared.</p>
+              <div className="text-center py-20 bg-card border border-border rounded-3xl">
+                 <Trophy className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                 <h3 className="text-xl font-bold text-foreground">No active tournaments</h3>
+                 <p className="text-muted-foreground mt-2">Stay tuned. The next challenge is being prepared.</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -154,10 +154,10 @@ export default function Tournaments() {
                    const isLocked = tournament.status === 'locked';
 
                    return (
-                     <Card key={tournament.id} className={`group relative overflow-hidden transition-all duration-300 border-2 ${
-                       isLive ? 'bg-slate-900/80 border-orange-500/50 shadow-[0_0_30px_rgba(249,115,22,0.15)]' :
-                       isLocked ? 'bg-slate-900/30 border-red-500/30 opacity-75' : 'bg-slate-900/40 border-slate-800 hover:border-blue-500/50'
-                     } backdrop-blur-md rounded-2xl`}>
+                     <Card key={tournament.id} className={`group relative overflow-hidden transition-all duration-300 border ${
+                       isLive ? 'bg-card border-orange-500 shadow-md' :
+                       isLocked ? 'bg-card border-border opacity-75' : 'bg-card border-border hover:border-primary/50'
+                     } rounded-2xl`}>
                         {/* Hover Gradient Overlay */}
                         <div className="absolute inset-0 bg-gradient-to-r from-blue-500/0 to-purple-500/0 group-hover:from-blue-500/5 group-hover:to-purple-500/5 transition-all duration-500" />
                         

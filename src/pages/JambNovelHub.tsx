@@ -92,7 +92,7 @@ export const JambNovelHub = () => {
     setShowExplanation(true);
     if (optLetter === selectedChapter.sampleQuestions[currentQIndex]?.correct) {
       setScore(prev => prev + 1);
-      toast.success('Correct Answer! 🎉');
+      toast.success('Correct Answer!');
     } else {
       toast.error('Incorrect. Review syllabus explanation.');
     }

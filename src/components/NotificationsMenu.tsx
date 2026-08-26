@@ -26,7 +26,7 @@ export function NotificationsMenu() {
       const notifs = notifsRes?.data || [];
       const anns = (annRes?.data || []).map(a => ({
         id: a.id,
-        title: `📢 ${a.title}`,
+        title: a.title,
         message: a.body || a.content || '',
         created_at: a.created_at,
         is_read: false,

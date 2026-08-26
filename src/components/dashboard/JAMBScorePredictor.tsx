@@ -188,47 +188,47 @@ Do NOT include any emojis anywhere in your output. Return ONLY valid JSON.`;
   };
 
   return (
-    <Card className="bg-slate-950/60 backdrop-blur-md border-slate-800 text-slate-100 relative overflow-hidden">
+    <Card className="bg-card text-card-foreground border-border shadow-md relative overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 bg-gradient-to-br from-purple-500/5 to-blue-500/5 pointer-events-none" />
       <div className="absolute top-0 right-0 w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <CardHeader className="relative z-10 pb-4">
         <CardTitle className="flex items-center gap-2 text-lg">
-          <BrainCircuit className="w-5 h-5 text-purple-400" />
+          <BrainCircuit className="w-5 h-5 text-purple-500" />
           JAMB Score Predictor
-          <span className="ml-auto text-xs font-normal text-purple-400/70 bg-purple-500/10 border border-purple-500/20 px-2 py-1 rounded-full flex items-center gap-1">
+          <span className="ml-auto text-xs font-normal text-purple-600 dark:text-purple-400 bg-purple-500/10 border border-purple-500/20 px-2 py-1 rounded-full flex items-center gap-1 font-semibold">
             <Sparkles className="w-3 h-3" /> AI Powered
           </span>
         </CardTitle>
-        <p className="text-sm text-slate-400">Predict your likely JAMB score based on real performance data.</p>
+        <p className="text-sm text-muted-foreground">Predict your likely JAMB score based on real performance data.</p>
       </CardHeader>
 
       <CardContent className="relative z-10 space-y-4">
         {/* Optional Inputs */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Target Course (optional)</label>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target Course (optional)</label>
             <Input
               value={targetCourse}
               onChange={e => setTargetCourse(e.target.value)}
               placeholder="e.g. Medicine & Surgery"
-              className="bg-slate-900 border-slate-700 text-slate-200 focus:border-purple-500/50"
+              className="bg-background border-input text-foreground focus:border-purple-500/50"
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Target University (optional)</label>
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Target University (optional)</label>
             <Input
               value={targetUniversity}
               onChange={e => setTargetUniversity(e.target.value)}
               placeholder="e.g. University of Lagos"
-              className="bg-slate-900 border-slate-700 text-slate-200 focus:border-purple-500/50"
+              className="bg-background border-input text-foreground focus:border-purple-500/50"
             />
           </div>
         </div>
 
         <div className="space-y-1.5">
-          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Recent Mock Score Override (optional)</label>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Recent Mock Score Override (optional)</label>
           <Input
             type="number"
             min="0"
@@ -236,14 +236,14 @@ Do NOT include any emojis anywhere in your output. Return ONLY valid JSON.`;
             value={recentMockScore}
             onChange={e => setRecentMockScore(e.target.value)}
             placeholder="Override with a specific score (0–400)"
-            className="bg-slate-900 border-slate-700 text-slate-200 focus:border-purple-500/50"
+            className="bg-background border-input text-foreground focus:border-purple-500/50"
           />
         </div>
 
         <Button
           onClick={handlePredict}
           disabled={loading}
-          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0 font-bold shadow-lg shadow-purple-500/25 h-11"
+          className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white border-0 font-bold shadow-md h-11"
         >
           {loading ? (
             <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Analyzing Performance...</>
@@ -256,16 +256,16 @@ Do NOT include any emojis anywhere in your output. Return ONLY valid JSON.`;
           <div className="space-y-4 pt-2 animate-in fade-in slide-in-from-bottom-4 duration-500">
             {/* Score Display */}
             {result.predicted_score > 0 && (
-              <div className="text-center py-6 bg-slate-900/70 rounded-2xl border border-slate-800">
+              <div className="text-center py-6 bg-muted/40 rounded-2xl border border-border">
                 <div className={`text-7xl font-black font-mono ${getScoreColor(result.predicted_score)}`}>
                   {result.predicted_score}
                 </div>
-                <div className="text-sm text-slate-400 mt-2">Predicted JAMB Score / 400</div>
+                <div className="text-sm text-muted-foreground mt-2 font-medium">Predicted JAMB Score / 400</div>
                 <div className="flex justify-center gap-4 mt-3">
-                  <span className="text-xs bg-slate-800 border border-slate-700 px-3 py-1 rounded-full text-slate-300">
+                  <span className="text-xs bg-muted border border-border px-3 py-1 rounded-full text-foreground font-semibold">
                     Confidence: {result.confidence}
                   </span>
-                  <span className="text-xs bg-slate-800 border border-slate-700 px-3 py-1 rounded-full text-slate-300">
+                  <span className="text-xs bg-muted border border-border px-3 py-1 rounded-full text-foreground font-semibold">
                     Admission Chance: {result.chance_of_admission}
                   </span>
                 </div>
@@ -273,38 +273,38 @@ Do NOT include any emojis anywhere in your output. Return ONLY valid JSON.`;
             )}
 
             {/* Verdict */}
-            <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
-              <p className="text-sm text-slate-300 leading-relaxed italic">{result.verdict}</p>
+            <div className="bg-muted/30 border border-border rounded-xl p-4">
+              <p className="text-sm text-foreground leading-relaxed italic">{result.verdict}</p>
             </div>
 
             {/* Completion Date Prediction & Step-by-Step Reasoning */}
             {result.completion_prediction && (
-              <div className="bg-slate-900/80 border border-purple-500/30 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-purple-400 flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-purple-400" /> Syllabus Completion Forecast
+              <div className="bg-muted/30 border border-purple-500/30 rounded-xl p-4 space-y-3">
+                <div className="flex items-center justify-between border-b border-border pb-2">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-purple-500" /> Syllabus Completion Forecast
                   </h4>
-                  <span className="text-xs font-bold font-mono px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
+                  <span className="text-xs font-bold font-mono px-2.5 py-0.5 rounded-full bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/30">
                     Est. {result.completion_prediction.estimated_completion_date}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                    <span className="text-slate-400 block text-[11px]">Daily Solving Velocity</span>
-                    <span className="text-sm font-bold text-slate-200 font-mono">{result.completion_prediction.daily_pace} Qs / day</span>
+                  <div className="bg-background p-2.5 rounded-lg border border-border">
+                    <span className="text-muted-foreground block text-[11px]">Daily Solving Velocity</span>
+                    <span className="text-sm font-bold text-foreground font-mono">{result.completion_prediction.daily_pace} Qs / day</span>
                   </div>
-                  <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800">
-                    <span className="text-slate-400 block text-[11px]">Estimated Days Left</span>
-                    <span className="text-sm font-bold text-slate-200 font-mono">{result.completion_prediction.days_to_completion} Days</span>
+                  <div className="bg-background p-2.5 rounded-lg border border-border">
+                    <span className="text-muted-foreground block text-[11px]">Estimated Days Left</span>
+                    <span className="text-sm font-bold text-foreground font-mono">{result.completion_prediction.days_to_completion} Days</span>
                   </div>
                 </div>
 
                 {/* Step-by-Step Reasoning Breakdown */}
                 <div className="space-y-1.5 pt-1">
-                  <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Step-by-Step Calculation Breakdown:</span>
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">Step-by-Step Calculation Breakdown:</span>
                   {result.completion_prediction.reasoning_steps?.map((step, idx) => (
-                    <div key={idx} className="text-xs text-slate-300 bg-slate-950/40 border border-slate-800/80 rounded-md px-3 py-1.5 leading-relaxed">
+                    <div key={idx} className="text-xs text-foreground bg-background border border-border rounded-md px-3 py-1.5 leading-relaxed">
                       {step}
                     </div>
                   ))}
@@ -315,11 +315,11 @@ Do NOT include any emojis anywhere in your output. Return ONLY valid JSON.`;
             {/* Course Matches */}
             {result.top_courses && result.top_courses.length > 0 && (
               <div className="space-y-2">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1"><GraduationCap className="w-3 h-3" /> Best Course Matches</h4>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1"><GraduationCap className="w-3.5 h-3.5 text-primary" /> Best Course Matches</h4>
                 {result.top_courses.map((c, i) => (
-                  <div key={i} className="flex items-center justify-between text-sm bg-slate-900/50 border border-slate-800 rounded-lg px-3 py-2">
-                    <span className="text-slate-200 font-medium">{c.course} — <span className="text-slate-400 font-normal">{c.university}</span></span>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.chance === 'High' ? 'text-green-400 bg-green-500/10' : c.chance === 'Medium' ? 'text-yellow-400 bg-yellow-500/10' : 'text-red-400 bg-red-500/10'}`}>
+                  <div key={i} className="flex items-center justify-between text-sm bg-muted/40 border border-border rounded-lg px-3 py-2">
+                    <span className="text-foreground font-medium">{c.course} — <span className="text-muted-foreground font-normal">{c.university}</span></span>
+                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${c.chance === 'High' ? 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10' : c.chance === 'Medium' ? 'text-amber-700 dark:text-amber-400 bg-amber-500/10' : 'text-rose-700 dark:text-rose-400 bg-rose-500/10'}`}>
                       {c.chance}
                     </span>
                   </div>
@@ -331,17 +331,17 @@ Do NOT include any emojis anywhere in your output. Return ONLY valid JSON.`;
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {result.weak_areas && result.weak_areas.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-red-400 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Weak Areas</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5" /> Weak Areas</h4>
                   {result.weak_areas.map((area, i) => (
-                    <div key={i} className="text-xs text-slate-300 bg-red-500/5 border border-red-500/20 rounded-lg px-3 py-2">• {area}</div>
+                    <div key={i} className="text-xs text-foreground bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">• {area}</div>
                   ))}
                 </div>
               )}
               {result.improvements && result.improvements.length > 0 && (
                 <div className="space-y-2">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-green-400 flex items-center gap-1"><Target className="w-3 h-3" /> Action Plan</h4>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><Target className="w-3.5 h-3.5" /> Action Plan</h4>
                   {result.improvements.map((tip, i) => (
-                    <div key={i} className="text-xs text-slate-300 bg-green-500/5 border border-green-500/20 rounded-lg px-3 py-2">• {tip}</div>
+                    <div key={i} className="text-xs text-foreground bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">• {tip}</div>
                   ))}
                 </div>
               )}

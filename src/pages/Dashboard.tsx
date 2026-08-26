@@ -66,17 +66,17 @@ export default function Dashboard() {
   const showSocial = mobileTab === 'all' || mobileTab === 'social';
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-20">
+    <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-hidden w-full">
       {/* Top Navigation / Header Area */}
-      <header className="sticky top-0 z-40 bg-background/80 backdrop-blur-md border-b border-border px-4 py-3 flex items-center justify-between">
-        <h1 className="text-xl font-display font-bold text-foreground">My Dashboard</h1>
-        <div className="flex items-center gap-3">
+      <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border px-4 py-3 flex items-center justify-between w-full max-w-full">
+        <h1 className="text-xl font-display font-bold text-foreground truncate">My Dashboard</h1>
+        <div className="flex items-center gap-3 shrink-0">
           <ThemeToggle />
           <NotificationsMenu />
         </div>
       </header>
 
-      <div className="container max-w-7xl mx-auto p-4 space-y-6 mt-4">
+      <div className="container max-w-7xl mx-auto p-3 sm:p-4 space-y-6 mt-2 sm:mt-4 w-full max-w-full min-w-0">
         
         {/* Real-time Platform Announcements Banner */}
         <AnnouncementBanner />
@@ -85,22 +85,22 @@ export default function Dashboard() {
         <SingleDeviceNotice />
         
         {/* Hero Section */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="min-w-0 w-full">
           <WelcomeHero profile={profile} stats={stats} />
         </motion.div>
 
         {/* Daily High-Yield Study Tip Widget */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.04 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.04 }} className="min-w-0 w-full">
           <DailyStudyTip />
         </motion.div>
 
         {/* JAMB Score Predictor */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }}>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }} className="min-w-0 w-full">
           <JambScorePredictorCard history={stats.history} />
         </motion.div>
 
         {/* Mobile View Filter Tabs - Ensures 100% feature access with easy mobile navigation */}
-        <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 p-1 bg-muted/40 rounded-xl border border-border/60">
+        <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 p-1 bg-muted/60 rounded-xl border border-border w-full max-w-full">
           <button
             onClick={() => setMobileTab('all')}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
@@ -154,43 +154,43 @@ export default function Dashboard() {
         </div>
 
         {/* Two Column Layout for Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-full min-w-0">
           
           {/* Main Column (Left) */}
-          <div className="lg:col-span-8 space-y-6">
+          <div className="lg:col-span-8 space-y-6 min-w-0 w-full max-w-full">
             
             {showPractice && (
               <>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="min-w-0 w-full">
                   <DailyMission />
                 </motion.div>
 
                 {/* Daily Study Planner Component */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.11 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.11 }} className="min-w-0 w-full">
                   <DailyStudyPlannerWidget />
                 </motion.div>
 
                 {/* Daily Practice Goal Tracker Component */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }} className="min-w-0 w-full">
                   <DailyGoalTracker />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="min-w-0 w-full">
                   <QuickActions />
                 </motion.div>
 
                 {/* Visual Study Streak Calendar Component */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.18 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.18 }} className="min-w-0 w-full">
                   <StudyStreakCalendar />
                 </motion.div>
 
                 {/* Educational Journey Map */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.27 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.27 }} className="min-w-0 w-full">
                   <EducationalJourneyMap />
                 </motion.div>
 
                 {/* Adaptive Learning Path Generator */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.29 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.29 }} className="min-w-0 w-full">
                   <AdaptiveLearningPathWidget />
                 </motion.div>
               </>
@@ -198,31 +198,31 @@ export default function Dashboard() {
             
             {showAnalytics && (
               <>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="min-w-0 w-full">
                   <StatsOverview stats={stats} />
                 </motion.div>
 
                 {/* Dashboard Performance Trends & Score Improvement Widget */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.23 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.23 }} className="min-w-0 w-full">
                   <DashboardWidget history={stats.history} studentName={profile?.full_name} />
                 </motion.div>
 
                 {/* Performance Trend Recharts Line Chart */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }} className="min-w-0 w-full">
                   <PerformanceTrendChart history={stats.history} />
                 </motion.div>
 
                 {/* Subject Mastery Radar Chart */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="min-w-0 w-full">
                   <SubjectMasteryRadarChart data={[]} />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="min-w-0 w-full">
                   <h2 className="text-xl font-bold font-display mb-4">Study Insights</h2>
                   <AIRecommendations profileId={profile?.id || ''} examsData={stats.history} />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }} className="min-w-0 w-full">
                   <ActivityHeatmap />
                 </motion.div>
               </>
@@ -231,17 +231,17 @@ export default function Dashboard() {
             {showSocial && (
               <>
                 {/* Milestone Badges & Achievements */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.35 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.35 }} className="min-w-0 w-full">
                   <Badges />
                 </motion.div>
 
                 {/* Comprehensive Student Achievements Widget */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.38 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.38 }} className="min-w-0 w-full">
                   <StudentAchievementsWidget />
                 </motion.div>
 
                 {/* Existing Gamification Tab Ported In */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }} className="min-w-0 w-full">
                   <Gamification />
                 </motion.div>
               </>
@@ -249,29 +249,29 @@ export default function Dashboard() {
           </div>
 
           {/* Sidebar Column (Right on Desktop, or contextual on Mobile) */}
-          <div className="lg:col-span-4 space-y-6">
+          <div className="lg:col-span-4 space-y-6 min-w-0 w-full max-w-full">
             
             {showSocial && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="min-w-0 w-full">
                 <MotivationEngine />
               </motion.div>
             )}
 
             {showTools && (
               <>
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }} className="min-w-0 w-full">
                   <JAMBCountdown />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="min-w-0 w-full">
                   <PomodoroTimer />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="min-w-0 w-full">
                   <StudyGoalTracker />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.7 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.7 }} className="min-w-0 w-full">
                   <BurnoutDetector />
                 </motion.div>
               </>
@@ -279,23 +279,23 @@ export default function Dashboard() {
 
             {showSocial && (
               <>
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="min-w-0 w-full">
                   <TournamentPreview />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="min-w-0 w-full">
                   <WeeklyChallenge />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.5 }} className="min-w-0 w-full">
                   <XPProgressPanel />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.6 }} className="min-w-0 w-full">
                   <LeaderboardPreview />
                 </motion.div>
 
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.8 }}>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.8 }} className="min-w-0 w-full">
                   <GuardianConnections />
                 </motion.div>
               </>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { 
-  Bell, CheckCircle, MessageSquare, CreditCard, AlertCircle, 
+  Bell, CheckCircle, MessageSquare, CreditCard, AlertCircle, AlertTriangle,
   ExternalLink, Trash2, CheckCheck, RefreshCw, Volume2, VolumeX, ShieldAlert
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
@@ -105,7 +105,7 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
       const systemAlerts: AdminAlert[] = (sysLogs || []).map(s => ({
         id: `system_${s.id}`,
         type: 'system',
-        title: `⚠️ System Capacity Alert`,
+        title: `System Capacity Alert`,
         description: s.details || 'Database, storage or SMTP usage exceeded the safety threshold.',
         created_at: s.created_at,
         is_read: false,
@@ -143,7 +143,7 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
           (payload) => {
             const newTicket = payload.new;
             playChime();
-            toast.info(`🚨 New Student Issue Reported!`, {
+            toast.info(`New Student Issue Reported!`, {
               description: newTicket.subject || 'A student submitted a support request.',
               action: {
                 label: 'View Support',
@@ -163,7 +163,7 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
           (payload) => {
             const newPayment = payload.new;
             playChime();
-            toast.warning(`💳 New Payment Proof Submitted!`, {
+            toast.warning(`New Payment Proof Submitted!`, {
               description: `Amount: ₦${Number(newPayment.amount || 0).toLocaleString()}`,
               action: {
                 label: 'Verify Payment',

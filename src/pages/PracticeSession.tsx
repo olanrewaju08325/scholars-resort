@@ -18,6 +18,8 @@ import { QuestionFlowService, type ExamMode } from '@/services/questionFlowServi
 import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
 import { useSwipeGesture } from '@/hooks/useSwipeGesture';
 import { CbtSnapshotService } from '@/services/cbtSnapshotService';
+import { useFocusLock } from '@/hooks/useFocusLock';
+import { FocusLockOverlay } from '@/components/FocusLockOverlay';
 
 const PracticeSession = () => {
   const { state } = useLocation();
@@ -42,6 +44,22 @@ const PracticeSession = () => {
   const [totalTime, setTotalTime] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null); // For Time Management Mode
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Focus Lock Anti-Cheat Hook
+  const {
+    isLocked,
+    warnings: focusLockWarnings,
+    isCompromised: isFocusLockCompromised,
+    showWarningModal: showFocusLockModal,
+    setShowWarningModal: setShowFocusLockModal,
+    resetWarnings: resetFocusLockWarnings
+  } = useFocusLock({
+    enabled: true,
+    maxWarnings: 3,
+    onCompromised: () => {
+      setIsPaused(true);
+    }
+  });
 
   // AI State
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
@@ -362,7 +380,7 @@ const PracticeSession = () => {
         },
         subjectName: selectedSubject
       });
-      toast.success(`📸 Practice Snapshot #${snap.id} captured!`);
+      toast.success(`Practice Snapshot #${snap.id} captured!`);
     } catch (err: any) {
       toast.error('Snapshot capture error: ' + err.message);
     } finally {
@@ -371,7 +389,19 @@ const PracticeSession = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="min-h-screen bg-background text-foreground flex flex-col select-none">
+      <FocusLockOverlay
+        isOpen={showFocusLockModal}
+        warnings={focusLockWarnings}
+        maxWarnings={3}
+        isCompromised={isFocusLockCompromised}
+        onResume={() => {
+          setShowFocusLockModal(false);
+          if (isFocusLockCompromised) {
+            navigate('/dashboard');
+          }
+        }}
+      />
       <header className="h-16 border-b border-border bg-card flex items-center justify-between px-3 md:px-8 shadow-sm relative z-20 gap-2">
         <div className="font-display font-bold md:text-lg flex items-center gap-2 md:gap-3">
           <span className="hidden md:inline">Practice Mode</span>

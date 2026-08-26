@@ -4,39 +4,34 @@ import { Calendar, Clock, Trophy, PlayCircle, Loader2, ArrowLeft } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
+import { useLiveFetch } from '@/hooks/useLiveFetch';
+import { DataLoading } from '@/components/DataLoading';
 import db from '@/lib/db';
 import { toast } from 'sonner';
 
 const WeeklyMocks = () => {
   const navigate = useNavigate();
-  const [activeMock, setActiveMock] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
   const [timeLeft, setTimeLeft] = useState<{ hours: number, mins: number, secs: number } | null>(null);
   const [downloading, setDownloading] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
 
-  useEffect(() => {
-    const fetchMock = async () => {
-      try {
-        const { data } = await supabase
-          .from('mock_exams')
-          .select('*')
-          .eq('is_active', true)
-          .order('start_time', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-          
-        if (data) {
-          setActiveMock(data);
-        }
-      } catch (e) {
-        console.error("No active mock found");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMock();
-  }, []);
+  const { data: activeMock, loading } = useLiveFetch<any>(
+    async () => {
+      const { data, error } = await supabase
+        .from('mock_exams')
+        .select('*')
+        .eq('is_active', true)
+        .order('start_time', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      return { data: data || null, error };
+    },
+    {
+      contextName: 'WeeklyMocks.activeMock',
+      fallbackData: null
+    }
+  );
 
   useEffect(() => {
     if (!activeMock) return;
@@ -125,10 +120,7 @@ const WeeklyMocks = () => {
         </div>
 
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
-            <Loader2 className="w-8 h-8 animate-spin mb-4" />
-            <p>Loading Mock Events...</p>
-          </div>
+          <DataLoading message="Loading Weekly Mock Events..." subtext="Syncing official JAMB mock schedules and countdowns..." />
         ) : (
           <div className="grid md:grid-cols-2 gap-8 mt-12">
             {/* Rolling Mock */}

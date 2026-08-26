@@ -84,31 +84,31 @@ export const DashboardWidget: React.FC<DashboardWidgetProps> = ({ history = [], 
   };
 
   return (
-    <Card id="dashboard-performance-widget" className="bg-slate-900/90 border-slate-800 text-slate-100 shadow-xl overflow-hidden">
-      <CardHeader className="pb-3 border-b border-slate-800/80 bg-slate-950/40">
+    <Card id="dashboard-performance-widget" className="bg-card text-card-foreground border-border shadow-md overflow-hidden">
+      <CardHeader className="pb-3 border-b border-border/80 bg-muted/20">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="p-1.5 bg-emerald-500/10 text-emerald-400 rounded-md border border-emerald-500/20">
+              <span className="p-1.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-md border border-emerald-500/20">
                 <TrendingUp className="w-4 h-4" />
               </span>
-              <CardTitle className="text-base sm:text-lg font-bold text-white tracking-tight">
+              <CardTitle className="text-base sm:text-lg font-bold text-foreground tracking-tight">
                 Exam Performance & Score Improvement Trends
               </CardTitle>
             </div>
-            <CardDescription className="text-xs text-slate-400 mt-1">
+            <CardDescription className="text-xs text-muted-foreground mt-1">
               Visualizing historical mock drills, percentage progression, and trajectory towards 300+ JAMB target.
             </CardDescription>
           </div>
 
           <div className="flex items-center gap-2 self-end sm:self-auto">
-            <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+            <div className="flex bg-muted p-1 rounded-lg border border-border text-xs">
               <button
                 onClick={() => setFilter('all')}
                 className={`px-2.5 py-1 rounded-md transition-all font-medium ${
                   filter === 'all' 
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-primary text-primary-foreground shadow-xs font-bold' 
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 All Mocks
@@ -117,8 +117,8 @@ export const DashboardWidget: React.FC<DashboardWidgetProps> = ({ history = [], 
                 onClick={() => setFilter('recent')}
                 className={`px-2.5 py-1 rounded-md transition-all font-medium ${
                   filter === 'recent' 
-                    ? 'bg-primary text-white shadow-sm' 
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-primary text-primary-foreground shadow-xs font-bold' 
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 Last 5
@@ -130,7 +130,7 @@ export const DashboardWidget: React.FC<DashboardWidgetProps> = ({ history = [], 
               variant="outline"
               onClick={handleDownloadReport}
               disabled={isExporting}
-              className="h-8 text-xs bg-slate-800/60 border-slate-700 hover:bg-slate-800 text-slate-200"
+              className="h-8 text-xs font-semibold"
             >
               <Download className="w-3.5 h-3.5 mr-1 text-primary" />
               {isExporting ? 'Exporting...' : 'Summary PDF'}
@@ -139,39 +139,39 @@ export const DashboardWidget: React.FC<DashboardWidgetProps> = ({ history = [], 
         </div>
 
         {/* Quick Highlights Ribbon */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 mt-2 border-t border-slate-800/60">
-          <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-            <div className="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
-              <Award className="w-3.5 h-3.5 text-amber-400" /> Highest Score
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-3 mt-2 border-t border-border/80">
+          <div className="bg-muted/40 p-2.5 rounded-lg border border-border/80">
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-medium">
+              <Award className="w-3.5 h-3.5 text-amber-500" /> Highest Score
             </div>
-            <div className="text-lg font-bold text-slate-100 mt-0.5">
-              {highestScore}% <span className="text-[11px] text-slate-500 font-normal">({Math.round(highestScore * 4)}/400)</span>
-            </div>
-          </div>
-
-          <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-            <div className="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
-              <Clock className="w-3.5 h-3.5 text-blue-400" /> Latest Score
-            </div>
-            <div className="text-lg font-bold text-slate-100 mt-0.5">
-              {latestScore}% <span className="text-[11px] text-slate-500 font-normal">({Math.round(latestScore * 4)}/400)</span>
+            <div className="text-lg font-bold text-foreground mt-0.5">
+              {highestScore}% <span className="text-[11px] text-muted-foreground font-normal">({Math.round(highestScore * 4)}/400)</span>
             </div>
           </div>
 
-          <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-            <div className="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
-              <Target className="w-3.5 h-3.5 text-emerald-400" /> Average
+          <div className="bg-muted/40 p-2.5 rounded-lg border border-border/80">
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-medium">
+              <Clock className="w-3.5 h-3.5 text-blue-500" /> Latest Score
             </div>
-            <div className="text-lg font-bold text-slate-100 mt-0.5">
-              {avgScore}% <span className="text-[11px] text-slate-500 font-normal">({Math.round(avgScore * 4)}/400)</span>
+            <div className="text-lg font-bold text-foreground mt-0.5">
+              {latestScore}% <span className="text-[11px] text-muted-foreground font-normal">({Math.round(latestScore * 4)}/400)</span>
             </div>
           </div>
 
-          <div className="bg-slate-950/60 p-2.5 rounded-lg border border-slate-800/80">
-            <div className="text-[11px] text-slate-400 flex items-center gap-1 font-medium">
-              <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Trajectory
+          <div className="bg-muted/40 p-2.5 rounded-lg border border-border/80">
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-medium">
+              <Target className="w-3.5 h-3.5 text-emerald-500" /> Average
             </div>
-            <div className={`text-lg font-bold flex items-center mt-0.5 ${isImproving ? 'text-emerald-400' : 'text-amber-400'}`}>
+            <div className="text-lg font-bold text-foreground mt-0.5">
+              {avgScore}% <span className="text-[11px] text-muted-foreground font-normal">({Math.round(avgScore * 4)}/400)</span>
+            </div>
+          </div>
+
+          <div className="bg-muted/40 p-2.5 rounded-lg border border-border/80">
+            <div className="text-[11px] text-muted-foreground flex items-center gap-1 font-medium">
+              <Sparkles className="w-3.5 h-3.5 text-purple-500" /> Trajectory
+            </div>
+            <div className={`text-lg font-bold flex items-center mt-0.5 ${isImproving ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
               {isImproving ? <ArrowUpRight className="w-4 h-4 mr-0.5" /> : <ArrowDownRight className="w-4 h-4 mr-0.5" />}
               {scoreDiff >= 0 ? `+${scoreDiff}%` : `${scoreDiff}%`}
             </div>
@@ -181,12 +181,12 @@ export const DashboardWidget: React.FC<DashboardWidgetProps> = ({ history = [], 
 
       <CardContent className="p-4 sm:p-6">
         {chartData.length === 0 ? (
-          <div className="h-[240px] flex flex-col items-center justify-center text-center p-6 bg-slate-950/30 rounded-xl border border-dashed border-slate-800">
-            <div className="w-12 h-12 rounded-full bg-slate-800/60 flex items-center justify-center text-slate-400 mb-3">
+          <div className="h-[240px] flex flex-col items-center justify-center text-center p-6 bg-muted/20 rounded-xl border border-dashed border-border">
+            <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center text-muted-foreground mb-3">
               <TrendingUp className="w-6 h-6" />
             </div>
-            <p className="text-sm font-semibold text-slate-300">No Mock Exam Sessions Recorded Yet</p>
-            <p className="text-xs text-slate-500 max-w-xs mt-1">
+            <p className="text-sm font-semibold text-foreground">No Mock Exam Sessions Recorded Yet</p>
+            <p className="text-xs text-muted-foreground max-w-xs mt-1">
               Complete your first full-length JAMB CBT mock exam or subject practice session to generate performance curves.
             </p>
           </div>

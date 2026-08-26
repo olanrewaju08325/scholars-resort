@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, Smartphone, Info, RefreshCw, X, CheckCircle2, ChevronRight, Lock } from 'lucide-react';
+import { ShieldCheck, Smartphone, Info, RefreshCw, X, Lock } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export const SingleDeviceNotice = () => {

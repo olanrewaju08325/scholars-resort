@@ -60,43 +60,43 @@ export const ActivityHeatmap = () => {
 
   const getColor = (intensity: number) => {
     switch (intensity) {
-      case 0: return 'bg-slate-900 border border-slate-800';
-      case 1: return 'bg-green-500/20 border border-green-500/30';
-      case 2: return 'bg-green-500/40 border border-green-500/50';
-      case 3: return 'bg-green-500/70 border border-green-500/80';
-      case 4: return 'bg-green-500 border border-green-600 shadow-[0_0_10px_rgba(34,197,94,0.3)]';
-      default: return 'bg-slate-900 border border-slate-800';
+      case 0: return 'bg-muted/60 border border-border/60';
+      case 1: return 'bg-emerald-500/20 border border-emerald-500/30';
+      case 2: return 'bg-emerald-500/40 border border-emerald-500/50';
+      case 3: return 'bg-emerald-500/70 border border-emerald-500/80';
+      case 4: return 'bg-emerald-500 text-white border border-emerald-600 shadow-sm';
+      default: return 'bg-muted/60 border border-border/60';
     }
   };
 
   return (
-    <Card className="bg-slate-950/50 backdrop-blur-md border-slate-800 text-slate-100 shadow-xl overflow-hidden relative">
+    <Card className="bg-card text-card-foreground border-border shadow-md overflow-hidden relative">
       {/* Background flare */}
-      <div className="absolute -top-10 -right-10 w-32 h-32 bg-green-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute -top-10 -right-10 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
 
       <CardContent className="p-6 relative z-10">
         <div className="flex justify-between items-end mb-6">
           <div>
-            <h3 className="text-lg font-bold font-display text-white">Study Heatmap</h3>
-            <p className="text-sm text-slate-400 mt-1">Your consistency over the last 35 days</p>
+            <h3 className="text-lg font-bold font-display text-foreground">Study Heatmap</h3>
+            <p className="text-sm text-muted-foreground mt-1">Your consistency over the last 35 days</p>
           </div>
           <div className="text-right">
-            <div className="text-3xl font-bold font-mono text-transparent bg-clip-text bg-gradient-to-r from-green-400 to-emerald-600">
+            <div className="text-3xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
               {consistencyScore}%
             </div>
-            <div className="text-[10px] text-slate-500 uppercase tracking-widest font-semibold mt-1">Consistency</div>
+            <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mt-1">Consistency</div>
           </div>
         </div>
 
         {loading ? (
            <div className="h-[120px] flex items-center justify-center">
-             <Loader2 className="w-6 h-6 animate-spin text-green-500" />
+             <Loader2 className="w-6 h-6 animate-spin text-emerald-500" />
            </div>
         ) : (
           <>
             <div className="grid grid-cols-7 gap-2 md:gap-3">
               {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(day => (
-                <div key={day} className="text-center text-[10px] uppercase font-bold text-slate-500 mb-2">
+                <div key={day} className="text-center text-[10px] uppercase font-bold text-muted-foreground mb-2">
                   {day}
                 </div>
               ))}
@@ -109,21 +109,21 @@ export const ActivityHeatmap = () => {
                 return (
                   <div 
                     key={i} 
-                    className={`aspect-square rounded-md transition-all duration-300 hover:scale-110 hover:ring-2 ring-green-400/50 cursor-pointer ${getColor(intensity)}`}
+                    className={`aspect-square rounded-md transition-all duration-300 hover:scale-110 hover:ring-2 ring-emerald-400/50 cursor-pointer ${getColor(intensity)}`}
                     title={`${dateStr}: ${intensity > 0 ? intensity + ' sessions' : 'No study activity'}`}
                   />
                 );
               })}
             </div>
             
-            <div className="flex items-center justify-end gap-2 mt-6 text-xs text-slate-400">
+            <div className="flex items-center justify-end gap-2 mt-6 text-xs text-muted-foreground">
               <span className="font-medium text-[10px] uppercase tracking-wider">Less</span>
               <div className="flex gap-1.5">
-                <div className="w-3.5 h-3.5 rounded bg-slate-900 border border-slate-800" />
-                <div className="w-3.5 h-3.5 rounded bg-green-500/20 border border-green-500/30" />
-                <div className="w-3.5 h-3.5 rounded bg-green-500/40 border border-green-500/50" />
-                <div className="w-3.5 h-3.5 rounded bg-green-500/70 border border-green-500/80" />
-                <div className="w-3.5 h-3.5 rounded bg-green-500 border border-green-600" />
+                <div className="w-3.5 h-3.5 rounded bg-muted/60 border border-border/60" />
+                <div className="w-3.5 h-3.5 rounded bg-emerald-500/20 border border-emerald-500/30" />
+                <div className="w-3.5 h-3.5 rounded bg-emerald-500/40 border border-emerald-500/50" />
+                <div className="w-3.5 h-3.5 rounded bg-emerald-500/70 border border-emerald-500/80" />
+                <div className="w-3.5 h-3.5 rounded bg-emerald-500 border border-emerald-600" />
               </div>
               <span className="font-medium text-[10px] uppercase tracking-wider">More</span>
             </div>

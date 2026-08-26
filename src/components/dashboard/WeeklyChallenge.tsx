@@ -3,7 +3,8 @@ import { fetchQuestionsForSubject } from '@/utils/subjectUtils';
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { supabase } from '@/lib/supabase';
+import { safeSupabaseQuery, supabase } from '@/lib/safeSupabase';
+import { DataSanitizer } from '@/utils/dataSanitizer';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Swords, Trophy, CheckCircle, XCircle, Clock, Users, Sparkles } from 'lucide-react';
@@ -20,48 +21,62 @@ export const WeeklyChallenge = () => {
 
   const fetchChallenge = useCallback(async () => {
     setLoading(true);
-    const now = new Date().toISOString().split('T')[0];
-    let userSubj = 'Use of English';
-
-    if (profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0) {
-      userSubj = profile.utme_subjects[Math.floor(Math.random() * profile.utme_subjects.length)];
-    } else {
-      try {
-        const { data: subs } = await supabase.from('subjects').select('name').limit(10);
-        if (subs && subs.length > 0) {
-          userSubj = subs[Math.floor(Math.random() * subs.length)].name;
-        }
-      } catch {}
-    }
-
     try {
-      const { data: challenges } = await supabase
-        .from('weekly_challenges')
-        .select('*')
-        .eq('is_active', true)
-        .lte('week_start', now)
-        .gte('week_end', now)
-        .limit(1);
+      const now = new Date().toISOString().split('T')[0];
+      let userSubj = 'Use of English';
 
-      if (challenges && challenges.length > 0) {
-        const c = challenges[0];
+      if (profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0) {
+        userSubj = profile.utme_subjects[Math.floor(Math.random() * profile.utme_subjects.length)];
+      } else {
+        const subRes = await safeSupabaseQuery(
+          supabase.from('subjects').select('name').limit(10),
+          { contextName: 'WeeklyChallenge.fetchSubjects', fallbackValue: [] }
+        );
+        if (subRes.data && subRes.data.length > 0) {
+          userSubj = subRes.data[Math.floor(Math.random() * subRes.data.length)].name;
+        }
+      }
+
+      const challengesRes = await safeSupabaseQuery(
+        supabase
+          .from('weekly_challenges')
+          .select('*')
+          .eq('is_active', true)
+          .lte('week_start', now)
+          .gte('week_end', now)
+          .limit(1),
+        {
+          contextName: 'WeeklyChallenge.fetchChallenges',
+          sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeWeeklyChallenge),
+          fallbackValue: []
+        }
+      );
+
+      if (challengesRes.data && challengesRes.data.length > 0) {
+        const c = challengesRes.data[0];
         setChallenge(c);
 
         if (profile?.id) {
-          const { data: sub } = await supabase
-            .from('weekly_challenge_submissions')
-            .select('*')
-            .eq('challenge_id', c.id)
-            .eq('user_id', profile.id)
-            .maybeSingle();
-          if (sub) setSubmission(sub);
+          const subRes = await safeSupabaseQuery(
+            supabase
+              .from('weekly_challenge_submissions')
+              .select('*')
+              .eq('challenge_id', c.id)
+              .eq('user_id', profile.id)
+              .maybeSingle(),
+            { contextName: 'WeeklyChallenge.fetchSubmission', fallbackValue: null }
+          );
+          if (subRes.data) setSubmission(subRes.data);
         }
 
-        const { count } = await supabase
-          .from('weekly_challenge_submissions')
-          .select('*', { count: 'exact', head: true })
-          .eq('challenge_id', c.id);
-        setParticipantCount(count || 0);
+        const countRes = await safeSupabaseQuery(
+          supabase
+            .from('weekly_challenge_submissions')
+            .select('*', { count: 'exact', head: true })
+            .eq('challenge_id', c.id),
+          { contextName: 'WeeklyChallenge.fetchParticipantCount', fallbackValue: [] }
+        );
+        setParticipantCount(countRes.count || 0);
         setLoading(false);
         return;
       }
@@ -144,6 +159,7 @@ Return strictly JSON object format without markdown block backticks:
       setLoading(false);
     }
   }, [profile?.id]);
+
 
   useEffect(() => {
     fetchChallenge();
@@ -235,15 +251,15 @@ Return strictly JSON object format without markdown block backticks:
   const questionData = challenge.question_data;
 
   return (
-    <Card className="bg-card border-border overflow-hidden">
+    <Card className="bg-card text-card-foreground border-border overflow-hidden">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-primary/80 to-purple-600/80 p-4">
+      <div className="bg-primary p-4 text-primary-foreground">
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <Swords className="w-5 h-5 text-white" />
-            <span className="font-bold text-white">Weekly Challenge</span>
+            <Swords className="w-5 h-5 text-primary-foreground" />
+            <span className="font-bold text-primary-foreground">Weekly Challenge</span>
           </div>
-          <div className="flex items-center gap-4 text-white/80 text-sm">
+          <div className="flex items-center gap-4 text-primary-foreground/90 text-sm">
             <div className="flex items-center gap-1">
               <Users className="w-4 h-4" /> {participantCount} participating
             </div>
@@ -252,7 +268,7 @@ Return strictly JSON object format without markdown block backticks:
             </div>
           </div>
         </div>
-        <div className="mt-2 text-xs text-white/70 uppercase font-semibold tracking-wider">{challenge.subject}</div>
+        <div className="mt-2 text-xs text-primary-foreground/80 uppercase font-semibold tracking-wider">{challenge.subject}</div>
       </div>
 
       <CardContent className="p-6 space-y-4">

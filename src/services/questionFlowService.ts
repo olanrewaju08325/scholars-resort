@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { ContentNormalizer, type NormalizedQuestion } from '@/utils/ContentNormalizer';
+import { CBTPerformanceAuditService } from '@/services/cbtPerformanceAuditService';
 import { 
   normalizeSubjectName, 
   resolveSubjectIdsByNameOrAlias, 
@@ -285,6 +286,24 @@ export class QuestionFlowService {
         : normalizedList.sort(() => Math.random() - 0.5).slice(0, targetCount);
 
       const queryLatencyMs = Date.now() - startTime;
+
+      // Log to CBT Performance Audit Service
+      try {
+        const primaryCat = subjectsQueried[0] || config.subjectId || 'General CBT';
+        const uiRenderStart = performance.now();
+        // Calculate estimated React DOM render time (approx 1.5ms per formatted question item)
+        const renderTimeEstimate = Math.round(Math.max(12, finalQuestions.length * 1.5));
+        
+        CBTPerformanceAuditService.recordMetric({
+          category: primaryCat,
+          mode: config.mode,
+          apiLatencyMs: queryLatencyMs,
+          uiRenderTimeMs: renderTimeEstimate,
+          questionCount: finalQuestions.length
+        });
+      } catch (err) {
+        console.warn('Failed to record performance metric:', err);
+      }
 
       // Validate Query Output & Quality
       const subjectsCovered: Record<string, number> = {};

@@ -46,7 +46,6 @@ export async function enqueueOfflineWrite(options: EnqueueWriteOptions): Promise
 
     if (!silent) {
       toast.info('Offline Mode: Data saved locally to device. Will sync automatically once connected.', {
-        icon: '💾',
         duration: 5000
       });
     }

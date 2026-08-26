@@ -1,31 +1,44 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { supabase } from '@/lib/supabase';
+import { safeSupabaseQuery, supabase } from '@/lib/safeSupabase';
+import { DataSanitizer } from '@/utils/dataSanitizer';
 import { useAuth } from '@/context/AuthContext';
 import { calculateLevel } from '@/lib/gamification';
-import { Zap, Gift, Award, ChevronRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { 
+  Zap, Award, ChevronRight, Gift, 
+  GraduationCap, BookOpen, Swords, Brain, Trophy, Crown, Sparkles 
+} from 'lucide-react';
+
+const ICON_MAP: Record<string, any> = {
+  GraduationCap, BookOpen, Swords, Brain, Trophy, Crown, Zap, Sparkles
+};
 
 export const XPProgressPanel = () => {
   const { profile } = useAuth();
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [_loading, setLoading] = useState(true);
   const [liveXp, setLiveXp] = useState<number>(profile?.xp || 0);
 
   const fetchTransactions = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
-    try {
-      const { data, error } = await supabase
+    const res = await safeSupabaseQuery(
+      supabase
         .from('xp_transactions')
         .select('*')
         .eq('user_id', profile.id)
         .order('created_at', { ascending: false })
-        .limit(4);
-      if (!error && data) setTransactions(data);
-    } catch {}
+        .limit(4),
+      {
+        contextName: 'XPProgressPanel.fetchTransactions',
+        sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeXPTransaction),
+        fallbackValue: []
+      }
+    );
+    setTransactions(res.data);
     setLoading(false);
   }, [profile?.id]);
+
 
   useEffect(() => {
     if (profile?.xp !== undefined) {
@@ -50,6 +63,7 @@ export const XPProgressPanel = () => {
   }, [fetchTransactions]);
 
   const levelInfo = calculateLevel(liveXp);
+  const LevelIcon = ICON_MAP[levelInfo.icon] || GraduationCap;
 
   return (
     <Card className="bg-card border-border shadow-sm">
@@ -69,7 +83,7 @@ export const XPProgressPanel = () => {
           <div className="flex items-center justify-between relative z-10">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur-md flex items-center justify-center text-2xl shadow-inner">
-                {levelInfo.icon}
+                <LevelIcon className="w-6 h-6 text-white" />
               </div>
               <div>
                 <div className="text-xs text-white/80 font-medium uppercase tracking-wider">Rank Distinction</div>

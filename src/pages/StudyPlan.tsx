@@ -1,36 +1,51 @@
-import { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { useLiveFetch } from '@/hooks/useLiveFetch';
+import { useDailyMotivation } from '@/hooks/useDailyMotivation';
 import { PomodoroTimer } from '@/components/study-plan/PomodoroTimer';
 import { StudySchedule } from '@/components/study-plan/StudySchedule';
 import { BurnoutDetector } from '@/components/study-plan/BurnoutDetector';
 import { AIRecommendations } from '@/components/AIRecommendations';
 import { JAMBScorePredictor } from '@/components/dashboard/JAMBScorePredictor';
-import { Calendar, BrainCircuit, Quote } from 'lucide-react';
+import { Calendar, Quote } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { motion } from 'framer-motion';
 
 export default function StudyPlan() {
   const { profile } = useAuth();
-  const [stats, setStats] = useState<{ history: { name: string, score: number }[] }>({ history: [] });
-  
-  useEffect(() => {
-    if (profile?.id) {
-      supabase.from('exam_sessions').select('*').eq('user_id', profile.id).eq('status', 'submitted').then(({ data }) => {
-        if (data) {
-          const hist = data.map((ex, i) => ({
-            name: `Exam ${i+1}`,
-            score: Math.round(((ex.score || 0) / (ex.total_questions || 50)) * 400)
-          }));
-          setStats({ history: hist });
-        }
-      });
+  const { motivation } = useDailyMotivation();
+
+  const { data: statsData } = useLiveFetch<{ history: { name: string; score: number }[] }>(
+    async () => {
+      if (!profile?.id) return { data: { history: [] }, error: null };
+      const { data, error } = await supabase
+        .from('exam_sessions')
+        .select('*')
+        .eq('user_id', profile.id)
+        .eq('status', 'submitted');
+      
+      if (data) {
+        const hist = data.map((ex, i) => ({
+          name: `Exam ${i + 1}`,
+          score: Math.round(((ex.score || 0) / (ex.total_questions || 50)) * 400)
+        }));
+        return { data: { history: hist }, error };
+      }
+      return { data: { history: [] }, error };
+    },
+    {
+      contextName: 'StudyPlanStats',
+      fallbackData: { history: [] },
+      enabled: !!profile?.id,
+      deps: [profile?.id]
     }
-  }, [profile]);
+  );
+
+  const stats = statsData || { history: [] };
 
   return (
-    <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto space-y-8 bg-slate-950/50 min-h-screen pb-20">
+    <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto space-y-8 bg-background text-foreground min-h-screen pb-20">
       
       {/* Header */}
       <motion.div 
@@ -80,9 +95,9 @@ export default function StudyPlan() {
               <Quote className="absolute -top-4 -right-4 w-24 h-24 text-primary/10 rotate-12" />
               <CardContent className="p-6 relative z-10">
                 <p className="italic text-lg font-display font-medium text-foreground mb-4">
-                  "Education is the most powerful weapon which you can use to change the world."
+                  "{motivation?.quote || 'Consistency is your superpower. 45 minutes of focused CBT drill today creates a 300+ score in April.'}"
                 </p>
-                <p className="text-sm font-bold text-primary uppercase tracking-wider">— Nelson Mandela</p>
+                <p className="text-sm font-bold text-primary uppercase tracking-wider">— {motivation?.author || 'Scholars AI Performance Coach'}</p>
               </CardContent>
             </Card>
           </motion.div>

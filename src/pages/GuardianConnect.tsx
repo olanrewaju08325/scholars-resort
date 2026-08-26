@@ -142,7 +142,7 @@ const GuardianConnect = () => {
         if (studentId) {
           await sendNotification(
             studentId,
-            'Guardian Connected! 🤝',
+            'Guardian Connected!',
             `${profile.full_name || 'Your guardian'} has successfully linked with your Scholars Resort account to support your JAMB preparation.`,
             'success'
           );

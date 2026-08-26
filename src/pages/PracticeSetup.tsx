@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { getDownloadedPacks } from '@/lib/offlineStore';
+import { SafeDataFetcher } from '@/utils/safeDataFetcher';
 
 const PracticeSetup = () => {
   const { profile } = useAuth();
@@ -40,8 +41,11 @@ const PracticeSetup = () => {
           return;
         }
 
-        const { data } = await supabase.from('subjects').select('*').eq('is_active', true);
-        if (data) setSubjects(data);
+        const res = await SafeDataFetcher<any[]>(
+          supabase.from('subjects').select('*').eq('is_active', true),
+          { contextName: 'PracticeSetup.subjects', fallbackData: [] }
+        );
+        if (res.data) setSubjects(res.data);
       } catch (err) {
         // Offline fallback
         const packs = getDownloadedPacks();

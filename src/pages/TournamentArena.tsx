@@ -165,7 +165,14 @@ export default function TournamentArena() {
             {ranked.map((p, i) => (
               <div key={i} className="flex justify-between items-center p-3 rounded-lg bg-muted/50 border border-border">
                 <span className="font-semibold flex items-center gap-2">
-                  {i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`} {p.name}
+                  <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
+                    i === 0 ? 'bg-amber-500/20 text-amber-500' :
+                    i === 1 ? 'bg-slate-300/20 text-slate-400' :
+                    i === 2 ? 'bg-amber-700/20 text-amber-600' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    #{i + 1}
+                  </span>
+                  {p.name}
                 </span>
                 <span className="text-primary font-mono font-bold">{p.score} pts</span>
               </div>

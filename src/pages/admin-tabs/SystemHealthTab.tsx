@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { Progress } from '@/components/ui/progress';
 import { RealtimeUsageQuotaMonitor } from '@/components/admin/RealtimeUsageQuotaMonitor';
 import { CbtResourceMonitorCard } from '@/components/admin/CbtResourceMonitorCard';
+import { CBTPerformanceAuditWidget } from '@/components/admin/CBTPerformanceAuditWidget';
 import { SystemUsageLimitService } from '@/services/systemUsageLimitService';
 import { Button } from '@/components/ui/button';
 
@@ -265,9 +266,12 @@ export const SystemHealthTab = () => {
         </div>
 
         {/* Right Col: Live Logs */}
-        <Card className="bg-card border-border text-card-foreground lg:col-span-2">
-          <CardHeader className="pb-3">
-            <CardTitle className="flex items-center justify-between text-base">
+        <div className="lg:col-span-2 space-y-6">
+          <CBTPerformanceAuditWidget />
+
+          <Card className="bg-card border-border text-card-foreground">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center justify-between text-base">
               <span className="flex items-center gap-2 font-bold font-display">
                 <Database className="w-4 h-4 text-primary"/> 
                 Live System Audit Stream
@@ -308,6 +312,7 @@ export const SystemHealthTab = () => {
             )}
           </CardContent>
         </Card>
+      </div>
 
       </div>
     </div>

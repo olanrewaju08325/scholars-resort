@@ -17,7 +17,10 @@ import {
   Check, 
   HelpCircle,
   X,
-  Target
+  Target,
+  Calculator,
+  FlaskConical,
+  Dna
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -54,11 +57,11 @@ export const EducationalJourneyMap: React.FC = () => {
   const currentSubjectJourney: SubjectJourney | undefined = data.subjectJourneys[selectedSubject];
 
   const subjectTabs = [
-    { id: 'use_of_english', name: 'Use of English', icon: '📝' },
-    { id: 'mathematics', name: 'Mathematics', icon: '📐' },
-    { id: 'physics', name: 'Physics', icon: '⚡' },
-    { id: 'chemistry', name: 'Chemistry', icon: '🧪' },
-    { id: 'biology', name: 'Biology', icon: '🧬' }
+    { id: 'use_of_english', name: 'Use of English', icon: BookOpen },
+    { id: 'mathematics', name: 'Mathematics', icon: Calculator },
+    { id: 'physics', name: 'Physics', icon: Zap },
+    { id: 'chemistry', name: 'Chemistry', icon: FlaskConical },
+    { id: 'biology', name: 'Biology', icon: Dna }
   ];
 
   const handleLaunchPractice = (node: JourneyNode) => {
@@ -132,7 +135,7 @@ export const EducationalJourneyMap: React.FC = () => {
                   : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground'
               }`}
             >
-              <span className="text-base">{tab.icon}</span>
+              <tab.icon className="w-4 h-4 shrink-0" />
               <span>{tab.name}</span>
               {subJourney && (
                 <Badge 

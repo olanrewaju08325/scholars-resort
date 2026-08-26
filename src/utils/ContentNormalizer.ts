@@ -5,6 +5,8 @@
  * Ensures every item displayed is properly branded as native Scholars Resort CBT Bank content.
  */
 
+import { SafeStringParser } from './SafeStringParser';
+
 export interface NormalizedOption {
   id: string; // e.g., 'A', 'B', 'C', 'D'
   text: string;
@@ -28,32 +30,17 @@ export interface NormalizedQuestion {
 
 export class ContentNormalizer {
   /**
-   * Unescapes HTML entities in text
+   * Unescapes HTML entities in text safely
    */
-  public static unescapeHtml(text: string): string {
-    if (!text) return '';
-    return text
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .replace(/&nbsp;/g, ' ');
+  public static unescapeHtml(text: any): string {
+    return SafeStringParser.unescapeHtml(text);
   }
 
   /**
-   * Strips HTML tags and extraneous whitespace
+   * Strips HTML tags and extraneous whitespace safely
    */
-  public static stripHtmlAndWhitespace(text: string): string {
-    if (!text) return '';
-    let cleaned = this.unescapeHtml(text);
-    // Replace <br> and <p> with spaces or line breaks
-    cleaned = cleaned.replace(/<br\s*\/?>/gi, '\n').replace(/<\/p>/gi, '\n');
-    // Strip remaining HTML tags
-    cleaned = cleaned.replace(/<[^>]*>/g, '');
-    // Collapse multiple spaces while preserving line breaks
-    cleaned = cleaned.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n\n').trim();
-    return cleaned;
+  public static stripHtmlAndWhitespace(text: any): string {
+    return SafeStringParser.stripHtmlAndWhitespace(text);
   }
 
   /**

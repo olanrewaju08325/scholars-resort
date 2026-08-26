@@ -21,6 +21,8 @@ import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { cleanQuestionText, cleanOptionText } from '@/utils/questionUtils';
 import { QuestionFlowService } from '@/services/questionFlowService';
+import { useFocusLock } from '@/hooks/useFocusLock';
+import { FocusLockOverlay } from '@/components/FocusLockOverlay';
 import { toast } from 'sonner';
 import { MathText } from '@/components/MathText';
 import { playFiveMinuteWarningSound } from '@/lib/celebration';
@@ -56,6 +58,22 @@ const CBTExam = () => {
   const [showNavDrawer, setShowNavDrawer] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const hasWarnedFiveMinutes = useRef(false);
+
+  // Focus Lock Anti-Cheat Hook
+  const {
+    isLocked,
+    warnings: focusLockWarnings,
+    isCompromised: isFocusLockCompromised,
+    showWarningModal: showFocusLockModal,
+    setShowWarningModal: setShowFocusLockModal
+  } = useFocusLock({
+    enabled: hasStarted,
+    maxWarnings: 3,
+    onCompromised: () => {
+      setIsCompromised(true);
+      submitExam(true);
+    }
+  });
 
   const handleNext = useCallback(() => {
     if (currentQuestionIdx < questions.length - 1) {
@@ -206,9 +224,8 @@ const CBTExam = () => {
         if (soundEnabled) {
           playFiveMinuteWarningSound();
         }
-        toast.warning('⏰ 5 MINUTES REMAINING! Please review your answers and prepare to conclude your exam.', {
-          duration: 9000,
-          icon: '⚠️'
+        toast.warning('5 MINUTES REMAINING! Please review your answers and prepare to conclude your exam.', {
+          duration: 9000
         });
       }
     };
@@ -415,7 +432,7 @@ const CBTExam = () => {
           email: profile?.email || 'candidate@scholarsresort.com'
         }
       });
-      toast.success(`📸 Session Snapshot #${snap.id} saved! Available in Admin Dashboard.`);
+      toast.success(`Session Snapshot #${snap.id} saved! Available in Admin Dashboard.`);
     } catch (err: any) {
       toast.error('Failed to capture snapshot: ' + err.message);
     } finally {
@@ -634,6 +651,18 @@ const CBTExam = () => {
 
   return (
     <div className="h-[100dvh] w-full bg-[#f4f7f6] dark:bg-background text-foreground flex flex-col overflow-hidden select-none">
+      <FocusLockOverlay
+        isOpen={showFocusLockModal}
+        warnings={focusLockWarnings}
+        maxWarnings={3}
+        isCompromised={isFocusLockCompromised}
+        onResume={() => {
+          setShowFocusLockModal(false);
+          if (isFocusLockCompromised) {
+            submitExam(true);
+          }
+        }}
+      />
       
       {/* Warning Overlay */}
       {showWarning && (
@@ -678,7 +707,7 @@ const CBTExam = () => {
               const next = !focusMode;
               setFocusMode(next);
               if (next) {
-                toast.info('Focus Mode Enabled: Minimized distraction view', { icon: '🎯' });
+                toast.info('Focus Mode Enabled: Minimized distraction view');
               } else {
                 toast.info('Focus Mode Disabled');
               }

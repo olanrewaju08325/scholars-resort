@@ -1,78 +1,71 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Medal, Search, Loader2, ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
+import { useLiveFetch } from '@/hooks/useLiveFetch';
+import { DataLoading } from '@/components/DataLoading';
 
 const Leaderboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [boardData, setBoardData] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchLeaderboard = async () => {
-      setLoading(true);
-      try {
-        // We'll aggregate exam sessions per user and get their top score
-        // Or aggregate total score. For JAMB CBT, usually highest score per student is best.
-        
-        // Fetch all submitted exams
-        const { data: exams } = await supabase
-          .from('exam_sessions')
-          .select('user_id, score_percent, total_questions')
-          .eq('status', 'submitted');
-          
-        if (exams && exams.length > 0) {
-          const userIds = Array.from(new Set(exams.map(e => e.user_id).filter(Boolean)));
-          const { data: profiles } = userIds.length > 0 
-            ? await supabase.from('profiles').select('id, full_name').in('id', userIds)
-            : { data: [] };
+  const { data: boardData, loading } = useLiveFetch<any[]>(
+    async () => {
+      const { data: exams, error: examErr } = await supabase
+        .from('exam_sessions')
+        .select('user_id, score_percent, total_questions')
+        .eq('status', 'submitted');
 
-          const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
-          const userBestScores = new Map();
-          
-          exams.forEach(exam => {
-            const currentBest = userBestScores.get(exam.user_id)?.score || 0;
-            const scorePercentage = Math.round((exam.score_percent || 0) * 4); // Convert % to out of 400
-            
-            if (scorePercentage > currentBest) {
-              const fullName = profileMap.get(exam.user_id) || 'Scholar Student';
-              const nameParts = fullName.split(' ');
-              const anonName = nameParts.length > 1 
-                ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
-                : nameParts[0];
-
-              userBestScores.set(exam.user_id, {
-                id: exam.user_id,
-                name: anonName,
-                score: scorePercentage
-              });
-            }
-          });
-          
-          const sortedBoard = Array.from(userBestScores.values())
-            .sort((a, b) => b.score - a.score)
-            .map((student, i) => ({
-              ...student,
-              rank: i + 1,
-              prize: i === 0 ? '₦5,000 Recharge Card' : i === 1 ? '₦3,000 Recharge Card' : i === 2 ? '₦1,000 Recharge Card' : null
-            }));
-            
-          setBoardData(sortedBoard);
-        }
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoading(false);
+      if (examErr || !exams || exams.length === 0) {
+        return { data: [], error: examErr };
       }
-    };
-    
-    fetchLeaderboard();
-  }, []);
 
-  const filteredBoard = boardData.filter(student => 
+      const userIds = Array.from(new Set(exams.map(e => e.user_id).filter(Boolean)));
+      const { data: profiles } = userIds.length > 0 
+        ? await supabase.from('profiles').select('id, full_name').in('id', userIds)
+        : { data: [] };
+
+      const profileMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
+      const userBestScores = new Map();
+
+      exams.forEach(exam => {
+        const currentBest = userBestScores.get(exam.user_id)?.score || 0;
+        const scorePercentage = Math.round((exam.score_percent || 0) * 4); // Convert % to out of 400
+
+        if (scorePercentage > currentBest) {
+          const fullName = profileMap.get(exam.user_id) || 'Scholar Student';
+          const nameParts = fullName.split(' ');
+          const anonName = nameParts.length > 1 
+            ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
+            : nameParts[0];
+
+          userBestScores.set(exam.user_id, {
+            id: exam.user_id,
+            name: anonName,
+            score: scorePercentage
+          });
+        }
+      });
+
+      const sortedBoard = Array.from(userBestScores.values())
+        .sort((a, b) => b.score - a.score)
+        .map((student, i) => ({
+          ...student,
+          rank: i + 1,
+          prize: i === 0 ? '₦5,000 Recharge Card' : i === 1 ? '₦3,000 Recharge Card' : i === 2 ? '₦1,000 Recharge Card' : null
+        }));
+
+      return { data: sortedBoard, error: null };
+    },
+    {
+      contextName: 'GlobalLeaderboard',
+      fallbackData: []
+    }
+  );
+
+  const filteredBoard = (boardData || []).filter(student => 
     student.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
@@ -121,10 +114,7 @@ const Leaderboard = () => {
           </CardHeader>
           <CardContent className="p-0 min-h-[300px]">
             {loading ? (
-              <div className="flex flex-col items-center justify-center h-48 text-muted-foreground">
-                <Loader2 className="w-8 h-8 animate-spin mb-4" />
-                <p>Loading Leaderboard...</p>
-              </div>
+              <DataLoading message="Loading Leaderboard..." subtext="Fetching highest scores from student mock exam sessions..." />
             ) : filteredBoard.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">No students found.</div>
             ) : (

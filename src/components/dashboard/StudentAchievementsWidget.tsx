@@ -79,8 +79,9 @@ export const StudentAchievementsWidget: React.FC = () => {
             </CardDescription>
           </div>
 
-          <Badge className="bg-amber-500 text-slate-950 font-bold px-3 py-1 rounded-full text-xs shrink-0 self-start sm:self-auto">
-            🏆 {unlockedCount} / {totalCount} Badges Unlocked
+          <Badge className="bg-amber-500 text-slate-950 font-bold px-3 py-1 rounded-full text-xs shrink-0 self-start sm:self-auto flex items-center gap-1.5">
+            <Trophy className="w-3.5 h-3.5" />
+            <span>{unlockedCount} / {totalCount} Badges Unlocked</span>
           </Badge>
         </div>
 
@@ -89,10 +90,18 @@ export const StudentAchievementsWidget: React.FC = () => {
           <Tabs defaultValue="all" value={activeCategory} onValueChange={setActiveCategory} className="w-full">
             <TabsList className="bg-muted/50 p-1 rounded-lg w-full flex flex-wrap gap-1">
               <TabsTrigger value="all" className="text-xs font-semibold px-3 py-1">All Badges</TabsTrigger>
-              <TabsTrigger value="streak" className="text-xs font-semibold px-3 py-1">🔥 Streaks</TabsTrigger>
-              <TabsTrigger value="mastery" className="text-xs font-semibold px-3 py-1">🎯 Topic Expert</TabsTrigger>
-              <TabsTrigger value="exam" className="text-xs font-semibold px-3 py-1">🏆 Exam Milestones</TabsTrigger>
-              <TabsTrigger value="special" className="text-xs font-semibold px-3 py-1">⚡ Special</TabsTrigger>
+              <TabsTrigger value="streak" className="text-xs font-semibold px-3 py-1 flex items-center gap-1">
+                <Flame className="w-3 h-3 text-amber-500" /> Streaks
+              </TabsTrigger>
+              <TabsTrigger value="mastery" className="text-xs font-semibold px-3 py-1 flex items-center gap-1">
+                <Target className="w-3 h-3 text-emerald-500" /> Topic Expert
+              </TabsTrigger>
+              <TabsTrigger value="exam" className="text-xs font-semibold px-3 py-1 flex items-center gap-1">
+                <Trophy className="w-3 h-3 text-amber-500" /> Exam Milestones
+              </TabsTrigger>
+              <TabsTrigger value="special" className="text-xs font-semibold px-3 py-1 flex items-center gap-1">
+                <Zap className="w-3 h-3 text-blue-500" /> Special
+              </TabsTrigger>
             </TabsList>
           </Tabs>
         </div>
@@ -102,7 +111,7 @@ export const StudentAchievementsWidget: React.FC = () => {
         {loading ? (
           <div className="py-8 text-center text-xs text-muted-foreground">Evaluating student milestones...</div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-[repeat(2,minmax(0,1fr))] gap-3 min-w-0">
             {filteredAchievements.map((badge) => (
               <div
                 key={badge.key}
