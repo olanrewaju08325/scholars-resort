@@ -45,7 +45,7 @@ type MobileTab = 'all' | 'practice' | 'analytics' | 'tools' | 'social';
 export default function Dashboard() {
   usePerfMonitoring('Dashboard');
   const { profile } = useAuth();
-  const { examsTaken, averageScore, streak, history, loading: statsLoading } = useStudentStats();
+  const { examsTaken, averageScore, streak, history, loading } = useStudentStats();
   const stats = { examsTaken, averageScore, streak, history };
   const [mobileTab, setMobileTab] = useState<MobileTab>('all');
 
