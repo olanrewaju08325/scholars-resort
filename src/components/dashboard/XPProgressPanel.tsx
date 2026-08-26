@@ -17,7 +17,7 @@ const ICON_MAP: Record<string, any> = {
 export const XPProgressPanel = () => {
   const { profile } = useAuth();
   const [transactions, setTransactions] = useState<any[]>([]);
-  const [_loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [liveXp, setLiveXp] = useState<number>(profile?.xp || 0);
 
   const fetchTransactions = useCallback(async () => {
