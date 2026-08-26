@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, BookOpen, FileQuestion, CreditCard, 
   Settings, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronRight, 
   Search, Bell, Plus, MessageSquare, Menu, Sparkles, Trophy,
-  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2
+  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2, ShieldCheck
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
