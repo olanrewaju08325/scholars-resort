@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
-  Users, BarChart3, Clock, AlertTriangle, CheckCircle, Link as LinkIcon,
+  Users, BarChart3, Clock, AlertTriangle, CheckCircle, Link2,
   Activity, Target, Trophy, Flame, BellRing, DollarSign, BookOpen, 
   Mail, MessageSquare, ShieldCheck, Sun, Moon, FileDown, LogOut, Layers
 } from 'lucide-react';
@@ -627,37 +627,33 @@ Scholars Resort Academic Team`
             Sign Out
           </Button>
         </div>
-      </aside>
-
-      {/* Main Content */}
-      <main className="flex-1 p-4 md:p-10 max-w-6xl mx-auto w-full overflow-y-auto">
+      </aside>      {/* Main Content */}
+      <main className="flex-1 p-4 md:p-8 w-full min-w-0 bg-background overflow-y-auto">
         <header className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-display font-bold">Welcome, Guardian</h1>
+            <h1 className="text-3xl font-display font-bold text-foreground">Welcome, Guardian</h1>
             <p className="text-muted-foreground">Monitor your ward's progress and readiness.</p>
           </div>
-
-          <div className="flex items-center gap-4">
+          
+          <div className="flex items-center gap-4 w-full md:w-auto">
             {activeStudentData && !activeStudentData.has_paid && (
-              <Button onClick={() => navigate(`/pricing?student_id=${activeStudentData.id}`)} className="bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-500/20">
+              <Button onClick={() => navigate(`/pricing?student_id=${activeStudentData.id}`)} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-md w-full md:w-auto">
                 <ShieldCheck className="w-4 h-4 mr-2" /> Activate Account
               </Button>
             )}
             
-            {/* Multi-Student Selector (Feature 42) */}
-            <div className="flex items-center gap-2">
-               <select 
-                 className="h-10 bg-card border border-border rounded-md px-3 font-medium"
-                 value={activeStudentId || ''}
-                 onChange={(e) => setActiveStudentId(e.target.value)}
-               >
-                  {linkedStudents.map(s => (
-                     <option key={s.id} value={s.id}>
-                       {s.name} {s.has_paid ? '(Premium)' : '(Unpaid)'}
-                     </option>
-                  ))}
-               </select>
-            </div>
+            {/* Multi-Student Selector */}
+            <select 
+              className="h-10 w-full md:w-auto bg-background border border-border rounded-xl px-3 font-medium text-foreground outline-none"
+              value={activeStudentId || ''}
+              onChange={(e) => setActiveStudentId(e.target.value)}
+            >
+                {linkedStudents.map(s => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} {s.has_paid ? '(Premium)' : '(Unpaid)'}
+                  </option>
+                ))}
+            </select>
           </div>
         </header>
 
@@ -666,11 +662,11 @@ Scholars Resort Academic Team`
         ) : linkedStudents.length === 0 ? (
           <div className="flex flex-col h-64 items-center justify-center text-center space-y-4">
              <Users className="w-12 h-12 text-muted-foreground opacity-50" />
-             <h2 className="text-xl font-bold">No Students Linked</h2>
+             <h2 className="text-xl font-bold text-foreground">No Students Linked</h2>
              <p className="text-muted-foreground">Enter a student's invite code below to link their account to your portal.</p>
-             <Card className="border-border bg-card/30 max-w-sm w-full mt-4">
+             <Card className="border-border bg-background max-w-sm w-full mt-4">
                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm">Link New Student</CardTitle>
+                  <CardTitle className="text-sm text-foreground">Link New Student</CardTitle>
                </CardHeader>
                <CardContent className="p-4 pt-0">
                   <form onSubmit={handleLinkStudent} className="flex gap-2">
@@ -679,10 +675,10 @@ Scholars Resort Academic Team`
                         value={inviteCode} 
                         onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
                         maxLength={8}
-                        className="font-mono text-sm uppercase"
+                        className="font-mono text-sm uppercase bg-background"
                      />
                      <Button type="submit" size="sm">
-                        <LinkIcon className="h-4 w-4" /> Link
+                        <Link2 className="h-4 w-4" /> Link
                      </Button>
                   </form>
                </CardContent>
@@ -691,280 +687,136 @@ Scholars Resort Academic Team`
         ) : !activeStudentData ? (
           <div className="flex h-64 items-center justify-center animate-pulse text-muted-foreground">Loading student data...</div>
         ) : !activeStudentData.has_paid ? (
-          <div className="flex flex-col h-64 items-center justify-center text-center space-y-4 bg-orange-500/5 border border-orange-500/20 rounded-2xl p-6">
-             <ShieldCheck className="w-16 h-16 text-orange-500 mb-2" />
-             <h2 className="text-2xl font-bold font-display text-orange-600 dark:text-orange-400">Account Not Activated</h2>
+          <div className="flex flex-col h-64 items-center justify-center text-center space-y-4 bg-background border border-border rounded-3xl p-6 shadow-sm">
+             <ShieldCheck className="w-16 h-16 text-primary mb-2" />
+             <h2 className="text-2xl font-bold font-display text-foreground">Account Not Activated</h2>
              <p className="text-muted-foreground max-w-md mx-auto">
                {activeStudentData.name}'s account is currently inactive. You must purchase a subscription to unlock their practice engine, exams, and see their performance reports here.
              </p>
-             <Button size="lg" onClick={() => navigate(`/pricing?student_id=${activeStudentData.id}`)} className="bg-orange-500 hover:bg-orange-600 shadow-xl shadow-orange-500/20 mt-4 rounded-xl">
+             <Button size="lg" onClick={() => navigate(`/pricing?student_id=${activeStudentData.id}`)} className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg mt-4 rounded-xl">
                Pay for Subscription Now
              </Button>
           </div>
         ) : (
-          <div id="guardian-report-content" className="space-y-6">
-            
-            {/* Mobile Tab Filter Bar */}
-            <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 p-1 bg-muted/40 rounded-xl border border-border/60">
-              <button
-                onClick={() => setMobileTab('all')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  mobileTab === 'all'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Layers className="w-3.5 h-3.5" /> Full View
-              </button>
-              <button
-                onClick={() => setMobileTab('overview')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  mobileTab === 'overview'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <Target className="w-3.5 h-3.5" /> Overview
-              </button>
-              <button
-                onClick={() => setMobileTab('analytics')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  mobileTab === 'analytics'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <BarChart3 className="w-3.5 h-3.5" /> Analytics
-              </button>
-              <button
-                onClick={() => setMobileTab('actions')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  mobileTab === 'actions'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <BellRing className="w-3.5 h-3.5" /> Actions
-              </button>
-              <button
-                onClick={() => setMobileTab('finance')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-                  mobileTab === 'finance'
-                    ? 'bg-primary text-primary-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                <DollarSign className="w-3.5 h-3.5" /> Finance & Link
-              </button>
-            </div>
+          <div id="guardian-report-content" className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+             {/* Stats Cards */}
+             <Card className="border border-border bg-background shadow-sm">
+               <CardContent className="p-6">
+                  <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Target className="w-3 h-3"/> Target Score</p>
+                  <div className="text-3xl font-display font-bold text-foreground">{activeStudentData.target}</div>
+               </CardContent>
+             </Card>
+             <Card className="border border-border bg-background shadow-sm">
+               <CardContent className="p-6">
+                  <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Activity className="w-3 h-3"/> Exam Readiness</p>
+                  <div className="text-3xl font-display font-bold text-primary">{activeStudentData.readiness}%</div>
+               </CardContent>
+             </Card>
+             <Card className="border border-border bg-background shadow-sm">
+               <CardContent className="p-6">
+                  <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Trophy className="w-3 h-3"/> Global Rank</p>
+                  <div className="text-3xl font-display font-bold text-foreground">#{activeStudentData.globalRank}</div>
+               </CardContent>
+             </Card>
 
-            {/* Top Stats Grid (Feature 43, 51, 47, 49) */}
-            {(mobileTab === 'all' || mobileTab === 'overview') && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                 <Card className="border-border shadow-sm">
-                   <CardContent className="p-4 md:p-6">
-                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Target className="w-3 h-3"/> Target Score</p>
-                      <div className="text-2xl font-display font-bold text-primary">{activeStudentData.target}</div>
-                   </CardContent>
-                 </Card>
-                 <Card className="border-border shadow-sm bg-primary/5 border-primary/20">
-                   <CardContent className="p-4 md:p-6">
-                      <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Activity className="w-3 h-3"/> Exam Readiness</p>
-                      <div className="text-2xl font-display font-bold text-primary">{activeStudentData.readiness}%</div>
-                   </CardContent>
-                 </Card>
-                 <Card className="border-border shadow-sm">
-                   <CardContent className="p-4 md:p-6">
-                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Trophy className="w-3 h-3"/> Global Rank</p>
-                      <div className="text-2xl font-display font-bold">#{activeStudentData.globalRank}</div>
-                   </CardContent>
-                 </Card>
-                 <Card className="border-border shadow-sm">
-                   <CardContent className="p-4 md:p-6">
-                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><BarChart3 className="w-3 h-3"/> Average Score</p>
-                      <div className="text-2xl font-display font-bold">{activeStudentData.score}%</div>
-                   </CardContent>
-                 </Card>
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-               
-               {/* Left Column (Analytics) */}
-               <div className="lg:col-span-2 space-y-8">
-                  {/* Subject Drilldown & Weakness (Feature 44 & 46) */}
-                  {(mobileTab === 'all' || mobileTab === 'overview' || mobileTab === 'analytics') && (
-                    <Card className="border-border shadow-sm">
-                       <CardHeader className="border-b border-border bg-muted/30 pb-4">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                             <AlertTriangle className="h-5 w-5 text-amber-500" /> Subject Weakness Alerts
-                          </CardTitle>
-                       </CardHeader>
-                       <CardContent className="p-6">
-                          <div className="space-y-4">
-                             {activeStudentData.weakSubjects.map((sub: string, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between p-3 border border-amber-500/20 bg-amber-500/5 rounded-md">
-                                   <span className="font-semibold text-amber-600 dark:text-amber-400">{sub}</span>
-                                   <span className="text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase">Needs Attention</span>
-                                </div>
-                             ))}
-                          </div>
-                       </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Exam History & Heatmap (Feature 45 & 48) */}
-                  {(mobileTab === 'all' || mobileTab === 'analytics') && (
-                    <Card className="border-border shadow-sm">
-                       <CardHeader className="border-b border-border bg-muted/30 pb-4">
-                          <CardTitle className="text-lg flex items-center gap-2">
-                             <Clock className="h-5 w-5 text-primary" /> Attendance & Study History
-                          </CardTitle>
-                       </CardHeader>
-                       <CardContent className="p-6">
-                          {/* Focus Time & Attendance Summary */}
-                          <div className="grid grid-cols-2 gap-4 mb-6">
-                            <div className="p-4 rounded-xl border border-border bg-muted/20">
-                              <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Weekly Focus Time</div>
-                              <div className="text-2xl font-display font-bold text-primary">{activeStudentData.weeklyFocusTime || '0m'}</div>
+             {/* Analytics Area */}
+             <div className="md:col-span-2 lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
+               <Card className="border border-border bg-background shadow-sm">
+                   <CardHeader className="border-b border-border bg-background pb-4">
+                      <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                         <AlertTriangle className="h-5 w-5 text-amber-500" /> Subject Weakness Alerts
+                      </CardTitle>
+                   </CardHeader>
+                   <CardContent className="p-6">
+                      <div className="space-y-4">
+                         {activeStudentData.weakSubjects.map((sub: string, idx: number) => (
+                            <div key={idx} className="flex items-center justify-between p-3 border border-border bg-background rounded-md">
+                               <span className="font-semibold text-foreground">{sub}</span>
+                               <span className="text-xs font-bold text-amber-500 uppercase">Needs Attention</span>
                             </div>
-                            <div className="p-4 rounded-xl border border-border bg-muted/20">
-                              <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Attendance Rate (7d)</div>
-                              <div className="text-2xl font-display font-bold text-green-500">{activeStudentData.attendanceRate || '0%'}</div>
-                            </div>
-                          </div>
+                         ))}
+                      </div>
+                   </CardContent>
+                </Card>
 
-                          <div className="mb-6 p-4 bg-slate-900 border border-slate-800 rounded-lg">
-                             <div className="flex justify-between items-center mb-2">
-                               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Study Activity Heatmap</span>
-                               <span className="text-xs text-slate-500">Last 14 Days</span>
-                             </div>
-                             <div className="flex gap-1 justify-between">
-                               {(activeStudentData.heatmap && activeStudentData.heatmap.length > 0 ? activeStudentData.heatmap : [...Array(14)].map((_, i) => ({ date: `Day ${i+1}`, count: 0, intensity: 0 }))).map((day: any, i: number) => {
-                                 const colors = ['bg-slate-800', 'bg-emerald-900/60', 'bg-emerald-600', 'bg-emerald-400'];
-                                 const colorClass = colors[day.intensity || 0] || 'bg-slate-800';
-                                 return (
-                                   <div 
-                                     key={i} 
-                                     className={`w-full aspect-square rounded-sm ${colorClass} border border-slate-800/50 transition-all hover:scale-110 hover:ring-1 hover:ring-emerald-400 cursor-pointer`}
-                                     title={`${day.date}: ${day.count} sessions completed`}
-                                   ></div>
-                                 )
-                               })}
-                             </div>
-                             <div className="flex justify-between mt-2 text-[10px] text-slate-500">
-                               <span>14 days ago</span>
-                               <span>Today</span>
-                             </div>
-                          </div>
-                          <div className="space-y-3">
-                             {activeStudentData.history.map((h: any, idx: number) => (
-                                <div key={idx} className="flex items-center justify-between p-3 bg-muted/20 border border-border rounded text-sm">
-                                   <span className="font-semibold">{h.date} CBT Mock</span>
-                                   <div className="flex gap-4">
-                                      <span className="text-primary font-bold">{h.score} pts</span>
-                                      <span className="text-muted-foreground">{h.time}</span>
-                                   </div>
-                                </div>
-                             ))}
-                             {activeStudentData.history.length === 0 && (
-                                <div className="text-center py-4 text-sm text-muted-foreground">
-                                   No mock exam sessions completed yet.
-                                </div>
-                             )}
-                          </div>
-                       </CardContent>
-                    </Card>
-                  )}
-
-                  {/* AI Suggestions (Feature 50) */}
-                  {(mobileTab === 'all' || mobileTab === 'overview' || mobileTab === 'analytics') && (
-                    <Card className="border-purple-500/30 bg-purple-500/5 shadow-sm">
-                       <CardContent className="p-6 flex items-start gap-4">
-                          <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-1">
-                             <Flame className="w-5 h-5 text-purple-500" />
-                          </div>
-                          <div>
-                             <h4 className="font-bold text-purple-600 dark:text-purple-400 mb-1">AI Guardian Suggestion</h4>
-                             <p className="text-sm text-foreground/80 leading-relaxed">
-                                {activeStudentData.weakSubjects && activeStudentData.weakSubjects[0] !== 'No weak areas identified yet' ? (
-                                  `${activeStudentData.name} needs targeted focus on ${activeStudentData.weakSubjects.join(', ')}. We recommend assigning a targeted practice drill.`
-                                ) : (
-                                  `${activeStudentData.name}'s performance metrics will update automatically as they take CBT mock exams and practice drills.`
-                                )}
-                             </p>
-                          </div>
-                       </CardContent>
-                    </Card>
-                  )}
-               </div>
-
-               {/* Right Column (Controls & Tracking) */}
-               <div className="space-y-6">
-                  {/* Action Buttons (Feature 54, 56, 57) */}
-                  {(mobileTab === 'all' || mobileTab === 'actions') && (
-                    <div className="grid grid-cols-1 gap-3">
-                       <Button 
-                          onClick={async () => {
-                            if (activeStudentData?.id) {
-                              const toastId = toast.loading('Generating personalized AI motivation...');
-                              try {
-                                  const prompt = `You are an academic counselor. Write a very short (1-2 sentences), highly motivating push notification for a student named ${activeStudentData.name}. Their target JAMB score is ${activeStudentData.target}. Current score average is ${activeStudentData.score}. Make it encouraging and personal. Do NOT use emojis.`;
-                                  const aiMessage = await callGroqAPI([{ role: 'user', content: prompt }]);
-                                  const cleanMessage = stripThinkTags(aiMessage).replace(/"/g, '').trim();
-                                  
-                                  await sendNotification(
-                                    activeStudentData.id,
-                                    'Motivation from Guardian!',
-                                    `${cleanMessage} - Sent by ${profile?.full_name || 'Your Guardian'}`,
-                                    'success'
-                                  );
-                                  toast.success(`AI Motivation Nudge sent to ${activeStudentData.name}!`, { id: toastId });
-                              } catch (e) {
-                                  toast.error('Failed to generate motivation nudge.', { id: toastId });
-                              }
-                            }
-                          }}
-                          className="w-full justify-start gap-3 h-12"
-                       >
-                          <BellRing className="w-4 h-4" /> Send AI Motivation Nudge
-                       </Button>
-                       <Button onClick={downloadPDF} disabled={loading} variant="outline" className="w-full justify-start gap-3 h-12">
-                          <FileDown className="w-4 h-4" /> Download PDF Report
-                       </Button>
-                       <Button 
-                          onClick={() => window.location.href = "mailto:admitwise2@gmail.com"}
-                          variant="secondary" 
-                          className="w-full justify-start gap-3 h-12 bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20 font-semibold"
-                       >
-                          <MessageSquare className="w-4 h-4" /> Contact Admin / Support (admitwise2@gmail.com)
-                       </Button>
-                    </div>
-                  )}
-
-                  {/* Automated Reports Toggle (Feature 55) */}
-                  {(mobileTab === 'all' || mobileTab === 'actions') && (
-                    <Card className="border-border shadow-sm">
-                       <CardContent className="p-4 flex flex-col gap-3">
-                          <div className="flex items-center justify-between">
-                             <div className="flex items-center gap-3">
-                                <Mail className="w-5 h-5 text-muted-foreground" />
-                                <div className="text-sm font-semibold">Weekly Email Reports</div>
-                             </div>
-                             <input type="checkbox" className="w-4 h-4 accent-primary" defaultChecked />
-                          </div>
-                          <Button 
-                            onClick={handleEmailReport} 
-                            disabled={loading || !activeStudentData} 
-                            variant="outline" 
-                            size="sm" 
-                            className="w-full text-xs gap-2"
-                          >
-                            <Mail className="w-3 h-3" /> Send PDF via SMTP Now
-                          </Button>
-                       </CardContent>
-                    </Card>
-                  )}
+                <Card className="border border-border bg-background shadow-sm">
+                   <CardHeader className="border-b border-border bg-background pb-4">
+                      <CardTitle className="text-lg flex items-center gap-2 text-foreground">
+                         <Clock className="h-5 w-5 text-primary" /> Activity Summary
+                      </CardTitle>
+                   </CardHeader>
+                   <CardContent className="p-6 space-y-4">
+                      <div className="flex justify-between items-center p-4 rounded-xl border border-border bg-background">
+                        <div className="text-xs font-bold uppercase text-muted-foreground">Weekly Focus</div>
+                        <div className="text-xl font-display font-bold text-foreground">{activeStudentData.weeklyFocusTime || '0m'}</div>
+                      </div>
+                      <div className="flex justify-between items-center p-4 rounded-xl border border-border bg-background">
+                        <div className="text-xs font-bold uppercase text-muted-foreground">Attendance</div>
+                        <div className="text-xl font-display font-bold text-foreground">{activeStudentData.attendanceRate || '0%'}</div>
+                      </div>
+                   </CardContent>
+                </Card>
+             </div>
+             
+             {/* Action Buttons */}
+             <Card className="border border-border bg-background shadow-sm md:col-span-2 lg:col-span-3">
+               <CardContent className="p-6 flex flex-wrap gap-4">
+                  <Button 
+                     onClick={async () => {
+                       if (activeStudentData?.id) {
+                         const toastId = toast.loading('Generating personalized AI motivation...');
+                         try {
+                             const prompt = `You are an academic counselor. Write a very short (1-2 sentences), highly motivating push notification for a student named ${activeStudentData.name}. Their target JAMB score is ${activeStudentData.target}. Current score average is ${activeStudentData.score}. Make it encouraging and personal. Do NOT use emojis.`;
+                             const aiMessage = await callGroqAPI([{ role: 'user', content: prompt }]);
+                             const cleanMessage = stripThinkTags(aiMessage).replace(/"/g, '').trim();
+                             
+                             await sendNotification(
+                               activeStudentData.id,
+                               'Motivation from Guardian!',
+                               `${cleanMessage} - Sent by ${profile?.full_name || 'Your Guardian'}`,
+                               'success'
+                             );
+                             toast.success(`AI Motivation Nudge sent to ${activeStudentData.name}!`, { id: toastId });
+                         } catch (e) {
+                             toast.error('Failed to generate motivation nudge.', { id: toastId });
+                         }
+                       }
+                     }}
+                     className="gap-2"
+                  >
+                     <BellRing className="w-4 h-4" /> Send AI Motivation Nudge
+                  </Button>
+                  <Button onClick={downloadPDF} disabled={loading} variant="outline" className="gap-2">
+                     <FileDown className="w-4 h-4" /> Download Report
+                  </Button>
+               </CardContent>
+             </Card>
+          </div>
+        )}
+      </main>
+             {/* Automated Reports Toggle (Feature 55) */}
+             {(mobileTab === 'all' || mobileTab === 'actions') && (
+               <Card className="border border-border bg-background shadow-sm">
+                  <CardContent className="p-4 flex flex-col gap-3">
+                     <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                           <Mail className="w-5 h-5 text-muted-foreground" />
+                           <div className="text-sm font-semibold text-foreground">Weekly Email Reports</div>
+                        </div>
+                        <input type="checkbox" className="w-4 h-4 accent-primary" defaultChecked />
+                     </div>
+                     <Button 
+                       onClick={handleEmailReport} 
+                       disabled={loading || !activeStudentData} 
+                       variant="outline" 
+                       size="sm" 
+                       className="w-full text-xs gap-2"
+                     >
+                       <Mail className="w-3 h-3" /> Send PDF via SMTP Now
+                     </Button>
+                  </CardContent>
+               </Card>
+             )}
 
                   {/* Syllabus Progress Tracker (Feature 53) */}
                   {(mobileTab === 'all' || mobileTab === 'overview') && (

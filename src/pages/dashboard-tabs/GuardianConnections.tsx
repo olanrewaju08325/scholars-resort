@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Users, Link as LinkIcon, Trash2, Copy, CheckCircle2 } from 'lucide-react';
+import { Users, Link2, Trash2, Copy, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
@@ -128,7 +128,7 @@ export const GuardianConnections = () => {
           <p className="text-muted-foreground">Manage parents or sponsors who can view your academic progress.</p>
         </div>
         <Button onClick={generateLink} disabled={generating} className="gap-2">
-          <LinkIcon className="w-4 h-4" /> {generating ? 'Generating...' : 'Generate New Link'}
+          <Link2 className="w-4 h-4" /> {generating ? 'Generating...' : 'Generate New Link'}
         </Button>
       </div>
 

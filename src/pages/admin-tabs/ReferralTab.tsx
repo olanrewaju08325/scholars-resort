@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
-import { Network, Users, Trophy, Percent, Link as LinkIcon } from 'lucide-react';
+import { Network, Users, Trophy, Percent, Link2 } from 'lucide-react';
 
 export const ReferralTab = () => {
   const [referrals, setReferrals] = useState<any[]>([]);
@@ -162,7 +162,7 @@ export const ReferralTab = () => {
                         <div className="font-medium text-slate-200">{ref.referrer?.full_name || 'Unknown'}</div>
                         <div className="text-xs text-slate-500 line-clamp-1">{ref.referrer?.email}</div>
                       </td>
-                      <td className="px-4 py-3 text-center text-slate-600"><LinkIcon className="w-4 h-4 mx-auto" /></td>
+                      <td className="px-4 py-3 text-center text-slate-600"><Link2 className="w-4 h-4 mx-auto" /></td>
                       <td className="px-4 py-3">
                         <div className="font-medium text-slate-200">{ref.referred?.full_name || 'Unknown'}</div>
                         <div className="text-xs text-slate-500 line-clamp-1">{ref.referred?.email}</div>
