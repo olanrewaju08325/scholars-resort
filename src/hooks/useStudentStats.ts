@@ -13,7 +13,7 @@ export function useStudentStats() {
     coins: 0,
     rank: 1,
     history: [] as { name: string; score: number }[],
-    loading: true,
+    statsLoading: true,
   });
 
   useEffect(() => {
@@ -65,7 +65,7 @@ export function useStudentStats() {
         coins: profile.coins || 0,
         rank: 1,
         history,
-        loading: false
+        statsLoading: false
       });
     };
 
