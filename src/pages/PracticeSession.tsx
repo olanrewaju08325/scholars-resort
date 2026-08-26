@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +17,7 @@ import { cleanQuestionText, cleanOptionText, ContentNormalizer } from '@/utils/q
 import { QuestionFlowService, type ExamMode } from '@/services/questionFlowService';
 import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
 import { useSwipeGesture } from '@/hooks/useSwipeGesture';
+import { CbtSnapshotService } from '@/services/cbtSnapshotService';
 
 const PracticeSession = () => {
   const { state } = useLocation();
@@ -340,6 +341,34 @@ const PracticeSession = () => {
 
   const q = currentQ;
   const answeredCount = Object.keys(answersMap).length;
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+
+  const handleTakeSnapshot = async () => {
+    setIsCapturingSnapshot(true);
+    try {
+      const snap = await CbtSnapshotService.captureSnapshot({
+        examMode: (state?.mode as any) || 'subject',
+        sessionTitle: `Practice: ${selectedSubject} (${selectedYear || 'All Years'})`,
+        questions,
+        answers: answersMap,
+        currentQuestionIndex: currentIndex,
+        timeLeftSeconds: timeRemaining || 3600,
+        totalTimeSeconds: 3600,
+        flaggedIndices: [],
+        user: {
+          id: profile?.id || 'anonymous_student',
+          name: profile?.full_name || 'Student',
+          email: profile?.email || 'student@scholarsresort.com'
+        },
+        subjectName: selectedSubject
+      });
+      toast.success(`📸 Practice Snapshot #${snap.id} captured!`);
+    } catch (err: any) {
+      toast.error('Snapshot capture error: ' + err.message);
+    } finally {
+      setIsCapturingSnapshot(false);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
@@ -368,6 +397,18 @@ const PracticeSession = () => {
                <Clock className="w-3.5 h-3.5" /> 00:{timeRemaining?.toString().padStart(2, '0')}
              </div>
           )}
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTakeSnapshot}
+            disabled={isCapturingSnapshot}
+            className="h-9 text-xs font-semibold gap-1.5 bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border-sky-500/30"
+            title="Take snapshot for diagnostics"
+          >
+            <Camera className={`w-3.5 h-3.5 ${isCapturingSnapshot ? 'animate-spin' : ''}`} />
+            <span className="hidden sm:inline">Snapshot</span>
+          </Button>
           
           <Button variant="outline" size="sm" onClick={() => setShowNavDrawer(true)} className="hidden sm:flex h-9 text-xs font-semibold gap-1.5">
             <Grid3X3 className="w-3.5 h-3.5 text-primary" /> Navigator

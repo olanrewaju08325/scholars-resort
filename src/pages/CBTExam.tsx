@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles, Grid3X3, Layers, Compass } from 'lucide-react';
+import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles, Grid3X3, Layers, Compass, Camera } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { JambCalculator } from '@/components/cbt/JambCalculator';
 import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
 import { useSwipeGesture } from '@/hooks/useSwipeGesture';
+import { CbtSnapshotService } from '@/services/cbtSnapshotService';
 
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -394,6 +395,34 @@ const CBTExam = () => {
     });
   }, [profile, questions, sessionStartedAt, timeLeft]);
 
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
+
+  const handleTakeSnapshot = async () => {
+    setIsCapturingSnapshot(true);
+    try {
+      const snap = await CbtSnapshotService.captureSnapshot({
+        examMode: 'mock',
+        sessionTitle: `UTME CBT Exam (${examSubjectsList.join(', ')})`,
+        questions,
+        answers,
+        currentQuestionIndex: currentQuestionIdx,
+        timeLeftSeconds: timeLeft,
+        totalTimeSeconds: 7200,
+        flaggedIndices: Object.keys(flagged).filter(k => flagged[Number(k)]).map(Number),
+        user: {
+          id: profile?.id || 'anonymous_candidate',
+          name: profile?.full_name || 'Candidate',
+          email: profile?.email || 'candidate@scholarsresort.com'
+        }
+      });
+      toast.success(`📸 Session Snapshot #${snap.id} saved! Available in Admin Dashboard.`);
+    } catch (err: any) {
+      toast.error('Failed to capture snapshot: ' + err.message);
+    } finally {
+      setIsCapturingSnapshot(false);
+    }
+  };
+
   const toggleFlag = useCallback(() => {
     setFlagged(prev => ({ ...prev, [currentQuestionIdx]: !prev[currentQuestionIdx] }));
   }, [currentQuestionIdx]);
@@ -509,72 +538,74 @@ const CBTExam = () => {
 
   if (!hasStarted) {
     return (
-      <div className="flex flex-col h-screen bg-slate-100 items-center justify-center p-6 w-full">
-        <div className="bg-white shadow-2xl rounded-none border-t-8 border-green-600 max-w-4xl w-full p-8">
-          <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
-            <div className="flex gap-4 items-center">
-              <div className="w-24 h-24 bg-slate-200 border border-slate-300 flex items-center justify-center text-slate-400 font-bold text-xs uppercase text-center">
+      <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-center p-3 sm:p-6 w-full overflow-y-auto">
+        <div className="bg-white dark:bg-card shadow-2xl rounded-xl border-t-8 border-green-600 max-w-4xl w-full p-4 sm:p-8 my-auto">
+          <div className="flex flex-col sm:flex-row justify-between items-center sm:items-start border-b border-slate-200 dark:border-border pb-4 sm:pb-6 mb-4 sm:mb-6 gap-4 text-center sm:text-left">
+            <div className="flex flex-col sm:flex-row gap-4 items-center">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-slate-200 dark:bg-muted border border-slate-300 dark:border-border flex items-center justify-center text-slate-500 dark:text-muted-foreground font-bold text-xs uppercase text-center rounded-lg shrink-0">
                 Candidate<br/>Photo
               </div>
               <div>
-                <h1 className="text-2xl font-bold uppercase text-green-800 mb-1">Joint Admissions and Matriculation Board</h1>
-                <h2 className="text-xl font-bold text-slate-700">2026 UTME Examination</h2>
-                <div className="mt-2 text-sm">
-                  <p><strong>Candidate Name:</strong> {profile?.full_name?.toUpperCase()}</p>
+                <h1 className="text-lg sm:text-2xl font-bold uppercase text-green-800 dark:text-green-400 mb-1 font-display">Joint Admissions and Matriculation Board</h1>
+                <h2 className="text-base sm:text-xl font-bold text-slate-700 dark:text-slate-200">2026 UTME Examination</h2>
+                <div className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400 space-y-0.5">
+                  <p><strong>Candidate Name:</strong> {profile?.full_name?.toUpperCase() || 'REGISTERED CANDIDATE'}</p>
                   <p><strong>Registration Number:</strong> {profile?.id.substring(0, 10).toUpperCase()}UT</p>
                   <p><strong>Seat Number:</strong> 042</p>
                 </div>
               </div>
             </div>
-            <div className="text-right">
-              <div className="w-16 h-16 bg-green-600 rounded flex items-center justify-center text-white font-bold text-2xl ml-auto mb-2">
+            <div className="hidden sm:block text-right">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-600 rounded-xl flex items-center justify-center text-white font-bold text-xl sm:text-2xl ml-auto mb-2 shadow-sm">
                 SR
               </div>
             </div>
           </div>
           
-          <div className="grid grid-cols-2 gap-8 mb-8">
-            <div className="bg-slate-50 p-4 border border-slate-200 rounded">
-              <h3 className="font-bold text-slate-800 mb-2 border-b pb-1">Registered UTME Subjects</h3>
-              <ul className="list-disc pl-5 text-sm space-y-1 font-bold text-slate-700 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 mb-6">
+            <div className="bg-slate-50 dark:bg-muted/30 p-4 border border-slate-200 dark:border-border rounded-xl">
+              <h3 className="font-bold text-slate-800 dark:text-slate-200 mb-2 border-b border-slate-200 dark:border-border pb-1 text-sm sm:text-base">Registered UTME Subjects</h3>
+              <ul className="list-disc pl-5 text-xs sm:text-sm space-y-1 font-semibold text-slate-700 dark:text-slate-300 mb-4">
                 {examSubjectsList.map((s: string, i: number) => (
                   <li key={i}>{s.toUpperCase()} ({s === 'Use of English' ? '60 Qs' : '40 Qs'})</li>
                 ))}
               </ul>
 
-              <div className="mt-4 pt-4 border-t border-slate-200">
-                <label className="text-xs font-bold uppercase tracking-wider text-slate-600 block mb-1">
+              <div className="mt-4 pt-3 border-t border-slate-200 dark:border-border">
+                <label className="text-xs font-bold uppercase tracking-wider text-slate-600 dark:text-slate-400 block mb-1.5">
                   Choose Starting Subject First:
                 </label>
                 <select 
-                  className="w-full bg-white border border-slate-300 rounded p-2 text-sm font-bold text-slate-800"
+                  className="w-full bg-white dark:bg-card border border-slate-300 dark:border-border rounded-lg p-2.5 text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200 shadow-sm"
                   value={startingSubject}
                   onChange={(e) => setStartingSubject(e.target.value)}
                 >
                   {examSubjectsList.map((subj, idx) => (
                     <option key={idx} value={subj}>
-                      Start with {subj} First ({subj === 'Use of English' ? '60 Questions' : '40 Questions'})
+                      Start with {subj} ({subj === 'Use of English' ? '60 Qs' : '40 Qs'})
                     </option>
                   ))}
                 </select>
               </div>
             </div>
-            <div className="bg-yellow-50 p-4 border border-yellow-200 rounded text-sm text-yellow-900">
-              <h3 className="font-bold mb-2 border-b border-yellow-200 pb-1 flex items-center gap-2"><AlertTriangle className="w-4 h-4" /> Important Instructions</h3>
-              <ul className="list-disc pl-5 space-y-1">
-                <li>Do not click "Submit Exam" until you have answered all questions.</li>
+            <div className="bg-amber-500/10 dark:bg-amber-950/20 p-4 border border-amber-500/20 rounded-xl text-xs sm:text-sm text-amber-900 dark:text-amber-300">
+              <h3 className="font-bold mb-2 border-b border-amber-500/20 pb-1 flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                <AlertTriangle className="w-4 h-4" /> Important Instructions
+              </h3>
+              <ul className="list-disc pl-5 space-y-1.5">
+                <li>Do not click "Submit Exam" until you have attempted your questions.</li>
                 <li><strong>Subject Switcher:</strong> Use the subject tabs at the top of the exam screen to freely switch between registered subjects at any time during the test.</li>
-                <li><strong>Laptop/PC Recommendation:</strong> For best exam experience, full split view, and quick desktop keyboard shortcuts (A, B, C, D, N, P), using a Laptop or Desktop computer is recommended.</li>
-                <li>Use <kbd className="px-1 bg-white border border-slate-300 rounded">A</kbd> <kbd className="px-1 bg-white border border-slate-300 rounded">B</kbd> <kbd className="px-1 bg-white border border-slate-300 rounded">C</kbd> <kbd className="px-1 bg-white border border-slate-300 rounded">D</kbd> to select answers.</li>
-                <li>Use <kbd className="px-1 bg-white border border-slate-300 rounded">N</kbd> for Next, <kbd className="px-1 bg-white border border-slate-300 rounded">P</kbd> for Previous.</li>
+                <li><strong>Mobile & Desktop Ready:</strong> On mobile, swipe left/right or tap Jump to navigate questions.</li>
+                <li>On desktop, use <kbd className="px-1.5 py-0.5 bg-card border rounded text-xs font-mono">A</kbd> <kbd className="px-1.5 py-0.5 bg-card border rounded text-xs font-mono">B</kbd> <kbd className="px-1.5 py-0.5 bg-card border rounded text-xs font-mono">C</kbd> <kbd className="px-1.5 py-0.5 bg-card border rounded text-xs font-mono">D</kbd> keys to select answers.</li>
+                <li>Use <kbd className="px-1.5 py-0.5 bg-card border rounded text-xs font-mono">N</kbd> for Next, <kbd className="px-1.5 py-0.5 bg-card border rounded text-xs font-mono">P</kbd> for Previous.</li>
               </ul>
             </div>
           </div>
 
-          <div className="flex justify-center border-t border-slate-200 pt-6">
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 border-t border-slate-200 dark:border-border pt-4 sm:pt-6">
             <Button 
               size="lg" 
-              className="bg-green-600 hover:bg-green-700 text-white px-12 py-6 text-xl rounded-none shadow-lg font-bold tracking-wide"
+              className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 sm:px-12 py-5 sm:py-6 text-base sm:text-lg rounded-xl shadow-lg font-bold tracking-wide transition-all active:scale-95"
               onClick={() => {
                 if (document.documentElement.requestFullscreen) {
                   document.documentElement.requestFullscreen().catch((err) => console.log('Fullscreen denied:', err));
@@ -602,7 +633,7 @@ const CBTExam = () => {
   const q = questions[currentQuestionIdx];
 
   return (
-    <div className="h-screen w-full bg-[#f4f7f6] text-slate-900 flex flex-col overflow-hidden select-none">
+    <div className="h-[100dvh] w-full bg-[#f4f7f6] dark:bg-background text-foreground flex flex-col overflow-hidden select-none">
       
       {/* Warning Overlay */}
       {showWarning && (
@@ -620,22 +651,24 @@ const CBTExam = () => {
       )}
 
       {/* Header - Classic JAMB style with modern touches */}
-      <header className={`transition-all duration-300 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-6 shadow-sm flex-shrink-0 ${focusMode ? 'h-16 bg-slate-900 text-white border-slate-800' : 'h-20'}`}>
-        <div className="flex items-center gap-3 md:gap-4">
-          <div className={`w-10 h-10 md:w-12 md:h-12 rounded-lg flex items-center justify-center font-bold text-xl ${focusMode ? 'bg-purple-600 text-white' : 'bg-green-600 text-white'}`}>
-            {focusMode ? <Eye className="w-5 h-5" /> : 'SR'}
+      <header className={`transition-all duration-300 bg-white dark:bg-card border-b border-slate-200 dark:border-border flex items-center justify-between px-3 md:px-6 shadow-xs flex-shrink-0 ${focusMode ? 'h-14 md:h-16 bg-slate-900 text-white border-slate-800' : 'h-16 md:h-20'}`}>
+        <div className="flex items-center gap-2 md:gap-4 min-w-0">
+          <div className={`w-8 h-8 md:w-12 md:h-12 rounded-lg flex items-center justify-center font-bold text-sm md:text-xl shrink-0 ${focusMode ? 'bg-purple-600 text-white' : 'bg-green-600 text-white'}`}>
+            {focusMode ? <Eye className="w-4 h-4 md:w-5 md:h-5" /> : 'SR'}
           </div>
-          <div>
-            <h1 className={`font-bold text-base md:text-lg leading-tight uppercase ${focusMode ? 'text-white' : 'text-slate-800'}`}>
-              {focusMode ? 'Focus Mode Active • Unified Tertiary Matriculation Examination' : 'Unified Tertiary Matriculation Examination'}
+          <div className="min-w-0">
+            <h1 className={`font-bold text-xs sm:text-sm md:text-lg leading-tight uppercase truncate ${focusMode ? 'text-white' : 'text-slate-800 dark:text-slate-100'}`}>
+              {focusMode ? 'Focus Mode Active' : 'UTME CBT Exam'}
             </h1>
             {!focusMode && (
-              <p className="text-xs md:text-sm text-slate-500 font-medium">{profile?.full_name || 'Candidate'} • {profile?.id.substring(0,8).toUpperCase()}</p>
+              <p className="text-[10px] sm:text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium truncate">
+                {profile?.full_name || 'Candidate'} • <span className="font-mono">{profile?.id?.substring(0,6).toUpperCase()}</span>
+              </p>
             )}
           </div>
         </div>
         
-        <div className="flex items-center gap-2 md:gap-3">
+        <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
           {/* Focus Mode Toggle */}
           <Button 
             id="cbt-focus-mode-toggle-btn"
@@ -650,15 +683,15 @@ const CBTExam = () => {
                 toast.info('Focus Mode Disabled');
               }
             }} 
-            className={`h-9 px-3 text-xs border font-medium transition-all ${
+            className={`h-8 sm:h-9 px-2 sm:px-3 text-xs border font-medium transition-all ${
               focusMode 
-                ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-500 shadow-md ring-2 ring-purple-400/50' 
-                : 'bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-300'
+                ? 'bg-purple-600 hover:bg-purple-700 text-white border-purple-500 shadow-xs' 
+                : 'bg-slate-100 dark:bg-muted hover:bg-slate-200 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-border'
             }`}
-            title="Toggle Focus Mode (Minimizes support widgets and distraction-free testing)"
+            title="Toggle Focus Mode"
           >
-            {focusMode ? <EyeOff className="w-3.5 h-3.5 mr-1.5" /> : <Eye className="w-3.5 h-3.5 mr-1.5 text-purple-600" />}
-            <span>{focusMode ? 'Exit Focus' : 'Focus Mode'}</span>
+            {focusMode ? <EyeOff className="w-3.5 h-3.5 sm:mr-1.5" /> : <Eye className="w-3.5 h-3.5 sm:mr-1.5 text-purple-600 dark:text-purple-400" />}
+            <span className="hidden sm:inline">{focusMode ? 'Exit' : 'Focus'}</span>
           </Button>
 
           <Button 
@@ -669,27 +702,27 @@ const CBTExam = () => {
               setSoundEnabled(nextState);
               if (nextState) {
                 playFiveMinuteWarningSound();
-                toast.success('Exam audio cues enabled (Test chime played)');
+                toast.success('Exam audio cues enabled');
               } else {
                 toast.info('Exam audio cues muted');
               }
             }} 
-            className={`hidden sm:flex h-9 px-3 text-xs border ${soundEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-300' : 'bg-slate-100 text-slate-500 border-slate-300'}`}
-            title={soundEnabled ? 'Audio cues active (Click to mute)' : 'Audio cues muted (Click to enable)'}
+            className={`hidden sm:flex h-9 px-3 text-xs border ${soundEnabled ? 'bg-emerald-50 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800' : 'bg-slate-100 dark:bg-muted text-slate-500 border-slate-300 dark:border-border'}`}
+            title={soundEnabled ? 'Audio cues active' : 'Audio cues muted'}
           >
-            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 mr-1.5 text-emerald-600" /> : <VolumeX className="w-3.5 h-3.5 mr-1.5 text-slate-400" />}
-            <span className="hidden md:inline">{soundEnabled ? 'Audio: On' : 'Audio: Muted'}</span>
+            {soundEnabled ? <Volume2 className="w-3.5 h-3.5 mr-1.5 text-emerald-600 dark:text-emerald-400" /> : <VolumeX className="w-3.5 h-3.5 mr-1.5 text-slate-400" />}
+            <span className="hidden md:inline">{soundEnabled ? 'Sound' : 'Muted'}</span>
           </Button>
 
           <Button 
             variant="outline" 
             size="sm" 
             onClick={() => setShowNavDrawer(true)} 
-            className="h-9 px-2.5 sm:px-3 text-xs bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 font-bold flex items-center gap-1.5 shadow-sm"
-            title="Open Question Navigator Grid & Quick Jumps (Shortcut: G)"
+            className="h-8 sm:h-9 px-2 sm:px-3 text-xs bg-primary/10 hover:bg-primary/20 text-primary border-primary/30 font-bold flex items-center gap-1 sm:gap-1.5 shadow-xs"
+            title="Open Question Navigator Grid (Shortcut: G)"
           >
             <Grid3X3 className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Navigator</span>
+            <span className="hidden sm:inline">Grid</span>
             <span className="text-[10px] bg-primary text-primary-foreground px-1.5 py-0.2 rounded-full font-mono">
               {currentQuestionIdx + 1}/{questions.length}
             </span>
@@ -698,32 +731,40 @@ const CBTExam = () => {
           <Button 
             variant="outline" 
             size="sm" 
-            onClick={() => setShowShortcutsModal(true)} 
-            className="hidden lg:flex bg-slate-100 text-slate-700 border-slate-300 h-9 px-3 text-xs"
-            title="View keyboard shortcuts (or press ?)"
+            onClick={() => setShowCalculator(!showCalculator)} 
+            className="h-8 sm:h-9 px-2 sm:px-2.5 text-xs bg-slate-100 dark:bg-muted text-slate-700 dark:text-slate-200 border-slate-300 dark:border-border"
           >
-            <Keyboard className="w-3.5 h-3.5 mr-1.5 text-slate-600" />
-            <span>Shortcuts (?)</span>
+            <Calculator className="w-3.5 h-3.5 sm:mr-1" /> 
+            <span className="hidden md:inline">Calc</span>
           </Button>
 
-          <Button variant="outline" size="sm" onClick={() => setShowCalculator(!showCalculator)} className="hidden md:flex bg-slate-100 text-slate-700 border-slate-300">
-            <Calculator className="w-4 h-4 mr-2" /> Calculator
+          {/* Admin / Diagnostic Snapshot Button */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleTakeSnapshot}
+            disabled={isCapturingSnapshot}
+            className="h-8 sm:h-9 px-2 sm:px-2.5 text-xs bg-sky-500/10 hover:bg-sky-500/20 text-sky-600 dark:text-sky-400 border-sky-500/30 font-semibold"
+            title="Capture Active Exam State Snapshot for Diagnostics"
+          >
+            <Camera className={`w-3.5 h-3.5 sm:mr-1 ${isCapturingSnapshot ? 'animate-pulse' : ''}`} />
+            <span className="hidden md:inline">{isCapturingSnapshot ? 'Saving...' : 'Snapshot'}</span>
           </Button>
 
-          <div className="flex flex-col items-end pl-2">
+          <div className="flex flex-col items-end pl-1 sm:pl-2">
             {!focusMode && (
-              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Time Left</span>
+              <span className="hidden sm:inline text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Time Left</span>
             )}
             <motion.div 
-              animate={timeLeft <= 300 ? { scale: [1, 1.08, 1], opacity: [1, 0.7, 1] } : {}}
+              animate={timeLeft <= 300 ? { scale: [1, 1.05, 1], opacity: [1, 0.7, 1] } : {}}
               transition={timeLeft <= 300 ? { duration: 1, repeat: Infinity, ease: "easeInOut" } : {}}
-              className={`flex items-center gap-1.5 md:gap-2 text-xl md:text-3xl font-display font-bold px-2.5 py-1 rounded-lg ${
+              className={`flex items-center gap-1 md:gap-1.5 text-sm sm:text-lg md:text-2xl font-display font-bold px-2 py-0.5 sm:py-1 rounded-lg ${
                 timeLeft <= 300 
                   ? 'bg-red-500/10 text-red-600 border border-red-500/30' 
                   : focusMode ? 'bg-purple-950/80 text-purple-300 border border-purple-700' : getTimeColorClass()
               }`}
             >
-              <Clock className="w-4 h-4 md:w-6 md:h-6" />
+              <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 md:w-5 md:h-5" />
               <span className="font-mono tracking-tighter">{formatTime(timeLeft)}</span>
             </motion.div>
           </div>
@@ -731,7 +772,7 @@ const CBTExam = () => {
       </header>
       
       {showCalculator && (
-        <div className="fixed top-24 right-10 z-50 animate-in slide-in-from-top-4">
+        <div className="fixed top-16 sm:top-24 right-3 sm:right-10 z-50 animate-in slide-in-from-top-4">
           <JambCalculator onClose={() => setShowCalculator(false)} />
         </div>
       )}
@@ -742,10 +783,10 @@ const CBTExam = () => {
         {/* Left Side: Question Area */}
         <div 
           {...swipeHandlers}
-          className="flex-1 flex flex-col relative bg-card text-card-foreground m-2 md:m-4 lg:mr-0 rounded-xl shadow-sm border border-border lg:min-h-0 min-h-[480px] touch-pan-y"
+          className="flex-1 flex flex-col relative bg-card text-card-foreground m-1.5 sm:m-2 md:m-4 lg:mr-0 rounded-xl shadow-xs border border-border min-h-0 touch-pan-y"
         >
           {/* Real JAMB Subject Switcher Tabs */}
-          <div className="bg-slate-900 dark:bg-slate-950 px-3 py-2 flex items-center gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
+          <div className="bg-slate-900 dark:bg-slate-950 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
             {examSubjectsList.map((subjName, idx) => {
               const activeQSubject = q?.subject_name;
               const isSelectedSubject = activeQSubject === subjName;
@@ -764,14 +805,14 @@ const CBTExam = () => {
                       setActiveSubjectTab(subjName);
                     }
                   }}
-                  className={`px-3 md:px-4 py-1.5 md:py-2 rounded text-[11px] md:text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1.5 md:gap-2 ${
+                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded text-[10px] sm:text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1 sm:gap-2 ${
                     isSelectedSubject
-                      ? 'bg-emerald-600 text-white shadow-md border border-emerald-400'
+                      ? 'bg-emerald-600 text-white shadow-xs border border-emerald-400'
                       : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
                   }`}
                 >
                   <span>{subjName}</span>
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${isSelectedSubject ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-800 text-slate-400'}`}>
+                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] ${isSelectedSubject ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-800 text-slate-400'}`}>
                     {answeredSubjCount}/{subjectQs.length || (subjName === 'Use of English' ? 60 : 40)}
                   </span>
                 </button>
@@ -857,32 +898,57 @@ const CBTExam = () => {
             </div>
           </motion.div>
 
-          <div className="p-3 md:p-4 border-t border-border bg-muted/30 rounded-b-xl flex justify-between items-center">
-            <Button variant="outline" onClick={handlePrev} disabled={currentQuestionIdx === 0} className="w-24 sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm">
-              <ChevronLeft className="w-4 h-4 mr-1 md:mr-2" /> Previous
+          <div className="p-2.5 sm:p-3 md:p-4 border-t border-border bg-muted/30 rounded-b-xl flex justify-between items-center gap-2">
+            <Button 
+              variant="outline" 
+              onClick={handlePrev} 
+              disabled={currentQuestionIdx === 0} 
+              className="flex-1 sm:flex-none sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm font-semibold active:scale-95"
+            >
+              <ChevronLeft className="w-4 h-4 mr-1" /> Prev
             </Button>
             
             <Button 
               variant="outline" 
               size="sm" 
               onClick={() => setShowNavDrawer(true)}
-              className="h-9 px-3 text-xs font-bold text-primary hover:bg-primary/10 border-primary/30 flex items-center gap-1.5"
+              className="h-9 px-2.5 sm:px-3 text-xs font-bold text-primary hover:bg-primary/10 border-primary/30 flex items-center gap-1 active:scale-95"
             >
               <Grid3X3 className="w-3.5 h-3.5" />
-              <span>Jump</span>
+              <span className="hidden xs:inline">Jump</span>
             </Button>
 
-            <Button onClick={handleNext} disabled={currentQuestionIdx === questions.length - 1} className="w-24 sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm bg-primary hover:bg-primary/90">
-              Next <ChevronRight className="w-4 h-4 ml-1 md:ml-2" />
+            <Button 
+              onClick={handleNext} 
+              disabled={currentQuestionIdx === questions.length - 1} 
+              className="flex-1 sm:flex-none sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm bg-primary hover:bg-primary/90 font-semibold active:scale-95"
+            >
+              Next <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
+
+            {/* Mobile-only Submit Quick Action */}
+            <Button 
+              onClick={() => {
+                confirmAction(
+                  "Submit Exam",
+                  "Are you sure you want to submit your exam now?",
+                  () => submitExam()
+                );
+              }}
+              variant="destructive"
+              size="sm"
+              className="lg:hidden h-9 px-2.5 sm:px-3 text-xs font-bold shadow-xs active:scale-95"
+            >
+              Submit
             </Button>
           </div>
         </div>
 
-        {/* Right Side: Navigator */}
-        <div className="w-full lg:w-80 bg-card text-card-foreground m-2 md:m-4 lg:ml-4 lg:mr-4 rounded-xl shadow-sm border border-border flex flex-col lg:max-h-full max-h-[380px]">
-          <div className="p-3 md:p-4 border-b border-border bg-muted/30 rounded-t-xl flex justify-between items-center">
+        {/* Right Side: Desktop Navigator */}
+        <div className="hidden lg:flex w-80 bg-card text-card-foreground m-4 ml-2 rounded-xl shadow-xs border border-border flex-col max-h-full">
+          <div className="p-3.5 border-b border-border bg-muted/30 rounded-t-xl flex justify-between items-center">
             <div className="flex items-center gap-2">
-              <h3 className="font-bold text-sm md:text-base text-foreground">Question Navigator</h3>
+              <h3 className="font-bold text-sm text-foreground">Question Navigator</h3>
               <Button 
                 variant="ghost" 
                 size="sm" 
@@ -898,23 +964,23 @@ const CBTExam = () => {
             </span>
           </div>
           
-          <div className="flex-1 overflow-y-auto p-3 md:p-4">
-             <div className="grid grid-cols-5 md:grid-cols-6 lg:grid-cols-5 gap-2">
+          <div className="flex-1 overflow-y-auto p-3.5">
+             <div className="grid grid-cols-5 gap-2">
                 {questions.map((q, idx) => {
                   const isAnswered = !!answers[q.id];
                   const isFlagged = flagged[idx];
                   const isCurrent = currentQuestionIdx === idx;
                   
                   let bgColor = "bg-muted/40 border-border text-muted-foreground";
-                  if (isCurrent) bgColor = "bg-primary border-primary text-primary-foreground font-bold shadow-md transform scale-105";
-                  else if (isFlagged) bgColor = "bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400";
+                  if (isCurrent) bgColor = "bg-primary border-primary text-primary-foreground font-bold shadow-xs scale-105";
+                  else if (isFlagged) bgColor = "bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400 font-semibold";
                   else if (isAnswered) bgColor = "bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-medium";
 
                   return (
                     <button
                       key={idx}
                       onClick={() => setCurrentQuestionIdx(idx)}
-                      className={`w-full aspect-square rounded-lg border text-xs transition-all flex items-center justify-center ${bgColor} hover:opacity-80`}
+                      className={`w-full aspect-square rounded-lg border text-xs transition-all flex items-center justify-center ${bgColor} hover:opacity-80 active:scale-95`}
                     >
                       {idx + 1}
                     </button>
@@ -923,14 +989,14 @@ const CBTExam = () => {
              </div>
           </div>
 
-          <div className="p-3 md:p-4 border-t border-border bg-muted/30 rounded-b-xl space-y-3">
+          <div className="p-3.5 border-t border-border bg-muted/30 rounded-b-xl space-y-3">
             <div className="grid grid-cols-2 gap-2 text-[11px] text-muted-foreground">
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-emerald-500/20 border border-emerald-500/40 rounded" /> Answered</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-red-500/20 border border-red-500/40 rounded" /> Flagged</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-muted/40 border border-border rounded" /> Unanswered</div>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 bg-primary rounded" /> Current</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-emerald-500/30 border border-emerald-500 rounded" /> Answered</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-red-500/30 border border-red-500 rounded" /> Flagged</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-muted border border-border rounded" /> Unanswered</div>
+              <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-primary rounded" /> Current</div>
             </div>
-            <Button onClick={() => submitExam()} variant="destructive" className="w-full font-bold h-11 shadow-sm text-sm">
+            <Button onClick={() => submitExam()} variant="destructive" className="w-full font-bold h-10 shadow-xs text-sm active:scale-95">
               SUBMIT EXAM
             </Button>
           </div>

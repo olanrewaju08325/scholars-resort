@@ -8,6 +8,12 @@ import { DashboardOverview } from '@/components/admin/DashboardOverview';
 import { OrphanedEntriesScanner } from '@/components/admin/OrphanedEntriesScanner';
 import { QuickStats } from '@/components/admin/QuickStats';
 import { GroqLiveQuotaWidget } from '@/components/GroqLiveQuotaWidget';
+import { FlowValidatorStatusWidget } from '@/components/admin/FlowValidatorStatusWidget';
+import { FlowValidatorTestCoverageCard } from '@/components/admin/FlowValidatorTestCoverageCard';
+import { FlowValidatorHistoricalChart } from '@/components/admin/FlowValidatorHistoricalChart';
+import { CbtResourceMonitorCard } from '@/components/admin/CbtResourceMonitorCard';
+import { RealtimeUsageQuotaMonitor } from '@/components/admin/RealtimeUsageQuotaMonitor';
+import { CbtSessionSnapshotViewer } from '@/components/admin/CbtSessionSnapshotViewer';
 import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 
 export const DashboardTab = () => {
@@ -150,6 +156,24 @@ export const DashboardTab = () => {
          </div>
       </div>
 
+      {/* Real-time System Storage, Database, SMTP & AI Quota Monitor & Limits */}
+      <RealtimeUsageQuotaMonitor />
+
+      {/* CBT Engine Browser Memory & Network Latency Resource Monitor */}
+      <CbtResourceMonitorCard currentModule="CBT Engine Practice & Exam Suite" />
+
+      {/* CBT Session Snapshot Inspector & Reproduction Player */}
+      <CbtSessionSnapshotViewer />
+
+      {/* Real-time FlowValidator Engine Status */}
+      <FlowValidatorStatusWidget />
+
+      {/* CBT Test Coverage Summary Card */}
+      <FlowValidatorTestCoverageCard />
+
+      {/* Historical Reliability Trend Chart (30-Day Recharts Engine) */}
+      <FlowValidatorHistoricalChart />
+
       {/* Real-time QuickStats Repository Counters */}
       <QuickStats />
 
@@ -162,15 +186,15 @@ export const DashboardTab = () => {
       {/* Orphaned Entries Cleaner & Cron Audit */}
       <OrphanedEntriesScanner />
 
-      {/* Top Metrics Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Top Metrics Row: Seamless single column on mobile, 2 on tablet, 4 on desktop */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
         <Card className="bg-slate-900/50 backdrop-blur-md border-slate-800 text-slate-100 hover:border-blue-500/50 transition-colors">
           <CardHeader className="pb-2 flex flex-row items-center justify-between">
             <CardTitle className="text-sm font-medium text-slate-400">Total Revenue</CardTitle>
             <Activity className="h-4 w-4 text-green-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-mono">{loading ? '...' : `₦${stats.revenue.toLocaleString()}`}</div>
+            <div className="text-2xl sm:text-3xl font-bold font-mono">{loading ? '...' : `₦${stats.revenue.toLocaleString()}`}</div>
             <p className={`text-xs flex items-center gap-1 mt-2 ${stats.revenueGrowth >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {stats.revenueGrowth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
               {Math.abs(stats.revenueGrowth).toFixed(1)}% MoM
@@ -184,7 +208,7 @@ export const DashboardTab = () => {
             <Users className="h-4 w-4 text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-mono">{loading ? '...' : stats.students.toLocaleString()}</div>
+            <div className="text-2xl sm:text-3xl font-bold font-mono">{loading ? '...' : stats.students.toLocaleString()}</div>
             <p className={`text-xs flex items-center gap-1 mt-2 ${stats.studentGrowth >= 0 ? 'text-green-400' : 'text-red-400'}`}>
               {stats.studentGrowth >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
               {Math.abs(stats.studentGrowth).toFixed(1)}% vs last week
@@ -198,7 +222,7 @@ export const DashboardTab = () => {
             <BookOpen className="h-4 w-4 text-purple-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-mono">{loading ? '...' : stats.examsTaken.toLocaleString()}</div>
+            <div className="text-2xl sm:text-3xl font-bold font-mono">{loading ? '...' : stats.examsTaken.toLocaleString()}</div>
             <p className="text-xs text-slate-400 mt-2">Total exams submitted</p>
           </CardContent>
         </Card>
@@ -209,7 +233,7 @@ export const DashboardTab = () => {
             <Trophy className="h-4 w-4 text-yellow-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold font-mono">{loading ? '...' : stats.tournamentsLive}</div>
+            <div className="text-2xl sm:text-3xl font-bold font-mono">{loading ? '...' : stats.tournamentsLive}</div>
             <p className="text-xs text-yellow-400/80 mt-2 animate-pulse">Running right now</p>
           </CardContent>
         </Card>

@@ -1,9 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
-import { calculateLevel, LEVEL_TIERS } from '@/lib/gamification';
-import { Zap, Gift, Star, Award, Flame, ChevronRight } from 'lucide-react';
+import { calculateLevel } from '@/lib/gamification';
+import { Zap, Gift, Award, ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 
 export const XPProgressPanel = () => {
@@ -11,6 +11,21 @@ export const XPProgressPanel = () => {
   const [transactions, setTransactions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [liveXp, setLiveXp] = useState<number>(profile?.xp || 0);
+
+  const fetchTransactions = useCallback(async () => {
+    if (!profile?.id) return;
+    setLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('xp_transactions')
+        .select('*')
+        .eq('user_id', profile.id)
+        .order('created_at', { ascending: false })
+        .limit(4);
+      if (!error && data) setTransactions(data);
+    } catch {}
+    setLoading(false);
+  }, [profile?.id]);
 
   useEffect(() => {
     if (profile?.xp !== undefined) {
@@ -23,30 +38,16 @@ export const XPProgressPanel = () => {
     const handleXpUpdate = (e: any) => {
       if (e.detail?.xp !== undefined) {
         setLiveXp(e.detail.xp);
-        if (profile?.id) fetchTransactions();
+        fetchTransactions();
       }
     };
     window.addEventListener('user_xp_updated', handleXpUpdate);
     return () => window.removeEventListener('user_xp_updated', handleXpUpdate);
-  }, [profile?.id]);
+  }, [fetchTransactions]);
 
   useEffect(() => {
-    if (profile?.id) fetchTransactions();
-  }, [profile?.id]);
-
-  const fetchTransactions = async () => {
-    setLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('xp_transactions')
-        .select('*')
-        .eq('user_id', profile!.id)
-        .order('created_at', { ascending: false })
-        .limit(4);
-      if (!error && data) setTransactions(data);
-    } catch {}
-    setLoading(false);
-  };
+    fetchTransactions();
+  }, [fetchTransactions]);
 
   const levelInfo = calculateLevel(liveXp);
 

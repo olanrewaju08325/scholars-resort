@@ -105,14 +105,14 @@ export const AdminAITab = () => {
   const [newKeyInput, setNewKeyInput] = useState('');
   const [updatingKey, setUpdatingKey] = useState(false);
 
-  useEffect(() => {
-    loadQuota();
-  }, []);
-
-  const loadQuota = async () => {
+  const loadQuota = useCallback(async () => {
     const status = await aiRateLimiter.getQuotaStatus();
     setQuotaStatus(status);
-  };
+  }, []);
+
+  useEffect(() => {
+    loadQuota();
+  }, [loadQuota]);
 
   const handleUpdateKey = async () => {
     if (!newKeyInput.trim()) {

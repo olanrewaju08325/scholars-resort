@@ -974,6 +974,172 @@ app.get('/api/admin/subject-counts', async (req, res) => {
   }
 });
 
+// In-memory / server-side store for CBT Session Snapshots
+const serverCbtSnapshots: any[] = [];
+
+// API Route: Get & Save CBT Session Snapshots
+app.get('/api/cbt-snapshots', (req, res) => {
+  return res.json({ success: true, snapshots: serverCbtSnapshots.slice(0, 100) });
+});
+
+app.post('/api/cbt-snapshots', async (req, res) => {
+  try {
+    const snapshot = req.body;
+    if (!snapshot || !snapshot.id) {
+      return res.status(400).json({ success: false, error: 'Snapshot data with ID is required.' });
+    }
+
+    serverCbtSnapshots.unshift(snapshot);
+    if (serverCbtSnapshots.length > 200) {
+      serverCbtSnapshots.length = 200;
+    }
+
+    // Persist to audit_logs
+    try {
+      await supabase.from('audit_logs').insert({
+        user_id: snapshot.user?.id && snapshot.user.id.length > 10 ? snapshot.user.id : null,
+        action: `CBT Session Snapshot Captured: ${snapshot.id}`,
+        entity_type: 'cbt_snapshot',
+        entity_id: snapshot.id,
+        status: 'success'
+      });
+    } catch (_) {}
+
+    return res.json({ success: true, snapshotId: snapshot.id, message: 'Snapshot saved successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Real-Time System Resource Usage & Quota Tracker
+app.get('/api/system-usage', async (req, res) => {
+  try {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayIso = startOfToday.toISOString();
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const monthIso = startOfMonth.toISOString();
+
+    const [
+      { count: questions },
+      { count: profiles },
+      { count: examSessions },
+      { count: sessionAnswers },
+      { count: auditLogs },
+      { count: emailLogs },
+      { count: studyMaterials },
+      { count: todaySentEmails },
+      { count: monthSentEmails },
+      { count: todayFailedEmails }
+    ] = await Promise.all([
+      supabase.from('questions').select('*', { count: 'exact', head: true }),
+      supabase.from('profiles').select('*', { count: 'exact', head: true }),
+      supabase.from('exam_sessions').select('*', { count: 'exact', head: true }),
+      supabase.from('session_answers').select('*', { count: 'exact', head: true }),
+      supabase.from('audit_logs').select('*', { count: 'exact', head: true }),
+      supabase.from('email_logs').select('*', { count: 'exact', head: true }),
+      supabase.from('study_materials').select('*', { count: 'exact', head: true }),
+      supabase.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', todayIso).eq('status', 'sent'),
+      supabase.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', monthIso).eq('status', 'sent'),
+      supabase.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', todayIso).eq('status', 'failed')
+    ]);
+
+    const qCount = questions || 0;
+    const pCount = profiles || 0;
+    const sessCount = examSessions || 0;
+    const ansCount = sessionAnswers || 0;
+    const auditCount = auditLogs || 0;
+    const emailCount = emailLogs || 0;
+    const matCount = studyMaterials || 0;
+
+    const totalRows = qCount + pCount + sessCount + ansCount + auditCount + emailCount + matCount;
+    const estimatedDbSizeMB = Math.round((totalRows * 1.35 / 1024) * 10) / 10;
+    const estimatedStorageMB = Math.round(((matCount * 2.8) + (pCount * 0.4) + 42) * 10) / 10;
+
+    // Load saved limits from DB platform_config
+    let limits = {
+      dbStorageLimitMB: 500,
+      fileStorageLimitMB: 1024,
+      smtpDailyLimit: 500,
+      aiMonthlyTokensLimit: 1000000,
+      alertThresholdPercent: 85,
+      adminAlertEmail: 'olanrewajuhamilot@gmail.com',
+      autoEmailAlertsEnabled: true
+    };
+
+    try {
+      const { data: configData } = await supabase
+        .from('platform_config')
+        .select('value')
+        .eq('key', 'system_usage_quota_limits')
+        .maybeSingle();
+
+      if (configData?.value && typeof configData.value === 'object') {
+        limits = { ...limits, ...configData.value };
+      }
+    } catch (_) {}
+
+    const memUsage = process.memoryUsage();
+    const serverMemoryMB = Math.round((memUsage.heapUsed / (1024 * 1024)) * 10) / 10;
+
+    return res.json({
+      success: true,
+      timestamp: new Date().toISOString(),
+      database: {
+        totalRows,
+        estimatedSizeMB: estimatedDbSizeMB,
+        limitMB: limits.dbStorageLimitMB,
+        percentUsed: Math.min(100, Math.round((estimatedDbSizeMB / limits.dbStorageLimitMB) * 100)),
+        mbLeft: Math.max(0, Math.round((limits.dbStorageLimitMB - estimatedDbSizeMB) * 10) / 10),
+        breakdown: { questions: qCount, profiles: pCount, examSessions: sessCount, sessionAnswers: ansCount, auditLogs: auditCount, emailLogs: emailCount, materials: matCount }
+      },
+      storage: {
+        usedMB: estimatedStorageMB,
+        limitMB: limits.fileStorageLimitMB,
+        percentUsed: Math.min(100, Math.round((estimatedStorageMB / limits.fileStorageLimitMB) * 100)),
+        mbLeft: Math.max(0, Math.round((limits.fileStorageLimitMB - estimatedStorageMB) * 10) / 10),
+        gbLeft: Math.round((Math.max(0, limits.fileStorageLimitMB - estimatedStorageMB) / 1024) * 100) / 100,
+        objectsCount: matCount + pCount + 24
+      },
+      smtp: {
+        emailsSentToday: todaySentEmails || 0,
+        emailsSentThisMonth: monthSentEmails || 0,
+        failedToday: todayFailedEmails || 0,
+        dailyLimit: limits.smtpDailyLimit,
+        percentUsed: Math.min(100, Math.round(((todaySentEmails || 0) / limits.smtpDailyLimit) * 100)),
+        emailsLeftToday: Math.max(0, limits.smtpDailyLimit - (todaySentEmails || 0))
+      },
+      server: {
+        nodeHeapUsedMB: serverMemoryMB,
+        uptimeSeconds: Math.floor(process.uptime())
+      },
+      limits
+    });
+  } catch (err: any) {
+    console.error('[System Usage API Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Update Quota Limits
+app.post('/api/system-usage/limits', async (req, res) => {
+  try {
+    const limits = req.body;
+    await supabase.from('platform_config').upsert({
+      key: 'system_usage_quota_limits',
+      value: limits,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' });
+
+    return res.json({ success: true, message: 'Quota limits persisted to cloud storage.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // API Route: Backend Question Flow Service Check across all modes (Subject Practice, Topic Drill, Speed Test, Full Mock)
 app.get('/api/health/question-flow-audit', async (req, res) => {
   const startTime = Date.now();

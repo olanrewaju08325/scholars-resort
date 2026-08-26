@@ -13,6 +13,8 @@ import {
   type CbtSuiteValidationReport 
 } from '@/services/flowValidatorService';
 import type { ExamMode } from '@/services/questionFlowService';
+import { FlowValidatorTestCoverageCard } from '@/components/admin/FlowValidatorTestCoverageCard';
+import { FlowValidatorHistoricalChart } from '@/components/admin/FlowValidatorHistoricalChart';
 import { toast } from 'sonner';
 
 export const FlowValidatorDashboard: React.FC = () => {
@@ -82,6 +84,31 @@ export const FlowValidatorDashboard: React.FC = () => {
     }
   };
 
+  const exportValidationCsv = () => {
+    if (!suiteReport && !currentTrace) {
+      toast.error('No validation report available to export as CSV. Run a test first.');
+      return;
+    }
+    const reportToExport = suiteReport || {
+      id: currentTrace?.id || `single_${Date.now()}`,
+      timestamp: currentTrace?.startTime || new Date().toISOString(),
+      testedSubject: selectedSubject,
+      totalModes: 1,
+      passedModes: currentTrace?.overallStatus === 'passed' ? 1 : 0,
+      warningModes: currentTrace?.overallStatus === 'warning' ? 1 : 0,
+      failedModes: currentTrace?.overallStatus === 'failed' ? 1 : 0,
+      totalLatencyMs: currentTrace?.totalLatencyMs || 0,
+      avgLatencyMs: currentTrace?.totalLatencyMs || 0,
+      totalRecordsFetched: currentTrace?.recordsFetched || 0,
+      allZeroMockEnforced: currentTrace?.zeroMockEnforced || true,
+      overallHealth: currentTrace?.overallStatus === 'passed' ? 'optimal' : currentTrace?.overallStatus === 'warning' ? 'moderate' : 'critical',
+      traces: currentTrace ? [currentTrace] : []
+    };
+
+    FlowValidator.exportReportToCsv(reportToExport as CbtSuiteValidationReport);
+    toast.success('Generated and downloaded FlowValidator CSV Report!');
+  };
+
   const exportValidationLog = () => {
     const exportData = {
       suiteReport,
@@ -105,6 +132,12 @@ export const FlowValidatorDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Test Coverage & 30-Day Historical Reliability Charts */}
+      <div className="grid grid-cols-1 gap-6">
+        <FlowValidatorTestCoverageCard />
+        <FlowValidatorHistoricalChart />
+      </div>
+
       {/* Control & Run Panel */}
       <Card className="border border-emerald-900/40 bg-gradient-to-br from-emerald-950/30 via-slate-900 to-slate-900 shadow-xl overflow-hidden">
         <CardHeader className="pb-4">
@@ -128,14 +161,24 @@ export const FlowValidatorDashboard: React.FC = () => {
 
             <div className="flex flex-wrap items-center gap-3 shrink-0">
               {(suiteReport || currentTrace) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={exportValidationLog}
-                  className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 h-9"
-                >
-                  <Download className="w-3.5 h-3.5 mr-1.5" /> Export Log
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportValidationCsv}
+                    className="border-emerald-700/50 bg-emerald-950/40 text-emerald-300 hover:bg-emerald-900/60 h-9"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5" /> Export CSV Report
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={exportValidationLog}
+                    className="border-slate-700 bg-slate-800 text-slate-200 hover:bg-slate-700 h-9"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1.5" /> Export JSON Log
+                  </Button>
+                </>
               )}
 
               <Button

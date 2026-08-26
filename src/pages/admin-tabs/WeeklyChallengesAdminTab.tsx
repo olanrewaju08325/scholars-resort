@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,11 +36,7 @@ export const WeeklyChallengesAdminTab = () => {
   const [questionJSON, setQuestionJSON] = useState('');
   const [title, setTitle] = useState('');
 
-  useEffect(() => {
-    fetchChallenges();
-  }, []);
-
-  const fetchChallenges = async () => {
+  const fetchChallenges = useCallback(async () => {
     setLoading(true);
     let items: any[] = [];
     try {
@@ -76,7 +72,11 @@ export const WeeklyChallengesAdminTab = () => {
 
     setChallenges(items);
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchChallenges();
+  }, [fetchChallenges]);
 
   // Pull real question from database matching subject and difficulty
   const fetchQuestionFromDatabase = async () => {

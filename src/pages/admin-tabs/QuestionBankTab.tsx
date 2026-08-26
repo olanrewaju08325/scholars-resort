@@ -423,17 +423,44 @@ export const QuestionBankTab = () => {
   const handleValidateQuality = async (q: any) => {
     setValidatingId(q.id);
     try {
-      // Simulate AI validation for immediate UX feedback
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      const score = Math.floor(Math.random() * 20) + 80; // 80-100 score
-      const flags = score < 90 ? ['Formatting could be improved', 'Missing detailed explanation'] : [];
+      let score = 100;
+      const flags: string[] = [];
+
+      if (!q.question_text || q.question_text.trim().length < 15) {
+        score -= 25;
+        flags.push('Question text is very short or missing context');
+      }
+
+      const opts = Array.isArray(q.options) ? q.options : [];
+      if (opts.length < 4) {
+        score -= 20;
+        flags.push('Less than 4 standard multiple choice options provided');
+      } else {
+        const uniqueOpts = new Set(opts.map((o: any) => String(o).trim().toLowerCase()));
+        if (uniqueOpts.size < opts.length) {
+          score -= 15;
+          flags.push('Duplicate answer choices detected');
+        }
+      }
+
+      if (!q.correct_answer || (typeof q.correct_answer === 'string' && !['A', 'B', 'C', 'D', '0', '1', '2', '3'].includes(q.correct_answer.toUpperCase()))) {
+        score -= 25;
+        flags.push('Correct answer key is invalid or not specified');
+      }
+
+      if (!q.explanation || q.explanation.trim().length < 10) {
+        score -= 15;
+        flags.push('Missing detailed explanation for student feedback');
+      }
+
+      score = Math.max(20, Math.min(100, score));
       
       const { error } = await supabase.from('questions').update({ 
         quality_score: score, 
         quality_flags: flags 
       }).eq('id', q.id);
 
-      if (error && error.code !== '42703') throw error; // Ignore column not found if migration pending
+      if (error && error.code !== '42703') throw error;
 
       toast.success(`Question Validated! Quality Score: ${score}/100`);
       fetchData();

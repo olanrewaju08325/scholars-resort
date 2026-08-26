@@ -88,11 +88,7 @@ export const StudentsTab = () => {
   const [banReasonInput, setBanReasonInput] = useState('');
   const [statusLoading, setStatusLoading] = useState(false);
 
-  useEffect(() => {
-    fetchAllData();
-  }, []);
-
-  const fetchAllData = async () => {
+  const fetchAllData = React.useCallback(async () => {
     setLoading(true);
     try {
       let profData: any[] = [];
@@ -124,11 +120,11 @@ export const StudentsTab = () => {
           localOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
         } catch {}
 
+        const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+
         const enriched: Profile[] = profData.map((rawP: any) => {
           const overrides = localOverrides[rawP.id] || {};
           const p = { ...rawP, ...overrides };
-          const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  const isMasterAdminEmail = (email?: string | null) => email ? ADMIN_EMAILS.includes(email.toLowerCase().trim()) : false;
           const isMasterAdmin = p.email && ADMIN_EMAILS.includes(p.email.toLowerCase().trim());
           const effectiveRole = isMasterAdmin ? 'admin' : (p.role || 'student');
           const effectiveStatus = p.is_banned ? 'banned' : (p.is_suspended || p.status === 'suspended' ? 'suspended' : (p.status || 'active'));
@@ -154,7 +150,11 @@ export const StudentsTab = () => {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchAllData();
+  }, [fetchAllData]);
 
   // Helper map for fast guardian/student lookup
   const { studentToGuardians, guardianToStudents } = useMemo(() => {

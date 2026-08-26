@@ -45,6 +45,7 @@ import { MaterialsTab } from './admin-tabs/MaterialsTab';
 import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
 import { DatabaseDiagnosticsTab } from './admin-tabs/DatabaseDiagnosticsTab';
 import { EnvironmentCleanupTab } from './admin-tabs/EnvironmentCleanupTab';
+import { FlowValidatorDashboard } from '@/components/admin/FlowValidatorDashboard';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AdminNotificationSystem } from '@/components/admin/AdminNotificationSystem';
 import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
@@ -118,6 +119,7 @@ export default function Admin() {
     { id: 'ai', label: 'AI Assistant', icon: Sparkles },
     { id: 'logs', label: 'Audit Logs', icon: List },
     { id: 'backups', label: 'Backups', icon: DatabaseBackup },
+    { id: 'flow-validator', label: 'CBT Flow Validator', icon: ShieldCheck },
     { id: 'db-diagnostics', label: 'Database Diagnostic Suite', icon: Activity },
     { id: 'env-cleanup', label: 'Environment Cleanup', icon: Trash2 },
     { id: 'smtp-health', label: 'SMTP Health Check', icon: Mail },
@@ -158,6 +160,7 @@ export default function Admin() {
       case 'ai': return <AdminAITab />;
       case 'logs': return <LogsTab />;
       case 'backups': return <BackupsTab />;
+      case 'flow-validator': return <FlowValidatorDashboard />;
       case 'db-diagnostics': return <DatabaseDiagnosticsTab />;
       case 'env-cleanup': return <EnvironmentCleanupTab />;
       default: return <DashboardTab />;

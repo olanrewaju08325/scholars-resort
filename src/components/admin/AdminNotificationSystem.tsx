@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 export interface AdminAlert {
   id: string;
-  type: 'issue' | 'payment';
+  type: 'issue' | 'payment' | 'system';
   title: string;
   description: string;
   created_at: string;
@@ -29,7 +29,7 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
   const [alerts, setAlerts] = useState<AdminAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
-  const [filter, setFilter] = useState<'all' | 'issue' | 'payment'>('all');
+  const [filter, setFilter] = useState<'all' | 'issue' | 'payment' | 'system'>('all');
 
   const playChime = useCallback(() => {
     if (!soundEnabled) return;
@@ -56,7 +56,7 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
   const fetchAlerts = useCallback(async () => {
     try {
       setLoading(true);
-      // Fetch open support tickets (student reported issues)
+      // 1. Fetch open support tickets (student reported issues)
       const { data: tickets } = await supabase
         .from('support_tickets')
         .select('*')
@@ -64,13 +64,21 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
         .order('created_at', { ascending: false })
         .limit(15);
 
-      // Fetch pending manual payments (student payment proofs)
+      // 2. Fetch pending manual payments (student payment proofs)
       const { data: payments } = await supabase
         .from('manual_payments')
         .select('*')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(15);
+
+      // 3. Fetch system health capacity warnings
+      const { data: sysLogs } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('action', 'SYSTEM_CAPACITY_ALERT')
+        .order('created_at', { ascending: false })
+        .limit(10);
 
       const ticketAlerts: AdminAlert[] = (tickets || []).map(t => ({
         id: `ticket_${t.id}`,
@@ -94,7 +102,18 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
         metadata: p
       }));
 
-      const merged = [...ticketAlerts, ...paymentAlerts].sort(
+      const systemAlerts: AdminAlert[] = (sysLogs || []).map(s => ({
+        id: `system_${s.id}`,
+        type: 'system',
+        title: `⚠️ System Capacity Alert`,
+        description: s.details || 'Database, storage or SMTP usage exceeded the safety threshold.',
+        created_at: s.created_at,
+        is_read: false,
+        raw_id: s.id,
+        metadata: s
+      }));
+
+      const merged = [...ticketAlerts, ...paymentAlerts, ...systemAlerts].sort(
         (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
       );
 
@@ -182,12 +201,15 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
       if (onNavigate) onNavigate('support');
     } else if (alertItem.type === 'payment') {
       if (onNavigate) onNavigate('payments');
+    } else if (alertItem.type === 'system') {
+      if (onNavigate) onNavigate('system_health');
     }
   };
 
   const filteredAlerts = alerts.filter(a => {
     if (filter === 'issue') return a.type === 'issue';
     if (filter === 'payment') return a.type === 'payment';
+    if (filter === 'system') return a.type === 'system';
     return true;
   });
 
@@ -244,24 +266,30 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex items-center gap-1 p-2 bg-muted/30 border-b border-border text-xs font-semibold">
+        <div className="flex items-center gap-1 p-2 bg-muted/30 border-b border-border text-xs font-semibold overflow-x-auto">
           <button
             onClick={() => setFilter('all')}
-            className={`flex-1 py-1 px-2 rounded-md transition-colors text-center ${filter === 'all' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+            className={`py-1 px-2 rounded-md transition-colors text-center shrink-0 ${filter === 'all' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
           >
             All ({alerts.length})
           </button>
           <button
             onClick={() => setFilter('issue')}
-            className={`flex-1 py-1 px-2 rounded-md transition-colors text-center flex items-center justify-center gap-1 ${filter === 'issue' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
+            className={`py-1 px-2 rounded-md transition-colors text-center flex items-center justify-center gap-1 shrink-0 ${filter === 'issue' ? 'bg-blue-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
           >
             <MessageSquare className="w-3 h-3" /> Issues ({alerts.filter(a => a.type === 'issue').length})
           </button>
           <button
             onClick={() => setFilter('payment')}
-            className={`flex-1 py-1 px-2 rounded-md transition-colors text-center flex items-center justify-center gap-1 ${filter === 'payment' ? 'bg-amber-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
+            className={`py-1 px-2 rounded-md transition-colors text-center flex items-center justify-center gap-1 shrink-0 ${filter === 'payment' ? 'bg-amber-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
           >
             <CreditCard className="w-3 h-3" /> Payments ({alerts.filter(a => a.type === 'payment').length})
+          </button>
+          <button
+            onClick={() => setFilter('system')}
+            className={`py-1 px-2 rounded-md transition-colors text-center flex items-center justify-center gap-1 shrink-0 ${filter === 'system' ? 'bg-red-600 text-white' : 'text-muted-foreground hover:bg-muted'}`}
+          >
+            <AlertTriangle className="w-3 h-3" /> Quotas ({alerts.filter(a => a.type === 'system').length})
           </button>
         </div>
 
@@ -270,13 +298,13 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
           {loading ? (
             <div className="p-8 text-center text-muted-foreground text-xs flex flex-col items-center justify-center gap-2">
               <RefreshCw className="w-5 h-5 animate-spin text-primary" />
-              Scanning for active student reports & payments...
+              Scanning for active alerts...
             </div>
           ) : filteredAlerts.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground flex flex-col items-center justify-center gap-2">
               <CheckCircle className="w-8 h-8 text-emerald-500/50" />
               <p className="text-sm font-medium">No pending dispatch alerts</p>
-              <p className="text-xs text-muted-foreground">All support issues & payments are up to date.</p>
+              <p className="text-xs text-muted-foreground">All support issues, payments & system health are optimal.</p>
             </div>
           ) : (
             filteredAlerts.map((alertItem) => (
@@ -287,12 +315,16 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
                 <div className={`p-2 rounded-lg shrink-0 mt-0.5 ${
                   alertItem.type === 'issue' 
                     ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' 
-                    : 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                    : alertItem.type === 'payment'
+                    ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20'
+                    : 'bg-red-500/10 text-red-500 border border-red-500/20'
                 }`}>
                   {alertItem.type === 'issue' ? (
                     <MessageSquare className="w-4 h-4" />
-                  ) : (
+                  ) : alertItem.type === 'payment' ? (
                     <CreditCard className="w-4 h-4" />
+                  ) : (
+                    <ShieldAlert className="w-4 h-4" />
                   )}
                 </div>
 
@@ -317,7 +349,7 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
                       onClick={() => handleAlertAction(alertItem)}
                       className="h-6 px-2 text-[11px] font-semibold text-primary hover:text-primary hover:bg-primary/10 gap-1"
                     >
-                      {alertItem.type === 'issue' ? 'Respond in Support' : 'Review Financials'}
+                      {alertItem.type === 'issue' ? 'Respond in Support' : alertItem.type === 'payment' ? 'Review Financials' : 'Manage System Health'}
                       <ExternalLink className="w-3 h-3" />
                     </Button>
 

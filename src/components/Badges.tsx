@@ -33,20 +33,15 @@ export const Badges: React.FC = () => {
   const [badges, setBadges] = useState<MilestoneBadge[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user?.id) {
-      fetchBadges();
-    }
-  }, [user?.id, profile?.streak_days]);
-
-  const fetchBadges = async () => {
+  const fetchBadges = React.useCallback(async () => {
+    if (!user?.id) return;
     try {
       setLoading(true);
       // Fetch user's unlocked achievements from Supabase
       const { data: unlockedData, error: achErr } = await supabase
         .from('achievements')
         .select('*')
-        .eq('user_id', user!.id);
+        .eq('user_id', user.id);
 
       if (achErr) console.warn('Fetch achievements error:', achErr);
 
@@ -150,7 +145,11 @@ export const Badges: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user, profile?.streak_days]);
+
+  useEffect(() => {
+    fetchBadges();
+  }, [fetchBadges]);
 
   const renderIcon = (iconName: string, unlocked: boolean) => {
     const cls = `w-5 h-5 ${unlocked ? 'text-amber-500' : 'text-muted-foreground/40'}`;

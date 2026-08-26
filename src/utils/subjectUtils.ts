@@ -221,8 +221,8 @@ export const resolveSubjectIdsByNameOrAlias = async (subjectNameOrId: string): P
     const matched = dbSubjects.filter(s => {
       if (!s.id || !isUUID(s.id)) return false;
       if (s.id === subjectNameOrId) return true;
-      const normalizedName = normalizeSubjectName(s.name);
-      return normalizedName === canonical || aliases.includes(s.name.toLowerCase());
+      const normalizedName = normalizeSubjectName(s.name || '');
+      return normalizedName === canonical || aliases.includes((s.name || '').toLowerCase());
     }).map(s => s.id).filter(isUUID);
 
     return Array.from(new Set(matched));

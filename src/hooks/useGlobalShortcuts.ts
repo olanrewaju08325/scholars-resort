@@ -30,7 +30,11 @@ export function useGlobalShortcuts() {
     // Ignore with modifiers like Ctrl/Cmd/Alt unless Shift + ?
     if (e.ctrlKey || e.metaKey || e.altKey) return;
 
-    const key = e.key;
+    const isAuthRoute = ['/login', '/signup', '/forgot-password', '/reset-password', '/onboarding'].some(p => location.pathname.startsWith(p));
+    if (isAuthRoute) return;
+
+    const key = e.key || '';
+    if (!key) return;
 
     // Open Shortcut Help with '?' or 'Shift+/'
     if (key === '?' || (e.shiftKey && key === '/')) {

@@ -38,12 +38,16 @@ import { MotivationEngine } from '@/components/dashboard/MotivationEngine';
 import { DashboardSkeleton } from '@/components/dashboard/skeletons/DashboardSkeleton';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { motion } from 'framer-motion';
+import { Sparkles, BookOpen, BarChart2, Clock, Trophy, Layers } from 'lucide-react';
+
+type MobileTab = 'all' | 'practice' | 'analytics' | 'tools' | 'social';
 
 export default function Dashboard() {
   usePerfMonitoring('Dashboard');
   const { profile } = useAuth();
   const { examsTaken, averageScore, streak, history, loading: statsLoading } = useStudentStats();
   const stats = { examsTaken, averageScore, streak, history };
+  const [mobileTab, setMobileTab] = useState<MobileTab>('all');
 
   const navigate = useNavigate();
   useEffect(() => {
@@ -55,6 +59,11 @@ export default function Dashboard() {
   if (statsLoading || !profile) {
     return <DashboardSkeleton />;
   }
+
+  const showPractice = mobileTab === 'all' || mobileTab === 'practice';
+  const showAnalytics = mobileTab === 'all' || mobileTab === 'analytics';
+  const showTools = mobileTab === 'all' || mobileTab === 'tools';
+  const showSocial = mobileTab === 'all' || mobileTab === 'social';
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-20">
@@ -90,131 +99,207 @@ export default function Dashboard() {
           <JambScorePredictorCard history={stats.history} />
         </motion.div>
 
+        {/* Mobile View Filter Tabs - Ensures 100% feature access with easy mobile navigation */}
+        <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 p-1 bg-muted/40 rounded-xl border border-border/60">
+          <button
+            onClick={() => setMobileTab('all')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              mobileTab === 'all'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Layers className="w-3.5 h-3.5" /> All Modules
+          </button>
+          <button
+            onClick={() => setMobileTab('practice')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              mobileTab === 'practice'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <BookOpen className="w-3.5 h-3.5" /> Practice & Journey
+          </button>
+          <button
+            onClick={() => setMobileTab('analytics')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              mobileTab === 'analytics'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <BarChart2 className="w-3.5 h-3.5" /> Analytics & Mastery
+          </button>
+          <button
+            onClick={() => setMobileTab('tools')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              mobileTab === 'tools'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Clock className="w-3.5 h-3.5" /> Goals & Timers
+          </button>
+          <button
+            onClick={() => setMobileTab('social')}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+              mobileTab === 'social'
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Trophy className="w-3.5 h-3.5" /> Quests & Community
+          </button>
+        </div>
+
         {/* Two Column Layout for Main Content */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           
           {/* Main Column (Left) */}
           <div className="lg:col-span-8 space-y-6">
             
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-              <DailyMission />
-            </motion.div>
+            {showPractice && (
+              <>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+                  <DailyMission />
+                </motion.div>
 
-            {/* Daily Study Planner Component */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.11 }}>
-              <DailyStudyPlannerWidget />
-            </motion.div>
+                {/* Daily Study Planner Component */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.11 }}>
+                  <DailyStudyPlannerWidget />
+                </motion.div>
 
-            {/* Daily Practice Goal Tracker Component */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
-              <DailyGoalTracker />
-            </motion.div>
+                {/* Daily Practice Goal Tracker Component */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
+                  <DailyGoalTracker />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
-              <QuickActions />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
+                  <QuickActions />
+                </motion.div>
 
-            {/* Visual Study Streak Calendar Component */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.18 }}>
-              <StudyStreakCalendar />
-            </motion.div>
+                {/* Visual Study Streak Calendar Component */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.18 }}>
+                  <StudyStreakCalendar />
+                </motion.div>
+
+                {/* Educational Journey Map */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.27 }}>
+                  <EducationalJourneyMap />
+                </motion.div>
+
+                {/* Adaptive Learning Path Generator */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.29 }}>
+                  <AdaptiveLearningPathWidget />
+                </motion.div>
+              </>
+            )}
             
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
-               <StatsOverview stats={stats} />
-            </motion.div>
+            {showAnalytics && (
+              <>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+                  <StatsOverview stats={stats} />
+                </motion.div>
 
-            {/* Dashboard Performance Trends & Score Improvement Widget */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.23 }}>
-               <DashboardWidget history={stats.history} studentName={profile?.full_name} />
-            </motion.div>
+                {/* Dashboard Performance Trends & Score Improvement Widget */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.23 }}>
+                  <DashboardWidget history={stats.history} studentName={profile?.full_name} />
+                </motion.div>
 
-            {/* Performance Trend Recharts Line Chart */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }}>
-               <PerformanceTrendChart history={stats.history} />
-            </motion.div>
+                {/* Performance Trend Recharts Line Chart */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }}>
+                  <PerformanceTrendChart history={stats.history} />
+                </motion.div>
 
-            {/* Educational Journey Map */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.27 }}>
-               <EducationalJourneyMap />
-            </motion.div>
+                {/* Subject Mastery Radar Chart */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                  <SubjectMasteryRadarChart data={[]} />
+                </motion.div>
 
-            {/* Adaptive Learning Path Generator */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.29 }}>
-               <AdaptiveLearningPathWidget />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+                  <h2 className="text-xl font-bold font-display mb-4">Study Insights</h2>
+                  <AIRecommendations profileId={profile?.id || ''} examsData={stats.history} />
+                </motion.div>
 
-            {/* Subject Mastery Radar Chart */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
-               <SubjectMasteryRadarChart data={[]} />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
+                  <ActivityHeatmap />
+                </motion.div>
+              </>
+            )}
 
-            {/* Milestone Badges & Achievements */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.35 }}>
-               <Badges />
-            </motion.div>
+            {showSocial && (
+              <>
+                {/* Milestone Badges & Achievements */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.35 }}>
+                  <Badges />
+                </motion.div>
 
-            {/* Comprehensive Student Achievements Widget */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.38 }}>
-               <StudentAchievementsWidget />
-            </motion.div>
+                {/* Comprehensive Student Achievements Widget */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.38 }}>
+                  <StudentAchievementsWidget />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-               <h2 className="text-xl font-bold font-display mb-4">Study Insights</h2>
-               <AIRecommendations profileId={profile?.id || ''} examsData={stats.history} />
-            </motion.div>
-
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
-               <ActivityHeatmap />
-            </motion.div>
-
-            {/* Existing Gamification Tab Ported In */}
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
-               <Gamification />
-            </motion.div>
+                {/* Existing Gamification Tab Ported In */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
+                  <Gamification />
+                </motion.div>
+              </>
+            )}
           </div>
 
-          {/* Sidebar Column (Right) */}
+          {/* Sidebar Column (Right on Desktop, or contextual on Mobile) */}
           <div className="lg:col-span-4 space-y-6">
             
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
-               <MotivationEngine />
-            </motion.div>
+            {showSocial && (
+              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
+                <MotivationEngine />
+              </motion.div>
+            )}
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
-               <JAMBCountdown />
-            </motion.div>
+            {showTools && (
+              <>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }}>
+                  <JAMBCountdown />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
-               <PomodoroTimer />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
+                  <PomodoroTimer />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
-               <StudyGoalTracker />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>
+                  <StudyGoalTracker />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
-               <TournamentPreview />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.7 }}>
+                  <BurnoutDetector />
+                </motion.div>
+              </>
+            )}
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
-               <WeeklyChallenge />
-            </motion.div>
+            {showSocial && (
+              <>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }}>
+                  <TournamentPreview />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
-               <XPProgressPanel />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }}>
+                  <WeeklyChallenge />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
-               <LeaderboardPreview />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.5 }}>
+                  <XPProgressPanel />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.7 }}>
-               <BurnoutDetector />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.6 }}>
+                  <LeaderboardPreview />
+                </motion.div>
 
-            <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.8 }}>
-               <GuardianConnections />
-            </motion.div>
+                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.8 }}>
+                  <GuardianConnections />
+                </motion.div>
+              </>
+            )}
 
           </div>
         </div>

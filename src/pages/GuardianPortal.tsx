@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { 
   Users, BarChart3, Clock, AlertTriangle, CheckCircle, Link as LinkIcon,
   Activity, Target, Trophy, Flame, BellRing, DollarSign, BookOpen, 
-  Mail, MessageSquare, ShieldCheck, Sun, Moon, FileDown, LogOut
+  Mail, MessageSquare, ShieldCheck, Sun, Moon, FileDown, LogOut, Layers
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -37,6 +37,7 @@ const GuardianPortal = () => {
   const [loading, setLoading] = useState(true);
   const [activeStudentData, setActiveStudentData] = useState<any>(null);
   const [isSecureLogin, setIsSecureLogin] = useState(true); // Feature 58
+  const [mobileTab, setMobileTab] = useState<'all' | 'overview' | 'analytics' | 'actions' | 'finance'>('all');
 
 
 
@@ -701,266 +702,338 @@ Scholars Resort Academic Team`
              </Button>
           </div>
         ) : (
-          <div id="guardian-report-content" className="space-y-8">
+          <div id="guardian-report-content" className="space-y-6">
             
-            {/* Top Stats Grid (Feature 43, 51, 47, 49) */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-               <Card className="border-border shadow-sm">
-                 <CardContent className="p-4 md:p-6">
-                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Target className="w-3 h-3"/> Target Score</p>
-                    <div className="text-2xl font-display font-bold text-primary">{activeStudentData.target}</div>
-                 </CardContent>
-               </Card>
-               <Card className="border-border shadow-sm bg-primary/5 border-primary/20">
-                 <CardContent className="p-4 md:p-6">
-                    <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Activity className="w-3 h-3"/> Exam Readiness</p>
-                    <div className="text-2xl font-display font-bold text-primary">{activeStudentData.readiness}%</div>
-                 </CardContent>
-               </Card>
-               <Card className="border-border shadow-sm">
-                 <CardContent className="p-4 md:p-6">
-                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Trophy className="w-3 h-3"/> Global Rank</p>
-                    <div className="text-2xl font-display font-bold">#{activeStudentData.globalRank}</div>
-                 </CardContent>
-               </Card>
-               <Card className="border-border shadow-sm">
-                 <CardContent className="p-4 md:p-6">
-                    <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><BarChart3 className="w-3 h-3"/> Average Score</p>
-                    <div className="text-2xl font-display font-bold">{activeStudentData.score}%</div>
-                 </CardContent>
-               </Card>
+            {/* Mobile Tab Filter Bar */}
+            <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 p-1 bg-muted/40 rounded-xl border border-border/60">
+              <button
+                onClick={() => setMobileTab('all')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  mobileTab === 'all'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" /> Full View
+              </button>
+              <button
+                onClick={() => setMobileTab('overview')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  mobileTab === 'overview'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Target className="w-3.5 h-3.5" /> Overview
+              </button>
+              <button
+                onClick={() => setMobileTab('analytics')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  mobileTab === 'analytics'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <BarChart3 className="w-3.5 h-3.5" /> Analytics
+              </button>
+              <button
+                onClick={() => setMobileTab('actions')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  mobileTab === 'actions'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <BellRing className="w-3.5 h-3.5" /> Actions
+              </button>
+              <button
+                onClick={() => setMobileTab('finance')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
+                  mobileTab === 'finance'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <DollarSign className="w-3.5 h-3.5" /> Finance & Link
+              </button>
             </div>
+
+            {/* Top Stats Grid (Feature 43, 51, 47, 49) */}
+            {(mobileTab === 'all' || mobileTab === 'overview') && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                 <Card className="border-border shadow-sm">
+                   <CardContent className="p-4 md:p-6">
+                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Target className="w-3 h-3"/> Target Score</p>
+                      <div className="text-2xl font-display font-bold text-primary">{activeStudentData.target}</div>
+                   </CardContent>
+                 </Card>
+                 <Card className="border-border shadow-sm bg-primary/5 border-primary/20">
+                   <CardContent className="p-4 md:p-6">
+                      <p className="text-xs text-primary font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Activity className="w-3 h-3"/> Exam Readiness</p>
+                      <div className="text-2xl font-display font-bold text-primary">{activeStudentData.readiness}%</div>
+                   </CardContent>
+                 </Card>
+                 <Card className="border-border shadow-sm">
+                   <CardContent className="p-4 md:p-6">
+                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><Trophy className="w-3 h-3"/> Global Rank</p>
+                      <div className="text-2xl font-display font-bold">#{activeStudentData.globalRank}</div>
+                   </CardContent>
+                 </Card>
+                 <Card className="border-border shadow-sm">
+                   <CardContent className="p-4 md:p-6">
+                      <p className="text-xs text-muted-foreground font-bold uppercase tracking-wider mb-1 flex items-center gap-1"><BarChart3 className="w-3 h-3"/> Average Score</p>
+                      <div className="text-2xl font-display font-bold">{activeStudentData.score}%</div>
+                   </CardContent>
+                 </Card>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                
                {/* Left Column (Analytics) */}
                <div className="lg:col-span-2 space-y-8">
                   {/* Subject Drilldown & Weakness (Feature 44 & 46) */}
-                  <Card className="border-border shadow-sm">
-                     <CardHeader className="border-b border-border bg-muted/30 pb-4">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                           <AlertTriangle className="h-5 w-5 text-amber-500" /> Subject Weakness Alerts
-                        </CardTitle>
-                     </CardHeader>
-                     <CardContent className="p-6">
-                        <div className="space-y-4">
-                           {activeStudentData.weakSubjects.map((sub: string, idx: number) => (
-                              <div key={idx} className="flex items-center justify-between p-3 border border-amber-500/20 bg-amber-500/5 rounded-md">
-                                 <span className="font-semibold text-amber-600 dark:text-amber-400">{sub}</span>
-                                 <span className="text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase">Needs Attention</span>
-                              </div>
-                           ))}
-                        </div>
-                     </CardContent>
-                  </Card>
+                  {(mobileTab === 'all' || mobileTab === 'overview' || mobileTab === 'analytics') && (
+                    <Card className="border-border shadow-sm">
+                       <CardHeader className="border-b border-border bg-muted/30 pb-4">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                             <AlertTriangle className="h-5 w-5 text-amber-500" /> Subject Weakness Alerts
+                          </CardTitle>
+                       </CardHeader>
+                       <CardContent className="p-6">
+                          <div className="space-y-4">
+                             {activeStudentData.weakSubjects.map((sub: string, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between p-3 border border-amber-500/20 bg-amber-500/5 rounded-md">
+                                   <span className="font-semibold text-amber-600 dark:text-amber-400">{sub}</span>
+                                   <span className="text-xs font-bold text-amber-600/80 dark:text-amber-400/80 uppercase">Needs Attention</span>
+                                </div>
+                             ))}
+                          </div>
+                       </CardContent>
+                    </Card>
+                  )}
 
                   {/* Exam History & Heatmap (Feature 45 & 48) */}
-                  <Card className="border-border shadow-sm">
-                     <CardHeader className="border-b border-border bg-muted/30 pb-4">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                           <Clock className="h-5 w-5 text-primary" /> Attendance & Study History
-                        </CardTitle>
-                     </CardHeader>
-                     <CardContent className="p-6">
-                        {/* Focus Time & Attendance Summary */}
-                        <div className="grid grid-cols-2 gap-4 mb-6">
-                          <div className="p-4 rounded-xl border border-border bg-muted/20">
-                            <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Weekly Focus Time</div>
-                            <div className="text-2xl font-display font-bold text-primary">{activeStudentData.weeklyFocusTime || '0m'}</div>
+                  {(mobileTab === 'all' || mobileTab === 'analytics') && (
+                    <Card className="border-border shadow-sm">
+                       <CardHeader className="border-b border-border bg-muted/30 pb-4">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                             <Clock className="h-5 w-5 text-primary" /> Attendance & Study History
+                          </CardTitle>
+                       </CardHeader>
+                       <CardContent className="p-6">
+                          {/* Focus Time & Attendance Summary */}
+                          <div className="grid grid-cols-2 gap-4 mb-6">
+                            <div className="p-4 rounded-xl border border-border bg-muted/20">
+                              <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Weekly Focus Time</div>
+                              <div className="text-2xl font-display font-bold text-primary">{activeStudentData.weeklyFocusTime || '0m'}</div>
+                            </div>
+                            <div className="p-4 rounded-xl border border-border bg-muted/20">
+                              <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Attendance Rate (7d)</div>
+                              <div className="text-2xl font-display font-bold text-green-500">{activeStudentData.attendanceRate || '0%'}</div>
+                            </div>
                           </div>
-                          <div className="p-4 rounded-xl border border-border bg-muted/20">
-                            <div className="text-xs font-bold uppercase text-muted-foreground mb-1">Attendance Rate (7d)</div>
-                            <div className="text-2xl font-display font-bold text-green-500">{activeStudentData.attendanceRate || '0%'}</div>
-                          </div>
-                        </div>
 
-                        <div className="mb-6 p-4 bg-slate-900 border border-slate-800 rounded-lg">
-                           <div className="flex justify-between items-center mb-2">
-                             <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Study Activity Heatmap</span>
-                             <span className="text-xs text-slate-500">Last 14 Days</span>
-                           </div>
-                           <div className="flex gap-1 justify-between">
-                             {(activeStudentData.heatmap && activeStudentData.heatmap.length > 0 ? activeStudentData.heatmap : [...Array(14)].map((_, i) => ({ date: `Day ${i+1}`, count: 0, intensity: 0 }))).map((day: any, i: number) => {
-                               const colors = ['bg-slate-800', 'bg-emerald-900/60', 'bg-emerald-600', 'bg-emerald-400'];
-                               const colorClass = colors[day.intensity || 0] || 'bg-slate-800';
-                               return (
-                                 <div 
-                                   key={i} 
-                                   className={`w-full aspect-square rounded-sm ${colorClass} border border-slate-800/50 transition-all hover:scale-110 hover:ring-1 hover:ring-emerald-400 cursor-pointer`}
-                                   title={`${day.date}: ${day.count} sessions completed`}
-                                 ></div>
-                               )
-                             })}
-                           </div>
-                           <div className="flex justify-between mt-2 text-[10px] text-slate-500">
-                             <span>14 days ago</span>
-                             <span>Today</span>
-                           </div>
-                        </div>
-                        <div className="space-y-3">
-                           {activeStudentData.history.map((h: any, idx: number) => (
-                              <div key={idx} className="flex items-center justify-between p-3 bg-muted/20 border border-border rounded text-sm">
-                                 <span className="font-semibold">{h.date} CBT Mock</span>
-                                 <div className="flex gap-4">
-                                    <span className="text-primary font-bold">{h.score} pts</span>
-                                    <span className="text-muted-foreground">{h.time}</span>
-                                 </div>
-                              </div>
-                           ))}
-                           {activeStudentData.history.length === 0 && (
-                              <div className="text-center py-4 text-sm text-muted-foreground">
-                                 No mock exam sessions completed yet.
-                              </div>
-                           )}
-                        </div>
-                     </CardContent>
-                  </Card>
+                          <div className="mb-6 p-4 bg-slate-900 border border-slate-800 rounded-lg">
+                             <div className="flex justify-between items-center mb-2">
+                               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Study Activity Heatmap</span>
+                               <span className="text-xs text-slate-500">Last 14 Days</span>
+                             </div>
+                             <div className="flex gap-1 justify-between">
+                               {(activeStudentData.heatmap && activeStudentData.heatmap.length > 0 ? activeStudentData.heatmap : [...Array(14)].map((_, i) => ({ date: `Day ${i+1}`, count: 0, intensity: 0 }))).map((day: any, i: number) => {
+                                 const colors = ['bg-slate-800', 'bg-emerald-900/60', 'bg-emerald-600', 'bg-emerald-400'];
+                                 const colorClass = colors[day.intensity || 0] || 'bg-slate-800';
+                                 return (
+                                   <div 
+                                     key={i} 
+                                     className={`w-full aspect-square rounded-sm ${colorClass} border border-slate-800/50 transition-all hover:scale-110 hover:ring-1 hover:ring-emerald-400 cursor-pointer`}
+                                     title={`${day.date}: ${day.count} sessions completed`}
+                                   ></div>
+                                 )
+                               })}
+                             </div>
+                             <div className="flex justify-between mt-2 text-[10px] text-slate-500">
+                               <span>14 days ago</span>
+                               <span>Today</span>
+                             </div>
+                          </div>
+                          <div className="space-y-3">
+                             {activeStudentData.history.map((h: any, idx: number) => (
+                                <div key={idx} className="flex items-center justify-between p-3 bg-muted/20 border border-border rounded text-sm">
+                                   <span className="font-semibold">{h.date} CBT Mock</span>
+                                   <div className="flex gap-4">
+                                      <span className="text-primary font-bold">{h.score} pts</span>
+                                      <span className="text-muted-foreground">{h.time}</span>
+                                   </div>
+                                </div>
+                             ))}
+                             {activeStudentData.history.length === 0 && (
+                                <div className="text-center py-4 text-sm text-muted-foreground">
+                                   No mock exam sessions completed yet.
+                                </div>
+                             )}
+                          </div>
+                       </CardContent>
+                    </Card>
+                  )}
 
                   {/* AI Suggestions (Feature 50) */}
-                  <Card className="border-purple-500/30 bg-purple-500/5 shadow-sm">
-                     <CardContent className="p-6 flex items-start gap-4">
-                        <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-1">
-                           <Flame className="w-5 h-5 text-purple-500" />
-                        </div>
-                        <div>
-                           <h4 className="font-bold text-purple-600 dark:text-purple-400 mb-1">AI Guardian Suggestion</h4>
-                           <p className="text-sm text-foreground/80 leading-relaxed">
-                              {activeStudentData.weakSubjects && activeStudentData.weakSubjects[0] !== 'No weak areas identified yet' ? (
-                                `${activeStudentData.name} needs targeted focus on ${activeStudentData.weakSubjects.join(', ')}. We recommend assigning a targeted practice drill.`
-                              ) : (
-                                `${activeStudentData.name}'s performance metrics will update automatically as they take CBT mock exams and practice drills.`
-                              )}
-                           </p>
-                        </div>
-                     </CardContent>
-                  </Card>
+                  {(mobileTab === 'all' || mobileTab === 'overview' || mobileTab === 'analytics') && (
+                    <Card className="border-purple-500/30 bg-purple-500/5 shadow-sm">
+                       <CardContent className="p-6 flex items-start gap-4">
+                          <div className="w-10 h-10 rounded-full bg-purple-500/20 flex items-center justify-center flex-shrink-0 mt-1">
+                             <Flame className="w-5 h-5 text-purple-500" />
+                          </div>
+                          <div>
+                             <h4 className="font-bold text-purple-600 dark:text-purple-400 mb-1">AI Guardian Suggestion</h4>
+                             <p className="text-sm text-foreground/80 leading-relaxed">
+                                {activeStudentData.weakSubjects && activeStudentData.weakSubjects[0] !== 'No weak areas identified yet' ? (
+                                  `${activeStudentData.name} needs targeted focus on ${activeStudentData.weakSubjects.join(', ')}. We recommend assigning a targeted practice drill.`
+                                ) : (
+                                  `${activeStudentData.name}'s performance metrics will update automatically as they take CBT mock exams and practice drills.`
+                                )}
+                             </p>
+                          </div>
+                       </CardContent>
+                    </Card>
+                  )}
                </div>
 
                {/* Right Column (Controls & Tracking) */}
                <div className="space-y-6">
                   {/* Action Buttons (Feature 54, 56, 57) */}
-                  <div className="grid grid-cols-1 gap-3">
-                     <Button 
-                        onClick={async () => {
-                          if (activeStudentData?.id) {
-                            const toastId = toast.loading('Generating personalized AI motivation...');
-                            try {
-                                const prompt = `You are an academic counselor. Write a very short (1-2 sentences), highly motivating push notification for a student named ${activeStudentData.name}. Their target JAMB score is ${activeStudentData.target}. Current score average is ${activeStudentData.score}. Make it encouraging and personal. Do NOT use emojis.`;
-                                const aiMessage = await callGroqAPI([{ role: 'user', content: prompt }]);
-                                const cleanMessage = stripThinkTags(aiMessage).replace(/"/g, '').trim();
-                                
-                                await sendNotification(
-                                  activeStudentData.id,
-                                  'Motivation from Guardian! 🌟',
-                                  `${cleanMessage} - Sent by ${profile?.full_name || 'Your Guardian'}`,
-                                  'success'
-                                );
-                                toast.success(`AI Motivation Nudge sent to ${activeStudentData.name}!`, { id: toastId });
-                            } catch (e) {
-                                toast.error('Failed to generate motivation nudge.', { id: toastId });
+                  {(mobileTab === 'all' || mobileTab === 'actions') && (
+                    <div className="grid grid-cols-1 gap-3">
+                       <Button 
+                          onClick={async () => {
+                            if (activeStudentData?.id) {
+                              const toastId = toast.loading('Generating personalized AI motivation...');
+                              try {
+                                  const prompt = `You are an academic counselor. Write a very short (1-2 sentences), highly motivating push notification for a student named ${activeStudentData.name}. Their target JAMB score is ${activeStudentData.target}. Current score average is ${activeStudentData.score}. Make it encouraging and personal. Do NOT use emojis.`;
+                                  const aiMessage = await callGroqAPI([{ role: 'user', content: prompt }]);
+                                  const cleanMessage = stripThinkTags(aiMessage).replace(/"/g, '').trim();
+                                  
+                                  await sendNotification(
+                                    activeStudentData.id,
+                                    'Motivation from Guardian! 🌟',
+                                    `${cleanMessage} - Sent by ${profile?.full_name || 'Your Guardian'}`,
+                                    'success'
+                                  );
+                                  toast.success(`AI Motivation Nudge sent to ${activeStudentData.name}!`, { id: toastId });
+                              } catch (e) {
+                                  toast.error('Failed to generate motivation nudge.', { id: toastId });
+                              }
                             }
-                          }
-                        }}
-                        className="w-full justify-start gap-3 h-12"
-                     >
-                        <BellRing className="w-4 h-4" /> Send AI Motivation Nudge
-                     </Button>
-                     <Button onClick={downloadPDF} disabled={loading} variant="outline" className="w-full justify-start gap-3 h-12">
-                        <FileDown className="w-4 h-4" /> Download PDF Report
-                     </Button>
-                     <Button 
-                        onClick={() => window.location.href = "mailto:admitwise2@gmail.com"}
-                        variant="secondary" 
-                        className="w-full justify-start gap-3 h-12 bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20 font-semibold"
-                     >
-                        <MessageSquare className="w-4 h-4" /> Contact Admin / Support (admitwise2@gmail.com)
-                     </Button>
-                  </div>
+                          }}
+                          className="w-full justify-start gap-3 h-12"
+                       >
+                          <BellRing className="w-4 h-4" /> Send AI Motivation Nudge
+                       </Button>
+                       <Button onClick={downloadPDF} disabled={loading} variant="outline" className="w-full justify-start gap-3 h-12">
+                          <FileDown className="w-4 h-4" /> Download PDF Report
+                       </Button>
+                       <Button 
+                          onClick={() => window.location.href = "mailto:admitwise2@gmail.com"}
+                          variant="secondary" 
+                          className="w-full justify-start gap-3 h-12 bg-green-500/10 text-green-600 hover:bg-green-500/20 border-green-500/20 font-semibold"
+                       >
+                          <MessageSquare className="w-4 h-4" /> Contact Admin / Support (admitwise2@gmail.com)
+                       </Button>
+                    </div>
+                  )}
 
                   {/* Automated Reports Toggle (Feature 55) */}
-                  <Card className="border-border shadow-sm">
-                     <CardContent className="p-4 flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                           <div className="flex items-center gap-3">
-                              <Mail className="w-5 h-5 text-muted-foreground" />
-                              <div className="text-sm font-semibold">Weekly Email Reports</div>
-                           </div>
-                           <input type="checkbox" className="w-4 h-4 accent-primary" defaultChecked />
-                        </div>
-                        <Button 
-                          onClick={handleEmailReport} 
-                          disabled={loading || !activeStudentData} 
-                          variant="outline" 
-                          size="sm" 
-                          className="w-full text-xs gap-2"
-                        >
-                          <Mail className="w-3 h-3" /> Send PDF via SMTP Now
-                        </Button>
-                     </CardContent>
-                  </Card>
+                  {(mobileTab === 'all' || mobileTab === 'actions') && (
+                    <Card className="border-border shadow-sm">
+                       <CardContent className="p-4 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                             <div className="flex items-center gap-3">
+                                <Mail className="w-5 h-5 text-muted-foreground" />
+                                <div className="text-sm font-semibold">Weekly Email Reports</div>
+                             </div>
+                             <input type="checkbox" className="w-4 h-4 accent-primary" defaultChecked />
+                          </div>
+                          <Button 
+                            onClick={handleEmailReport} 
+                            disabled={loading || !activeStudentData} 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full text-xs gap-2"
+                          >
+                            <Mail className="w-3 h-3" /> Send PDF via SMTP Now
+                          </Button>
+                       </CardContent>
+                    </Card>
+                  )}
 
                   {/* Syllabus Progress Tracker (Feature 53) */}
-                  <Card className="border-border shadow-sm">
-                     <CardHeader className="pb-3 border-b border-border bg-muted/30">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                           <BookOpen className="h-4 w-4" /> Syllabus Progress
-                        </CardTitle>
-                     </CardHeader>
-                     <CardContent className="p-4 space-y-4">
-                        {activeStudentData.syllabus.map((s: any, idx: number) => (
-                           <div key={idx}>
-                              <div className="flex justify-between text-xs font-bold mb-1">
-                                 <span>{s.sub}</span>
-                                 <span>{s.progress}%</span>
-                              </div>
-                              <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-                                 <div className="h-full bg-primary" style={{ width: `${s.progress}%` }}></div>
-                              </div>
-                           </div>
-                        ))}
-                     </CardContent>
-                  </Card>
+                  {(mobileTab === 'all' || mobileTab === 'overview') && (
+                    <Card className="border-border shadow-sm">
+                       <CardHeader className="pb-3 border-b border-border bg-muted/30">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                             <BookOpen className="h-4 w-4" /> Syllabus Progress
+                          </CardTitle>
+                       </CardHeader>
+                       <CardContent className="p-4 space-y-4">
+                          {activeStudentData.syllabus.map((s: any, idx: number) => (
+                             <div key={idx}>
+                                <div className="flex justify-between text-xs font-bold mb-1">
+                                   <span>{s.sub}</span>
+                                   <span>{s.progress}%</span>
+                                </div>
+                                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                                   <div className="h-full bg-primary" style={{ width: `${s.progress}%` }}></div>
+                                </div>
+                             </div>
+                          ))}
+                       </CardContent>
+                    </Card>
+                  )}
 
                   {/* Financial Log (Feature 52) */}
-                  <Card className="border-border shadow-sm">
-                     <CardHeader className="pb-3 border-b border-border bg-muted/30">
-                        <CardTitle className="text-sm flex items-center gap-2">
-                           <DollarSign className="h-4 w-4" /> Financial Log
-                        </CardTitle>
-                     </CardHeader>
-                     <CardContent className="p-4 space-y-3">
-                        {activeStudentData.payments.map((p: any, idx: number) => (
-                           <div key={idx} className="flex justify-between items-center text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
-                              <div>
-                                 <div className="font-semibold">{p.amount}</div>
-                                 <div className="text-[10px] text-muted-foreground font-mono">{p.ref}</div>
-                              </div>
-                              <div className="text-xs text-muted-foreground">{p.date}</div>
-                           </div>
-                        ))}
-                     </CardContent>
-                  </Card>
+                  {(mobileTab === 'all' || mobileTab === 'finance') && (
+                    <Card className="border-border shadow-sm">
+                       <CardHeader className="pb-3 border-b border-border bg-muted/30">
+                          <CardTitle className="text-sm flex items-center gap-2">
+                             <DollarSign className="h-4 w-4" /> Financial Log
+                          </CardTitle>
+                       </CardHeader>
+                       <CardContent className="p-4 space-y-3">
+                          {activeStudentData.payments.map((p: any, idx: number) => (
+                             <div key={idx} className="flex justify-between items-center text-sm border-b border-border/50 pb-2 last:border-0 last:pb-0">
+                                <div>
+                                   <div className="font-semibold">{p.amount}</div>
+                                   <div className="text-[10px] text-muted-foreground font-mono">{p.ref}</div>
+                                </div>
+                                <div className="text-xs text-muted-foreground">{p.date}</div>
+                             </div>
+                          ))}
+                       </CardContent>
+                    </Card>
+                  )}
 
                   {/* Link New Student (Feature 41) */}
-                  <Card className="border-border bg-card/30">
-                     <CardHeader className="pb-3">
-                        <CardTitle className="text-sm">Link Another Student</CardTitle>
-                     </CardHeader>
-                     <CardContent className="p-4 pt-0">
-                        <form onSubmit={handleLinkStudent} className="flex gap-2">
-                           <Input 
-                              placeholder="Code..." 
-                              value={inviteCode} 
-                              onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                              maxLength={8}
-                              className="font-mono text-sm uppercase"
-                           />
-                           <Button type="submit" size="sm">
-                              <LinkIcon className="h-4 w-4" />
-                           </Button>
-                        </form>
-                     </CardContent>
-                  </Card>
+                  {(mobileTab === 'all' || mobileTab === 'finance') && (
+                    <Card className="border-border bg-card/30">
+                       <CardHeader className="pb-3">
+                          <CardTitle className="text-sm">Link Another Student</CardTitle>
+                       </CardHeader>
+                       <CardContent className="p-4 pt-0">
+                          <form onSubmit={handleLinkStudent} className="flex gap-2">
+                             <Input 
+                                placeholder="Code..." 
+                                value={inviteCode} 
+                                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                                maxLength={8}
+                                className="font-mono text-sm uppercase"
+                             />
+                             <Button type="submit" size="sm">
+                                <LinkIcon className="h-4 w-4" />
+                             </Button>
+                          </form>
+                       </CardContent>
+                    </Card>
+                  )}
                </div>
             </div>
           </div>

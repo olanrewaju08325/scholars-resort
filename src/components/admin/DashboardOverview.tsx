@@ -46,13 +46,20 @@ export function DashboardOverview() {
       startDate.setDate(startDate.getDate() - daysCount);
       const isoStartDate = startDate.toISOString();
 
-      // 1. Fetch User Registration Growth
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('created_at')
-        .gte('created_at', isoStartDate);
+      // 1. Fetch User Registration Growth and Real Daily Activity
+      const [{ data: profiles }, { data: dailyActivity }] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('created_at')
+          .gte('created_at', isoStartDate),
+        supabase
+          .from('exam_sessions')
+          .select('created_at, user_id')
+          .gte('created_at', isoStartDate)
+      ]);
 
       const daysMap: Record<string, number> = {};
+      const activeMap: Record<string, Set<string>> = {};
       
       // Initialize map with empty zero counts for each day in range
       for (let i = daysCount - 1; i >= 0; i--) {
@@ -62,6 +69,7 @@ export function DashboardOverview() {
           ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
           : d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
         daysMap[key] = 0;
+        activeMap[key] = new Set();
       }
 
       if (profiles) {
@@ -76,10 +84,22 @@ export function DashboardOverview() {
         });
       }
 
+      if (dailyActivity) {
+        dailyActivity.forEach(a => {
+          const d = new Date(a.created_at);
+          const key = timeframe === '90d' 
+            ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+            : d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });
+          if (activeMap[key] && a.user_id) {
+            activeMap[key].add(a.user_id);
+          }
+        });
+      }
+
       const formattedGrowth: GrowthDataPoint[] = Object.keys(daysMap).map(key => ({
         date: key,
         signups: daysMap[key],
-        activeUsers: Math.floor(daysMap[key] * 1.5) + Math.floor(Math.random() * 3) // simulate active users engagement
+        activeUsers: activeMap[key] ? activeMap[key].size : 0
       }));
 
       setGrowthData(formattedGrowth);

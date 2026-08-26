@@ -221,8 +221,10 @@ const Library = () => {
   };
 
   const filteredMaterials = materials.filter(m => {
-    const matchesSearch = m.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          m.subjects?.name?.toLowerCase().includes(searchTerm.toLowerCase());
+    const sTerm = (searchTerm || '').toLowerCase();
+    const titleMatch = (m.title || '').toLowerCase().includes(sTerm);
+    const subjectMatch = (m.subjects?.name || '').toLowerCase().includes(sTerm);
+    const matchesSearch = titleMatch || subjectMatch;
     const matchesSubject = activeSubject === 'All' || m.subjects?.name === activeSubject;
     return matchesSearch && matchesSubject;
   });
