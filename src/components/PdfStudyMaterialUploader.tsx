@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, FileText, Sparkles, Loader2, CheckCircle2, AlertCircle, BookOpen, BrainCircuit, ShieldCheck, Tag, Info } from 'lucide-react';
+import { Upload, FileText, Sparkles, Loader2, CheckCircle2, BookOpen, BrainCircuit, ShieldCheck, Tag, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { analyzeDocumentWithGroq } from '@/services/aiService';
 import { toast } from 'sonner';

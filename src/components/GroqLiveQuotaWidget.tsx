@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Cpu, RefreshCw, Zap, ShieldCheck, Activity, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Cpu, RefreshCw, Zap, CheckCircle2 } from 'lucide-react';
 import { fetchGroqTelemetry, type GroqTelemetryData } from '@/services/groqTelemetryService';
 
 export const GroqLiveQuotaWidget: React.FC<{ className?: string }> = ({ className = '' }) => {

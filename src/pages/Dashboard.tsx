@@ -56,7 +56,7 @@ export default function Dashboard() {
     }
   }, [profile, navigate]);
 
-  if (statsLoading || !profile) {
+  if (loading || !profile) {
     return <DashboardSkeleton />;
   }
 

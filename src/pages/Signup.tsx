@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Shield, Lock, Mail, Eye, EyeOff, User, Phone, Users, Sparkles, Check } from 'lucide-react';
+import { BookOpen, Shield, Lock, Mail, Eye, EyeOff, User, Phone, Users, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
-import { toast } from 'sonner';
 import { sendWelcomeEmail } from '@/services/emailService';
 
 const Signup = () => {

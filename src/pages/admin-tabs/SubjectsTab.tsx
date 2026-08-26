@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   BookOpen, BarChart, Plus, CheckCircle, XCircle, Sparkles, RefreshCw, 
-  Trash2, Award, Calendar, Layers, Check, AlertCircle, ShieldCheck, GitMerge, Pencil
+  Trash2, Award, Calendar, Check, ShieldCheck, GitMerge, Pencil
 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';

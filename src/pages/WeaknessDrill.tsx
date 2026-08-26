@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Target, AlertTriangle, Clock, History, BrainCircuit, Download, FileText, Sparkles } from 'lucide-react';
+import { Target, AlertTriangle, Clock, History, BrainCircuit, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
