@@ -82,7 +82,7 @@ const PracticeSetup = () => {
   }, [selectedSubject, subjects]);
 
   const handleStart = async () => {
-    if (!profile?.has_paid) {
+    if (!profile?.has_paid && profile?.role !== 'admin') {
       toast.error("Practice Mode requires an active premium subscription.");
       navigate('/pricing');
       return;

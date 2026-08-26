@@ -441,21 +441,12 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     }
   }
 
-  // 2. Fallback to Server Proxy /api/groq-chat
+  // 2. Fallback to Gemini API if available
   try {
-    const proxyRes = await fetch('/api/groq-chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages, model, temperature })
-    }).catch(() => null);
-
-    if (proxyRes && proxyRes.ok) {
-      const proxyData = await proxyRes.json().catch(() => null);
-      const proxyContent = proxyData?.choices?.[0]?.message?.content || proxyData?.content;
-      if (proxyContent) {
-        aiCircuitBreaker.recordSuccess();
-        return stripThinkTags(proxyContent);
-      }
+    const geminiRes = await callGeminiAPI(messages);
+    if (geminiRes) {
+      aiCircuitBreaker.recordSuccess();
+      return stripThinkTags(geminiRes);
     }
   } catch {
     aiCircuitBreaker.recordFailure();

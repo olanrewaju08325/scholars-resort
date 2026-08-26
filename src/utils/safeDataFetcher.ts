@@ -13,6 +13,10 @@ export interface SafeFetchResponse<T = any[]> {
  * Log API error directly to Supabase central database logs (`error_logs` and `platform_error_logs`).
  */
 async function logErrorToDatabase(contextName: string, status: number | string, message: string, metadata?: any) {
+  // Suppress logging for 404/400 missing tables to keep console and logs clean
+  if (status === 404 || status === 400 || String(message).includes('relation') || String(message).includes('does not exist')) {
+    return;
+  }
   if (!supabase) return;
   const payload = {
     error_type: 'database_error',
@@ -28,14 +32,14 @@ async function logErrorToDatabase(contextName: string, status: number | string, 
   try {
     // Insert into both platform_error_logs and error_logs for admin tray visibility
     await Promise.allSettled([
-      supabase.from('platform_error_logs').insert(payload),
+      supabase.from('platform_error_logs').insert(payload).catch(() => {}),
       supabase.from('error_logs').insert({
         message: payload.error_message,
         source: contextName,
         status_code: status,
         details: JSON.stringify(metadata || {}),
         created_at: payload.created_at
-      })
+      }).catch(() => {})
     ]);
   } catch {
     // Ignore background logging failures
