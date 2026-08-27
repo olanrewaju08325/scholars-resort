@@ -4,18 +4,53 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Power, ShieldAlert, Key, Mail, RefreshCw, Save } from 'lucide-react';
+import { 
+  Power, ShieldAlert, Key, Mail, RefreshCw, Save, 
+  Sparkles, CheckCircle2, XCircle, Eye, EyeOff, Zap, 
+  Globe, MessageSquare, BookOpen, Users, Clock, Send
+} from 'lucide-react';
 import { SMTPHealthCheck } from '@/components/admin/SMTPHealthCheck';
+import { 
+  fetchAllSystemConfigs, 
+  saveAllSystemConfigs, 
+  testGroqKeyLive, 
+  type GroqConfig, 
+  type SmtpConfig, 
+  type PlatformControls 
+} from '@/services/systemConfigService';
 
 export const SettingsTab = () => {
+  // Platform & Feature Toggles
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("We are currently undergoing scheduled maintenance.");
-  
   const [cbtEnabled, setCbtEnabled] = useState(true);
   const [tournamentsEnabled, setTournamentsEnabled] = useState(true);
+  const [studyRoomsEnabled, setStudyRoomsEnabled] = useState(true);
   const [jambDate, setJambDate] = useState("2026-04-15T08:00:00");
   const [telegramSupportLink, setTelegramSupportLink] = useState('https://t.me/+6dtsZgQpwrNhZDM8');
   const [telegramAnnouncementLink, setTelegramAnnouncementLink] = useState('https://t.me/+9WU6HrQE6DJhYTRk');
+  const [whatsappSupportNumber, setWhatsappSupportNumber] = useState('2348000000000');
+
+  // GROQ AI Configuration
+  const [groqKey, setGroqKey] = useState('');
+  const [groqModel, setGroqModel] = useState('llama-3.3-70b-versatile');
+  const [groqMonthlyLimit, setGroqMonthlyLimit] = useState(5000000);
+  const [showGroqKey, setShowGroqKey] = useState(false);
+  const [testingGroq, setTestingGroq] = useState(false);
+  const [groqTestResult, setGroqTestResult] = useState<{ success?: boolean; message?: string; latency?: number } | null>(null);
+
+  // SMTP Configuration
+  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
+  const [smtpPort, setSmtpPort] = useState('587');
+  const [smtpUser, setSmtpUser] = useState('admitwise2@gmail.com');
+  const [smtpPass, setSmtpPass] = useState('fliwopndlqxipara');
+  const [smtpFrom, setSmtpFrom] = useState('Scholars Resort <admitwise2@gmail.com>');
+  const [smtpSecure, setSmtpSecure] = useState(false);
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
+
+  // Payment Gateways
+  const [paystackKey, setPaystackKey] = useState('');
+  const [stripeKey, setStripeKey] = useState('');
 
   // Landing Customization
   const [landingTitle, setLandingTitle] = useState('Scholars Resort CBT & E-Learning Platform');
@@ -36,71 +71,71 @@ export const SettingsTab = () => {
   const [card5Title, setCard5Title] = useState("Guardian & Parent Portal");
   const [card5Desc, setCard5Desc] = useState("Parents receive transparent weekly email progress summaries and live dashboard tracking for peace of mind.");
 
-  const [paystackKey, setPaystackKey] = useState('');
-  const [stripeKey, setStripeKey] = useState('');
-  
-  // SMTP Configuration
-  const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
-  const [smtpPort, setSmtpPort] = useState('587');
-  const [smtpUser, setSmtpUser] = useState('admitwise2@gmail.com');
-  const [smtpPass, setSmtpPass] = useState('fliwopndlqxipara');
-  const [smtpFrom, setSmtpFrom] = useState('Scholars Resort <admitwise2@gmail.com>');
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const fetchSettings = async () => {
     setLoading(true);
-    const { data, error } = await supabase.from('admin_settings').select('*');
-    if (data && !error) {
-      const mm = data.find(s => s.setting_key === 'maintenance_mode')?.setting_value;
-      const ft = data.find(s => s.setting_key === 'feature_toggles')?.setting_value;
-      const keys = data.find(s => s.setting_key === 'api_keys')?.setting_value;
-      const globalConf = data.find(s => s.setting_key === 'global_config')?.setting_value;
-      if (globalConf) {
-        if (globalConf.jamb_date) setJambDate(globalConf.jamb_date);
-        if (globalConf.telegram_support_link) setTelegramSupportLink(globalConf.telegram_support_link);
-        if (globalConf.telegram_announcement_link) setTelegramAnnouncementLink(globalConf.telegram_announcement_link);
-      }
+    try {
+      // 1. Fetch from unified systemConfigService (checks system_configs and admin_settings)
+      const unified = await fetchAllSystemConfigs();
       
-      const landingConf = data.find(s => s.setting_key === 'landing_config')?.setting_value;
-      if (landingConf) {
-        if (landingConf.title) setLandingTitle(landingConf.title);
-        if (landingConf.subtitle) setLandingSubtitle(landingConf.subtitle);
-        if (landingConf.hero_images && landingConf.hero_images.length >= 3) {
-          setHeroImage1(landingConf.hero_images[0]);
-          setHeroImage2(landingConf.hero_images[1]);
-          setHeroImage3(landingConf.hero_images[2]);
-        }
-        if (landingConf.card1_title) setCard1Title(landingConf.card1_title);
-        if (landingConf.card1_desc) setCard1Desc(landingConf.card1_desc);
-        if (landingConf.card2_title) setCard2Title(landingConf.card2_title);
-        if (landingConf.card2_desc) setCard2Desc(landingConf.card2_desc);
-        if (landingConf.card3_title) setCard3Title(landingConf.card3_title);
-        if (landingConf.card3_desc) setCard3Desc(landingConf.card3_desc);
-        if (landingConf.card4_title) setCard4Title(landingConf.card4_title);
-        if (landingConf.card4_desc) setCard4Desc(landingConf.card4_desc);
-        if (landingConf.card5_title) setCard5Title(landingConf.card5_title);
-        if (landingConf.card5_desc) setCard5Desc(landingConf.card5_desc);
-      }
+      // Populate GROQ settings
+      if (unified.groq.apiKey) setGroqKey(unified.groq.apiKey);
+      if (unified.groq.defaultModel) setGroqModel(unified.groq.defaultModel);
+      if (unified.groq.monthlyTokenLimit) setGroqMonthlyLimit(unified.groq.monthlyTokenLimit);
 
-      if (mm) {
-        setMaintenanceMode(mm.enabled);
-        setMaintenanceMessage(mm.message || "We are currently undergoing scheduled maintenance.");
+      // Populate SMTP settings
+      if (unified.smtp.host) setSmtpHost(unified.smtp.host);
+      if (unified.smtp.port) setSmtpPort(String(unified.smtp.port));
+      if (unified.smtp.user) setSmtpUser(unified.smtp.user);
+      if (unified.smtp.pass) setSmtpPass(unified.smtp.pass);
+      if (unified.smtp.from) setSmtpFrom(unified.smtp.from);
+      if (unified.smtp.secure !== undefined) setSmtpSecure(unified.smtp.secure);
+
+      // Populate Platform controls
+      setMaintenanceMode(!!unified.platform.maintenanceMode);
+      if (unified.platform.maintenanceMessage) setMaintenanceMessage(unified.platform.maintenanceMessage);
+      setCbtEnabled(unified.platform.cbtEnabled !== false);
+      setTournamentsEnabled(unified.platform.tournamentsEnabled !== false);
+      setStudyRoomsEnabled(unified.platform.studyRoomsEnabled !== false);
+      if (unified.platform.jambDate) setJambDate(unified.platform.jambDate);
+      if (unified.platform.telegramSupportLink) setTelegramSupportLink(unified.platform.telegramSupportLink);
+      if (unified.platform.telegramAnnouncementLink) setTelegramAnnouncementLink(unified.platform.telegramAnnouncementLink);
+      if (unified.platform.whatsappSupportNumber) setWhatsappSupportNumber(unified.platform.whatsappSupportNumber);
+
+      // 2. Fetch landing & payment settings from admin_settings
+      const { data: adminRows } = await supabase.from('admin_settings').select('*');
+      if (adminRows) {
+        const landingConf = adminRows.find(s => s.setting_key === 'landing_config')?.setting_value;
+        if (landingConf) {
+          if (landingConf.title) setLandingTitle(landingConf.title);
+          if (landingConf.subtitle) setLandingSubtitle(landingConf.subtitle);
+          if (landingConf.hero_images && landingConf.hero_images.length >= 3) {
+            setHeroImage1(landingConf.hero_images[0]);
+            setHeroImage2(landingConf.hero_images[1]);
+            setHeroImage3(landingConf.hero_images[2]);
+          }
+          if (landingConf.card1_title) setCard1Title(landingConf.card1_title);
+          if (landingConf.card1_desc) setCard1Desc(landingConf.card1_desc);
+          if (landingConf.card2_title) setCard2Title(landingConf.card2_title);
+          if (landingConf.card2_desc) setCard2Desc(landingConf.card2_desc);
+          if (landingConf.card3_title) setCard3Title(landingConf.card3_title);
+          if (landingConf.card3_desc) setCard3Desc(landingConf.card3_desc);
+          if (landingConf.card4_title) setCard4Title(landingConf.card4_title);
+          if (landingConf.card4_desc) setCard4Desc(landingConf.card4_desc);
+          if (landingConf.card5_title) setCard5Title(landingConf.card5_title);
+          if (landingConf.card5_desc) setCard5Desc(landingConf.card5_desc);
+        }
+
+        const keys = adminRows.find(s => s.setting_key === 'api_keys')?.setting_value;
+        if (keys) {
+          if (keys.paystack) setPaystackKey(keys.paystack);
+          if (keys.stripe) setStripeKey(keys.stripe);
+        }
       }
-      if (ft) {
-        setCbtEnabled(ft.cbt_enabled !== false);
-        setTournamentsEnabled(ft.tournaments_enabled !== false);
-      }
-      if (keys) {
-        setPaystackKey(keys.paystack || '');
-        setStripeKey(keys.stripe || '');
-        if (keys.smtp_host) setSmtpHost(keys.smtp_host);
-        if (keys.smtp_port) setSmtpPort(keys.smtp_port);
-        if (keys.smtp_user) setSmtpUser(keys.smtp_user);
-        if (keys.smtp_pass) setSmtpPass(keys.smtp_pass);
-        if (keys.smtp_from) setSmtpFrom(keys.smtp_from);
-      }
+    } catch (err) {
+      console.error('Failed to load settings:', err);
     }
     setLoading(false);
   };
@@ -112,35 +147,42 @@ export const SettingsTab = () => {
   const saveSettings = async () => {
     setSaving(true);
     try {
+      const groqPayload: GroqConfig = {
+        apiKey: groqKey.trim(),
+        defaultModel: groqModel,
+        monthlyTokenLimit: Number(groqMonthlyLimit) || 5000000
+      };
+
+      const smtpPayload: SmtpConfig = {
+        host: smtpHost.trim(),
+        port: Number(smtpPort) || 587,
+        user: smtpUser.trim(),
+        pass: smtpPass.trim(),
+        from: smtpFrom.trim() || `Scholars Resort <${smtpUser.trim()}>`,
+        secure: smtpSecure
+      };
+
+      const platformPayload: PlatformControls = {
+        maintenanceMode,
+        maintenanceMessage,
+        cbtEnabled,
+        tournamentsEnabled,
+        studyRoomsEnabled,
+        jambDate,
+        telegramSupportLink,
+        telegramAnnouncementLink,
+        whatsappSupportNumber
+      };
+
+      // 1. Save unified configurations via service
+      const res = await saveAllSystemConfigs({
+        groq: groqPayload,
+        smtp: smtpPayload,
+        platform: platformPayload
+      });
+
+      // 2. Save landing page configuration
       await supabase.from('admin_settings').upsert([
-        { 
-          setting_key: 'maintenance_mode', 
-          setting_value: { enabled: maintenanceMode, message: maintenanceMessage } 
-        },
-        { 
-          setting_key: 'feature_toggles', 
-          setting_value: { cbt_enabled: cbtEnabled, tournaments_enabled: tournamentsEnabled } 
-        },
-        {
-          setting_key: 'api_keys',
-          setting_value: { 
-            paystack: paystackKey, 
-            stripe: stripeKey, 
-            smtp_host: smtpHost, 
-            smtp_port: smtpPort,
-            smtp_user: smtpUser,
-            smtp_pass: smtpPass,
-            smtp_from: smtpFrom
-          }
-        },
-        {
-          setting_key: 'global_config',
-          setting_value: { 
-            jamb_date: jambDate,
-            telegram_support_link: telegramSupportLink,
-            telegram_announcement_link: telegramAnnouncementLink
-          }
-        },
         {
           setting_key: 'landing_config',
           setting_value: {
@@ -158,69 +200,298 @@ export const SettingsTab = () => {
             card5_title: card5Title,
             card5_desc: card5Desc
           }
+        },
+        {
+          setting_key: 'api_keys',
+          setting_value: {
+            paystack: paystackKey,
+            stripe: stripeKey,
+            smtp_host: smtpHost,
+            smtp_port: smtpPort,
+            smtp_user: smtpUser,
+            smtp_pass: smtpPass,
+            smtp_from: smtpFrom,
+            groq: groqKey
+          }
         }
       ], { onConflict: 'setting_key' });
-      
-      toast.success("All System Controls & SMTP Settings saved successfully!");
+
+      if (res.success) {
+        toast.success("All System Configurations, GROQ API Key & SMTP Credentials saved successfully!");
+      } else {
+        toast.warning("Settings saved locally with database fallback notice.");
+      }
     } catch (_e) {
       toast.error("Failed to save settings.");
     }
     setSaving(false);
   };
 
-  const handleApplyGmailPreset = () => {
-    setSmtpHost('smtp.gmail.com');
-    setSmtpPort('587');
-    if (!smtpUser) setSmtpUser('admitwise2@gmail.com');
-    if (!smtpFrom) setSmtpFrom('Scholars Resort <admitwise2@gmail.com>');
-    toast.info("Applied Google Gmail SMTP presets (smtp.gmail.com:587). Please ensure you enter your 16-character App Password.");
+  const handleTestGroq = async () => {
+    if (!groqKey || groqKey.trim().length < 10) {
+      toast.error("Please enter a valid GROQ API Key (e.g. gsk_...) before testing.");
+      return;
+    }
+    setTestingGroq(true);
+    setGroqTestResult(null);
+    try {
+      const result = await testGroqKeyLive(groqKey.trim(), groqModel);
+      setGroqTestResult(result);
+      if (result.success) {
+        toast.success(result.message);
+      } else {
+        toast.error(result.message);
+      }
+    } catch (err: any) {
+      setGroqTestResult({ success: false, message: err.message || 'GROQ test failed.' });
+      toast.error(err.message || 'GROQ test failed.');
+    } finally {
+      setTestingGroq(false);
+    }
   };
 
-  if (loading) return <div className="p-8 flex justify-center items-center h-64"><RefreshCw className="w-8 h-8 animate-spin text-primary" /></div>;
+  const handleApplyPreset = (preset: 'gmail' | 'sendgrid' | 'ses' | 'mailgun') => {
+    if (preset === 'gmail') {
+      setSmtpHost('smtp.gmail.com');
+      setSmtpPort('587');
+      setSmtpSecure(false);
+      if (!smtpUser) setSmtpUser('admitwise2@gmail.com');
+      if (!smtpFrom) setSmtpFrom('Scholars Resort <admitwise2@gmail.com>');
+      toast.info("Applied Gmail SMTP preset (smtp.gmail.com:587). Ensure you use a 16-character App Password.");
+    } else if (preset === 'sendgrid') {
+      setSmtpHost('smtp.sendgrid.net');
+      setSmtpPort('587');
+      setSmtpSecure(false);
+      setSmtpUser('apikey');
+      toast.info("Applied SendGrid preset. Use 'apikey' as username and your SendGrid API key as password.");
+    } else if (preset === 'ses') {
+      setSmtpHost('email-smtp.us-east-1.amazonaws.com');
+      setSmtpPort('587');
+      setSmtpSecure(false);
+      toast.info("Applied Amazon SES preset. Enter your AWS IAM SMTP username and secret password.");
+    } else if (preset === 'mailgun') {
+      setSmtpHost('smtp.mailgun.org');
+      setSmtpPort('587');
+      setSmtpSecure(false);
+      toast.info("Applied Mailgun preset. Enter your domain SMTP credentials.");
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-12 flex flex-col justify-center items-center h-64 gap-3">
+        <RefreshCw className="w-8 h-8 animate-spin text-primary" />
+        <p className="text-sm text-muted-foreground">Loading system configurations from database...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 bg-card border border-border p-6 rounded-2xl shadow-sm">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2"><Power className="w-6 h-6 text-primary" /> System Controls & Integrations</h2>
-          <p className="text-slate-400">Manage global access, feature toggles, SMTP mail routing, and gateways.</p>
+          <h2 className="text-2xl font-bold font-display flex items-center gap-2 text-foreground">
+            <Power className="w-6 h-6 text-primary" /> System Controls & Integrations
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Centrally manage GROQ AI provider keys, SMTP mail server credentials, feature toggles, and security locks.
+          </p>
         </div>
-        <Button onClick={saveSettings} disabled={saving} className="bg-primary hover:bg-primary/90 shrink-0">
+        <Button onClick={saveSettings} disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground shrink-0 shadow-md">
           {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-          Save All Settings
+          Save All System Configs
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        
+        {/* LEFT COLUMN: GROQ AI & MODULE CONTROLS */}
         <div className="space-y-6">
-          <Card className="bg-slate-900 border-slate-800 text-slate-100">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-400">
-                <ShieldAlert className="w-5 h-5" /> Maintenance Mode & Platform Lock
-              </CardTitle>
-              <CardDescription className="text-slate-400">If enabled, students are redirected to the maintenance splash screen.</CardDescription>
+
+          {/* GROQ AI Provider Configuration */}
+          <Card className="border border-border shadow-sm">
+            <CardHeader className="bg-gradient-to-r from-purple-500/10 to-indigo-500/10 border-b border-border">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-purple-600 dark:text-purple-400">
+                  <Sparkles className="w-5 h-5" /> GROQ AI Engine Configuration
+                </CardTitle>
+                <span className="text-xs bg-purple-500/20 text-purple-700 dark:text-purple-300 font-mono px-2.5 py-1 rounded-full font-semibold">
+                  system_configs
+                </span>
+              </div>
+              <CardDescription>
+                Configure your custom GROQ API key for instantaneous AI answer explanations, personal tutoring, and syllabus breakdowns.
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-lg">
+            <CardContent className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold text-foreground flex items-center gap-1.5">
+                    <Key className="w-4 h-4 text-purple-500" /> Custom GROQ API Key
+                  </label>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowGroqKey(!showGroqKey)}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    {showGroqKey ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    {showGroqKey ? 'Hide Key' : 'Show Key'}
+                  </button>
+                </div>
+                <Input 
+                  type={showGroqKey ? 'text' : 'password'}
+                  value={groqKey} 
+                  onChange={e => setGroqKey(e.target.value)} 
+                  placeholder="gsk_..." 
+                  className="font-mono text-sm"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Get your free API key at <a href="https://console.groq.com/keys" target="_blank" rel="noreferrer" className="text-primary hover:underline font-semibold">console.groq.com</a>.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Default AI Model</label>
+                  <select 
+                    value={groqModel}
+                    onChange={e => setGroqModel(e.target.value)}
+                    className="w-full h-10 px-3 rounded-md bg-background border border-input text-sm text-foreground focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile (Recommended)</option>
+                    <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (Ultra-fast)</option>
+                    <option value="mixtral-8x7b-32768">Mixtral 8x7B (Long Context)</option>
+                    <option value="gemma2-9b-it">Gemma 2 9B IT (Google DeepMind)</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-semibold text-foreground">Monthly Token Quota</label>
+                  <Input 
+                    type="number"
+                    value={groqMonthlyLimit}
+                    onChange={e => setGroqMonthlyLimit(Number(e.target.value))}
+                    className="text-sm"
+                  />
+                </div>
+              </div>
+
+              {/* Test GROQ Key Trigger */}
+              <div className="pt-2">
+                <Button 
+                  type="button" 
+                  onClick={handleTestGroq} 
+                  disabled={testingGroq}
+                  variant="outline"
+                  className="w-full border-purple-500/30 hover:bg-purple-500/10 text-purple-600 dark:text-purple-400 font-semibold"
+                >
+                  {testingGroq ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Zap className="w-4 h-4 mr-2" />}
+                  {testingGroq ? 'Running Connectivity Benchmark...' : 'Test GROQ API Key & Latency'}
+                </Button>
+              </div>
+
+              {groqTestResult && (
+                <div className={`p-3 rounded-lg text-xs flex items-start gap-2 ${groqTestResult.success ? 'bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-300' : 'bg-red-500/10 border border-red-500/20 text-red-700 dark:text-red-300'}`}>
+                  {groqTestResult.success ? <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" /> : <XCircle className="w-4 h-4 shrink-0 mt-0.5" />}
+                  <div>
+                    <p className="font-semibold">{groqTestResult.message}</p>
+                    {groqTestResult.latency && <p className="mt-0.5 opacity-80">Response latency: {groqTestResult.latency}ms</p>}
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Module Feature Flags */}
+          <Card className="border border-border shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                <Power className="w-5 h-5" /> Module Feature Flags & Access
+              </CardTitle>
+              <CardDescription>Instantly toggle platform features across the student dashboard.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between p-3.5 bg-muted/40 border border-border rounded-xl">
                 <div>
-                  <p className="font-bold">Enable Maintenance Lockdown</p>
-                  <p className="text-sm text-slate-400">Only Administrator accounts can access the platform.</p>
+                  <p className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-primary" /> CBT Examination Center
+                  </p>
+                  <p className="text-xs text-muted-foreground">Full timed JAMB mock tests & past questions engine</p>
                 </div>
                 <button 
-                  onClick={() => setMaintenanceMode(!maintenanceMode)}
-                  className={`w-12 h-6 rounded-full p-1 transition-colors ${maintenanceMode ? 'bg-red-500' : 'bg-slate-700'}`}
+                  type="button"
+                  onClick={() => setCbtEnabled(!cbtEnabled)}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors ${cbtEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}
                 >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${maintenanceMode ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${cbtEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 bg-muted/40 border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-500" /> Tournaments & Battle Arena
+                  </p>
+                  <p className="text-xs text-muted-foreground">Live 1v1 multiplayer and weekly national tournaments</p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setTournamentsEnabled(!tournamentsEnabled)}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors ${tournamentsEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${tournamentsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between p-3.5 bg-muted/40 border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <Users className="w-4 h-4 text-indigo-500" /> Peer Study Rooms & Chat
+                  </p>
+                  <p className="text-xs text-muted-foreground">Real-time collaborative study groups and messaging</p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setStudyRoomsEnabled(!studyRoomsEnabled)}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors ${studyRoomsEnabled ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${studyRoomsEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Maintenance Mode & Platform Lock */}
+          <Card className="border border-red-500/20 shadow-sm">
+            <CardHeader className="bg-red-500/5">
+              <CardTitle className="flex items-center gap-2 text-red-600 dark:text-red-400">
+                <ShieldAlert className="w-5 h-5" /> Maintenance Mode & Lockdown
+              </CardTitle>
+              <CardDescription>If enabled, non-admin students are redirected to the maintenance notice.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+              <div className="flex items-center justify-between p-3.5 bg-muted/40 border border-border rounded-xl">
+                <div>
+                  <p className="font-bold text-sm text-foreground">Enable Platform Lockdown</p>
+                  <p className="text-xs text-muted-foreground">Only authorized administrator accounts can access the platform.</p>
+                </div>
+                <button 
+                  type="button"
+                  onClick={() => setMaintenanceMode(!maintenanceMode)}
+                  className={`w-11 h-6 rounded-full p-1 transition-colors ${maintenanceMode ? 'bg-red-500' : 'bg-muted-foreground/30'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${maintenanceMode ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
               </div>
               
               {maintenanceMode && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Maintenance Notice Message</label>
+                  <label className="text-sm font-medium text-foreground">Maintenance Notice Message</label>
                   <textarea 
                     value={maintenanceMessage}
                     onChange={(e) => setMaintenanceMessage(e.target.value)}
-                    className="w-full h-24 bg-slate-950 border border-slate-800 rounded-md p-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+                    className="w-full h-20 bg-background border border-input rounded-md p-3 text-sm focus:ring-2 focus:ring-primary outline-none"
                     placeholder="We are upgrading our servers for the upcoming JAMB mock exam..."
                   />
                 </div>
@@ -228,202 +499,171 @@ export const SettingsTab = () => {
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 text-slate-100">
+          {/* Global Target JAMB Date & Social Links */}
+          <Card className="border border-border shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-emerald-400">
-                <Power className="w-5 h-5" /> Landing Page Customization
-              </CardTitle>
-              <CardDescription className="text-slate-400">Control headline text, subtitle, and hero image transition URLs.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Main Landing Title</label>
-                <Input 
-                  value={landingTitle}
-                  onChange={e => setLandingTitle(e.target.value)}
-                  className="bg-slate-950 border-slate-800"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Hero Subtitle</label>
-                <Input 
-                  value={landingSubtitle}
-                  onChange={e => setLandingSubtitle(e.target.value)}
-                  className="bg-slate-950 border-slate-800"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Hero Image 1 (URL)</label>
-                <Input 
-                  value={heroImage1}
-                  onChange={e => setHeroImage1(e.target.value)}
-                  className="bg-slate-950 border-slate-800 font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Hero Image 2 (URL)</label>
-                <Input 
-                  value={heroImage2}
-                  onChange={e => setHeroImage2(e.target.value)}
-                  className="bg-slate-950 border-slate-800 font-mono text-xs"
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-300">Hero Image 3 (URL)</label>
-                <Input 
-                  value={heroImage3}
-                  onChange={e => setHeroImage3(e.target.value)}
-                  className="bg-slate-950 border-slate-800 font-mono text-xs"
-                />
-              </div>
-
-              <div className="pt-4 border-t border-slate-800 space-y-4">
-                <h4 className="text-sm font-bold text-emerald-400">Landing Page Feature Cards Customization</h4>
-                
-                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 1 (Double Span)</span>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 1 Title</label>
-                    <Input value={card1Title} onChange={e => setCard1Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 1 Description</label>
-                    <Input value={card1Desc} onChange={e => setCard1Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                </div>
-
-                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 2</span>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 2 Title</label>
-                    <Input value={card2Title} onChange={e => setCard2Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 2 Description</label>
-                    <Input value={card2Desc} onChange={e => setCard2Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                </div>
-
-                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 3</span>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 3 Title</label>
-                    <Input value={card3Title} onChange={e => setCard3Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 3 Description</label>
-                    <Input value={card3Desc} onChange={e => setCard3Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                </div>
-
-                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 4</span>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 4 Title</label>
-                    <Input value={card4Title} onChange={e => setCard4Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 4 Description</label>
-                    <Input value={card4Desc} onChange={e => setCard4Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                </div>
-
-                <div className="space-y-3 bg-slate-950/40 p-4 rounded-xl border border-slate-800">
-                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Card 5 (Double Span)</span>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 5 Title</label>
-                    <Input value={card5Title} onChange={e => setCard5Title(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs text-slate-400 font-medium">Card 5 Description</label>
-                    <Input value={card5Desc} onChange={e => setCard5Desc(e.target.value)} className="bg-slate-950 border-slate-800 h-9 text-xs" />
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-900 border-slate-800 text-slate-100">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Power className="w-5 h-5 text-blue-400" /> Exam Countdown & Telegram Settings
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <Clock className="w-5 h-5 text-primary" /> Target Exam Dates & Community Channels
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm text-slate-400 font-medium">JAMB Official Examination Date</label>
+                <label className="text-sm font-medium text-foreground">JAMB UTME Target Date (Countdown Timer)</label>
                 <Input 
                   type="datetime-local" 
-                  value={jambDate ? jambDate.slice(0, 16) : ''} 
-                  onChange={e => setJambDate(new Date(e.target.value).toISOString())}
-                  className="bg-slate-850 border-slate-700 text-white" 
+                  value={jambDate.slice(0, 16)} 
+                  onChange={e => setJambDate(e.target.value)} 
+                  className="font-mono text-sm"
                 />
-                <p className="text-xs text-slate-500">Controls the real-time exam countdown timer across student dashboards.</p>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <label className="text-sm text-slate-400 font-medium">Telegram Support System Invite Link</label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                  <MessageSquare className="w-4 h-4 text-blue-500" /> Telegram Support Group
+                </label>
                 <Input 
-                  type="url" 
                   value={telegramSupportLink} 
                   onChange={e => setTelegramSupportLink(e.target.value)}
                   placeholder="https://t.me/..."
-                  className="bg-slate-850 border-slate-700 text-white font-mono text-xs" 
+                  className="font-mono text-xs" 
                 />
-                <p className="text-xs text-slate-500">Official support link where students and guardians request assistance.</p>
               </div>
 
-              <div className="space-y-2 pt-2 border-t border-slate-800/60">
-                <label className="text-sm text-slate-400 font-medium">Telegram Announcements Channel Link</label>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                  <Globe className="w-4 h-4 text-emerald-500" /> Telegram Official Channel
+                </label>
                 <Input 
-                  type="url" 
                   value={telegramAnnouncementLink} 
                   onChange={e => setTelegramAnnouncementLink(e.target.value)}
                   placeholder="https://t.me/..."
-                  className="bg-slate-850 border-slate-700 text-white font-mono text-xs" 
+                  className="font-mono text-xs" 
                 />
-                <p className="text-xs text-slate-500">Official channel link for sharing updates, schedules, and materials.</p>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-slate-900 border-slate-800 text-slate-100">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-blue-400">
-                <Power className="w-5 h-5" /> Module Feature Flags
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-lg">
-                <div>
-                  <p className="font-bold">CBT Examination Center</p>
-                  <p className="text-xs text-slate-400">Enable or pause full timed mock exams</p>
-                </div>
-                <button 
-                  onClick={() => setCbtEnabled(!cbtEnabled)}
-                  className={`w-12 h-6 rounded-full p-1 transition-colors ${cbtEnabled ? 'bg-green-500' : 'bg-slate-700'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${cbtEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                </button>
               </div>
 
-              <div className="flex items-center justify-between p-4 bg-slate-950 border border-slate-800 rounded-lg">
-                <div>
-                  <p className="font-bold">Tournaments & Battle Arena</p>
-                  <p className="text-xs text-slate-400">Live 1v1 and multiplayer competitions</p>
-                </div>
-                <button 
-                  onClick={() => setTournamentsEnabled(!tournamentsEnabled)}
-                  className={`w-12 h-6 rounded-full p-1 transition-colors ${tournamentsEnabled ? 'bg-green-500' : 'bg-slate-700'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform ${tournamentsEnabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
-                </button>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                  <Send className="w-4 h-4 text-emerald-600" /> WhatsApp Support Number
+                </label>
+                <Input 
+                  value={whatsappSupportNumber} 
+                  onChange={e => setWhatsappSupportNumber(e.target.value)}
+                  placeholder="2348000000000"
+                  className="font-mono text-xs" 
+                />
               </div>
             </CardContent>
           </Card>
         </div>
 
+        {/* RIGHT COLUMN: SMTP CREDENTIALS, DIAGNOSTICS & LANDING */}
         <div className="space-y-6">
+
+          {/* SMTP Credentials & Server Settings */}
+          <Card className="border border-border shadow-sm">
+            <CardHeader className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border-b border-border">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                  <Mail className="w-5 h-5" /> SMTP Mail Server Credentials
+                </CardTitle>
+                <span className="text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono px-2.5 py-1 rounded-full font-semibold">
+                  system_configs
+                </span>
+              </div>
+              <CardDescription>
+                Configure the outgoing mail server for secure OTP verification codes, report cards, and tournament alerts.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 pt-4">
+
+              {/* Quick Presets */}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-2">
+                  1-Click Mail Server Presets
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleApplyPreset('gmail')} className="text-xs">
+                    Gmail SMTP
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleApplyPreset('sendgrid')} className="text-xs">
+                    SendGrid
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleApplyPreset('ses')} className="text-xs">
+                    Amazon SES
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => handleApplyPreset('mailgun')} className="text-xs">
+                    Mailgun
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="sm:col-span-2 space-y-1.5">
+                  <label className="text-sm font-semibold text-foreground">SMTP Host</label>
+                  <Input 
+                    value={smtpHost} 
+                    onChange={e => setSmtpHost(e.target.value)} 
+                    placeholder="smtp.gmail.com" 
+                    className="font-mono text-sm" 
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold text-foreground">SMTP Port</label>
+                  <Input 
+                    value={smtpPort} 
+                    onChange={e => setSmtpPort(e.target.value)} 
+                    placeholder="587" 
+                    className="font-mono text-sm" 
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-foreground">SMTP Username / Email</label>
+                <Input 
+                  value={smtpUser} 
+                  onChange={e => setSmtpUser(e.target.value)} 
+                  placeholder="admitwise2@gmail.com" 
+                  className="font-mono text-sm" 
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-semibold text-foreground">SMTP Password / App Password</label>
+                  <button 
+                    type="button" 
+                    onClick={() => setShowSmtpPass(!showSmtpPass)}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    {showSmtpPass ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    {showSmtpPass ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                <Input 
+                  type={showSmtpPass ? 'text' : 'password'}
+                  value={smtpPass} 
+                  onChange={e => setSmtpPass(e.target.value)} 
+                  placeholder="16-character App Password" 
+                  className="font-mono text-sm" 
+                />
+                <p className="text-xs text-muted-foreground">
+                  For Gmail, generate an App Password at <a href="https://myaccount.google.com/apppasswords" target="_blank" rel="noreferrer" className="text-primary hover:underline font-semibold">myaccount.google.com/apppasswords</a>.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-sm font-semibold text-foreground">Sender From Display Header</label>
+                <Input 
+                  value={smtpFrom} 
+                  onChange={e => setSmtpFrom(e.target.value)} 
+                  placeholder="Scholars Resort <admitwise2@gmail.com>" 
+                  className="text-sm" 
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           {/* SMTP Live Diagnostic Section */}
           <SMTPHealthCheck 
             currentConfig={{
@@ -433,110 +673,84 @@ export const SettingsTab = () => {
               pass: smtpPass,
               fromEmail: smtpFrom
             }}
-            onApplyGmailPreset={handleApplyGmailPreset}
+            onApplyGmailPreset={() => handleApplyPreset('gmail')}
           />
 
-          {/* SMTP Credentials & Server Settings */}
-          <Card className="bg-slate-900 border-slate-800 text-slate-100">
+          {/* Landing Page Customization */}
+          <Card className="border border-border shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-amber-400">
-                <Mail className="w-5 h-5" /> SMTP Server & Authentication Credentials
+              <CardTitle className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                <Globe className="w-5 h-5" /> Landing Page Customization
               </CardTitle>
-              <CardDescription className="text-slate-400">Configure Gmail SMTP or custom transactional email host credentials.</CardDescription>
+              <CardDescription>Control headlines, subtitles, and hero transition banners.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">SMTP Host</label>
-                  <Input 
-                    value={smtpHost} 
-                    onChange={e => setSmtpHost(e.target.value)} 
-                    placeholder="smtp.gmail.com" 
-                    className="bg-slate-950 border-slate-800" 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">SMTP Port</label>
-                  <Input 
-                    value={smtpPort} 
-                    onChange={e => setSmtpPort(e.target.value)} 
-                    placeholder="587" 
-                    className="bg-slate-950 border-slate-800" 
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">SMTP Email / Username</label>
-                  <Input 
-                    value={smtpUser} 
-                    onChange={e => setSmtpUser(e.target.value)} 
-                    placeholder="your-email@gmail.com" 
-                    className="bg-slate-950 border-slate-800" 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">SMTP Password / App Password</label>
-                  <Input 
-                    type="password"
-                    value={smtpPass} 
-                    onChange={e => setSmtpPass(e.target.value)} 
-                    placeholder="16-character App Password" 
-                    className="bg-slate-950 border-slate-800" 
-                  />
-                </div>
-              </div>
-
               <div className="space-y-2">
-                <label className="text-sm font-medium">Sender Name / Email (From:)</label>
+                <label className="text-sm font-medium text-foreground">Main Landing Title</label>
                 <Input 
-                  value={smtpFrom} 
-                  onChange={e => setSmtpFrom(e.target.value)} 
-                  placeholder="Scholars Resort <your-email@gmail.com>" 
-                  className="bg-slate-950 border-slate-800" 
+                  value={landingTitle}
+                  onChange={e => setLandingTitle(e.target.value)}
                 />
               </div>
-
-              <div className="pt-2">
-                <Button 
-                  onClick={saveSettings} 
-                  disabled={saving} 
-                  className="w-full bg-amber-600 hover:bg-amber-700 font-bold text-white shadow"
-                >
-                  {saving ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
-                  Save SMTP Credentials
-                </Button>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Hero Subtitle</label>
+                <Input 
+                  value={landingSubtitle}
+                  onChange={e => setLandingSubtitle(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Hero Image 1 (URL)</label>
+                <Input 
+                  value={heroImage1}
+                  onChange={e => setHeroImage1(e.target.value)}
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Hero Image 2 (URL)</label>
+                <Input 
+                  value={heroImage2}
+                  onChange={e => setHeroImage2(e.target.value)}
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-foreground">Hero Image 3 (URL)</label>
+                <Input 
+                  value={heroImage3}
+                  onChange={e => setHeroImage3(e.target.value)}
+                  className="font-mono text-xs"
+                />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="bg-slate-900 border-slate-800 text-slate-100">
+          {/* Payment Gateways */}
+          <Card className="border border-border shadow-sm">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-purple-400">
-                <Key className="w-5 h-5" /> Payment Gateway Keys
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <Key className="w-5 h-5 text-purple-500" /> Payment Gateway Keys
               </CardTitle>
-              <CardDescription className="text-slate-400">Configure API keys for Paystack (Nigeria NGN) and Stripe.</CardDescription>
+              <CardDescription>Configure Paystack and Stripe keys for student subscription activations.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Paystack Public / Secret Key</label>
+                <label className="text-sm font-medium text-foreground">Paystack Secret / Public Key</label>
                 <Input 
                   type="password"
                   value={paystackKey} 
                   onChange={e => setPaystackKey(e.target.value)} 
                   placeholder="pk_test_... or sk_test_..." 
-                  className="bg-slate-950 border-slate-800" 
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm font-medium">Stripe Secret Key</label>
+                <label className="text-sm font-medium text-foreground">Stripe Secret Key</label>
                 <Input 
                   type="password"
                   value={stripeKey} 
                   onChange={e => setStripeKey(e.target.value)} 
                   placeholder="sk_test_..." 
-                  className="bg-slate-950 border-slate-800" 
                 />
               </div>
             </CardContent>

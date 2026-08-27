@@ -682,9 +682,9 @@ export class FlowValidator {
             zeroMockEnforced: report.allZeroMockEnforced
           });
 
-          // Log to admin activity / audit table if Supabase is connected
+          // Log to activity_logs table if Supabase is connected
           try {
-            await supabase.from('admin_audit_logs').insert({
+            await supabase.from('activity_logs').insert({
               action: 'cron_flow_validation',
               details: `Automated 24h Flow Validation completed: ${report.overallHealth.toUpperCase()} (${report.totalRecordsFetched} live questions, ${report.entitiesTouched?.totalEntitiesTouched} entities touched, Coverage: ${report.coveragePercentage}%, ${report.totalLatencyMs}ms).`,
               created_at: new Date().toISOString()

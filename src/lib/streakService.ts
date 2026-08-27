@@ -3,11 +3,11 @@ import { awardDailyStreakXp, checkStreakBadges } from './gamification';
 
 export const recordStudyAction = async (userId: string, actionType: 'exam' | 'practice' | 'library') => {
   try {
-    // 1. Log the action
+    // 1. Log the action safely
     await supabase.from('study_logs').insert({
       user_id: userId,
       action_type: actionType
-    });
+    }).catch(() => {});
 
     // 2. Fetch current profile stats
     const { data: profile } = await supabase

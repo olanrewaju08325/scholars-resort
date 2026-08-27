@@ -129,7 +129,7 @@ export const XPProgressPanel = () => {
         <div>
           <div className="flex items-center justify-between mb-2">
             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Recent XP Earned</h4>
-            <Link to="/dashboard?tab=journey" className="text-xs text-primary font-semibold hover:underline flex items-center">
+            <Link to="/journey-map" className="text-xs text-primary font-semibold hover:underline flex items-center">
               View All Badges <ChevronRight className="w-3 h-3" />
             </Link>
           </div>

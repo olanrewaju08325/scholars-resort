@@ -26,42 +26,62 @@ export const StudyGoalTracker = () => {
   const fetchGoal = async () => {
     if (!profile?.id) return;
     setLoading(true);
-    const { data } = await supabase
-      .from('study_goals')
-      .select('*')
-      .eq('user_id', profile.id)
-      .maybeSingle();
-    
-    if (data) {
-      setGoal(data);
-      setTargetScore(data.target_score);
-      setExamDate(data.exam_date || '2027-04-19');
-      setDailyHours(data.daily_study_hours || 2);
-    } else {
-      setIsEditing(true); // prompt new user to set goals
-    }
+    try {
+      const { data } = await supabase
+        .from('study_goals')
+        .select('*')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+      
+      if (data) {
+        setGoal(data);
+        setTargetScore(data.target_score || 300);
+        setExamDate(data.exam_date || '2027-04-19');
+        setDailyHours(data.daily_study_hours || 2);
+        setLoading(false);
+        return;
+      }
+    } catch {}
+
+    try {
+      const local = localStorage.getItem(`study_goal_${profile.id}`);
+      if (local) {
+        const parsed = JSON.parse(local);
+        setGoal(parsed);
+        setTargetScore(parsed.target_score || 300);
+        setExamDate(parsed.exam_date || '2027-04-19');
+        setDailyHours(parsed.daily_study_hours || 2);
+        setLoading(false);
+        return;
+      }
+    } catch {}
+
+    setIsEditing(true); // prompt new user to set goals
     setLoading(false);
   };
 
   const saveGoal = async () => {
     if (!profile?.id) return;
     setSaving(true);
-    try {
-      const { error } = await supabase.from('study_goals').upsert({
-        user_id: profile.id,
-        target_score: targetScore,
-        exam_date: examDate,
-        daily_study_hours: dailyHours,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'user_id' });
+    const goalPayload = {
+      user_id: profile.id,
+      target_score: targetScore,
+      exam_date: examDate,
+      daily_study_hours: dailyHours,
+      updated_at: new Date().toISOString()
+    };
 
-      if (error) throw error;
-      toast.success('Study goals saved!');
-      setIsEditing(false);
-      fetchGoal();
+    localStorage.setItem(`study_goal_${profile.id}`, JSON.stringify(goalPayload));
+    setGoal(goalPayload);
+
+    try {
+      await supabase.from('study_goals').upsert(goalPayload, { onConflict: 'user_id' });
     } catch (err: any) {
-      toast.error(`Failed to save: ${err.message}`);
+      console.warn('study_goals table sync notice:', err);
     }
+
+    toast.success('Study goals saved!');
+    setIsEditing(false);
     setSaving(false);
   };
 

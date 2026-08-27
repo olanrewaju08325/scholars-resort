@@ -1,7 +1,6 @@
 import { supabase } from './supabase';
 import { syncPendingAnswers } from './offlineDb';
 import { processSyncQueue } from './syncQueue';
-import { toast } from 'sonner';
 
 export const syncWithSupabase = async () => {
   try {

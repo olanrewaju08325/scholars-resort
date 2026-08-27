@@ -3,9 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Activity, ShieldCheck, CheckCircle2, AlertTriangle, XCircle, 
-  RefreshCw, Play, Code, Database, Filter, Layers, Clock, Zap, Sparkles,
-  Download, Eye, Check, ShieldAlert, Cpu
+  ShieldCheck, CheckCircle2, AlertTriangle, XCircle, 
+  RefreshCw, Play, Code, Layers, Zap, Download, Cpu
 } from 'lucide-react';
 import { 
   FlowValidator, 

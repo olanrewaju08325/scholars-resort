@@ -176,17 +176,49 @@ export async function processSyncQueue(supabaseClient: any = supabase): Promise<
       try {
         await offlineDb.syncQueue.update(item.id, { status: 'syncing' });
 
-        let query = supabaseClient.from(item.table);
+        // Map deprecated or non-existent table names to exact schema matches
+        let targetTable = item.table;
+        let payload = item.payload ? { ...item.payload } : {};
+
+        if (targetTable === 'practice_sessions') {
+          targetTable = 'exam_sessions';
+          if (payload.completed_at && !payload.submitted_at) {
+            payload.submitted_at = payload.completed_at;
+            delete payload.completed_at;
+          }
+          if (!payload.status) {
+            payload.status = 'submitted';
+          }
+        }
+
+        // Map payload fields in session_answers if practice_session_id is present
+        if (targetTable === 'session_answers' && payload) {
+          if (Array.isArray(payload)) {
+            payload = payload.map((ans: any) => {
+              const cleanAns = { ...ans };
+              if (cleanAns.practice_session_id) {
+                cleanAns.exam_session_id = cleanAns.practice_session_id;
+                delete cleanAns.practice_session_id;
+              }
+              return cleanAns;
+            });
+          } else if (payload.practice_session_id) {
+            payload.exam_session_id = payload.practice_session_id;
+            delete payload.practice_session_id;
+          }
+        }
+
+        let query = supabaseClient.from(targetTable);
         let error: any = null;
 
         if (item.action === 'insert') {
-          const res = await query.insert(item.payload);
+          const res = await query.insert(payload);
           error = res.error;
         } else if (item.action === 'upsert') {
-          const res = await query.upsert(item.payload);
+          const res = await query.upsert(payload);
           error = res.error;
         } else if (item.action === 'update') {
-          let updateQuery = query.update(item.payload);
+          let updateQuery = query.update(payload);
           if (item.matchCriteria) {
             Object.entries(item.matchCriteria).forEach(([k, v]) => {
               updateQuery = updateQuery.eq(k, v);
@@ -197,24 +229,39 @@ export async function processSyncQueue(supabaseClient: any = supabase): Promise<
         }
 
         if (error) {
-          const nextRetryCount = (item.retryCount || 0) + 1;
-          const backoffDelay = calculateBackoffDelay(nextRetryCount);
-          const nextRetryTime = Date.now() + backoffDelay;
+          const isSchemaError = error.code === '42P01' ||
+            error.status === 404 ||
+            (error.message && (
+              error.message.includes('relation') ||
+              error.message.includes('does not exist') ||
+              error.message.includes('column')
+            ));
 
-          console.warn(`[SyncQueue] Item ${item.id} sync error on ${item.table}. Exponential backoff retry #${nextRetryCount} in ${Math.round(backoffDelay / 1000)}s:`, error.message);
-          
-          await offlineDb.syncQueue.update(item.id, {
-            status: 'failed',
-            retryCount: nextRetryCount,
-            nextRetryTime,
-            lastError: error.message
-          });
-          failed++;
+          if (isSchemaError && item.retryCount >= 2) {
+            // Dismiss items with non-existent table/column after 2 attempts to stop console error loop
+            console.warn(`[SyncQueue] Dismissing unrecoverable schema mismatch item #${item.id} on table "${targetTable}":`, error.message);
+            await offlineDb.syncQueue.delete(item.id);
+            failed++;
+          } else {
+            const nextRetryCount = (item.retryCount || 0) + 1;
+            const backoffDelay = calculateBackoffDelay(nextRetryCount);
+            const nextRetryTime = Date.now() + backoffDelay;
+
+            console.warn(`[SyncQueue] Item ${item.id} sync error on ${targetTable}. Exponential backoff retry #${nextRetryCount} in ${Math.round(backoffDelay / 1000)}s:`, error.message);
+            
+            await offlineDb.syncQueue.update(item.id, {
+              status: 'failed',
+              retryCount: nextRetryCount,
+              nextRetryTime,
+              lastError: error.message
+            });
+            failed++;
+          }
         } else {
           // Success: delete from sync queue
           await offlineDb.syncQueue.delete(item.id);
           synced++;
-          console.log(`[SyncQueue] ✅ Successfully synced item #${item.id} to "${item.table}"`);
+          console.log(`[SyncQueue] ✅ Successfully synced item #${item.id} to "${targetTable}"`);
         }
       } catch (itemErr: any) {
         const nextRetryCount = (item.retryCount || 0) + 1;

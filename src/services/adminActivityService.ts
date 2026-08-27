@@ -58,11 +58,10 @@ export const logAdminActivity = async (
     console.warn('Failed to save activity to localStorage:', err);
   }
 
-  // Attempt async sync to Supabase audit_logs
+  // Attempt async sync to Supabase activity_logs
   try {
-    await supabase.from('audit_logs').insert([{
+    await supabase.from('activity_logs').insert([{
       action: `${action}: ${details}`,
-      entity_type: entity,
       metadata: metadata || {},
       created_at: newItem.timestamp
     }]);
@@ -86,7 +85,7 @@ export const fetchAllAdminActivities = async (): Promise<AdminActivityItem[]> =>
 
   try {
     const { data, error } = await supabase
-      .from('audit_logs')
+      .from('activity_logs')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(100);

@@ -315,3 +315,35 @@ export function getActiveStudyRoomsList() {
     participants: Array.from(r.participants.values()).map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
   }));
 }
+
+export function createStudyRoom(params: { roomId: string; title: string; subject: string; hostName: string }) {
+  initializeDefaultRooms();
+  if (!activeRooms.has(params.roomId)) {
+    activeRooms.set(params.roomId, {
+      roomId: params.roomId,
+      title: params.title,
+      subject: params.subject,
+      hostName: params.hostName,
+      participants: new Map(),
+      whiteboardStrokes: [],
+      timerState: {
+        mode: 'sprint',
+        durationSeconds: 1500,
+        remainingSeconds: 1500,
+        isRunning: false
+      },
+      messages: [
+        {
+          id: 'msg_created',
+          senderId: 'system',
+          senderName: 'System Bot',
+          text: `Study room created by ${params.hostName}! Welcome peers!`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          type: 'system'
+        }
+      ]
+    });
+  }
+  return activeRooms.get(params.roomId);
+}
+

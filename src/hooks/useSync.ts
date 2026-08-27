@@ -97,17 +97,16 @@ export const useSync = () => {
       const pendingSessions = await db.pending_sessions.filter(s => !s.synced).toArray();
       
       for (const session of pendingSessions) {
-        // Insert session
+        // Insert session into exam_sessions
         const { error: sessionError } = await supabase
-          .from(session.mode === 'exam' ? 'exam_sessions' : 'practice_sessions')
+          .from('exam_sessions')
           .insert({
             id: session.id,
             user_id: session.user_id,
             score: session.score,
             started_at: session.started_at,
-            ...(session.mode === 'exam' 
-                ? { submitted_at: session.submitted_at, status: 'submitted' } 
-                : { completed_at: session.submitted_at })
+            submitted_at: session.submitted_at || new Date().toISOString(),
+            status: 'submitted'
           });
 
         if (sessionError) {
@@ -126,12 +125,10 @@ export const useSync = () => {
           const answersToInsert = pendingAnswers.map(a => ({
             id: a.id,
             user_id: user.id,
-            [session.mode === 'exam' ? 'exam_session_id' : 'practice_session_id']: a.session_id,
+            exam_session_id: a.session_id,
             question_id: a.question_id,
             selected_answer: a.selected_answer,
             time_spent_seconds: a.time_spent_seconds,
-            // Simple check: we don't have is_correct here easily without looking up question again,
-            // but in real app we'd calculate this during the exam and store it in Dexie.
           }));
 
           const { error: answersError } = await supabase

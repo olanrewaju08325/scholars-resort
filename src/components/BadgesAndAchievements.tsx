@@ -42,28 +42,33 @@ export const BadgesAndAchievements: React.FC = () => {
           .eq('user_id', user.id)
           .maybeSingle();
 
-        if (data) {
+        if (data && !error) {
           setStats(data);
-          setUnlockedBadges(data.badges_unlocked || []);
-        } else {
-          // Initialize user_stats if not present
-          const initStats = {
-            user_id: user.id,
-            xp: profile?.xp || 0,
-            streak_days: profile?.streak_days || 0,
-            coins: profile?.coins || 0,
-            level: Math.floor((profile?.xp || 0) / 500) + 1,
-            badges_unlocked: ['first_quiz']
-          };
-          await supabase.from('user_stats').upsert(initStats);
-          setStats(initStats);
-          setUnlockedBadges(['first_quiz']);
+          setUnlockedBadges(data.badges_unlocked || ['first_quiz']);
+          setLoading(false);
+          return;
         }
       } catch (err) {
-        console.error('Error fetching user stats:', err);
-      } finally {
-        setLoading(false);
+        console.warn('Error fetching user stats:', err);
       }
+
+      // Fallback to profile stats
+      const initStats = {
+        user_id: user.id,
+        xp: profile?.xp || 0,
+        streak_days: profile?.streak_days || 0,
+        coins: profile?.coins || 0,
+        level: Math.floor((profile?.xp || 0) / 500) + 1,
+        badges_unlocked: ['first_quiz']
+      };
+      
+      setStats(initStats);
+      setUnlockedBadges(['first_quiz']);
+      setLoading(false);
+
+      try {
+        await supabase.from('user_stats').upsert(initStats);
+      } catch {}
     };
 
     fetchUserStats();

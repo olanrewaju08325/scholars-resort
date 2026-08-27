@@ -27,18 +27,18 @@ export const BulkEmailTab = () => {
       if (!error && data) {
         setLogs(data);
       } else {
-        // Fallback to audit logs if communication_logs is empty
-        const { data: auditData } = await supabase
-          .from('audit_logs')
+        // Fallback to activity_logs if communication_logs is empty
+        const { data: actData } = await supabase
+          .from('activity_logs')
           .select('*')
-          .eq('entity_type', 'communication')
+          .ilike('action', '%broadcast%')
           .order('created_at', { ascending: false });
         
-        if (auditData) {
-          setLogs(auditData.map(a => ({
+        if (actData) {
+          setLogs(actData.map(a => ({
             id: a.id,
             subject: a.action,
-            message: 'Broadcast notification',
+            message: a.details || 'Broadcast notification',
             target: 'All Students',
             recipient_count: 1,
             created_at: a.created_at

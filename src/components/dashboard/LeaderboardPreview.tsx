@@ -12,20 +12,70 @@ export const LeaderboardPreview = () => {
 
   useEffect(() => {
     const fetchLeaderboard = async () => {
-      const res = await safeSupabaseQuery(
-        supabase
-          .from('leaderboard_entries')
-          .select('user_id, score, rank, full_name, avatar_url')
-          .order('score', { ascending: false })
-          .limit(5),
-        {
-          contextName: 'LeaderboardPreview.fetchLeaderboard',
-          sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeLeaderboardEntry),
-          fallbackValue: []
+      try {
+        // Try leaderboard_entries first if populated
+        const res = await safeSupabaseQuery(
+          supabase
+            .from('leaderboard_entries')
+            .select('user_id, score, rank, full_name, avatar_url')
+            .order('score', { ascending: false })
+            .limit(5),
+          {
+            contextName: 'LeaderboardPreview.fetchLeaderboard',
+            sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeLeaderboardEntry),
+            fallbackValue: []
+          }
+        );
+
+        if (res.data && res.data.length > 0) {
+          setLeaders(res.data);
+          setLoading(false);
+          return;
         }
-      );
-      setLeaders(res.data);
-      setLoading(false);
+
+        // Dynamic fallback using exam_sessions & profiles
+        const { data: exams } = await supabase
+          .from('exam_sessions')
+          .select('user_id, score, total_questions')
+          .eq('status', 'submitted')
+          .order('score', { ascending: false })
+          .limit(20);
+
+        if (exams && exams.length > 0) {
+          const userIds = Array.from(new Set(exams.map(e => e.user_id).filter(Boolean)));
+          const { data: profiles } = userIds.length > 0
+            ? await supabase.from('profiles').select('id, full_name, avatar_url').in('id', userIds)
+            : { data: [] };
+
+          const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+          const userBests = new Map();
+
+          exams.forEach(e => {
+            const current = userBests.get(e.user_id)?.score || 0;
+            const percentageScore = e.total_questions ? Math.round((e.score / e.total_questions) * 400) : 0;
+            if (percentageScore >= current) {
+              const prof = profileMap.get(e.user_id);
+              userBests.set(e.user_id, {
+                user_id: e.user_id,
+                full_name: prof?.full_name || 'Scholar Student',
+                avatar_url: prof?.avatar_url || null,
+                score: percentageScore
+              });
+            }
+          });
+
+          const top5 = Array.from(userBests.values())
+            .sort((a, b) => b.score - a.score)
+            .slice(0, 5)
+            .map((item, idx) => ({ ...item, rank: idx + 1 }));
+
+          setLeaders(top5);
+        }
+      } catch (err) {
+        console.warn('Leaderboard preview fetch notice:', err);
+      } finally {
+        setLoading(false);
+      }
     };
     fetchLeaderboard();
   }, []);

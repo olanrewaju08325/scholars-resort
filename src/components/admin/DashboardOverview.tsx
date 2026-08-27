@@ -54,8 +54,8 @@ export function DashboardOverview() {
           .gte('created_at', isoStartDate),
         supabase
           .from('exam_sessions')
-          .select('created_at, user_id')
-          .gte('created_at', isoStartDate)
+          .select('started_at, user_id')
+          .gte('started_at', isoStartDate)
       ]);
 
       const daysMap: Record<string, number> = {};
@@ -85,8 +85,10 @@ export function DashboardOverview() {
       }
 
       if (dailyActivity) {
-        dailyActivity.forEach(a => {
-          const d = new Date(a.created_at);
+        dailyActivity.forEach((a: any) => {
+          const rawDate = a.started_at || a.created_at;
+          if (!rawDate) return;
+          const d = new Date(rawDate);
           const key = timeframe === '90d' 
             ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
             : d.toLocaleDateString('en-US', { weekday: 'short', month: 'numeric', day: 'numeric' });

@@ -34,25 +34,20 @@ export const LogsTab = () => {
     try {
       setLoading(true);
       let query = supabase
-        .from('audit_logs')
+        .from('activity_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
 
-      if (filterType !== 'all') {
-        query = query.eq('entity_type', filterType);
-      }
       if (search) {
         query = query.ilike('action', `%${search}%`);
       }
 
       const { data, error } = await query;
-      if (error && error.code !== 'PGRST116') {
-        // Fallback to activity_logs if audit_logs fails
-        const { data: actData } = await supabase.from('activity_logs').select('*').order('created_at', { ascending: false }).limit(50);
-        setLogs(actData || []);
+      if (!error && data) {
+        setLogs(data);
       } else {
-        setLogs(data || []);
+        setLogs([]);
       }
     } catch (e) {
       console.warn(e);
@@ -60,7 +55,7 @@ export const LogsTab = () => {
     } finally {
       setLoading(false);
     }
-  }, [filterType, search]);
+  }, [search]);
 
   useEffect(() => {
     fetchLogs();

@@ -168,19 +168,17 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
       console.warn('Announcement fallback error:', annErr);
     }
 
-    // Log in audit_logs
+    // Log in activity_logs
     if (user) {
       try {
-        await supabase.from('audit_logs').insert({
+        await supabase.from('activity_logs').insert({
           user_id: user.id,
           action: `Sent Broadcast: ${payload.subject}`,
-          entity_type: 'communication',
-          entity_id: 'broadcast',
-          status: 'success',
+          details: `Email broadcast dispatched to targeted scholars`,
           created_at: new Date().toISOString()
         });
       } catch (auditErr) {
-        console.warn('Audit log insert failed:', auditErr);
+        console.warn('Activity log insert notice:', auditErr);
       }
     }
 

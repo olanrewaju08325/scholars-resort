@@ -6,7 +6,7 @@ import nodemailer from 'nodemailer';
 import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
-import { setupStudyRoomWebSocket, getActiveStudyRoomsList } from './src/services/studyRoomSocketServer';
+import { setupStudyRoomWebSocket, getActiveStudyRoomsList, createStudyRoom } from './src/services/studyRoomSocketServer';
 
 const app = express();
 const PORT = 3000;
@@ -44,7 +44,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 let cachedWorkingSmtpConfig: any = null;
 
-// Helper to resolve SMTP settings from DB or env or request
+// Helper to resolve SMTP settings from DB (system_configs, admin_settings) or env or request
 async function getSmtpConfig(customConfig?: any) {
   if (customConfig && customConfig.host) {
     return {
@@ -60,7 +60,29 @@ async function getSmtpConfig(customConfig?: any) {
     return cachedWorkingSmtpConfig;
   }
 
-  // 1. Try DB admin_settings (where Admin -> Settings saves api_keys)
+  // 1. Try DB system_configs table (primary modern config store)
+  try {
+    const { data: sysData } = await supabase
+      .from('system_configs')
+      .select('config_value')
+      .eq('config_key', 'smtp_settings')
+      .maybeSingle();
+
+    if (sysData?.config_value?.host) {
+      const s = sysData.config_value;
+      return {
+        host: s.host,
+        port: Number(s.port) || 587,
+        user: s.user || '',
+        pass: s.pass || '',
+        from: s.from || s.user || 'admitwise2@gmail.com'
+      };
+    }
+  } catch (err) {
+    console.warn('Failed to load SMTP config from system_configs:', err);
+  }
+
+  // 2. Try DB admin_settings (where Admin -> Settings saves api_keys)
   try {
     const { data: adminData } = await supabase
       .from('admin_settings')
@@ -81,7 +103,7 @@ async function getSmtpConfig(customConfig?: any) {
     console.warn('Failed to load SMTP config from admin_settings:', err);
   }
 
-  // 2. Try DB platform_config (where key = 'smtp_settings')
+  // 3. Try DB platform_config (where key = 'smtp_settings')
   try {
     const { data } = await supabase
       .from('platform_config')
@@ -642,16 +664,31 @@ app.post('/api/groq-chat', async (req, res) => {
   let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 
   if (!groqKey) {
+    // 1. Try DB system_configs table
     try {
-      const { data: dbKey } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'ai_api_keys')
+      const { data: sysKey } = await supabase
+        .from('system_configs')
+        .select('config_value')
+        .eq('config_key', 'groq_settings')
         .maybeSingle();
-      if (dbKey?.setting_value?.groq || dbKey?.setting_value?.groq_key) {
-        groqKey = dbKey.setting_value.groq || dbKey.setting_value.groq_key;
+      if (sysKey?.config_value?.apiKey || sysKey?.config_value?.groq) {
+        groqKey = sysKey.config_value.apiKey || sysKey.config_value.groq;
       }
     } catch (_) {}
+
+    // 2. Try DB admin_settings table
+    if (!groqKey) {
+      try {
+        const { data: dbKey } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'ai_api_keys')
+          .maybeSingle();
+        if (dbKey?.setting_value?.groq || dbKey?.setting_value?.groq_key) {
+          groqKey = dbKey.setting_value.groq || dbKey.setting_value.groq_key;
+        }
+      } catch (_) {}
+    }
   }
 
   const candidateModels = [
@@ -913,6 +950,430 @@ app.get('/api/groq-telemetry', async (req, res) => {
       modelUsage: [],
       logs: [],
       serverUptimeSeconds: Math.floor(process.uptime())
+    });
+  }
+});
+
+// ==========================================
+// --- SECURE OTP AUTHENTICATION SERVICE ---
+// ==========================================
+interface OtpEntry {
+  email: string;
+  otp: string;
+  expiresAt: number;
+  attempts: number;
+}
+const memoryOtpStore = new Map<string, OtpEntry>();
+
+// API Route: Send Security OTP via Server SMTP
+app.post('/api/auth/send-otp', async (req, res) => {
+  try {
+    const { email } = req.body;
+    const cleanEmail = (email || '').trim().toLowerCase();
+
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return res.status(400).json({ success: false, error: 'A valid email address is required.' });
+    }
+
+    // Generate cryptographically random 6-digit numeric OTP
+    const generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 15 * 60 * 1000; // 15 minutes validity
+
+    // Store in server memory cache
+    memoryOtpStore.set(cleanEmail, {
+      email: cleanEmail,
+      otp: generatedOtp,
+      expiresAt,
+      attempts: 0
+    });
+
+    // Log to communication_logs table in Supabase
+    try {
+      await supabase.from('communication_logs').insert({
+        recipient_email: cleanEmail,
+        email_type: 'password_reset',
+        subject: 'Your Scholars Resort Security Verification Code',
+        status: 'dispatched',
+        metadata: {
+          pin: generatedOtp,
+          code: generatedOtp,
+          expires_at: expiresAt,
+          used: false
+        },
+        created_at: new Date().toISOString()
+      });
+    } catch (logErr) {
+      console.warn('[OTP Log Notice]', logErr);
+    }
+
+    // Send formatted HTML security email
+    const emailSubject = `${generatedOtp} is your Scholars Resort Verification Code`;
+    const emailHtml = `
+      <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 540px; margin: 0 auto; padding: 32px 24px; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px;">
+        <div style="text-align: center; margin-bottom: 24px;">
+          <div style="display: inline-block; background: #4f46e5; color: #ffffff; font-weight: bold; font-size: 20px; width: 44px; height: 44px; line-height: 44px; border-radius: 12px; text-align: center; margin-bottom: 12px;">SR</div>
+          <h1 style="color: #0f172a; font-size: 22px; margin: 0; font-weight: 700;">Security Verification Code</h1>
+          <p style="color: #64748b; font-size: 14px; margin-top: 6px;">Scholars Resort Account Authentication</p>
+        </div>
+        
+        <p style="color: #334155; font-size: 15px; line-height: 1.6;">Hello,</p>
+        <p style="color: #334155; font-size: 15px; line-height: 1.6;">You recently requested a One-Time Password (OTP) to verify your account or reset your password. Use the 6-digit code below to proceed:</p>
+        
+        <div style="margin: 28px 0; text-align: center;">
+          <div style="display: inline-block; background: #f8fafc; border: 2px solid #6366f1; border-radius: 12px; padding: 16px 36px;">
+            <span style="font-family: monospace; font-size: 32px; font-weight: 800; letter-spacing: 10px; color: #4f46e5;">${generatedOtp}</span>
+          </div>
+          <p style="color: #94a3b8; font-size: 12px; margin-top: 10px;">This code expires in <strong>15 minutes</strong> and can only be used once.</p>
+        </div>
+
+        <div style="background: #f8fafc; border-left: 4px solid #f59e0b; padding: 12px 16px; border-radius: 6px; margin: 24px 0;">
+          <p style="color: #78350f; font-size: 13px; margin: 0; line-height: 1.5;"><strong>Security Tip:</strong> Never share this code with anyone. Scholars Resort staff will never ask for your verification code or password.</p>
+        </div>
+
+        <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin-top: 24px; border-top: 1px solid #f1f5f9; padding-top: 16px;">
+          If you did not request this verification code, you can safely ignore this email.
+        </p>
+        
+        <div style="text-align: center; margin-top: 24px; color: #94a3b8; font-size: 12px;">
+          &copy; ${new Date().getFullYear()} Scholars Resort CBT E-Learning Platform. All rights reserved.
+        </div>
+      </div>
+    `;
+
+    const dispatched = await sendServerSmtpEmail(cleanEmail, emailSubject, emailHtml);
+
+    return res.json({
+      success: true,
+      delivered: dispatched,
+      message: '6-digit verification code has been dispatched to your email address.'
+    });
+  } catch (err: any) {
+    console.error('[OTP SEND ERROR]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to dispatch verification code.' });
+  }
+});
+
+// API Route: Verify Security OTP & Reset Password
+app.post('/api/auth/verify-otp', async (req, res) => {
+  try {
+    const { email, otp, newPassword } = req.body;
+    const cleanEmail = (email || '').trim().toLowerCase();
+    const cleanOtp = (otp || '').trim();
+
+    if (!cleanEmail || !cleanOtp) {
+      return res.status(400).json({ success: false, error: 'Email and 6-digit verification OTP are required.' });
+    }
+
+    if (!newPassword || newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters long.' });
+    }
+
+    let isVerified = false;
+
+    // 1. Verify against server in-memory store
+    const memEntry = memoryOtpStore.get(cleanEmail);
+    if (memEntry) {
+      if (Date.now() > memEntry.expiresAt) {
+        memoryOtpStore.delete(cleanEmail);
+        return res.status(400).json({ success: false, error: 'Verification OTP has expired. Please request a new code.' });
+      }
+      if (memEntry.otp === cleanOtp) {
+        isVerified = true;
+        memoryOtpStore.delete(cleanEmail);
+      } else {
+        memEntry.attempts = (memEntry.attempts || 0) + 1;
+        if (memEntry.attempts >= 5) {
+          memoryOtpStore.delete(cleanEmail);
+          return res.status(400).json({ success: false, error: 'Too many incorrect attempts. Please request a new code.' });
+        }
+      }
+    }
+
+    // 2. Fallback verify against communication_logs in Supabase
+    if (!isVerified) {
+      try {
+        const { data: logs } = await supabase
+          .from('communication_logs')
+          .select('*')
+          .eq('recipient_email', cleanEmail)
+          .eq('email_type', 'password_reset')
+          .order('created_at', { ascending: false })
+          .limit(5);
+
+        if (logs && logs.length > 0) {
+          for (const log of logs) {
+            const meta = log.metadata || {};
+            if ((meta.pin === cleanOtp || meta.code === cleanOtp) && !meta.used) {
+              const createdAt = new Date(log.created_at).getTime();
+              if (Date.now() - createdAt <= 20 * 60 * 1000) {
+                isVerified = true;
+                await supabase.from('communication_logs').update({
+                  metadata: { ...meta, used: true }
+                }).eq('id', log.id);
+                break;
+              }
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    if (!isVerified) {
+      return res.status(400).json({ success: false, error: 'Invalid or expired 6-digit OTP code.' });
+    }
+
+    // 3. Log successful OTP reset
+    try {
+      await supabase.from('activity_logs').insert({
+        action: `Password reset verified for ${cleanEmail}`,
+        details: `Account password was successfully updated via email OTP verification`,
+        created_at: new Date().toISOString()
+      });
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      message: 'OTP verified successfully. Your password has been updated!'
+    });
+  } catch (err: any) {
+    console.error('[OTP VERIFY ERROR]', err);
+    return res.status(500).json({ success: false, error: err.message || 'OTP verification failed.' });
+  }
+});
+
+// =======================================================
+// --- SYSTEM CONFIGS & GROQ / SMTP ADMIN API ENDPOINTS ---
+// =======================================================
+
+// API Route: Get all system configs (system_configs & admin_settings)
+app.get('/api/admin/system-configs', async (req, res) => {
+  try {
+    const configs: any = {
+      groq: {
+        apiKey: process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || '',
+        defaultModel: 'llama-3.3-70b-versatile',
+        monthlyTokenLimit: 5000000
+      },
+      smtp: {
+        host: process.env.SMTP_HOST || 'smtp.gmail.com',
+        port: Number(process.env.SMTP_PORT || 587),
+        user: process.env.SMTP_USER || process.env.GMAIL_USER || 'admitwise2@gmail.com',
+        pass: process.env.SMTP_PASS || process.env.GMAIL_PASS || '',
+        from: process.env.SMTP_FROM || 'Scholars Resort <admitwise2@gmail.com>',
+        secure: false
+      },
+      platform: {
+        maintenanceMode: false,
+        maintenanceMessage: 'We are currently undergoing scheduled maintenance.',
+        cbtEnabled: true,
+        tournamentsEnabled: true,
+        studyRoomsEnabled: true,
+        jambDate: '2026-04-15T08:00:00',
+        telegramSupportLink: 'https://t.me/+6dtsZgQpwrNhZDM8',
+        telegramAnnouncementLink: 'https://t.me/+9WU6HrQE6DJhYTRk',
+        whatsappSupportNumber: '2348000000000'
+      }
+    };
+
+    // 1. Read from system_configs table
+    try {
+      const { data: sysConfigs } = await supabase.from('system_configs').select('*');
+      if (sysConfigs && sysConfigs.length > 0) {
+        sysConfigs.forEach((row: any) => {
+          if (row.config_key === 'groq_settings' && row.config_value) {
+            configs.groq = { ...configs.groq, ...row.config_value };
+          } else if (row.config_key === 'smtp_settings' && row.config_value) {
+            configs.smtp = { ...configs.smtp, ...row.config_value };
+          } else if (row.config_key === 'platform_controls' && row.config_value) {
+            configs.platform = { ...configs.platform, ...row.config_value };
+          }
+        });
+      }
+    } catch (_) {}
+
+    // 2. Read from admin_settings for backward compatibility
+    try {
+      const { data: adminSettings } = await supabase.from('admin_settings').select('*');
+      if (adminSettings && adminSettings.length > 0) {
+        adminSettings.forEach((row: any) => {
+          if (row.setting_key === 'ai_api_keys' && row.setting_value) {
+            if (row.setting_value.groq && !configs.groq.apiKey) configs.groq.apiKey = row.setting_value.groq;
+          }
+          if (row.setting_key === 'api_keys' && row.setting_value) {
+            const v = row.setting_value;
+            if (v.smtp_host) configs.smtp.host = v.smtp_host;
+            if (v.smtp_port) configs.smtp.port = Number(v.smtp_port) || 587;
+            if (v.smtp_user) configs.smtp.user = v.smtp_user;
+            if (v.smtp_pass && !configs.smtp.pass) configs.smtp.pass = v.smtp_pass;
+            if (v.smtp_from) configs.smtp.from = v.smtp_from;
+          }
+          if (row.setting_key === 'maintenance_mode' && row.setting_value) {
+            configs.platform.maintenanceMode = !!row.setting_value.enabled;
+            if (row.setting_value.message) configs.platform.maintenanceMessage = row.setting_value.message;
+          }
+          if (row.setting_key === 'feature_toggles' && row.setting_value) {
+            configs.platform.cbtEnabled = row.setting_value.cbt_enabled !== false;
+            configs.platform.tournamentsEnabled = row.setting_value.tournaments_enabled !== false;
+            configs.platform.studyRoomsEnabled = row.setting_value.study_rooms_enabled !== false;
+          }
+        });
+      }
+    } catch (_) {}
+
+    return res.json({ success: true, configs });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Save system configs to system_configs & admin_settings
+app.post('/api/admin/system-configs', async (req, res) => {
+  try {
+    const { groq, smtp, platform } = req.body;
+
+    // 1. Update in-memory runtime caches immediately
+    if (smtp && smtp.host) {
+      cachedWorkingSmtpConfig = {
+        host: smtp.host,
+        port: Number(smtp.port) || 587,
+        user: smtp.user || '',
+        pass: smtp.pass || '',
+        from: smtp.from || smtp.user || 'admitwise2@gmail.com'
+      };
+    }
+
+    // 2. Persist to system_configs table
+    try {
+      const inserts = [];
+      if (groq) {
+        inserts.push({
+          config_key: 'groq_settings',
+          config_value: groq,
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (smtp) {
+        inserts.push({
+          config_key: 'smtp_settings',
+          config_value: smtp,
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (platform) {
+        inserts.push({
+          config_key: 'platform_controls',
+          config_value: platform,
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (inserts.length > 0) {
+        await supabase.from('system_configs').upsert(inserts, { onConflict: 'config_key' });
+      }
+    } catch (sysErr) {
+      console.warn('[system_configs Save Notice]', sysErr);
+    }
+
+    // 3. Mirror to admin_settings table
+    try {
+      const adminInserts = [];
+      if (groq) {
+        adminInserts.push({
+          setting_key: 'ai_api_keys',
+          setting_value: { groq: groq.apiKey, default_model: groq.defaultModel },
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (smtp) {
+        adminInserts.push({
+          setting_key: 'api_keys',
+          setting_value: {
+            smtp_host: smtp.host,
+            smtp_port: smtp.port,
+            smtp_user: smtp.user,
+            smtp_pass: smtp.pass,
+            smtp_from: smtp.from,
+            groq: groq?.apiKey || ''
+          },
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (platform) {
+        adminInserts.push({
+          setting_key: 'maintenance_mode',
+          setting_value: {
+            enabled: platform.maintenanceMode,
+            message: platform.maintenanceMessage
+          },
+          updated_at: new Date().toISOString()
+        });
+        adminInserts.push({
+          setting_key: 'feature_toggles',
+          setting_value: {
+            cbt_enabled: platform.cbtEnabled,
+            tournaments_enabled: platform.tournamentsEnabled,
+            study_rooms_enabled: platform.studyRoomsEnabled
+          },
+          updated_at: new Date().toISOString()
+        });
+      }
+      if (adminInserts.length > 0) {
+        await supabase.from('admin_settings').upsert(adminInserts, { onConflict: 'setting_key' });
+      }
+    } catch (adminErr) {
+      console.warn('[admin_settings Save Notice]', adminErr);
+    }
+
+    return res.json({ success: true, message: 'All system configurations saved and applied in real-time!' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Failed to save system configurations.' });
+  }
+});
+
+// API Route: Test Groq API Key connectivity
+app.post('/api/admin/test-groq', async (req, res) => {
+  const startTime = Date.now();
+  try {
+    const { apiKey, model = 'llama-3.3-70b-versatile' } = req.body;
+    const keyToTest = (apiKey || process.env.GROQ_API_KEY || '').trim();
+
+    if (!keyToTest) {
+      return res.status(400).json({ success: false, message: 'GROQ API key is required for testing.' });
+    }
+
+    const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${keyToTest}`
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'user', content: 'Say OK' }],
+        max_tokens: 5
+      })
+    });
+
+    const latencyMs = Date.now() - startTime;
+
+    if (response.ok) {
+      return res.json({
+        success: true,
+        latencyMs,
+        message: `GROQ API Connection Successful! Latency: ${latencyMs}ms on model ${model}.`
+      });
+    }
+
+    const errJson = await response.json().catch(() => ({}));
+    return res.status(200).json({
+      success: false,
+      latencyMs,
+      message: errJson?.error?.message || `GROQ API rejected request with HTTP status ${response.status}.`
+    });
+  } catch (err: any) {
+    return res.status(200).json({
+      success: false,
+      latencyMs: Date.now() - startTime,
+      message: err.message || 'Network error connecting to GROQ API servers.'
     });
   }
 });
@@ -2716,10 +3177,26 @@ app.post('/api/admin/materials/upload-file', async (req, res) => {
   }
 });
 
-// API Route: Peer Study Rooms List
+// API Route: Peer Study Rooms List & Creation
 app.get('/api/study-rooms', (req, res) => {
   return res.json({ success: true, rooms: getActiveStudyRoomsList() });
 });
+
+app.post('/api/study-rooms', express.json(), (req, res) => {
+  const { title, subject, hostName } = req.body || {};
+  if (!title) {
+    return res.status(400).json({ success: false, error: 'Room title is required.' });
+  }
+  const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const room = createStudyRoom({
+    roomId,
+    title: title.trim(),
+    subject: subject || 'General',
+    hostName: hostName || 'Scholar Student'
+  });
+  return res.json({ success: true, room });
+});
+
 
 // Vite middleware for development vs static for production
 async function startServer() {

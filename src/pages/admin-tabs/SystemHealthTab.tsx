@@ -37,38 +37,35 @@ export const SystemHealthTab = () => {
       const latency = Math.max(1, Math.floor(performance.now() - start));
 
       const [
-        { count: auditCount }, 
+        { count: activityCount }, 
         { count: sessionCount }, 
-        { count: syncCount }, 
         { data: aiData },
-        { count: failedEmailCount },
         { count: rejectedPaymentCount },
         usageStats
       ] = await Promise.all([
-        supabase.from('audit_logs').select('*', { count: 'exact', head: true }),
-        supabase.from('device_sessions').select('*', { count: 'exact', head: true }),
-        supabase.from('offline_sync_queue').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        supabase.from('activity_logs').select('*', { count: 'exact', head: true }),
+        supabase.from('exam_sessions').select('*', { count: 'exact', head: true }),
         supabase.from('ai_usage').select('total_tokens'),
-        supabase.from('email_logs').select('*', { count: 'exact', head: true }).eq('status', 'failed'),
         supabase.from('manual_payments').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
         SystemUsageLimitService.fetchLiveUsageStats()
       ]);
 
       const totalAiTokens = aiData?.reduce((acc, curr) => acc + (curr.total_tokens || 0), 0) || usageStats.ai.tokensUsedThisMonth || 0;
+      const failedEmailCount = usageStats.smtp.failedEmailsToday || 0;
 
       // Real calculated error rate based on real logs
-      const totalEvents = (auditCount || 0) + (usageStats.smtp.emailsSentToday || 0);
+      const totalEvents = (activityCount || 0) + (usageStats.smtp.emailsSentToday || 0);
       const failures = (failedEmailCount || 0) + (rejectedPaymentCount || 0);
       const calculatedErrorRate = totalEvents > 0 
         ? ((failures / totalEvents) * 100).toFixed(2) + '%'
         : '0.00%';
 
       setMetrics({
-        auditLogs: auditCount || 0,
+        auditLogs: activityCount || 0,
         activeSessions: sessionCount || 0,
-        offlineQueue: syncCount || 0,
+        offlineQueue: 0,
         aiTokens: totalAiTokens,
-        failedEmails: failedEmailCount || 0,
+        failedEmails: failedEmailCount,
         rejectedPayments: rejectedPaymentCount || 0,
         dbLatency: latency,
         storageObjects: usageStats.storage.objectsCount || 0,
@@ -76,9 +73,9 @@ export const SystemHealthTab = () => {
         avgResponseTime: latency
       });
 
-      // Fetch recent real audit logs
+      // Fetch recent real activity logs
       const { data: logs } = await supabase
-        .from('audit_logs')
+        .from('activity_logs')
         .select('*')
         .order('created_at', { ascending: false })
         .limit(8);

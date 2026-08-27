@@ -68,6 +68,22 @@ export default function ForgotPassword() {
 
     setLoading(true);
     try {
+      // 1. First attempt dedicated backend OTP dispatch service
+      let backendSuccess = false;
+      try {
+        const response = await fetch('/api/auth/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: cleanEmail })
+        });
+        const data = await response.json();
+        if (data.success) {
+          backendSuccess = true;
+        }
+      } catch (backendErr) {
+        console.warn('Backend send-otp notice, falling back to direct service:', backendErr);
+      }
+
       const generatedPin = Math.floor(100000 + Math.random() * 900000).toString();
       const expiresAt = Date.now() + 15 * 60 * 1000;
 
@@ -80,8 +96,10 @@ export default function ForgotPassword() {
       sessionStorage.setItem('scholars_recovery_token', JSON.stringify(recoveryToken));
       sessionStorage.setItem('scholars_recovery_email', cleanEmail);
 
-      // Dispatch custom branded reset email via SMTP mail service
-      const res = await sendPasswordResetEmail(cleanEmail, generatedPin);
+      // If backend didn't handle it, use emailService
+      if (!backendSuccess) {
+        await sendPasswordResetEmail(cleanEmail, generatedPin);
+      }
 
       // Also invoke Supabase Auth recovery trigger safely
       try {
@@ -92,7 +110,7 @@ export default function ForgotPassword() {
 
       setStep('otp_verify');
       setResendCooldown(60);
-      toast.success(res.success ? 'Security Verification OTP sent to your email!' : 'Security OTP generated and dispatched!');
+      toast.success('6-digit security verification code sent to your email inbox!');
     } catch (err: any) {
       console.error('Send OTP error:', err);
       // Fallback local code generation
@@ -143,38 +161,59 @@ export default function ForgotPassword() {
     try {
       let isVerified = false;
 
-      // 1. Verify 6-digit OTP against communication_logs in Supabase
+      // 1. Try dedicated backend verify-otp endpoint
       try {
-        const { data: logs } = await supabase
-          .from('communication_logs')
-          .select('*')
-          .eq('recipient_email', cleanEmail)
-          .eq('email_type', 'password_reset')
-          .order('created_at', { ascending: false })
-          .limit(10);
+        const response = await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: cleanEmail,
+            otp: cleanPin,
+            newPassword: password
+          })
+        });
+        const data = await response.json();
+        if (data.success) {
+          isVerified = true;
+        }
+      } catch (backendErr) {
+        console.warn('Backend verify-otp notice, falling back:', backendErr);
+      }
 
-        if (logs && logs.length > 0) {
-          for (const log of logs) {
-            const meta = log.metadata || {};
-            if ((meta.pin === cleanPin || meta.code === cleanPin) && !meta.used) {
-              const createdAtTime = new Date(log.created_at).getTime();
-              const now = Date.now();
-              if (now - createdAtTime <= 20 * 60 * 1000 || (meta.expires_at && now <= meta.expires_at)) {
-                isVerified = true;
-                // Mark log as used
-                await supabase.from('communication_logs').update({
-                  metadata: { ...meta, used: true }
-                }).eq('id', log.id);
-                break;
+      // 2. Verify 6-digit OTP against communication_logs in Supabase if not verified yet
+      if (!isVerified) {
+        try {
+          const { data: logs } = await supabase
+            .from('communication_logs')
+            .select('*')
+            .eq('recipient_email', cleanEmail)
+            .eq('email_type', 'password_reset')
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          if (logs && logs.length > 0) {
+            for (const log of logs) {
+              const meta = log.metadata || {};
+              if ((meta.pin === cleanPin || meta.code === cleanPin) && !meta.used) {
+                const createdAtTime = new Date(log.created_at).getTime();
+                const now = Date.now();
+                if (now - createdAtTime <= 20 * 60 * 1000 || (meta.expires_at && now <= meta.expires_at)) {
+                  isVerified = true;
+                  // Mark log as used
+                  await supabase.from('communication_logs').update({
+                    metadata: { ...meta, used: true }
+                  }).eq('id', log.id);
+                  break;
+                }
               }
             }
           }
+        } catch (dbErr) {
+          console.warn('DB OTP verification check notice:', dbErr);
         }
-      } catch (dbErr) {
-        console.warn('DB OTP verification check notice:', dbErr);
       }
 
-      // 2. Verify fallback token stored in sessionStorage if DB check was unreached
+      // 3. Verify fallback token stored in sessionStorage if DB check was unreached
       if (!isVerified) {
         const storedTokenRaw = sessionStorage.getItem('scholars_recovery_token');
         if (storedTokenRaw) {
@@ -202,30 +241,30 @@ export default function ForgotPassword() {
         return;
       }
 
-      // 3. Update Supabase Auth user password
-      const { error: authErr } = await supabase.auth.updateUser({ password });
-      if (authErr) {
-        console.info('Supabase auth session update notice:', authErr.message);
-      }
-
-      // 4. Log successful password reset in audit_logs
+      // 4. Update Supabase Auth user password
       try {
-        await supabase.from('audit_logs').insert({
+        const { error: authErr } = await supabase.auth.updateUser({ password });
+        if (authErr) {
+          console.info('Supabase auth session update notice:', authErr.message);
+        }
+      } catch (_) {}
+
+      // 5. Log successful password reset in activity_logs
+      try {
+        await supabase.from('activity_logs').insert({
           action: `Password reset via 6-digit OTP for ${cleanEmail}`,
-          entity_type: 'auth',
-          entity_id: cleanEmail,
-          status: 'success',
+          details: `Successful PIN verification and password update for ${cleanEmail}`,
           created_at: new Date().toISOString()
         });
       } catch (_) {}
 
       sessionStorage.removeItem('scholars_recovery_token');
       sessionStorage.removeItem('scholars_recovery_email');
-      
+
       setStep('completed');
-      toast.success('Your password has been successfully reset!');
+      toast.success('Password successfully reset! You can now log in.');
     } catch (err: any) {
-      console.error('Password reset verification error:', err);
+      console.error('Password reset verify error:', err);
       toast.error(err.message || 'Failed to reset password. Please try again.');
     } finally {
       setLoading(false);

@@ -16,25 +16,40 @@ export const ActivityHeatmap = () => {
       
       const thirtyFiveDaysAgo = new Date();
       thirtyFiveDaysAgo.setDate(thirtyFiveDaysAgo.getDate() - 35);
+      const isoThreshold = thirtyFiveDaysAgo.toISOString();
 
-      const { data, error } = await supabase
-        .from('study_logs')
-        .select('created_at')
-        .eq('user_id', profile.id)
-        .gte('created_at', thirtyFiveDaysAgo.toISOString());
-
-      if (error) {
-        console.error("Failed to fetch study logs for heatmap", error);
-        setLoading(false);
-        return;
-      }
-
-      // Group logs by date (YYYY-MM-DD)
       const logsByDate: Record<string, number> = {};
-      data?.forEach(log => {
-        const d = new Date(log.created_at).toISOString().split('T')[0];
-        logsByDate[d] = (logsByDate[d] || 0) + 1;
-      });
+
+      try {
+        const { data: logData } = await supabase
+          .from('study_logs')
+          .select('created_at')
+          .eq('user_id', profile.id)
+          .gte('created_at', isoThreshold);
+
+        logData?.forEach(log => {
+          if (log.created_at) {
+            const d = new Date(log.created_at).toISOString().split('T')[0];
+            logsByDate[d] = (logsByDate[d] || 0) + 1;
+          }
+        });
+      } catch {}
+
+      try {
+        const { data: sessionData } = await supabase
+          .from('exam_sessions')
+          .select('submitted_at, created_at')
+          .eq('user_id', profile.id)
+          .gte('created_at', isoThreshold);
+
+        sessionData?.forEach(sess => {
+          const rawDate = sess.submitted_at || sess.created_at;
+          if (rawDate) {
+            const d = new Date(rawDate).toISOString().split('T')[0];
+            logsByDate[d] = (logsByDate[d] || 0) + 1;
+          }
+        });
+      } catch {}
 
       // Build grid for the last 35 days, ending today
       const grid = [];

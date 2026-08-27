@@ -51,12 +51,12 @@ export const BadgesAdminTab = () => {
     try {
       const { data: settingData } = await supabase
         .from('admin_settings')
-        .select('value')
-        .eq('key', 'gamification_badges_config')
+        .select('setting_value')
+        .eq('setting_key', 'gamification_badges_config')
         .maybeSingle();
 
-      if (settingData?.value && Array.isArray(settingData.value)) {
-        setBadges(settingData.value);
+      if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+        setBadges(settingData.setting_value);
         setLoading(false);
         return;
       }
@@ -99,10 +99,10 @@ export const BadgesAdminTab = () => {
       // Save to Supabase admin_settings / badges table
       try {
         await supabase.from('admin_settings').upsert({
-          key: 'gamification_badges_config',
-          value: updatedList,
+          setting_key: 'gamification_badges_config',
+          setting_value: updatedList,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'key' });
+        }, { onConflict: 'setting_key' });
       } catch (err) {
         console.warn('Failed to sync badges to admin_settings:', err);
       }
@@ -154,10 +154,10 @@ export const BadgesAdminTab = () => {
       
       try {
         await supabase.from('admin_settings').upsert({
-          key: 'gamification_badges_config',
-          value: updatedList,
+          setting_key: 'gamification_badges_config',
+          setting_value: updatedList,
           updated_at: new Date().toISOString()
-        }, { onConflict: 'key' });
+        }, { onConflict: 'setting_key' });
       } catch {}
 
       toast.success('Badge definition deleted successfully.');

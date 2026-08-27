@@ -92,7 +92,7 @@ export const PlatformHealthTab = () => {
       } catch {}
 
       // Measure real Storage count
-      const { count: storageCount } = await supabase.from('study_materials').select('*', { count: 'exact', head: true });
+      const { count: storageCount } = await supabase.from('library_materials').select('*', { count: 'exact', head: true });
 
       setLiveMetrics({
         dbLatency: latency,

@@ -92,10 +92,11 @@ const PracticeSession = () => {
       sessionStorage.removeItem('practice_session_state');
       
       if (sessionId) {
-        await supabase.from('practice_sessions').update({
+        await supabase.from('exam_sessions').update({
           score,
           total_questions: questions.length,
-          completed_at: new Date().toISOString()
+          status: 'submitted',
+          submitted_at: new Date().toISOString()
         }).eq('id', sessionId);
         
         if (questions.length >= 5 || score > 0) { 
@@ -207,10 +208,12 @@ const PracticeSession = () => {
         return;
       }
 
-      // 1. Create Practice Session Record
-      const { data: sessionData } = await supabase.from('practice_sessions').insert({
+      // 1. Create Practice Session Record in exam_sessions
+      const { data: sessionData } = await supabase.from('exam_sessions').insert({
         user_id: profile?.id,
-        subject_id: state.subjectId !== 'all' ? state.subjectId : null
+        status: 'started',
+        started_at: new Date().toISOString(),
+        total_questions: state.questionCount || 20
       }).select().maybeSingle();
       
       if (sessionData) setSessionId(sessionData.id);

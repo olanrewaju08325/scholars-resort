@@ -333,7 +333,6 @@ export const importQuestionsToDatabase = async (
 }> => {
   const {
     publishImmediately = true,
-    duplicateHandling = 'skip',
     onProgress
   } = options;
 
@@ -488,7 +487,7 @@ export const importQuestionsToDatabase = async (
         localStorage.setItem('scholar_custom_questions', JSON.stringify(updatedLocal));
         successCount += chunk.length;
         console.log(`Saved ${chunk.length} questions to custom local storage.`);
-      } catch (localErr) {
+      } catch {
         failedCount += chunk.length;
         errors.push(`Failed to save chunk: Database policy restricted insert.`);
       }

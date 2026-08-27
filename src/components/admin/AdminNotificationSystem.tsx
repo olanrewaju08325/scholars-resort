@@ -74,7 +74,7 @@ export function AdminNotificationSystem({ onNavigate, compact = false }: AdminNo
 
       // 3. Fetch system health capacity warnings
       const { data: sysLogs } = await supabase
-        .from('audit_logs')
+        .from('activity_logs')
         .select('*')
         .eq('action', 'SYSTEM_CAPACITY_ALERT')
         .order('created_at', { ascending: false })

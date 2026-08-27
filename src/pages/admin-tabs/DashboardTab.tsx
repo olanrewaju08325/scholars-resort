@@ -184,20 +184,21 @@ export const DashboardTab = () => {
       // Retrieve Student Progress Stats & Compute Dynamic JAMB Pass Success Outlook
       const { data: progList } = await supabase
         .from('profiles')
-        .select('id, full_name, email, xp, study_streak, target_score, has_paid')
-        .eq('role', 'student')
-        .order('xp', { ascending: false });
+        .select('*')
+        .eq('role', 'student');
       
-      const limitedProg = (progList || []).slice(0, 5);
+      const sortedProg = [...(progList || [])].sort((a, b) => (b.xp || 0) - (a.xp || 0));
+      const limitedProg = sortedProg.slice(0, 5);
       setStudentProgress(limitedProg);
 
       let readyCount = 0;
-      const totalStudents = progList?.length || 0;
-      if (progList && totalStudents > 0) {
-        progList.forEach(p => {
+      const totalStudents = sortedProg.length;
+      if (totalStudents > 0) {
+        sortedProg.forEach((p: any) => {
           const base = 180;
           const xpBonus = Math.min(80, Math.floor((p.xp || 0) / 100) * 2);
-          const streakBonus = Math.min(40, (p.study_streak || 0) * 3);
+          const streak = p.streak_days || p.study_streak || 0;
+          const streakBonus = Math.min(40, streak * 3);
           const premiumBonus = p.has_paid ? 30 : 0;
           const predicted = base + xpBonus + streakBonus + premiumBonus;
           if (predicted >= 200) {

@@ -1,10 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { 
   Upload, FileText, CheckCircle2, AlertCircle, RefreshCw, X, Play, 
-  Trash2, Layers, ShieldCheck, Sparkles, FolderUp, Check
+  Layers, FolderUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { uploadMaterialFile } from '@/services/fileUploadService';
 

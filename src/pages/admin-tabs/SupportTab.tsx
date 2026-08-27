@@ -26,20 +26,6 @@ export const SupportTab = () => {
   const [internalNote, setInternalNote] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
 
-  useEffect(() => {
-    if (activeView === 'student') {
-      fetchTickets();
-    } else {
-      fetchGuardianMessages();
-    }
-  }, [activeView]);
-
-  useEffect(() => {
-    if (activeView === 'student' && selectedTicket) {
-      fetchReplies(selectedTicket.id);
-    }
-  }, [selectedTicket, activeView]);
-
   // ================= STUDENT TICKETS =================
   const fetchTickets = async () => {
     setLoading(true);
@@ -61,6 +47,31 @@ export const SupportTab = () => {
     
     if (data) setReplies(data);
   };
+
+  const fetchGuardianMessages = async () => {
+    setLoading(true);
+    const { data } = await supabase
+      .from('guardian_messages')
+      .select('*, guardian_student_relationships(student_id, profiles!student_id(full_name))')
+      .order('created_at', { ascending: false });
+
+    if (data) setGuardianMessages(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    if (activeView === 'student') {
+      fetchTickets();
+    } else {
+      fetchGuardianMessages();
+    }
+  }, [activeView]);
+
+  useEffect(() => {
+    if (activeView === 'student' && selectedTicket) {
+      fetchReplies(selectedTicket.id);
+    }
+  }, [selectedTicket, activeView]);
 
   const sendReply = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -99,16 +110,6 @@ export const SupportTab = () => {
   };
 
   // ================= GUARDIAN INQUIRIES =================
-  const fetchGuardianMessages = async () => {
-    setLoading(true);
-    const { data } = await supabase
-      .from('guardian_messages')
-      .select('*, profiles(full_name)')
-      .order('created_at', { ascending: false });
-      
-    if (data) setGuardianMessages(data);
-    setLoading(false);
-  };
 
   const resolveGuardianMsg = async (id: string, status: string) => {
     const { error } = await supabase.from('guardian_messages').update({ status }).eq('id', id);

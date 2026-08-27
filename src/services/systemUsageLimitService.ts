@@ -162,47 +162,42 @@ export class SystemUsageLimitService {
         { count: profiles },
         { count: examSessions },
         { count: sessionAnswers },
-        { count: auditLogs },
-        { count: emailLogs },
-        { count: studyMaterials }
+        { count: activityLogs },
+        { count: libraryMaterials }
       ] = await Promise.all([
         supabase.from('questions').select('*', { count: 'exact', head: true }),
         supabase.from('profiles').select('*', { count: 'exact', head: true }),
         supabase.from('exam_sessions').select('*', { count: 'exact', head: true }),
         supabase.from('session_answers').select('*', { count: 'exact', head: true }),
-        supabase.from('audit_logs').select('*', { count: 'exact', head: true }),
-        supabase.from('email_logs').select('*', { count: 'exact', head: true }),
-        supabase.from('study_materials').select('*', { count: 'exact', head: true })
+        supabase.from('activity_logs').select('*', { count: 'exact', head: true }),
+        supabase.from('library_materials').select('*', { count: 'exact', head: true })
       ]);
 
       qCount = questions || 0;
       pCount = profiles || 0;
       sessCount = examSessions || 0;
       ansCount = sessionAnswers || 0;
-      auditCount = auditLogs || 0;
-      emailCount = emailLogs || 0;
-      matCount = studyMaterials || 0;
+      auditCount = activityLogs || 0;
+      matCount = libraryMaterials || 0;
     } catch (dbErr) {
-      console.warn('[SystemUsageLimitService] DB counts error:', dbErr);
+      console.warn('[SystemUsageLimitService] DB counts notice:', dbErr);
     }
 
     try {
-      // 2. SMTP Real Usage
-      const [
-        { count: todaySent },
-        { count: monthSent },
-        { count: todayFailed }
-      ] = await Promise.all([
-        supabase.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', todayIso).eq('status', 'sent'),
-        supabase.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', monthIso).eq('status', 'sent'),
-        supabase.from('email_logs').select('*', { count: 'exact', head: true }).gte('sent_at', todayIso).eq('status', 'failed')
-      ]);
+      // 2. SMTP Real Usage - derived from activity_logs
+      const { data: emailLogsData } = await supabase
+        .from('activity_logs')
+        .select('action, created_at')
+        .ilike('action', '%email%')
+        .gte('created_at', monthIso);
 
-      emailsSentToday = todaySent || 0;
-      emailsSentMonth = monthSent || 0;
-      failedEmailsToday = todayFailed || 0;
+      if (emailLogsData) {
+        emailsSentMonth = emailLogsData.filter(l => l.action.includes('sent') || l.action.includes('approved')).length;
+        emailsSentToday = emailLogsData.filter(l => (l.action.includes('sent') || l.action.includes('approved')) && new Date(l.created_at) >= startOfToday).length;
+        failedEmailsToday = emailLogsData.filter(l => l.action.includes('fail') && new Date(l.created_at) >= startOfToday).length;
+      }
     } catch (smtpErr) {
-      console.warn('[SystemUsageLimitService] SMTP counts error:', smtpErr);
+      console.warn('[SystemUsageLimitService] SMTP counts notice:', smtpErr);
     }
 
     try {
@@ -386,17 +381,9 @@ export class SystemUsageLimitService {
 
       // Log notification to Admin Tray
       try {
-        await supabase.from('audit_logs').insert({
-          action: 'SYSTEM_CAPACITY_ALERT',
-          details: `Resource Warning: ${stats.alertMessages.join(' | ')}`,
-          created_at: new Date().toISOString()
-        });
-      } catch {}
-
-      try {
         await supabase.from('activity_logs').insert({
           action: 'SYSTEM_CAPACITY_ALERT',
-          details: stats.alertMessages[0] || 'Resource usage exceeded safety threshold',
+          details: `Resource Warning: ${stats.alertMessages.join(' | ')}`,
           created_at: new Date().toISOString()
         });
       } catch {}

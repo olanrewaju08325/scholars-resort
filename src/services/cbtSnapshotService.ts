@@ -150,13 +150,10 @@ export class CbtSnapshotService {
         body: JSON.stringify(snapshot)
       }).catch(() => {});
 
-      // Also log audit entry
-      await supabase.from('audit_logs').insert({
+      // Also log activity entry
+      await supabase.from('activity_logs').insert({
         user_id: params.userProfile?.id || null,
         action: `CBT Session Snapshot Captured: ${snapshot.id}`,
-        entity_type: 'cbt_session',
-        entity_id: snapshot.id,
-        status: 'success',
         metadata: {
           examMode: params.examMode,
           totalQ: params.questions.length,
