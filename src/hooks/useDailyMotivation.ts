@@ -81,12 +81,13 @@ export function useDailyMotivation() {
   const fetchQuotesFromDb = useCallback(async () => {
     try {
       if (supabase && navigator.onLine) {
-        const { data, error } = await supabase
-          .from('motivational_quotes')
-          .select('*')
-          .order('created_at', { ascending: false });
-
-        if (!error && data && data.length > 0) {
+        const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+        const qRes = await safeSupabaseQuery<any[]>(
+          supabase.from('motivational_quotes').select('*').order('created_at', { ascending: false }),
+          { contextName: 'useDailyMotivation', fallbackValue: [] }
+        );
+        const data = qRes.data || [];
+        if (data.length > 0) {
           const formatted: MotivationQuote[] = data.map(q => ({
             id: q.id,
             quote: q.quote,

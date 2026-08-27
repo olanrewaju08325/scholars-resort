@@ -1,16 +1,53 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Flame, ChevronLeft, ChevronRight, CheckCircle2, Award, Calendar as CalendarIcon, Sparkles } from 'lucide-react';
+import { Flame, ChevronLeft, ChevronRight, Calendar as CalendarIcon, BookOpen } from 'lucide-react';
 import { useStudentStats } from '@/hooks/useStudentStats';
+import { useAuth } from '@/context/AuthContext';
+import { supabase } from '@/lib/supabase';
 
 export const StudyStreakCalendar = () => {
+  const { profile } = useAuth();
   const { streak, history } = useStudentStats();
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [utmeStudyLogs, setUtmeStudyLogs] = useState<string[]>([]);
 
-  // Extract practice dates from history
+  // Registered UTME subjects
+  const userUtmeSubjects: string[] = useMemo(() => {
+    if (profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0) {
+      return profile.utme_subjects;
+    }
+    return ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+  }, [profile?.utme_subjects]);
+
+  // Fetch UTME subject specific activity logs
+  useEffect(() => {
+    if (!profile?.id) return;
+    const fetchUtmeLogs = async () => {
+      try {
+        const { data } = await supabase
+          .from('study_logs')
+          .select('created_at, subject_context, is_utme_curriculum')
+          .eq('user_id', profile.id)
+          .eq('is_utme_curriculum', true);
+
+        if (data && data.length > 0) {
+          const dates = data.map((d: any) => new Date(d.created_at).toISOString().split('T')[0]);
+          setUtmeStudyLogs(dates);
+        }
+      } catch {}
+    };
+    fetchUtmeLogs();
+  }, [profile?.id]);
+
+  // Extract practice dates from history & study logs specifically matching registered UTME subjects
   const activeDaysSet = useMemo(() => {
     const set = new Set<string>();
+
+    // Add UTME curriculum study logs
+    utmeStudyLogs.forEach(d => set.add(d));
+
+    // Fallback: Add session history if valid
     if (history && Array.isArray(history)) {
       history.forEach((session: any) => {
         if (session.created_at) {
@@ -19,12 +56,13 @@ export const StudyStreakCalendar = () => {
         }
       });
     }
-    // Also include today if current streak > 0
+
+    // Include today if current streak > 0
     if (streak > 0) {
       set.add(new Date().toISOString().split('T')[0]);
     }
     return set;
-  }, [history, streak]);
+  }, [utmeStudyLogs, history, streak]);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -72,8 +110,18 @@ export const StudyStreakCalendar = () => {
               <CalendarIcon className="w-4 h-4 text-primary" /> Study Streak & Practice Calendar
             </CardTitle>
             <CardDescription className="text-xs">
-              Track your daily CBT practice consistency leading up to JAMB
+              Track your daily CBT practice consistency for your registered UTME subjects
             </CardDescription>
+            <div className="flex items-center gap-1 mt-1.5 flex-wrap">
+              <span className="text-[10px] text-muted-foreground font-medium flex items-center gap-1">
+                <BookOpen className="w-3 h-3 text-primary" /> Active UTME Focus:
+              </span>
+              {userUtmeSubjects.map((sub, idx) => (
+                <span key={idx} className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 border border-primary/20 text-primary font-semibold">
+                  {sub}
+                </span>
+              ))}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">

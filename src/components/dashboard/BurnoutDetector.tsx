@@ -13,6 +13,10 @@ export const BurnoutDetector = () => {
   const [loading, setLoading] = useState(false);
 
   const analyzeStudent = async () => {
+    if (localStorage.getItem('scholars_live_exam_active') === 'true') {
+      toast.error('AI analysis tools are locked during live proctored CBT exams.');
+      return;
+    }
     if (!profile?.id) return;
     setLoading(true);
 

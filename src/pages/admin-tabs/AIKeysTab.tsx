@@ -202,57 +202,16 @@ export const AIKeysTab = () => {
     setTestingGroq(true);
     try {
       const trimmedKey = groqKey.trim();
-      let workingModel = 'llama-3.3-70b-versatile';
+      const { testGroqConnection } = await import('@/services/systemConfigService');
+      const result = await testGroqConnection(trimmedKey);
 
-      try {
-        const modelsRes = await fetch('https://api.groq.com/openai/v1/models', {
-          headers: { 'Authorization': `Bearer ${trimmedKey}` }
-        });
-        if (modelsRes.ok) {
-          const modelsData = await modelsRes.json();
-          const ids: string[] = (modelsData?.data || []).map((m: any) => m.id);
-          if (ids.includes('llama-3.3-70b-versatile')) workingModel = 'llama-3.3-70b-versatile';
-          else if (ids.includes('llama-3.1-8b-instant')) workingModel = 'llama-3.1-8b-instant';
-          else if (ids.includes('mixtral-8x7b-32768')) workingModel = 'mixtral-8x7b-32768';
-          else if (ids.length > 0) workingModel = ids[0];
-        }
-      } catch {}
-
-      const testModels = [workingModel, 'llama-3.3-70b-versatile', 'llama-3.1-8b-instant', 'mixtral-8x7b-32768'].filter((m, i, arr) => arr.indexOf(m) === i);
-      let reply = '';
-      let successModel = '';
-
-      for (const m of testModels) {
-        try {
-          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${trimmedKey}`
-            },
-            body: JSON.stringify({
-              model: m,
-              messages: [{ role: 'user', content: 'Say "Groq API Connected!" in 3 words.' }],
-              max_tokens: 20
-            })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            reply = data?.choices?.[0]?.message?.content || 'Connected';
-            successModel = m;
-            break;
-          }
-        } catch {}
+      if (result.ok) {
+        toast.success(result.message || 'Groq API Key verified successfully!');
+        setGroqStatus({ ok: true, msg: result.message || 'Verified successfully' });
+        loadTelemetryData();
+      } else {
+        throw new Error(result.message || 'Groq key rejected. Please check your key.');
       }
-
-      if (!reply) {
-        throw new Error('Groq key rejected. Please check your API key format.');
-      }
-
-      toast.success(`Groq API Verified (${successModel})! Reply: "${reply}"`);
-      setGroqStatus({ ok: true, msg: `Verified with ${successModel}: "${reply}"` });
-      loadTelemetryData();
     } catch (err: any) {
       toast.error(`Groq Test Failed: ${err.message}`);
       setGroqStatus({ ok: false, msg: err.message });

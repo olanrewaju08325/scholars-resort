@@ -49,13 +49,12 @@ export const ImageQuestionManagerTab = () => {
       }
 
       // Fetch questions that have image_url
-      const { data: qData, error } = await supabase
-        .from('questions')
-        .select('*, subjects(name)')
-        .not('image_url', 'is', null)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+      const qRes = await safeSupabaseQuery<any[]>(
+        supabase.from('questions').select('*').not('image_url', 'is', null).order('created_at', { ascending: false }),
+        { contextName: 'ImageQuestionManagerTab', fallbackValue: [] }
+      );
+      const qData = qRes.data || [];
       
       let localImgQuestions: any[] = [];
       try {

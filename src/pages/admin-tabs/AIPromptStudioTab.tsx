@@ -134,46 +134,32 @@ export const AIPromptStudioTab = () => {
 
     try {
       const key = await getGroqApiKey();
-      if (!key) throw new Error("No Groq API Key found. Please save your Groq key in the AI Keys tab.");
+      const trimmedKey = key ? key.trim() : '';
 
-      const trimmedKey = key.trim();
-      const testModels = [modelType, 'openai/gpt-oss-120b', 'openai/gpt-oss-20b', 'groq/compound', 'groq/compound-mini', 'qwen/qwen3.6-27b'].filter((m, i, arr) => arr.indexOf(m) === i);
-      let content = '';
-      let activeModel = '';
-
-      for (const m of testModels) {
-        try {
-          const res = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${trimmedKey}`
-            },
-            body: JSON.stringify({
-              model: m,
-              messages: [{ role: 'user', content: 'Respond with "Groq Engine Online"' }],
-              max_tokens: 15
-            })
-          });
-
-          if (res.ok) {
-            const data = await res.json();
-            content = data?.choices?.[0]?.message?.content || 'Groq Active';
-            activeModel = m;
-            break;
-          }
-        } catch {}
-      }
+      const res = await fetch('/api/groq-chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(trimmedKey ? { 'x-groq-key': trimmedKey } : {})
+        },
+        body: JSON.stringify({
+          model: modelType || 'llama-3.3-70b-versatile',
+          messages: [{ role: 'user', content: 'Respond with "Groq Engine Online"' }]
+        })
+      });
 
       const latency = Date.now() - startTime;
-      if (!content) throw new Error('Groq key test failed across all candidate models.');
-      
+      if (!res.ok) throw new Error(`Groq server proxy responded with status ${res.status}`);
+
+      const data = await res.json();
+      const content = data?.text || data?.content || 'Groq Active';
+
       setGroqStatus({
         ok: true,
         latency,
-        msg: `${content} (${activeModel})`
+        msg: `${content} (${modelType || 'llama-3.3-70b-versatile'})`
       });
-      toast.success(`Groq API verified via ${activeModel}! Reply: "${content}" (${latency}ms)`);
+      toast.success(`Groq API verified! Reply: "${content}" (${latency}ms)`);
     } catch (err: any) {
       setGroqStatus({ ok: false, msg: err.message });
       toast.error(`Groq Key Test Failed: ${err.message}`);

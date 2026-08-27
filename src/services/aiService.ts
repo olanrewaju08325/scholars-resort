@@ -392,44 +392,31 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
           });
         }
 
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const response = await fetch('/api/groq-chat', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${apiKey}`
+            'x-groq-key': apiKey
           },
           body: JSON.stringify({
             model: currentModel,
             messages: sanitizedMessages,
-            temperature: Math.min(2.0, Math.max(0.0, Number(temperature) || 0.7)),
-            max_tokens: 2048
+            temperature: Math.min(2.0, Math.max(0.0, Number(temperature) || 0.7))
           })
         });
 
         if (response.ok) {
-          const remTokens = response.headers.get('x-ratelimit-remaining-tokens') || response.headers.get('x-ratelimit-remaining-tokens-minute');
-          const limTokens = response.headers.get('x-ratelimit-limit-tokens') || response.headers.get('x-ratelimit-limit-tokens-minute');
-          const resReset = response.headers.get('x-ratelimit-reset-tokens');
-          const remReqs = response.headers.get('x-ratelimit-remaining-requests');
-
           const data = await response.json();
-          const content = data?.choices?.[0]?.message?.content;
+          const content = data?.text || data?.content;
 
           if (content) {
             aiCircuitBreaker.recordSuccess();
-            const promptTokens = data?.usage?.prompt_tokens || 100;
-            const completionTokens = data?.usage?.completion_tokens || 200;
-
             reportGroqCallTelemetry({
               model: currentModel,
-              promptTokens,
-              completionTokens,
-              totalTokens: promptTokens + completionTokens,
-              status: 'success',
-              remainingTokens: remTokens || undefined,
-              limitTokens: limTokens || undefined,
-              resetTokens: resReset || undefined,
-              remainingRequests: remReqs || undefined
+              promptTokens: 150,
+              completionTokens: 250,
+              totalTokens: 400,
+              status: 'success'
             });
 
             return stripThinkTags(content);
@@ -452,18 +439,22 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     aiCircuitBreaker.recordFailure();
   }
 
-  // 3. Fallback to Supabase Edge Function
+  // 3. Fallback to Local Express AI proxy without edge function
   try {
-    const { data, error } = await supabase.functions.invoke('ai-gateway', {
-      body: { action: 'chat', payload: { messages } }
+    const localRes = await fetch('/api/groq-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages })
     });
-    if (!error && (data?.content || data?.text)) {
-      aiCircuitBreaker.recordSuccess();
-      return stripThinkTags(data?.content || data?.text || '');
+    if (localRes.ok) {
+      const data = await localRes.json();
+      if (data?.text || data?.content) {
+        aiCircuitBreaker.recordSuccess();
+        return stripThinkTags(data?.text || data?.content || '');
+      }
     }
-  } catch (edgeErr) {
+  } catch {
     aiCircuitBreaker.recordFailure();
-    console.warn('Edge function fallback notice:', edgeErr);
   }
 
   // 4. Circuit Breaker / Admin-Manual Fallback Reasoning Engine

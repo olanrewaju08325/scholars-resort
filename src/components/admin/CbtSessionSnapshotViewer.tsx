@@ -57,13 +57,14 @@ export const CbtSessionSnapshotViewer: React.FC = () => {
   };
 
   const filteredSnapshots = snapshots.filter(s => {
+    const term = String(searchTerm || '').toLowerCase();
     const matchesSearch = 
-      s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.sessionTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      s.user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (s.subjectName && s.subjectName.toLowerCase().includes(searchTerm.toLowerCase()));
+      String(s.id || '').toLowerCase().includes(term) ||
+      String(s.sessionTitle || '').toLowerCase().includes(term) ||
+      String(s.user?.email || '').toLowerCase().includes(term) ||
+      (s.subjectName && String(s.subjectName || '').toLowerCase().includes(term));
     
-    const matchesMode = filterMode === 'all' || s.examMode.toLowerCase() === filterMode.toLowerCase();
+    const matchesMode = filterMode === 'all' || String(s.examMode || '').toLowerCase() === String(filterMode || '').toLowerCase();
     return matchesSearch && matchesMode;
   });
 
@@ -300,7 +301,7 @@ export const CbtSessionSnapshotViewer: React.FC = () => {
                       {selectedSnapshot.questions.map((q, qIndex) => {
                         const candidateAnswer = selectedSnapshot.answers[q.id] || selectedSnapshot.answers[qIndex.toString()];
                         const isFlagged = selectedSnapshot.flaggedIndices.includes(qIndex);
-                        const isCorrect = candidateAnswer && q.correctOption && candidateAnswer.toLowerCase() === q.correctOption.toLowerCase();
+                        const isCorrect = candidateAnswer && q.correctOption && String(candidateAnswer).toLowerCase() === String(q.correctOption).toLowerCase();
 
                         return (
                           <div key={q.id || qIndex} className="p-3 rounded-lg bg-card border border-border/80 text-xs space-y-2">
@@ -339,8 +340,8 @@ export const CbtSessionSnapshotViewer: React.FC = () => {
                             {/* Options List */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] pt-1">
                               {Object.entries(q.options || {}).map(([optKey, optVal]) => {
-                                const isCandidatePick = candidateAnswer?.toLowerCase() === optKey.toLowerCase();
-                                const isCorrectPick = q.correctOption?.toLowerCase() === optKey.toLowerCase();
+                                const isCandidatePick = candidateAnswer && String(candidateAnswer).toLowerCase() === String(optKey).toLowerCase();
+                                const isCorrectPick = q.correctOption && String(q.correctOption).toLowerCase() === String(optKey).toLowerCase();
 
                                 return (
                                   <div

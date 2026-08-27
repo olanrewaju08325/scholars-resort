@@ -266,30 +266,12 @@ export async function testGroqConnection(apiKey: string, model: string = 'llama-
       body: JSON.stringify({ apiKey, model })
     });
 
-    if (res.ok) {
-      const data = await res.json();
-      return { ok: data.success, latencyMs: data.latencyMs, message: data.message };
+    const data = await res.json().catch(() => ({}));
+    if (res.ok && data.success) {
+      return { ok: true, latencyMs: data.latencyMs, message: data.message || 'GROQ API connection verified successfully!' };
     }
 
-    // Direct fetch test
-    const directRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey.trim()}`
-      },
-      body: JSON.stringify({
-        model: model || 'llama-3.3-70b-versatile',
-        messages: [{ role: 'user', content: 'Respond with OK.' }],
-        max_tokens: 10
-      })
-    });
-
-    if (directRes.ok) {
-      return { ok: true, message: 'GROQ API connection verified successfully!' };
-    }
-    const errData = await directRes.json().catch(() => ({}));
-    return { ok: false, message: errData?.error?.message || 'Invalid or revoked GROQ API key.' };
+    return { ok: false, message: data.message || data.error || 'Failed to verify GROQ API key.' };
   } catch (err: any) {
     return { ok: false, message: err.message || 'Failed to connect to GROQ API server.' };
   }

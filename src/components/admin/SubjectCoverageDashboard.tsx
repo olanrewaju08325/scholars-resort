@@ -136,7 +136,7 @@ export const SubjectCoverageDashboard: React.FC = () => {
   const filteredSubjects = useMemo(() => {
     return subjectsData
       .filter(item => {
-        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
+        const matchesSearch = String(item.name || '').toLowerCase().includes(String(searchQuery || '').toLowerCase());
         const matchesCategory = selectedCategory === 'all' || item.category === selectedCategory;
         return matchesSearch && matchesCategory;
       })

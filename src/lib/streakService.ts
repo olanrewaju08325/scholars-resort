@@ -1,22 +1,47 @@
 import { supabase } from './supabase';
 import { awardDailyStreakXp, checkStreakBadges } from './gamification';
 
-export const recordStudyAction = async (userId: string, actionType: 'exam' | 'practice' | 'library') => {
+export const recordStudyAction = async (
+  userId: string, 
+  actionType: 'exam' | 'practice' | 'library',
+  subjectNameOrId?: string
+) => {
   try {
-    // 1. Log the action safely
-    await supabase.from('study_logs').insert({
-      user_id: userId,
-      action_type: actionType
-    }).catch(() => {});
-
-    // 2. Fetch current profile stats
+    // 1. Fetch current profile stats & user selected UTME subjects
     const { data: profile } = await supabase
       .from('profiles')
-      .select('streak_days, streak_freezes, last_study_date, longest_streak')
+      .select('streak_days, streak_freezes, last_study_date, longest_streak, utme_subjects')
       .eq('id', userId)
       .maybeSingle();
 
     if (!profile) return;
+
+    // 2. Validate context-aware subject match if subject is provided & user has registered UTME subjects
+    const userSubjects: string[] = Array.isArray(profile.utme_subjects) ? profile.utme_subjects : [];
+    if (subjectNameOrId && userSubjects.length > 0) {
+      const normalizedSubject = subjectNameOrId.trim().toLowerCase();
+      const isRelevant = userSubjects.some(s => 
+        s.toLowerCase().includes(normalizedSubject) || normalizedSubject.includes(s.toLowerCase())
+      );
+      // If student is practicing a subject NOT in their UTME curriculum, log study but do not update primary UTME streak
+      if (!isRelevant) {
+        await supabase.from('study_logs').insert({
+          user_id: userId,
+          action_type: actionType,
+          subject_context: subjectNameOrId,
+          is_utme_curriculum: false
+        }).catch(() => {});
+        return;
+      }
+    }
+
+    // 3. Log the context-aware action safely
+    await supabase.from('study_logs').insert({
+      user_id: userId,
+      action_type: actionType,
+      subject_context: subjectNameOrId || 'UTME Core',
+      is_utme_curriculum: true
+    }).catch(() => {});
 
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     
@@ -59,7 +84,7 @@ export const recordStudyAction = async (userId: string, actionType: 'exam' | 'pr
 
     const newLongest = Math.max(newStreak, profile.longest_streak || 0);
 
-    // 3. Update profile
+    // 4. Update profile
     await supabase.from('profiles').update({
       streak_days: newStreak,
       streak_freezes: newFreezes,
@@ -67,10 +92,11 @@ export const recordStudyAction = async (userId: string, actionType: 'exam' | 'pr
       longest_streak: newLongest
     }).eq('id', userId);
 
-    // 4. Award Daily Streak XP and badges
+    // 5. Award Daily Streak XP and badges
     await awardDailyStreakXp(userId, newStreak);
 
   } catch (err) {
     console.error("Error updating streak:", err);
   }
 };
+

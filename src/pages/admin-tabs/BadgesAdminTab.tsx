@@ -35,18 +35,6 @@ export const BadgesAdminTab = () => {
 
   const fetchBadges = async () => {
     setLoading(true);
-    try {
-      // Try fetching from database table 'badges' or 'admin_settings'
-      const { data, error } = await supabase.from('badges').select('*').order('xp_threshold', { ascending: true });
-      if (error) throw error;
-      if (data && data.length > 0) {
-        setBadges(data);
-        setLoading(false);
-        return;
-      }
-    } catch (err) {
-      console.warn('Badges table fetch notice:', err);
-    }
 
     try {
       const { data: settingData } = await supabase
@@ -55,12 +43,25 @@ export const BadgesAdminTab = () => {
         .eq('setting_key', 'gamification_badges_config')
         .maybeSingle();
 
-      if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+      if (settingData?.setting_value && Array.isArray(settingData.setting_value) && settingData.setting_value.length > 0) {
         setBadges(settingData.setting_value);
         setLoading(false);
         return;
       }
-    } catch {}
+    } catch (_) {}
+
+    try {
+      const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+      const res = await safeSupabaseQuery<any[]>(
+        supabase.from('badges').select('*'),
+        { contextName: 'BadgesAdminTab', fallbackValue: [] }
+      );
+      if (res.data && res.data.length > 0) {
+        setBadges(res.data);
+        setLoading(false);
+        return;
+      }
+    } catch (_) {}
 
     // Default seed badges
     const defaultBadges = [

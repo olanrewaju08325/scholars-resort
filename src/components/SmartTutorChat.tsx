@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame, Lock } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 export const SmartTutorChat = () => {
   const { profile } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const [isExamLocked, setIsExamLocked] = useState(() => localStorage.getItem('scholars_live_exam_active') === 'true');
   const [studentStats, setStudentStats] = useState<any>(null);
   const [uploadedMaterials, setUploadedMaterials] = useState<any[]>([]);
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
@@ -20,6 +21,58 @@ export const SmartTutorChat = () => {
   const [showAttachNote, setShowAttachNote] = useState(false);
   const [customNote, setCustomNote] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Listen to exam proctor lock events & query database for active exam session with is_ai_tutor_locked flag
+  useEffect(() => {
+    const handleExamState = (e: any) => {
+      const active = !!(e.detail?.active || localStorage.getItem('scholars_live_exam_active') === 'true');
+      setIsExamLocked(active);
+      if (active) {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener('scholars:exam-active', handleExamState);
+    window.addEventListener('scholars:focus-mode', handleExamState);
+
+    // Also check server API & Supabase database for active session lock flag
+    const checkDbExamLock = async () => {
+      if (!profile?.id) return;
+      try {
+        const res = await fetch(`/api/exam-session/active-status?userId=${profile.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.is_ai_tutor_locked) {
+            setIsExamLocked(true);
+            return;
+          }
+        }
+        // Fallback Supabase direct check
+        const { data: dbSession } = await supabase
+          .from('exam_sessions')
+          .select('is_ai_tutor_locked, status')
+          .eq('user_id', profile.id)
+          .eq('status', 'in_progress')
+          .eq('is_ai_tutor_locked', true)
+          .maybeSingle();
+
+        if (dbSession?.is_ai_tutor_locked) {
+          setIsExamLocked(true);
+        } else if (localStorage.getItem('scholars_live_exam_active') !== 'true') {
+          setIsExamLocked(false);
+        }
+      } catch {}
+    };
+
+    checkDbExamLock();
+    const interval = setInterval(checkDbExamLock, 5000);
+
+    return () => {
+      window.removeEventListener('scholars:exam-active', handleExamState);
+      window.removeEventListener('scholars:focus-mode', handleExamState);
+      clearInterval(interval);
+    };
+  }, [profile?.id]);
 
   // Fetch performance data when chat is initialized
   useEffect(() => {
@@ -101,6 +154,12 @@ export const SmartTutorChat = () => {
   }, [messages, isOpen]);
 
   const handleSend = async (textToSend?: string) => {
+    if (isExamLocked || localStorage.getItem('scholars_live_exam_active') === 'true') {
+      toast.error('AI Tutor is locked during live proctored CBT exams to prevent cheating.');
+      setIsOpen(false);
+      return;
+    }
+
     const text = textToSend || input;
     if (!text.trim() || loading) return;
 
@@ -162,6 +221,7 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
     }
   };
 
+
   const handleAttachStudyNote = async () => {
     if (!customNote.trim()) return;
     const noteText = customNote.trim();
@@ -176,27 +236,42 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
     <div className="fixed bottom-6 right-4 md:bottom-6 md:right-6 z-[90] pb-[72px] md:pb-0">
       {!isOpen && (
         <Button 
-          onClick={() => setIsOpen(true)} 
-          className="h-12 px-4 rounded-full shadow-2xl shadow-purple-500/30 bg-purple-600 hover:bg-purple-700 text-white relative group flex items-center gap-2 border border-purple-400/40"
+          onClick={() => {
+            if (isExamLocked) {
+              toast.error('AI Scholar Tutor is locked during live proctored CBT exams to prevent cheating.');
+              return;
+            }
+            setIsOpen(true);
+          }} 
+          className={`h-12 px-4 rounded-full shadow-2xl transition-all flex items-center gap-2 border ${
+            isExamLocked 
+              ? 'bg-rose-900/90 border-rose-500/50 text-rose-200 cursor-not-allowed opacity-90' 
+              : 'shadow-purple-500/30 bg-purple-600 hover:bg-purple-700 text-white border-purple-400/40'
+          }`}
           aria-label="Open AI Smart Tutor"
         >
           <div className="relative flex items-center justify-center">
-            <Bot className="h-5 w-5 text-white" />
-            <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-300 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-200"></span>
-            </span>
+            {isExamLocked ? <Lock className="h-5 w-5 text-rose-300" /> : <Bot className="h-5 w-5 text-white" />}
+            {!isExamLocked && (
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-purple-300 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-purple-200"></span>
+              </span>
+            )}
           </div>
-          <span className="font-bold text-xs tracking-wide">AI Smart Tutor</span>
+          <span className="font-bold text-xs tracking-wide">
+            {isExamLocked ? 'AI Tutor Locked (Exam)' : 'AI Smart Tutor'}
+          </span>
         </Button>
       )}
 
       {isOpen && (
         <Card className="w-80 sm:w-96 h-[560px] flex flex-col shadow-2xl border-purple-500/30 bg-background">
-          <CardHeader className="bg-purple-600 text-white rounded-t-lg flex flex-row items-center justify-between py-3 px-4 shrink-0">
+          <CardHeader className={`${isExamLocked ? 'bg-rose-900' : 'bg-purple-600'} text-white rounded-t-lg flex flex-row items-center justify-between py-3 px-4 shrink-0`}>
             <CardTitle className="text-sm font-bold flex items-center gap-2">
-              <Bot className="h-5 w-5" /> AI Smart Tutor
-              {studentStats && (
+              {isExamLocked ? <Lock className="h-5 w-5 text-rose-300" /> : <Bot className="h-5 w-5" />} 
+              {isExamLocked ? 'AI Tutor Locked' : 'AI Smart Tutor'}
+              {studentStats && !isExamLocked && (
                 <span className="text-[10px] bg-purple-800/80 px-2 py-0.5 rounded-full font-mono text-purple-200">
                   Target: {studentStats.targetScore}
                 </span>
@@ -208,6 +283,19 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
               </Button>
             </div>
           </CardHeader>
+
+          {/* Locked Exam Notice Banner */}
+          {isExamLocked && (
+            <div className="bg-rose-950/80 border-b border-rose-500/30 p-3 text-xs text-rose-200 flex items-start gap-2 shrink-0">
+              <Lock className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold">Proctor Mode Active</p>
+                <p className="text-[11px] text-rose-300/90 mt-0.5">
+                  AI Scholar Tutor is locked during live CBT exams to ensure academic integrity and prevent cheating.
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* Context Banner */}
           {studentStats && (
@@ -314,20 +402,21 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
                 variant="outline"
                 size="icon"
                 onClick={() => setShowAttachNote(!showAttachNote)}
-                title="Feed study material or notes to AI"
+                disabled={isExamLocked}
+                title={isExamLocked ? "Locked during exam" : "Feed study material or notes to AI"}
                 className={`h-9 w-9 shrink-0 ${showAttachNote ? 'border-purple-500 text-purple-400' : 'text-muted-foreground'}`}
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
               <Input 
-                placeholder="Ask your AI Tutor..." 
+                placeholder={isExamLocked ? "AI Tutor locked during exam..." : "Ask your AI Tutor..."}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                disabled={loading}
+                disabled={loading || isExamLocked}
                 className="text-xs h-9"
               />
-              <Button onClick={() => handleSend()} size="icon" className="h-9 w-9 bg-purple-600 hover:bg-purple-700 text-white shrink-0" disabled={loading || !input.trim()}>
+              <Button onClick={() => handleSend()} size="icon" className="h-9 w-9 bg-purple-600 hover:bg-purple-700 text-white shrink-0" disabled={loading || !input.trim() || isExamLocked}>
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>

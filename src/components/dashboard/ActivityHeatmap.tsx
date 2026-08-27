@@ -23,8 +23,9 @@ export const ActivityHeatmap = () => {
       try {
         const { data: logData } = await supabase
           .from('study_logs')
-          .select('created_at')
+          .select('created_at, subject_context, is_utme_curriculum')
           .eq('user_id', profile.id)
+          .eq('is_utme_curriculum', true)
           .gte('created_at', isoThreshold);
 
         logData?.forEach(log => {

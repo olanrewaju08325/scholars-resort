@@ -21,12 +21,13 @@ export const CorrectionQueueTab = () => {
       const localReports = JSON.parse(localStorage.getItem('jamb_reported_errors') || '[]');
       
       // Also try supabase
-      const { data, error } = await supabase.from('reported_errors').select('*');
+      const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+      const dbRes = await safeSupabaseQuery<any[]>(
+        supabase.from('reported_errors').select('*'),
+        { contextName: 'CorrectionQueueTab', fallbackValue: [] }
+      );
       
-      let allReports = [...localReports];
-      if (data && !error) {
-        allReports = [...allReports, ...data];
-      }
+      let allReports = [...localReports, ...(dbRes.data || [])];
       
       setReports(allReports);
     } catch (e) {

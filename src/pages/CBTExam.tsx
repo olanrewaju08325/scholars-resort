@@ -121,13 +121,73 @@ const CBTExam = () => {
     }
   });
 
-  // Broadcast Focus Mode state to suppress WhatsApp widget & floating overlays
+  // Broadcast Focus Mode & Live Exam Active state to lock AI Tutor and suppress widgets
   useEffect(() => {
-    window.dispatchEvent(new CustomEvent('scholars:focus-mode', { detail: { active: focusMode } }));
-    return () => {
-      window.dispatchEvent(new CustomEvent('scholars:focus-mode', { detail: { active: false } }));
-    };
-  }, [focusMode]);
+    if (hasStarted && profile?.id) {
+      localStorage.setItem('scholars_live_exam_active', 'true');
+      window.dispatchEvent(new CustomEvent('scholars:exam-active', { detail: { active: true } }));
+      window.dispatchEvent(new CustomEvent('scholars:focus-mode', { detail: { active: true } }));
+
+      // Call server endpoint to set is_ai_tutor_locked = true in database exam_sessions
+      fetch('/api/exam-session/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: profile.id,
+          mode: 'CBT Exam',
+          subjects: examSubjectsList
+        })
+      }).catch(err => console.warn('[Exam Session Start API Notice]', err));
+
+      // Global Keydown Anti-Cheat Handler
+      const handleKeyDown = (e: KeyboardEvent) => {
+        if (
+          ((e.ctrlKey || e.metaKey) && ['c', 'v', 'x', 'a', 'u', 's'].includes(e.key.toLowerCase())) ||
+          e.key === 'F12' ||
+          ((e.ctrlKey || e.metaKey) && e.shiftKey && ['i', 'j', 'c'].includes(e.key.toLowerCase()))
+        ) {
+          e.preventDefault();
+          e.stopPropagation();
+          toast.warning('Proctor Mode: Keyboard shortcut blocked during live CBT exam.');
+        }
+      };
+
+      // Block copy, paste, cut, contextmenu, drag, selectstart on exam text areas & containers
+      const blockCopyPaste = (e: Event) => {
+        e.preventDefault();
+        e.stopPropagation();
+        toast.warning('Proctor Mode: Copying, pasting, and text selection are disabled during live exam.');
+      };
+
+      window.addEventListener('keydown', handleKeyDown, true);
+      window.addEventListener('copy', blockCopyPaste, true);
+      window.addEventListener('paste', blockCopyPaste, true);
+      window.addEventListener('cut', blockCopyPaste, true);
+      window.addEventListener('contextmenu', blockCopyPaste, true);
+      window.addEventListener('selectstart', blockCopyPaste, true);
+
+      return () => {
+        localStorage.removeItem('scholars_live_exam_active');
+        window.dispatchEvent(new CustomEvent('scholars:exam-active', { detail: { active: false } }));
+        window.dispatchEvent(new CustomEvent('scholars:focus-mode', { detail: { active: false } }));
+        window.removeEventListener('keydown', handleKeyDown, true);
+        window.removeEventListener('copy', blockCopyPaste, true);
+        window.removeEventListener('paste', blockCopyPaste, true);
+        window.removeEventListener('cut', blockCopyPaste, true);
+        window.removeEventListener('contextmenu', blockCopyPaste, true);
+        window.removeEventListener('selectstart', blockCopyPaste, true);
+
+        // Call server endpoint to set is_ai_tutor_locked = false
+        fetch('/api/exam-session/end', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: profile.id, status: 'submitted' })
+        }).catch(() => {});
+      };
+    } else {
+      window.dispatchEvent(new CustomEvent('scholars:focus-mode', { detail: { active: focusMode } }));
+    }
+  }, [hasStarted, focusMode, profile?.id, examSubjectsList]);
 
   useEffect(() => {
     const initializeExam = async () => {
@@ -193,26 +253,48 @@ const CBTExam = () => {
     initializeExam();
   }, [profile, location.state]);
 
-  // Proctoring: Fullscreen lock and Tab-switch detection
+  // Proctoring: Fullscreen lock, Tab-switch, and Blur detection
   useEffect(() => {
-    const handleVisibilityChange = () => {
+    let lastWarningTime = 0;
+
+    const triggerProctorWarning = (reason: string) => {
       if (!hasStarted) return;
+      const now = Date.now();
+      // Throttle warnings by 1.5s to avoid duplicate triggers from simultaneous blur + visibilitychange
+      if (now - lastWarningTime < 1500) return;
+      lastWarningTime = now;
+
+      setWarnings(prev => {
+        const newWarnings = prev + 1;
+        if (newWarnings >= 3) {
+          setIsCompromised(true);
+          toast.error(`Proctor Mode: Maximum integrity violations reached (${newWarnings}/3). Submitting exam automatically.`);
+          submitExam(true); // Submit forcefully as compromised
+        } else {
+          setShowWarning(true);
+          toast.warning(`Proctor Warning (${newWarnings}/3): ${reason}`);
+        }
+        return newWarnings;
+      });
+    };
+
+    const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
-        setWarnings(prev => {
-          const newWarnings = prev + 1;
-          if (newWarnings >= 4) {
-            setIsCompromised(true);
-            submitExam(true); // Submit forcefully as compromised
-          } else {
-            setShowWarning(true);
-          }
-          return newWarnings;
-        });
+        triggerProctorWarning('Tab switch / window minimize detected.');
       }
     };
 
+    const handleBlur = () => {
+      triggerProctorWarning('Window focus lost / application switched.');
+    };
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleBlur);
+    };
   }, [hasStarted]);
 
   const targetEndTimeRef = useRef<number | null>(null);

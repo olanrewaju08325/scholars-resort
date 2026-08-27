@@ -656,9 +656,136 @@ function addGroqServerLog(entry: Omit<GroqTelemetryLog, 'id' | 'timestamp'>) {
   return log;
 }
 
+// API Route: Exam Session Handler - Start Exam (Lock AI Tutor)
+app.post('/api/exam-session/start', async (req, res) => {
+  const { userId, sessionId, mode, subjects } = req.body;
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'userId is required.' });
+  }
+
+  const sId = sessionId || crypto.randomUUID();
+  try {
+    const payload = {
+      id: sId,
+      user_id: userId,
+      status: 'in_progress',
+      is_ai_tutor_locked: true,
+      started_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase
+      .from('exam_sessions')
+      .upsert(payload)
+      .select('id, is_ai_tutor_locked, status')
+      .single();
+
+    if (error) {
+      console.warn('[Exam Session Start Warning]', error.message);
+    }
+
+    return res.json({
+      success: true,
+      sessionId: sId,
+      is_ai_tutor_locked: true,
+      status: 'in_progress'
+    });
+  } catch (err: any) {
+    console.error('[API /api/exam-session/start Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Exam Session Handler - End / Submit Exam (Unlock AI Tutor)
+app.post('/api/exam-session/end', async (req, res) => {
+  const { sessionId, userId, status, score, totalQuestions } = req.body;
+  
+  try {
+    const updatePayload: any = {
+      is_ai_tutor_locked: false,
+      status: status || 'submitted',
+      submitted_at: new Date().toISOString()
+    };
+    if (score !== undefined) updatePayload.score = score;
+    if (totalQuestions !== undefined) updatePayload.total_questions = totalQuestions;
+
+    let query = supabase.from('exam_sessions').update(updatePayload);
+    if (sessionId) {
+      query = query.eq('id', sessionId);
+    } else if (userId) {
+      query = query.eq('user_id', userId).eq('status', 'in_progress');
+    }
+
+    const { error } = await query;
+    if (error) {
+      console.warn('[Exam Session End Warning]', error.message);
+    }
+
+    return res.json({
+      success: true,
+      is_ai_tutor_locked: false,
+      status: status || 'submitted'
+    });
+  } catch (err: any) {
+    console.error('[API /api/exam-session/end Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Exam Session Handler - Query AI Tutor Lock Status for User
+app.get('/api/exam-session/active-status', async (req, res) => {
+  const userId = req.query.userId as string;
+  if (!userId) {
+    return res.json({ is_ai_tutor_locked: false });
+  }
+
+  try {
+    const { data } = await supabase
+      .from('exam_sessions')
+      .select('id, status, is_ai_tutor_locked')
+      .eq('user_id', userId)
+      .eq('status', 'in_progress')
+      .eq('is_ai_tutor_locked', true)
+      .maybeSingle();
+
+    return res.json({
+      is_ai_tutor_locked: !!data,
+      sessionId: data?.id || null
+    });
+  } catch (err) {
+    return res.json({ is_ai_tutor_locked: false });
+  }
+});
+
 // API Route: Groq / Server AI Chat Proxy
 app.post('/api/groq-chat', async (req, res) => {
   const startTime = Date.now();
+  const userId = req.body?.userId || (req.headers['x-user-id'] as string);
+
+  // Proctor Mode Anti-Cheating check: Lock AI Tutor during live CBT exams
+  let isExamActive = req.headers['x-exam-active'] === 'true' || req.body?.isExamActive === true;
+
+  if (!isExamActive && userId) {
+    try {
+      const { data: activeSession } = await supabase
+        .from('exam_sessions')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('status', 'in_progress')
+        .eq('is_ai_tutor_locked', true)
+        .maybeSingle();
+      if (activeSession) {
+        isExamActive = true;
+      }
+    } catch (_) {}
+  }
+
+  if (isExamActive) {
+    return res.status(403).json({
+      error: 'AI Tutor access is locked during live proctored CBT exams to enforce academic integrity and prevent cheating.',
+      locked: true
+    });
+  }
+
   const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
   const customGroqKey = req.headers['x-groq-key'] as string;
   let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
@@ -2512,6 +2639,241 @@ app.post('/api/guardian/link', async (req, res) => {
     return res.json({ success: true, message: 'Student ward successfully linked to guardian.' });
   } catch (err: any) {
     console.error('[API /api/guardian/link Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Guardian Portal - Student Invites Parent / Guardian
+app.post('/api/guardian/invite', async (req, res) => {
+  const { studentId, parentEmail, studentName, baseUrl } = req.body;
+  if (!studentId) {
+    return res.status(400).json({ success: false, error: 'studentId is required.' });
+  }
+
+  try {
+    // 1. Fetch student profile to get or generate invite_code
+    const { data: prof } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, invite_code')
+      .eq('id', studentId)
+      .maybeSingle();
+
+    if (!prof) {
+      return res.status(404).json({ success: false, error: 'Student profile not found.' });
+    }
+
+    let code = prof.invite_code;
+    if (!code) {
+      code = `SCH-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      await supabase.from('profiles').update({ invite_code: code }).eq('id', studentId);
+    }
+
+    // 2. Save invitation record in guardian_links
+    await supabase.from('guardian_links').upsert({
+      student_id: studentId,
+      invitation_code: code,
+      status: 'pending',
+      created_at: new Date().toISOString()
+    });
+
+    const appOrigin = baseUrl || req.headers.origin || 'https://ais-dev-ity2upo7enzaao2otb7fcf-761006180903.europe-west2.run.app';
+    const connectUrl = `${appOrigin}/guardian-connect?code=${code}`;
+
+    // 3. Send email to parent if email address is provided
+    let emailSent = false;
+    if (parentEmail && parentEmail.trim()) {
+      try {
+        const sName = studentName || prof.full_name || prof.email || 'Your Student Ward';
+        const mailOptions = {
+          from: `"Scholars Resort Guardian Portal" <${process.env.SMTP_USER || 'admitwise2@gmail.com'}>`,
+          to: parentEmail.trim(),
+          subject: `Academic Monitoring Invitation: Connect to ${sName} on Scholars Resort`,
+          html: `
+            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+              <div style="text-align: center; margin-bottom: 24px;">
+                <h1 style="color: #ea580c; margin: 0; font-size: 24px;">Scholars Resort Guardian Portal</h1>
+                <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Empowering Parents with Real-Time UTME / JAMB Analytics</p>
+              </div>
+
+              <div style="background: #fff7ed; border-left: 4px solid #ea580c; padding: 16px; margin-bottom: 24px; border-radius: 4px;">
+                <p style="margin: 0; color: #9a3412; font-size: 15px; font-weight: bold;">
+                  ${sName} has invited you to monitor their academic preparation.
+                </p>
+              </div>
+
+              <p style="color: #334155; font-size: 14px; line-height: 1.6;">
+                As a linked guardian on Scholars Resort, you will be able to track CBT mock exam scores, daily study streaks, subject accuracy, time spent practicing, and receive automated weekly progress reports directly to your inbox.
+              </p>
+
+              <div style="background: #f8fafc; border: 1px dashed #cbd5e1; padding: 20px; text-align: center; border-radius: 8px; margin: 24px 0;">
+                <span style="font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 8px;">Your Student Invitation Code</span>
+                <span style="font-family: monospace; font-size: 28px; font-weight: bold; color: #ea580c; letter-spacing: 3px;">${code}</span>
+              </div>
+
+              <div style="text-align: center; margin: 28px 0;">
+                <a href="${connectUrl}" style="background-color: #ea580c; color: #ffffff; padding: 14px 28px; font-size: 15px; font-weight: bold; border-radius: 8px; text-decoration: none; display: inline-block;">
+                  Accept Invitation & Link Account
+                </a>
+              </div>
+
+              <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 32px;">
+                Or copy and paste this link into your browser: <br/>
+                <a href="${connectUrl}" style="color: #ea580c;">${connectUrl}</a>
+              </p>
+            </div>
+          `
+        };
+
+        if (transporter) {
+          await transporter.sendMail(mailOptions);
+          emailSent = true;
+        }
+      } catch (eErr) {
+        console.warn('[Guardian Invite Email Warning]', eErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      invitationCode: code,
+      connectUrl,
+      emailSent,
+      message: emailSent ? `Invitation sent successfully to ${parentEmail}!` : 'Invitation generated successfully.'
+    });
+
+  } catch (err: any) {
+    console.error('[API /api/guardian/invite Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Guardian Portal - Dispatch Weekly Automated Email Reports
+app.post('/api/guardian/send-weekly-reports', async (req, res) => {
+  const { guardianId } = req.body;
+
+  try {
+    // 1. Query active relationships
+    let relsQuery = supabase.from('guardian_student_relationships').select('*').eq('status', 'active');
+    if (guardianId) {
+      relsQuery = relsQuery.eq('guardian_id', guardianId);
+    }
+
+    const { data: rels } = await relsQuery;
+    if (!rels || rels.length === 0) {
+      return res.json({ success: true, sentCount: 0, message: 'No active student-guardian links found.' });
+    }
+
+    const guardianIds = Array.from(new Set(rels.map((r: any) => r.guardian_id).filter(Boolean)));
+    const studentIds = Array.from(new Set(rels.map((r: any) => r.student_id).filter(Boolean)));
+
+    // Fetch profiles
+    const { data: guardianProfiles } = await supabase.from('profiles').select('id, full_name, email').in('id', guardianIds);
+    const { data: studentProfiles } = await supabase.from('profiles').select('id, full_name, email, target_score, target_university, streak_days, xp, utme_subjects').in('id', studentIds);
+
+    const guardianMap: Record<string, any> = {};
+    (guardianProfiles || []).forEach((g: any) => { guardianMap[g.id] = g; });
+
+    const studentMap: Record<string, any> = {};
+    (studentProfiles || []).forEach((s: any) => { studentMap[s.id] = s; });
+
+    let sentCount = 0;
+
+    for (const rel of rels) {
+      const g = guardianMap[rel.guardian_id];
+      const s = studentMap[rel.student_id];
+
+      if (!g || !g.email || !s) continue;
+
+      // Calculate past 7 days statistics
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
+      const { data: recentExams } = await supabase
+        .from('exam_sessions')
+        .select('score, total_questions, submitted_at, status')
+        .eq('user_id', s.id)
+        .eq('status', 'submitted')
+        .gte('submitted_at', sevenDaysAgo);
+
+      const examCount = recentExams?.length || 0;
+      let totalQuestions = 0;
+      let totalScorePct = 0;
+
+      (recentExams || []).forEach((ex: any) => {
+        totalQuestions += ex.total_questions || 40;
+        const pct = ex.total_questions ? (ex.score / ex.total_questions) * 100 : 0;
+        totalScorePct += pct;
+      });
+
+      const avgAccuracy = examCount > 0 ? Math.round(totalScorePct / examCount) : 0;
+      const streak = s.streak_days || 0;
+      const targetScore = s.target_score || 300;
+      const sName = s.full_name || s.email || 'Student Ward';
+
+      const mailOptions = {
+        from: `"Scholars Resort Guardian Portal" <${process.env.SMTP_USER || 'admitwise2@gmail.com'}>`,
+        to: g.email,
+        subject: `Weekly Academic Progress Report for ${sName} | Scholars Resort`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
+            <div style="text-align: center; margin-bottom: 24px; border-bottom: 2px solid #ea580c; padding-bottom: 16px;">
+              <h1 style="color: #ea580c; margin: 0; font-size: 22px;">Weekly Student Progress Report</h1>
+              <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Student Ward: <strong>${sName}</strong></p>
+            </div>
+
+            <p style="color: #334155; font-size: 14px;">
+              Dear <strong>${g.full_name || 'Parent / Guardian'}</strong>,<br/>
+              Here is the automated weekly performance summary for <strong>${sName}</strong> covering their UTME exam prep over the last 7 days.
+            </p>
+
+            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 20px 0;">
+              <div style="background: #fff7ed; padding: 14px; border-radius: 8px; border: 1px solid #ffedd5;">
+                <span style="font-size: 11px; color: #9a3412; text-transform: uppercase; font-weight: bold;">Daily Study Streak</span>
+                <p style="font-size: 24px; font-weight: bold; color: #ea580c; margin: 4px 0 0 0;">🔥 ${streak} Days</p>
+              </div>
+
+              <div style="background: #f0fdf4; padding: 14px; border-radius: 8px; border: 1px solid #dcfce7;">
+                <span style="font-size: 11px; color: #166534; text-transform: uppercase; font-weight: bold;">Weekly Mock Exams</span>
+                <p style="font-size: 24px; font-weight: bold; color: #16a34a; margin: 4px 0 0 0;">${examCount} Sessions</p>
+              </div>
+
+              <div style="background: #eff6ff; padding: 14px; border-radius: 8px; border: 1px solid #dbeafe;">
+                <span style="font-size: 11px; color: #1e40af; text-transform: uppercase; font-weight: bold;">Average Practice Accuracy</span>
+                <p style="font-size: 24px; font-weight: bold; color: #2563eb; margin: 4px 0 0 0;">${avgAccuracy}%</p>
+              </div>
+
+              <div style="background: #faf5ff; padding: 14px; border-radius: 8px; border: 1px solid #f3e8ff;">
+                <span style="font-size: 11px; color: #6b21a8; text-transform: uppercase; font-weight: bold;">JAMB Target Score</span>
+                <p style="font-size: 24px; font-weight: bold; color: #9333ea; margin: 4px 0 0 0;">${targetScore} / 400</p>
+              </div>
+            </div>
+
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+              <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #1e293b;">Study Habits & Insights</h3>
+              <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 13px; line-height: 1.6;">
+                <li>Registered UTME Subjects: ${s.utme_subjects?.join(', ') || 'English, Mathematics, Physics, Chemistry'}</li>
+                <li>Total Practice Questions Solved: ${totalQuestions} questions</li>
+                <li>Consistency Assessment: ${streak >= 5 ? 'Excellent daily consistency!' : streak >= 2 ? 'Moderate consistency. Encourage daily practice.' : 'Needs encouragement to build a daily study routine.'}</li>
+              </ul>
+            </div>
+
+            <div style="text-align: center; margin-top: 24px;">
+              <a href="${req.headers.origin || 'https://ais-dev-ity2upo7enzaao2otb7fcf-761006180903.europe-west2.run.app'}/guardian" style="background-color: #1e293b; color: #ffffff; padding: 12px 24px; font-size: 14px; font-weight: bold; border-radius: 6px; text-decoration: none; display: inline-block;">
+                Open Guardian Portal Dashboard
+              </a>
+            </div>
+          </div>
+        `
+      };
+
+      if (transporter) {
+        await transporter.sendMail(mailOptions);
+        sentCount++;
+      }
+    }
+
+    return res.json({ success: true, sentCount, message: `Weekly progress reports emailed to ${sentCount} linked guardians.` });
+
+  } catch (err: any) {
+    console.error('[API /api/guardian/send-weekly-reports Error]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
