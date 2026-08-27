@@ -29,6 +29,7 @@ import { JambScorePredictorCard } from '@/components/dashboard/JambScorePredicto
 import { DailyStudyTip } from '@/components/dashboard/DailyStudyTip';
 import { DailyStudyPlannerWidget } from '@/components/dashboard/DailyStudyPlannerWidget';
 import { StudentAchievementsWidget } from '@/components/dashboard/StudentAchievementsWidget';
+import { PeerStudyRoomWidget } from '@/components/dashboard/PeerStudyRoomWidget';
 import { EducationalJourneyMap } from '@/components/journey/EducationalJourneyMap';
 import { AdaptiveLearningPathWidget } from '@/components/learningpath/AdaptiveLearningPathWidget';
 import { StudyStreakCalendar } from '@/components/dashboard/StudyStreakCalendar';
@@ -39,6 +40,7 @@ import { DashboardSkeleton } from '@/components/dashboard/skeletons/DashboardSke
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { motion } from 'framer-motion';
 import { Sparkles, BookOpen, BarChart2, Clock, Trophy, Layers } from 'lucide-react';
+import { DailyFiveQuestionDrill } from "@/components/dashboard/DailyFiveQuestionDrill";
 
 type MobileTab = 'all' | 'practice' | 'analytics' | 'tools' | 'social';
 
@@ -76,6 +78,7 @@ export default function Dashboard() {
         </div>
       </header>
 
+        <DailyFiveQuestionDrill userId={profile.id} />
       <div className="container max-w-7xl mx-auto p-3 sm:p-4 space-y-6 mt-2 sm:mt-4 w-full max-w-full min-w-0">
         
         {/* Real-time Platform Announcements Banner */}
@@ -187,6 +190,11 @@ export default function Dashboard() {
                 {/* Educational Journey Map */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.27 }} className="min-w-0 w-full">
                   <EducationalJourneyMap />
+                </motion.div>
+
+                {/* Peer Study Room Live Widget */}
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.28 }} className="min-w-0 w-full">
+                  <PeerStudyRoomWidget />
                 </motion.div>
 
                 {/* Adaptive Learning Path Generator */}

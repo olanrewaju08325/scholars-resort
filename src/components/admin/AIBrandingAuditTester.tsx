@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  ShieldCheck, Sparkles, CheckCircle2, AlertTriangle, XCircle, 
+  ShieldCheck, CheckCircle2, AlertTriangle, XCircle, 
   RefreshCw, Play, ShieldAlert, FileText, Download, Code2, 
-  BrainCircuit, Check, Terminal, Eye, Layers, Lock, Zap
+  BrainCircuit, Check, Layers, Lock
 } from 'lucide-react';
 import { 
   AIBrandingAuditService, 

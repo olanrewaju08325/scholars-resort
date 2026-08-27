@@ -639,7 +639,20 @@ app.post('/api/groq-chat', async (req, res) => {
   const startTime = Date.now();
   const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
   const customGroqKey = req.headers['x-groq-key'] as string;
-  const groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+  let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+
+  if (!groqKey) {
+    try {
+      const { data: dbKey } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'ai_api_keys')
+        .maybeSingle();
+      if (dbKey?.setting_value?.groq || dbKey?.setting_value?.groq_key) {
+        groqKey = dbKey.setting_value.groq || dbKey.setting_value.groq_key;
+      }
+    } catch (_) {}
+  }
 
   const candidateModels = [
     model,

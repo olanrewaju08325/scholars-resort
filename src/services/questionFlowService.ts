@@ -27,6 +27,7 @@ export interface ModeQuestionQueryConfig {
   difficulty?: 'easy' | 'medium' | 'hard' | 'mixed' | 'adaptive';
   timeLimitSeconds?: number;
   learningStyle?: string;
+  userId?: string;
 }
 
 export interface QuestionFlowValidation {
@@ -88,192 +89,250 @@ export class QuestionFlowService {
 
     try {
       let rawQuestions: any[] = [];
+      let isMistakeFallbackNeeded = false;
 
-      switch (config.mode) {
-        case 'subject_practice': {
-          const subId = config.subjectId || 'use-of-english';
-          const canonical = normalizeSubjectName(subId);
-          subjectsQueried.push(canonical);
+      if (config.learningStyle === 'mistakes' && config.userId) {
+        try {
+          const { data: userAnswers, error: answersError } = await supabase
+            .from('session_answers')
+            .select('question_id, is_correct, created_at')
+            .eq('user_id', config.userId)
+            .order('created_at', { ascending: true });
 
-          const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
-          const validUuids = matchedIds.filter(isUUID);
+          if (!answersError && userAnswers && userAnswers.length > 0) {
+            const latestStatusMap: Record<string, boolean> = {};
+            userAnswers.forEach((ans: any) => {
+              if (ans.question_id) {
+                latestStatusMap[ans.question_id] = ans.is_correct;
+              }
+            });
 
-          let query = supabase
-            .from('questions')
-            .select('*, subjects(id, name), topics(id, name)')
-            .eq('is_active', true);
+            const failedQIds = Object.keys(latestStatusMap).filter(qId => latestStatusMap[qId] === false);
 
-          if (validUuids.length > 0) {
-            query = query.in('subject_id', validUuids);
-          }
+            if (failedQIds.length > 0) {
+              let query = supabase
+                .from('questions')
+                .select('*, subjects(id, name), topics(id, name)')
+                .in('id', failedQIds);
+              
+              if (config.subjectId && config.subjectId !== 'all') {
+                const matchedIds = await resolveSubjectIdsByNameOrAlias(config.subjectId);
+                const validUuids = matchedIds.filter(isUUID);
+                if (validUuids.length > 0) {
+                  query = query.in('subject_id', validUuids);
+                }
+              }
 
-          if (config.difficulty && config.difficulty !== 'mixed' && config.difficulty !== 'adaptive') {
-            query = query.eq('difficulty', config.difficulty);
-          }
-
-          const { data, error } = await query.limit(Math.max(targetCount * 3, 100));
-
-          if (error) {
-            warnings.push(`Supabase error fetching Subject Practice questions: ${error.message}`);
-          } else if (data && data.length > 0) {
-            rawQuestions = data;
-          }
-          break;
-        }
-
-        case 'topic_drill': {
-          const subId = config.subjectId || 'use-of-english';
-          const canonical = normalizeSubjectName(subId);
-          subjectsQueried.push(canonical);
-
-          let query = supabase
-            .from('questions')
-            .select('*, subjects(id, name), topics(id, name)')
-            .eq('is_active', true);
-
-          if (config.topicId && config.topicId !== 'all') {
-            query = query.eq('topic_id', config.topicId);
-          } else {
-            const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
-            const validUuids = matchedIds.filter(isUUID);
-            if (validUuids.length > 0) {
-              query = query.in('subject_id', validUuids);
+              const { data: failedQs, error: failedQsError } = await query.limit(targetCount);
+              if (!failedQsError && failedQs && failedQs.length > 0) {
+                rawQuestions = failedQs;
+                subjectsQueried.push('Mistake Review');
+              } else {
+                isMistakeFallbackNeeded = true;
+                warnings.push(`No specific details found for user's failed questions, falling back to standard questions.`);
+              }
+            } else {
+              isMistakeFallbackNeeded = true;
             }
+          } else {
+            isMistakeFallbackNeeded = true;
+            warnings.push(`No failed questions on record for this user. Practicing with standard questions.`);
           }
-
-          const { data, error } = await query.limit(Math.max(targetCount * 2, 60));
-
-          if (error) {
-            warnings.push(`Supabase error fetching Topic Drill questions: ${error.message}`);
-          } else if (data && data.length > 0) {
-            rawQuestions = data;
-          } else if (config.topicId) {
-            warnings.push(`No active questions found in database for topic ID: ${config.topicId}`);
-          }
-          break;
+        } catch (err: any) {
+          isMistakeFallbackNeeded = true;
+          warnings.push(`Error loading failed questions: ${err.message || err}. Falling back.`);
         }
+      } else {
+        isMistakeFallbackNeeded = true;
+      }
 
-        case 'speed_test': {
-          const subId = config.subjectId || 'all';
-          let query = supabase
-            .from('questions')
-            .select('*, subjects(id, name), topics(id, name)')
-            .eq('is_active', true);
-
-          if (subId !== 'all') {
+      if (isMistakeFallbackNeeded) {
+        switch (config.mode) {
+          case 'subject_practice': {
+            const subId = config.subjectId || 'use-of-english';
             const canonical = normalizeSubjectName(subId);
             subjectsQueried.push(canonical);
+
             const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
             const validUuids = matchedIds.filter(isUUID);
-            if (validUuids.length > 0) {
-              query = query.in('subject_id', validUuids);
-            }
-          } else {
-            subjectsQueried.push('General UTME');
-          }
 
-          const { data, error } = await query.limit(60);
-
-          if (error) {
-            warnings.push(`Supabase error fetching Speed Test questions: ${error.message}`);
-          } else if (data && data.length > 0) {
-            rawQuestions = data;
-          }
-          break;
-        }
-
-        case 'full_mock':
-        case 'ai_generated_mock': {
-          // Standard UTME: 4 Subjects (Use of English [60 Qs] + 3 Core Subjects [40 Qs each] = 180 total)
-          let targetSubs = config.subjectIds || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
-          if (targetSubs.length < 4) {
-            targetSubs = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
-          }
-
-          const normalizedSubs = Array.from(new Set(targetSubs.map(s => normalizeSubjectName(s))));
-          const hasEnglish = normalizedSubs.includes('Use of English');
-          const finalSubjects = hasEnglish
-            ? ['Use of English', ...normalizedSubs.filter(s => s !== 'Use of English').slice(0, 3)]
-            : ['Use of English', ...normalizedSubs.slice(0, 3)];
-
-          subjectsQueried.push(...finalSubjects);
-
-          const subjectPromises = finalSubjects.map(async (subjName) => {
-            const limit = subjName === 'Use of English' ? 60 : 40;
-            const matchedIds = await resolveSubjectIdsByNameOrAlias(subjName);
-            const validUuids = matchedIds.filter(isUUID);
-
-            let subQuery = supabase
+            let query = supabase
               .from('questions')
               .select('*, subjects(id, name), topics(id, name)')
               .eq('is_active', true);
 
             if (validUuids.length > 0) {
-              subQuery = subQuery.in('subject_id', validUuids);
+              query = query.in('subject_id', validUuids);
             }
 
-            const { data, error } = await subQuery.limit(limit * 2);
+            if (config.difficulty && config.difficulty !== 'mixed' && config.difficulty !== 'adaptive') {
+              query = query.eq('difficulty', config.difficulty);
+            }
+
+            const { data, error } = await query.limit(Math.max(targetCount * 3, 100));
+
             if (error) {
-              warnings.push(`Failed querying ${subjName} for mock: ${error.message}`);
-              return [];
+              warnings.push(`Supabase error fetching Subject Practice questions: ${error.message}`);
+            } else if (data && data.length > 0) {
+              rawQuestions = data;
             }
-            
-            const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, limit);
-            return shuffled.map(q => ({
-              ...q,
-              subject_name: subjName
-            }));
-          });
-
-          const results = await Promise.all(subjectPromises);
-          rawQuestions = results.flat();
-          break;
-        }
-
-        case 'daily_quiz': {
-          subjectsQueried.push('Daily Challenge');
-          const { data, error } = await supabase
-            .from('questions')
-            .select('*, subjects(id, name), topics(id, name)')
-            .eq('is_active', true)
-            .limit(45);
-
-          if (error) {
-            warnings.push(`Supabase error fetching Daily Quiz questions: ${error.message}`);
-          } else if (data) {
-            rawQuestions = data;
-          }
-          break;
-        }
-
-        case 'past_questions': {
-          const subId = config.subjectId || 'use-of-english';
-          const canonical = normalizeSubjectName(subId);
-          subjectsQueried.push(canonical);
-
-          const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
-          const validUuids = matchedIds.filter(isUUID);
-
-          let query = supabase
-            .from('questions')
-            .select('*, subjects(id, name), topics(id, name)')
-            .eq('is_active', true);
-
-          if (validUuids.length > 0) {
-            query = query.in('subject_id', validUuids);
+            break;
           }
 
-          if (config.examYear) {
-            query = query.eq('exam_year', config.examYear);
+          case 'topic_drill': {
+            const subId = config.subjectId || 'use-of-english';
+            const canonical = normalizeSubjectName(subId);
+            subjectsQueried.push(canonical);
+
+            let query = supabase
+              .from('questions')
+              .select('*, subjects(id, name), topics(id, name)')
+              .eq('is_active', true);
+
+            if (config.topicId && config.topicId !== 'all') {
+              query = query.eq('topic_id', config.topicId);
+            } else {
+              const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
+              const validUuids = matchedIds.filter(isUUID);
+              if (validUuids.length > 0) {
+                query = query.in('subject_id', validUuids);
+              }
+            }
+
+            const { data, error } = await query.limit(Math.max(targetCount * 2, 60));
+
+            if (error) {
+              warnings.push(`Supabase error fetching Topic Drill questions: ${error.message}`);
+            } else if (data && data.length > 0) {
+              rawQuestions = data;
+            } else if (config.topicId) {
+              warnings.push(`No active questions found in database for topic ID: ${config.topicId}`);
+            }
+            break;
           }
 
-          const { data, error } = await query.limit(targetCount * 2);
-          if (error) {
-            warnings.push(`Supabase error fetching Past Questions: ${error.message}`);
-          } else if (data) {
-            rawQuestions = data;
+          case 'speed_test': {
+            const subId = config.subjectId || 'all';
+            let query = supabase
+              .from('questions')
+              .select('*, subjects(id, name), topics(id, name)')
+              .eq('is_active', true);
+
+            if (subId !== 'all') {
+              const canonical = normalizeSubjectName(subId);
+              subjectsQueried.push(canonical);
+              const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
+              const validUuids = matchedIds.filter(isUUID);
+              if (validUuids.length > 0) {
+                query = query.in('subject_id', validUuids);
+              }
+            } else {
+              subjectsQueried.push('General UTME');
+            }
+
+            const { data, error } = await query.limit(60);
+
+            if (error) {
+              warnings.push(`Supabase error fetching Speed Test questions: ${error.message}`);
+            } else if (data && data.length > 0) {
+              rawQuestions = data;
+            }
+            break;
           }
-          break;
+
+          case 'full_mock':
+          case 'ai_generated_mock': {
+            // Standard UTME: 4 Subjects (Use of English [60 Qs] + 3 Core Subjects [40 Qs each] = 180 total)
+            let targetSubs = config.subjectIds || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+            if (targetSubs.length < 4) {
+              targetSubs = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+            }
+
+            const normalizedSubs = Array.from(new Set(targetSubs.map(s => normalizeSubjectName(s))));
+            const hasEnglish = normalizedSubs.includes('Use of English');
+            const finalSubjects = hasEnglish
+              ? ['Use of English', ...normalizedSubs.filter(s => s !== 'Use of English').slice(0, 3)]
+              : ['Use of English', ...normalizedSubs.slice(0, 3)];
+
+            subjectsQueried.push(...finalSubjects);
+
+            const subjectPromises = finalSubjects.map(async (subjName) => {
+              const limit = subjName === 'Use of English' ? 60 : 40;
+              const matchedIds = await resolveSubjectIdsByNameOrAlias(subjName);
+              const validUuids = matchedIds.filter(isUUID);
+
+              let subQuery = supabase
+                .from('questions')
+                .select('*, subjects(id, name), topics(id, name)')
+                .eq('is_active', true);
+
+              if (validUuids.length > 0) {
+                subQuery = subQuery.in('subject_id', validUuids);
+              }
+
+              const { data, error } = await subQuery.limit(limit * 2);
+              if (error) {
+                warnings.push(`Failed querying ${subjName} for mock: ${error.message}`);
+                return [];
+              }
+              
+              const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, limit);
+              return shuffled.map(q => ({
+                ...q,
+                subject_name: subjName
+              }));
+            });
+
+            const results = await Promise.all(subjectPromises);
+            rawQuestions = results.flat();
+            break;
+          }
+
+          case 'daily_quiz': {
+            subjectsQueried.push('Daily Challenge');
+            const { data, error } = await supabase
+              .from('questions')
+              .select('*, subjects(id, name), topics(id, name)')
+              .eq('is_active', true)
+              .limit(45);
+
+            if (error) {
+              warnings.push(`Supabase error fetching Daily Quiz questions: ${error.message}`);
+            } else if (data) {
+              rawQuestions = data;
+            }
+            break;
+          }
+
+          case 'past_questions': {
+            const subId = config.subjectId || 'use-of-english';
+            const canonical = normalizeSubjectName(subId);
+            subjectsQueried.push(canonical);
+
+            const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
+            const validUuids = matchedIds.filter(isUUID);
+
+            let query = supabase
+              .from('questions')
+              .select('*, subjects(id, name), topics(id, name)')
+              .eq('is_active', true);
+
+            if (validUuids.length > 0) {
+              query = query.in('subject_id', validUuids);
+            }
+
+            if (config.examYear) {
+              query = query.eq('exam_year', config.examYear);
+            }
+
+            const { data, error } = await query.limit(targetCount * 2);
+            if (error) {
+              warnings.push(`Supabase error fetching Past Questions: ${error.message}`);
+            } else if (data) {
+              rawQuestions = data;
+            }
+            break;
+          }
         }
       }
 

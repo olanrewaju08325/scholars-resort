@@ -8,8 +8,8 @@ import {
   Trash2, 
   Download, 
   Type, 
-  Palette,
-  Sparkles
+  
+  
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import type { WhiteboardStroke } from '@/types/studyRoomTypes';
@@ -25,7 +25,7 @@ export const WhiteboardCanvas: React.FC<WhiteboardCanvasProps> = ({
   strokes,
   onAddStroke,
   onClearBoard,
-  userName
+  userName: _userName
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [activeTool, setActiveTool] = useState<'pen' | 'line' | 'rect' | 'circle' | 'eraser' | 'text'>('pen');

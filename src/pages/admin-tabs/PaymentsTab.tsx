@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
-import { CheckCircle, XCircle, CreditCard, Activity, Link2, Eye, ExternalLink } from 'lucide-react';
+import { CheckCircle, XCircle, CreditCard, Activity, Link2, Eye, ExternalLink, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';

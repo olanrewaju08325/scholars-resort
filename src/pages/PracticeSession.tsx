@@ -30,6 +30,16 @@ const PracticeSession = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answersMap, setAnswersMap] = useState<Record<string, string>>({});
   const [correctAnswersMap, setCorrectAnswersMap] = useState<Record<string, boolean>>({});
+  const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, string[]>>({});
+  const toggleEliminated = (questionId: string, option: string) => {
+    setEliminatedOptions(prev => {
+      const current = prev[questionId] || [];
+      const updated = current.includes(option)
+        ? current.filter(o => o !== option)
+        : [...current, option];
+      return { ...prev, [questionId]: updated };
+    });
+  };
   const [score, setScore] = useState(0);
   const [loading, setLoading] = useState(true);
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -107,6 +117,24 @@ const PracticeSession = () => {
         userId: profile?.id
       });
       
+      // Update Smart Mistake Bank
+      const mistakesToSave = questions.filter(q => answersMap[q.id] && answersMap[q.id] !== q.correct_answer);
+      try {
+        let existing = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+        if (state?.mode === 'mistakes') {
+          // Remove questions answered correctly this time
+          const correctlyAnsweredIds = questions.filter(q => answersMap[q.id] === q.correct_answer).map(q => q.id);
+          existing = existing.filter((q: any) => !correctlyAnsweredIds.includes(q.id));
+        }
+        if (mistakesToSave.length > 0) {
+          const combined = [...existing, ...mistakesToSave];
+          existing = Array.from(new Map(combined.map(item => [item.id, item])).values());
+        }
+        localStorage.setItem('jamb_mistake_bank', JSON.stringify(existing));
+      } catch (e) {
+        console.warn('Failed to update Mistake Bank:', e);
+      }
+
       if (profile) {
         const practiceXp = 30 + Math.round((percentageScore / 100) * 40);
         await awardXp(profile.id, practiceXp, `Completed ${state?.learningStyle || 'Practice'} Session (${score}/${questions.length})`);
@@ -146,7 +174,7 @@ const PracticeSession = () => {
 
   // Load state from session storage if resuming
   useEffect(() => {
-    if (!state?.subjectId && !state?.topicId && !state?.learningStyle) {
+    if (!state?.subjectId && !state?.topicId && !state?.learningStyle && state?.mode !== 'mistakes') {
       navigate('/practice');
       return;
     }
@@ -163,6 +191,18 @@ const PracticeSession = () => {
         setTotalTime(parsed.totalTime);
         if (parsed.answersMap) setAnswersMap(parsed.answersMap);
         if (parsed.correctAnswersMap) setCorrectAnswersMap(parsed.correctAnswersMap);
+        setLoading(false);
+        return;
+      }
+
+      if (state.mode === 'mistakes') {
+        const mistakes = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+        if (mistakes.length > 0) {
+          setQuestions(mistakes);
+        } else {
+          toast.info("No missed questions to retake!");
+          navigate('/practice');
+        }
         setLoading(false);
         return;
       }
@@ -192,7 +232,8 @@ const PracticeSession = () => {
         topicId: state.topicId !== 'all' ? state.topicId : undefined,
         count,
         difficulty: state.difficulty,
-        learningStyle: state.learningStyle
+        learningStyle: state.learningStyle,
+        userId: profile?.id
       });
 
       console.log(`[CBT Question Flow Service] Mode: ${targetMode} | Retrieved: ${flowResult.totalRetrieved} | Latency: ${flowResult.queryLatencyMs}ms | Zero-Mock Enforced: ${flowResult.validation.noMockFallbackUsed}`);
@@ -490,8 +531,13 @@ const PracticeSession = () => {
                 <span className="px-2.5 py-1 rounded-md bg-primary/10 text-primary font-bold text-xs border border-primary/20">
                   Question {currentIndex + 1} of {questions.length}
                 </span>
-                <span className="text-xs font-semibold text-muted-foreground">
+                <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
                   Time: {timeSpent}s
+                  <span className={`w-2 h-2 rounded-full inline-block transition-colors duration-300 ${
+                    timeSpent < 30 ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' :
+                    timeSpent < 45 ? 'bg-amber-500 shadow-sm shadow-amber-500/50' :
+                    'bg-rose-500 shadow-sm shadow-rose-500/50 animate-pulse'
+                  }`} title={timeSpent < 30 ? 'Pace: Perfect' : timeSpent < 45 ? 'Pace: Warning' : 'Pace: Take action!'} />
                 </span>
               </div>
 
@@ -524,6 +570,7 @@ const PracticeSession = () => {
                 {q.options.map((opt: string, i: number) => {
                   let btnClass = "border-border hover:bg-muted";
                   let Icon = null;
+                  const isEliminated = (eliminatedOptions[q.id] || []).includes(opt);
                   
                   if (isAnswered) {
                     if (opt === q.correct_answer) {
@@ -537,22 +584,39 @@ const PracticeSession = () => {
                     }
                   } else if (selectedAns === opt) {
                      btnClass = "border-primary bg-primary/5 text-primary";
+                  } else if (isEliminated) {
+                    btnClass = "border-dashed border-slate-700/40 opacity-40 bg-slate-100/5 dark:bg-slate-900/5";
                   }
 
                   return (
-                    <Button 
-                      key={i}
-                      variant="outline"
-                      className={`w-full justify-start h-auto min-h-[3.25rem] py-3 px-4 text-left whitespace-normal text-sm sm:text-base font-normal transition-all rounded-xl ${btnClass}`}
-                      onClick={() => handleSelect(opt)}
-                      disabled={isAnswered || isPaused}
-                    >
-                      <span className="font-bold mr-3 w-6 text-muted-foreground">
-                        {String.fromCharCode(65 + i)}.
-                      </span>
-                      <span className="flex-1">{cleanOptionText(opt)}</span>
-                      {Icon}
-                    </Button>
+                    <div key={i} className="relative flex items-center w-full">
+                      <Button 
+                        variant="outline"
+                        className={`w-full justify-start h-auto min-h-[3.25rem] py-3 pl-4 pr-20 text-left whitespace-normal text-sm sm:text-base font-normal transition-all rounded-xl ${btnClass}`}
+                        onClick={() => !isEliminated && handleSelect(opt)}
+                        disabled={isAnswered || isPaused}
+                      >
+                        <span className="font-bold mr-3 w-6 text-muted-foreground">
+                          {String.fromCharCode(65 + i)}.
+                        </span>
+                        <span className={`flex-1 ${isEliminated ? 'line-through opacity-55' : ''}`}>{cleanOptionText(opt)}</span>
+                        {Icon}
+                      </Button>
+                      
+                      {!isAnswered && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleEliminated(q.id, opt);
+                          }}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded border border-slate-700/30 bg-slate-900/40 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 text-[9px] font-mono tracking-wider font-bold transition-colors active:scale-95 z-10"
+                          title={isEliminated ? "Restore option" : "Eliminate option"}
+                        >
+                          {isEliminated ? "RESTORE" : "CROSS OUT"}
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>

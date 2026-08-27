@@ -2,7 +2,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { 
   Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, 
@@ -11,6 +12,8 @@ import {
   CheckSquare, Square, ListFilter, Zap
 } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
+import { SanityScanModal } from "@/components/admin/SanityScanModal";
+import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
@@ -558,6 +561,7 @@ export const QuestionBankTab = () => {
   
   // Advanced CSV Import & Duplicate Inspection State
   const [csvModalOpen, setCsvModalOpen] = useState(false);
+  const [sanityScanModalOpen, setSanityScanModalOpen] = useState(false);
   const [parsedCsvResult, setParsedCsvResult] = useState<CsvParseResult | null>(null);
   const [duplicateMode, setDuplicateMode] = useState<'skip' | 'allow'>('skip');
   const [activePreviewTab, setActivePreviewTab] = useState<'valid' | 'duplicates' | 'errors'>('valid');
@@ -712,6 +716,9 @@ export const QuestionBankTab = () => {
           <Button onClick={() => setCsvModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
             <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-400" /> Bulk CSV Import
           </Button>
+          <Button onClick={() => setSanityScanModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
+            <ShieldCheck className="w-4 h-4 mr-2 text-rose-400" /> Sanity Scan
+          </Button>
           <Button onClick={handlePublishAllDrafts} disabled={publishing} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
             <Send className="w-4 h-4 mr-2 text-blue-400" /> Publish All Drafts
           </Button>
@@ -755,13 +762,31 @@ export const QuestionBankTab = () => {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Question Text</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-foreground">Question Text</label>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Badge variant="outline" className="text-[10px] bg-slate-800/50 cursor-help border-slate-700">LaTeX Supported</Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Wrap math in $$ for block or $ for inline. E.g., $\sqrt{x^2}$</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
                 <textarea 
                   required
                   value={qText} onChange={e => setQText(e.target.value)}
                   className="w-full h-24 bg-muted/30 border border-border rounded-md p-3 text-sm text-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary" 
                   placeholder="Enter the question..."
                 ></textarea>
+                {qText && (
+                   <div className="mt-2 p-3 bg-slate-900 border border-slate-800 rounded-md shadow-inner text-sm">
+                     <div className="text-[10px] uppercase font-bold text-slate-500 mb-2 border-b border-slate-800 pb-1">Live Preview</div>
+                     <MathText text={qText} />
+                   </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1652,6 +1677,12 @@ export const QuestionBankTab = () => {
         description={`Are you sure you want to permanently delete all ${selectedIds.length} selected question(s)? This mass operation will remove them from the database.`}
         itemName={`${selectedIds.length} Selected Questions`}
         isDeleting={bulkDeleteDialogConfig.isDeleting}
+      />
+      <SanityScanModal 
+        isOpen={sanityScanModalOpen} 
+        onClose={() => setSanityScanModalOpen(false)} 
+        questions={questions} 
+        onRefresh={fetchQuestions}
       />
     </div>
   );

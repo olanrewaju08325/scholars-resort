@@ -3,8 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { 
-  Database, ShieldCheck, AlertTriangle, XCircle, CheckCircle2, 
-  RefreshCw, Wrench, FileCode, Check, AlertOctagon, Table
+  Database, AlertTriangle, CheckCircle2, 
+  RefreshCw, Wrench, Check, AlertOctagon, Table
 } from 'lucide-react';
 import { SchemaMigrationService, type SchemaValidationReport as ReportType, type AutoMigrationResult } from '@/services/schemaMigrationService';
 import { toast } from 'sonner';
@@ -14,7 +14,6 @@ export const SchemaValidationReport: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [repairing, setRepairing] = useState(false);
   const [migrationResult, setMigrationResult] = useState<AutoMigrationResult | null>(null);
-  const [selectedTable, setSelectedTable] = useState<string>('all');
 
   const runInspection = async () => {
     setLoading(true);

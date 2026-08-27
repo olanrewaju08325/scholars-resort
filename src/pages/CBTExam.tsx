@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles, Grid3X3, Layers, Compass, Camera } from 'lucide-react';
+import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles, Grid3X3, Layers, Compass, Camera, Edit3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { JambCalculator } from '@/components/cbt/JambCalculator';
@@ -40,11 +40,30 @@ const CBTExam = () => {
   const [activeSubjectTab, setActiveSubjectTab] = useState<string>('Use of English');
   const [examSubjectsList, setExamSubjectsList] = useState<string[]>([]);
   
+  const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, string[]>>({});
+  const toggleEliminated = (questionId: string, option: string) => {
+    setEliminatedOptions(prev => {
+      const current = prev[questionId] || [];
+      const updated = current.includes(option)
+        ? current.filter(o => o !== option)
+        : [...current, option];
+      return { ...prev, [questionId]: updated };
+    });
+  };
+
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [timeSpentOnQuestions, setTimeSpentOnQuestions] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(7200); // 2 hours (typical JAMB time)
   const [showCalculator, setShowCalculator] = useState(false);
+  const [showScratchpad, setShowScratchpad] = useState(false);
+  const [scratchpadText, setScratchpadText] = useState(() => localStorage.getItem('jamb_exam_scratchpad') || '');
+
+  useEffect(() => {
+    localStorage.setItem('jamb_exam_scratchpad', scratchpadText);
+  }, [scratchpadText]);
+
   const [showShortcutsModal, setShowShortcutsModal] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
   const [sessionStartedAt, setSessionStartedAt] = useState(new Date().toISOString());
@@ -211,6 +230,11 @@ const CBTExam = () => {
       if (!targetEndTimeRef.current) return;
       const remaining = Math.max(0, Math.floor((targetEndTimeRef.current - Date.now()) / 1000));
       setTimeLeft(remaining);
+      setTimeSpentOnQuestions(prev => {
+        const currentQId = questions[currentQuestionIdx]?.id;
+        if (!currentQId) return prev;
+        return { ...prev, [currentQId]: (prev[currentQId] || 0) + 1 };
+      });
 
       if (remaining <= 0) {
         toast.error("Time's up! Submitting your exam automatically.");
@@ -247,7 +271,58 @@ const CBTExam = () => {
       window.removeEventListener('focus', handleSyncOnVisibility);
       document.removeEventListener('visibilitychange', handleSyncOnVisibility);
     };
-  }, [hasStarted, questions.length, soundEnabled]);
+  }, [hasStarted, questions, currentQuestionIdx, soundEnabled]);
+
+  // JAMB Keyboard Navigation Shortcuts
+  useEffect(() => {
+    if (!hasStarted || questions.length === 0) return;
+    
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in scratchpad or other input
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
+
+      const key = e.key.toUpperCase();
+      const currentQ = questions[currentQuestionIdx];
+      if (!currentQ) return;
+
+      const options = [currentQ.option_a, currentQ.option_b, currentQ.option_c, currentQ.option_d];
+      
+      switch (key) {
+        case 'A':
+          if (options[0]) handleSelectAnswer(currentQ.id, options[0]);
+          break;
+        case 'B':
+          if (options[1]) handleSelectAnswer(currentQ.id, options[1]);
+          break;
+        case 'C':
+          if (options[2]) handleSelectAnswer(currentQ.id, options[2]);
+          break;
+        case 'D':
+          if (options[3]) handleSelectAnswer(currentQ.id, options[3]);
+          break;
+        case 'P':
+          handlePrev();
+          break;
+        case 'N':
+          handleNext();
+          break;
+        case 'S':
+          e.preventDefault();
+          confirmAction(
+            "Submit Exam",
+            "Are you sure you want to submit your exam now?",
+            () => submitExam()
+          );
+          break;
+        case '?':
+          setShowShortcutsModal(true);
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hasStarted, currentQuestionIdx, questions, answers, handleNext, handlePrev, confirmAction]);
 
   // Auto-save to both localStorage and Dexie periodically and on state change (crash safety)
   useEffect(() => {
@@ -374,6 +449,19 @@ const CBTExam = () => {
     }
     sessionStorage.removeItem('cbt_backup');
     
+    // Save to Smart Mistake Bank
+    const mistakesToSave = questions.filter(q => answers[q.id] !== q.correct_answer);
+    if (mistakesToSave.length > 0) {
+      try {
+        const existing = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+        const combined = [...existing, ...mistakesToSave];
+        const uniqueMistakes = Array.from(new Map(combined.map(item => [item.id, item])).values());
+        localStorage.setItem('jamb_mistake_bank', JSON.stringify(uniqueMistakes));
+      } catch (e) {
+        console.warn('Failed to save to Mistake Bank:', e);
+      }
+    }
+
     if (document.fullscreenElement) {
        document.exitFullscreen().catch(console.error);
     }
@@ -392,6 +480,54 @@ const CBTExam = () => {
     if (timeLeft <= 300) return "text-red-500 animate-pulse bg-red-500/10 px-3 py-1 rounded-lg border border-red-500/40 shadow-sm";
     if (timeLeft <= 900) return "text-amber-500 bg-amber-500/10 px-3 py-1 rounded-lg";
     return "text-green-600 bg-green-500/10 px-3 py-1 rounded-lg";
+  };
+  const getQuestionPaceColor = (timeSpent: number) => {
+    if (!timeSpent || timeSpent <= 35) {
+      return "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30";
+    }
+    if (timeSpent <= 45) {
+      return "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30";
+    }
+    return "bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/40 animate-pulse";
+  };
+
+  const getQuestionPaceLabel = (timeSpent: number) => {
+    if (!timeSpent || timeSpent <= 35) {
+      return `⚡ ${timeSpent || 0}s (40s Target: Great)`;
+    }
+    if (timeSpent <= 45) {
+      return `⏳ ${timeSpent}s (Approaching 45s)`;
+    }
+    return `⚠️ ${timeSpent}s (Pace Alert: >45s)`;
+  };
+
+
+  const getPaceStatus = () => {
+    if (!questions || questions.length === 0 || !hasStarted) return null;
+    const totalDurationSecs = 7200; // Standard 2 hours
+    const secondsPerQuestion = Math.max(15, Math.floor(totalDurationSecs / questions.length));
+    const elapsedSeconds = totalDurationSecs - timeLeft;
+    const targetSeconds = (currentQuestionIdx + 1) * secondsPerQuestion;
+
+    if (elapsedSeconds < targetSeconds - 60) {
+      return {
+        label: "Ahead of Pace ⚡",
+        colorClass: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+        status: "ahead"
+      };
+    } else if (elapsedSeconds > targetSeconds + 90) {
+      return {
+        label: "Behind Pace ⚠️",
+        colorClass: "bg-rose-500/15 text-rose-400 border-rose-500/25 animate-pulse",
+        status: "behind"
+      };
+    } else {
+      return {
+        label: "On Track • Pace Perfect",
+        colorClass: "bg-teal-500/15 text-teal-300 border-teal-500/25",
+        status: "on_track"
+      };
+    }
   };
 
   const handleSelectAnswer = useCallback((questionId: string, option: string) => {
@@ -767,6 +903,19 @@ const CBTExam = () => {
             <span className="hidden md:inline">Calc</span>
           </Button>
 
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setShowScratchpad(!showScratchpad)} 
+            className={`h-8 sm:h-9 px-2 sm:px-2.5 text-xs border border-slate-300 dark:border-border ${
+              showScratchpad ? 'bg-amber-500/10 text-amber-500 border-amber-500/30 font-bold' : 'bg-slate-100 dark:bg-muted text-slate-700 dark:text-slate-200'
+            }`}
+            title="Open Exam Scratchpad & Scribble Notes"
+          >
+            <Edit3 className="w-3.5 h-3.5 sm:mr-1" /> 
+            <span className="hidden md:inline">Scratchpad</span>
+          </Button>
+
           {/* Admin / Diagnostic Snapshot Button */}
           <Button
             variant="outline"
@@ -780,7 +929,12 @@ const CBTExam = () => {
             <span className="hidden md:inline">{isCapturingSnapshot ? 'Saving...' : 'Snapshot'}</span>
           </Button>
 
-          <div className="flex flex-col items-end pl-1 sm:pl-2">
+          <div className="flex flex-col items-end pl-1 sm:pl-2 gap-1">
+            {getPaceStatus() && (
+              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border leading-none ${getPaceStatus()?.colorClass}`}>
+                {getPaceStatus()?.label}
+              </span>
+            )}
             {!focusMode && (
               <span className="hidden sm:inline text-[9px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Time Left</span>
             )}
@@ -803,6 +957,32 @@ const CBTExam = () => {
       {showCalculator && (
         <div className="fixed top-16 sm:top-24 right-3 sm:right-10 z-50 animate-in slide-in-from-top-4">
           <JambCalculator onClose={() => setShowCalculator(false)} />
+        </div>
+      )}
+
+      {showScratchpad && (
+        <div className="fixed top-20 sm:top-28 right-3 sm:right-20 z-50 w-72 sm:w-80 bg-slate-900 border border-slate-700/60 rounded-xl shadow-2xl p-4 animate-in slide-in-from-top-4 text-slate-100">
+          <div className="flex justify-between items-center pb-2 border-b border-slate-800 mb-3">
+            <span className="font-bold text-[10px] tracking-wider uppercase text-amber-400 flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              JAMB Brain-Dump Pad
+            </span>
+            <button 
+              onClick={() => setShowScratchpad(false)}
+              className="text-slate-400 hover:text-slate-200 text-xs font-bold px-1.5 py-0.5 rounded hover:bg-slate-800"
+            >
+              Close
+            </button>
+          </div>
+          <textarea
+            value={scratchpadText}
+            onChange={(e) => setScratchpadText(e.target.value)}
+            placeholder="Type your notes, formulas, calculations, or novel character maps here... (Auto-saves instantly)"
+            className="w-full h-44 bg-slate-950 border border-slate-800 rounded-lg p-2.5 text-xs text-slate-200 focus:outline-none focus:border-amber-500/50 resize-none font-mono placeholder:text-slate-600"
+          />
+          <div className="text-[10px] text-slate-500 text-right mt-1.5">
+            Saves to browser memory
+          </div>
         </div>
       )}
 
@@ -863,8 +1043,16 @@ const CBTExam = () => {
           </div>
 
           <div className="p-3 md:p-4 border-b border-border flex flex-wrap justify-between items-center bg-muted/30 gap-2">
-            <div className="flex items-center gap-2 md:gap-3">
-               <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-md font-bold text-xs md:text-sm border border-primary/20">Question {currentQuestionIdx + 1} of {questions.length}</span>
+            <div className="flex items-center gap-2 md:gap-3 flex-wrap">
+               <span className="px-2.5 py-1 bg-primary/10 text-primary rounded-md font-bold text-xs md:text-sm border border-primary/20">
+                 Question {currentQuestionIdx + 1} of {questions.length}
+               </span>
+               
+               {/* Dynamic JAMB 40s Rule Pacer Badge */}
+               <span className={`px-2.5 py-1 rounded-md text-[11px] md:text-xs font-bold transition-colors ${getQuestionPaceColor(timeSpentOnQuestions[q?.id] || 0)}`}>
+                 {getQuestionPaceLabel(timeSpentOnQuestions[q?.id] || 0)}
+               </span>
+
                <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-[10px] md:text-xs font-bold uppercase">
                  {q?.subject_name || 'Subject'}
                </span>
@@ -879,9 +1067,33 @@ const CBTExam = () => {
               <Button variant="outline" size="sm" onClick={() => setShowCalculator(!showCalculator)} className="md:hidden h-8 text-xs gap-1">
                 <Calculator className="w-3.5 h-3.5" /> Calc
               </Button>
-              <Button variant="outline" size="sm" onClick={toggleFlag} className={`h-8 text-xs ${flagged[currentQuestionIdx] ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" : ""}`}>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={toggleFlag} 
+                className={`h-8 text-xs ${flagged[currentQuestionIdx] ? "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30" : ""}`}
+              >
                 <Flag className={`w-3.5 h-3.5 mr-1.5 ${flagged[currentQuestionIdx] ? "fill-red-600 text-red-600" : ""}`} />
                 {flagged[currentQuestionIdx] ? 'Flagged' : 'Flag'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => { 
+                  toast.success("Question flagged for admin review. Thank you!"); 
+                  const current = JSON.parse(localStorage.getItem("jamb_reported_errors") || "[]"); 
+                  current.push({ 
+                    id: Date.now().toString(), 
+                    question_id: questions[currentQuestionIdx]?.id, 
+                    reason: "Student Report", 
+                    details: "Reported during CBT Exam", 
+                    status: "pending" 
+                  }); 
+                  localStorage.setItem("jamb_reported_errors", JSON.stringify(current)); 
+                }} 
+                className="h-8 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20"
+              >
+                Report Error
               </Button>
             </div>
           </div>
@@ -901,27 +1113,47 @@ const CBTExam = () => {
               {q.options.map((opt: string, i: number) => {
                 const isSelected = answers[q.id] === opt;
                 const letter = String.fromCharCode(65 + i);
+                const isEliminated = (eliminatedOptions[q.id] || []).includes(opt);
                 
                 return (
-                  <motion.button 
-                    key={i}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => handleSelectAnswer(q.id, opt)}
-                    className={`flex items-start text-left p-3.5 md:p-4 rounded-xl border-2 transition-all ${
-                      isSelected 
-                        ? 'border-primary bg-primary/10 dark:bg-primary/20 text-foreground shadow-sm' 
-                        : 'border-border hover:border-primary/50 hover:bg-muted/40 text-foreground'
-                    }`}
+                  <div 
+                    key={i} 
+                    className="relative flex items-center w-full"
                   >
-                    <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center font-bold mr-3 md:mr-4 shrink-0 text-xs md:text-sm transition-colors ${
-                      isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 text-muted-foreground'
-                    }`}>
-                      {letter}
-                    </div>
-                    <span className={`text-sm md:text-lg pt-0.5 ${isSelected ? 'font-semibold text-primary' : 'text-foreground'}`}>
-                      <MathText text={cleanOptionText(opt)} />
-                    </span>
-                  </motion.button>
+                    <motion.button 
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => !isEliminated && handleSelectAnswer(q.id, opt)}
+                      onDoubleClick={(e) => { e.stopPropagation(); toggleEliminated(q.id, opt); }}
+                      className={`flex-1 flex items-start text-left p-3.5 pr-20 md:p-4 md:pr-24 rounded-xl border-2 transition-all ${
+                        isSelected 
+                          ? 'border-primary bg-primary/10 dark:bg-primary/20 text-foreground shadow-sm' 
+                          : isEliminated
+                            ? 'border-dashed border-slate-700/40 opacity-40 bg-slate-100/5 dark:bg-slate-900/5'
+                            : 'border-border hover:border-primary/50 hover:bg-muted/40 text-foreground'
+                      }`}
+                    >
+                      <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center font-bold mr-3 md:mr-4 shrink-0 text-xs md:text-sm transition-colors ${
+                        isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 text-muted-foreground'
+                      }`}>
+                        {letter}
+                      </div>
+                      <span className={`text-sm md:text-lg pt-0.5 ${isSelected ? 'font-semibold text-primary' : 'text-foreground'} ${isEliminated ? 'line-through opacity-55' : ''}`}>
+                        <MathText text={cleanOptionText(opt)} />
+                      </span>
+                    </motion.button>
+                    
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleEliminated(q.id, opt);
+                      }}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded border border-slate-700/30 bg-slate-900/40 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 text-[9px] font-mono tracking-wider font-bold transition-colors active:scale-95"
+                      title={isEliminated ? "Restore option" : "Eliminate option"}
+                    >
+                      {isEliminated ? "RESTORE" : "CROSS OUT"}
+                    </button>
+                  </div>
                 );
               })}
             </div>
@@ -1040,9 +1272,14 @@ const CBTExam = () => {
           <span className="font-mono text-xs font-bold tracking-tight">
             {formatTime(timeLeft)}
           </span>
-          <span className="text-[10px] text-slate-400 border-l border-slate-700 dark:border-border pl-2 font-sans">
+          <span className="text-[10px] text-slate-400 border-l border-slate-700 dark:border-border pl-2 pr-1 font-sans">
             {Object.keys(answers).length}/{questions.length} answered
           </span>
+          {getPaceStatus() && (
+            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${getPaceStatus()?.colorClass}`}>
+              {getPaceStatus()?.label}
+            </span>
+          )}
         </div>
       )}
 
@@ -1085,6 +1322,34 @@ const CBTExam = () => {
         }}
         onSubmitExam={() => submitExam()}
       />
+
+      {/* Floating Scratchpad */}
+      {showScratchpad && (
+        <motion.div 
+          drag
+          dragMomentum={false}
+          initial={{ opacity: 0, scale: 0.9, x: 20, y: 100 }}
+          animate={{ opacity: 1, scale: 1, x: 20, y: 100 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          className="fixed z-50 w-72 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl shadow-2xl flex flex-col overflow-hidden"
+          style={{ touchAction: "none" }}
+        >
+          <div className="bg-slate-100 dark:bg-slate-800 p-2 flex justify-between items-center cursor-move border-b border-slate-200 dark:border-slate-700">
+            <span className="text-xs font-bold text-slate-600 dark:text-slate-300 flex items-center gap-2">
+              <Edit3 className="w-3.5 h-3.5" /> Scratchpad
+            </span>
+            <button onClick={() => setShowScratchpad(false)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+              <EyeOff className="w-4 h-4" />
+            </button>
+          </div>
+          <textarea
+            value={scratchpadText}
+            onChange={(e) => setScratchpadText(e.target.value)}
+            className="w-full h-48 p-3 text-sm bg-transparent resize-none focus:outline-none focus:ring-0 text-slate-800 dark:text-slate-200"
+            placeholder="Type your calculations, formulas, or rough notes here..."
+          />
+        </motion.div>
+      )}
 
       {/* CBT Shortcuts Cheat Sheet Modal */}
       {showShortcutsModal && (

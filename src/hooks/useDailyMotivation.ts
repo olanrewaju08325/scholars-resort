@@ -192,7 +192,15 @@ export function useDailyMotivation() {
       ];
       const randomFocus = seedTopics[Math.floor(Math.random() * seedTopics.length)];
 
-      const prompt = `You are the Scholars Resort AI Academic Performance Coach. Generate a brand-new, powerful 2-sentence motivational quote and practical study tip for ${userName} aiming for a UTME score of ${targetScore}+ at ${targetUni}. Focus on: ${randomFocus}. Do NOT use clichés. Keep it highly inspiring, crisp, and direct. Return ONLY the text, no quotes or metadata.`;
+      const prompt = `You are the ultimate Scholars Resort AI Academic Performance Coach. 
+      Write a highly encouraging, 2-sentence motivational study strategy specifically for ${userName} who is determined to score ${targetScore}+ in their JAMB UTME exam and secure admission to ${targetUni}.
+      
+      CRITICAL STRUCTURAL RULES:
+      1. Your response MUST be EXACTLY two clear, powerful sentences. No more, no less.
+      2. The first sentence should be a burning, inspirational quote about self-discipline and academic greatness.
+      3. The second sentence must be a hyper-practical, actionable study tip targeting: "${randomFocus}".
+      4. DO NOT output any HTML tags, do NOT mention image URLs, do NOT include markdown syntax, and do NOT output any "Image:" or "Quote:" prefixes.
+      5. Output ONLY the pure plain text quote content.`;
 
       const rawAiResponse = await callGroqAPI([{ role: 'user', content: prompt }]);
       const cleanedQuote = stripThinkTags(rawAiResponse).replace(/^["']|["']$/g, '').trim();

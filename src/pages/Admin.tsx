@@ -5,11 +5,12 @@ import {
   LayoutDashboard, Users, BookOpen, FileQuestion, CreditCard, 
   Settings, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronRight, 
   Search, Bell, Plus, MessageSquare, Menu, Sparkles, Trophy,
-  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2, ShieldCheck
+  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2, ShieldCheck, AlertTriangle
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { CorrectionQueueTab } from "./admin-tabs/CorrectionQueueTab";
 
 // Sub-modules
 import { DashboardTab } from './admin-tabs/DashboardTab';
@@ -43,6 +44,9 @@ import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 import { initAdminOfflineSync } from '@/services/offlineSyncService';
 import { MaterialsTab } from './admin-tabs/MaterialsTab';
 import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
+import { SyllabusAdminTab } from './admin-tabs/SyllabusAdminTab';
+import { BadgesAdminTab } from './admin-tabs/BadgesAdminTab';
+import { ImageQuestionManagerTab } from './admin-tabs/ImageQuestionManagerTab';
 import { DatabaseDiagnosticsTab } from './admin-tabs/DatabaseDiagnosticsTab';
 import { EnvironmentCleanupTab } from './admin-tabs/EnvironmentCleanupTab';
 import { FlowValidatorDashboard } from '@/components/admin/FlowValidatorDashboard';
@@ -105,11 +109,15 @@ export default function Admin() {
     { id: 'ai-keys', label: 'AI Provider Keys', icon: Key },
     { id: 'weekly-challenges', label: 'Weekly Challenges', icon: Swords },
     { id: 'insights', label: 'Student Insights', icon: Activity },
+    { id: "correction-queue", label: "Correction Queue", icon: AlertTriangle },
     { id: 'analytics', label: 'Analytics', icon: BarChart },
     { id: 'security', label: 'Security', icon: ShieldAlert },
     { id: 'students', label: 'Users & Guardians', icon: Users },
     { id: 'materials', label: 'Library Resource Manager', icon: BookOpen },
     { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
+    { id: 'syllabus', label: 'Dynamic Syllabus', icon: BookOpen },
+    { id: 'badges', label: 'Gamification Badges', icon: Trophy },
+    { id: 'image-questions', label: 'Image & Diagram Questions', icon: FileQuestion },
     { id: 'subjects', label: 'Subjects & Topics', icon: BookOpen },
     { id: 'content-studio', label: 'Content Studio', icon: FileQuestion },
     { id: 'questions', label: 'Question Bank', icon: FileQuestion },
@@ -147,10 +155,14 @@ export default function Admin() {
       case 'students': return <StudentsTab />;
       case 'materials': return <MaterialsTab />;
       case 'literature': return <AdminLiteratureTab />;
+      case 'syllabus': return <SyllabusAdminTab />;
+      case 'badges': return <BadgesAdminTab />;
+      case 'image-questions': return <ImageQuestionManagerTab />;
       case 'subjects': return <SubjectsTab />;
       case 'content-studio': return <ContentStudioTab />;
       case 'questions': return <QuestionBankTab />;
       case 'payments': return <PaymentsTab />;
+      case "correction-queue": return <CorrectionQueueTab />;
       case 'smtp-health': return <SettingsTab />;
       case 'health': return <SystemHealthTab />;
       case 'platform-health': return <PlatformHealthTab />;

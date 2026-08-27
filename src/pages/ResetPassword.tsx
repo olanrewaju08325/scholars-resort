@@ -19,14 +19,16 @@ export default function ResetPassword() {
   const [loading, setLoading] = useState(false);
   const [completed, setCompleted] = useState(false);
   
-  // Initialize email & PIN from URL parameters or session
+  // Automatically redirect to the unified OTP reset flow at /forgot-password
   useEffect(() => {
     const emailParam = searchParams.get('email') || sessionStorage.getItem('scholars_recovery_email') || '';
     const codeParam = searchParams.get('code') || searchParams.get('pin') || '';
+    const query = new URLSearchParams();
+    if (emailParam) query.set('email', emailParam);
+    if (codeParam) query.set('code', codeParam);
     
-    if (emailParam) setEmail(emailParam);
-    if (codeParam) setPin(codeParam);
-  }, [searchParams]);
+    navigate(`/forgot-password?${query.toString()}`, { replace: true });
+  }, [searchParams, navigate]);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();

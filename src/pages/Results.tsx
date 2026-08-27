@@ -33,6 +33,7 @@ const Results = () => {
   const { profile } = useAuth();
   const percentage = total > 0 ? Math.round((score / total) * 100) : 0;
   const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [mistakesCount, setMistakesCount] = useState(0);
 
   useEffect(() => {
     if (percentage >= 70) {
@@ -40,6 +41,29 @@ const Results = () => {
       playSuccessChime();
     }
   }, [percentage]);
+
+  // Auto-sync missed questions to the Smart Mistake Bank
+  useEffect(() => {
+    if (questions && questions.length > 0) {
+      const missed = questions.filter(q => answers[q.id] && answers[q.id] !== q.correct_answer);
+      if (missed.length > 0) {
+        try {
+          const existing = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+          const combined = [...existing, ...missed];
+          const unique = Array.from(new Map(combined.map(item => [item.id, item])).values());
+          localStorage.setItem('jamb_mistake_bank', JSON.stringify(unique));
+          setMistakesCount(unique.length);
+        } catch (e) {
+          console.warn('Mistake bank sync error:', e);
+        }
+      }
+    } else {
+      try {
+        const stored = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+        setMistakesCount(stored.length);
+      } catch {}
+    }
+  }, [questions, answers]);
 
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
@@ -205,6 +229,26 @@ Give a short, clear explanation of WHY the correct answer is right, using a simp
             <div className="mt-4 text-sm text-muted-foreground flex items-center justify-center gap-1">
               <Zap className="w-4 h-4 text-amber-500" />
               Avg. {formatTime(avgTimePerQuestion)} per question
+            </div>
+          )}
+
+          {/* Smart Mistake Bank Retake Action Callout */}
+          {mistakesCount > 0 && (
+            <div className="mt-6 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="text-left">
+                <h3 className="font-bold text-sm text-rose-600 dark:text-rose-400 flex items-center gap-2">
+                  <RotateCcw className="w-4 h-4" /> Smart Mistake Bank: {mistakesCount} Question{mistakesCount > 1 ? 's' : ''} Saved
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Drill only your missed questions until you achieve 100% mastery!
+                </p>
+              </div>
+              <Button
+                onClick={() => navigate('/practice/session', { state: { mode: 'mistakes' } })}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs h-9 px-4 rounded-lg shadow-sm whitespace-nowrap"
+              >
+                Retake {mistakesCount} Missed Questions
+              </Button>
             </div>
           )}
         </motion.div>

@@ -13,6 +13,7 @@ const WeaknessDrill = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [weakTopics, setWeakTopics] = useState<any[]>([]);
+  const [mistakeCount, setMistakeCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
 
@@ -51,9 +52,20 @@ const WeaknessDrill = () => {
 
         if (!answers || answers.length === 0) {
           setWeakTopics([]);
+          setMistakeCount(0);
           setLoading(false);
           return;
         }
+
+        const latestStatusMap: Record<string, boolean> = {};
+        answers.forEach((a: any) => {
+          if (a.question_id) {
+            latestStatusMap[a.question_id] = a.is_correct;
+          }
+        });
+
+        const realMistakeCount = Object.values(latestStatusMap).filter(isCorrect => !isCorrect).length;
+        setMistakeCount(realMistakeCount);
 
         const qIds = Array.from(new Set(answers.map((a: any) => a.question_id).filter(Boolean)));
         let qMap: Record<string, { topic_id: string; subject_id: string }> = {};
@@ -222,7 +234,7 @@ const WeaknessDrill = () => {
               <CardContent>
                  <div className="p-8 border border-dashed border-border rounded-xl text-center bg-muted/20">
                     <AlertTriangle className="w-10 h-10 text-muted-foreground mx-auto mb-4 opacity-50" />
-                    <h3 className="text-lg font-bold mb-2">You have 45 Unreviewed Mistakes</h3>
+                    <h3 className="text-lg font-bold mb-2">You have {mistakeCount} Unreviewed Mistakes</h3>
                     <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
                       Reviewing your mistakes is the fastest way to improve. This drill will serve you a random set of 15 questions you got wrong recently.
                     </p>

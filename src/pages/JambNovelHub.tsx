@@ -25,6 +25,112 @@ export const JambNovelHub = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // Concept Matrix Game state
+  const [showMatrixGame, setShowMatrixGame] = useState(false);
+  const [matrixQIndex, setMatrixQIndex] = useState(0);
+  const [selectedMatrixAns, setSelectedMatrixAns] = useState<string | null>(null);
+  const [showMatrixExplanation, setShowMatrixExplanation] = useState(false);
+  const [matrixScore, setMatrixScore] = useState(0);
+
+  const matrixQuestions = [
+    {
+      category: "Character Concept Matching",
+      question: "Which of the following describes SALMA from 'The Life Changer'?",
+      options: [
+        "A confident, outspoken, and highly independent girl who unfortunately gets involved in exam malpractice.",
+        "A quiet, silent orphan boy who lives a mystifying life and gets caught up in a kidnapping ring.",
+        "The bright young daughter of the family who easily challenges her French language teacher with grammar rules.",
+        "The wealthy local politician who uses his influence to buy expensive gifts for campus girls."
+      ],
+      correct: 0,
+      explanation: "Salma represents independence and outspokenness. However, her pressure to pass leads her into exam malpractice, which forms a major moral lesson of the novel."
+    },
+    {
+      category: "Character Concept Matching",
+      question: "Which option best matches TALLE?",
+      options: [
+        "The student who gains admission into University of Lafayette with a high UTME score.",
+        "The silent, quiet man in Lafayette who becomes suddenly rich but is exposed as part of a kidnapping conspiracy.",
+        "The friendly female roommate who helps Salma reflect on her moral choices.",
+        "The Dean of Student Affairs who forgives Salma after her hearing."
+      ],
+      correct: 1,
+      explanation: "Talle is known as the 'quiet one' in Lafayette. His sudden wealth causes suspicion, and he's eventually arrested as an accomplice in a kidnapping ring."
+    },
+    {
+      category: "Character Concept Matching",
+      question: "Who is Omar and what is his academic accomplishment?",
+      options: [
+        "The eldest son who was admitted to study Law with an outstanding UTME score of 230.",
+        "Bint's elder brother who dropped out of school to become a local merchant.",
+        "The school taxi driver who gives moral advice to female students.",
+        "The security officer who arrested Talle in the village of Lafayette."
+      ],
+      correct: 0,
+      explanation: "Omar is the first-born child in the family, who makes his mother proud by gaining admission into the University of Lafayette to study Law with a 230 UTME score."
+    },
+    {
+      category: "Literary Device Matching",
+      question: "What literary device is used in the quote: 'Trust is a fragile thing, like a mirror once broken...'?",
+      options: [
+        "Metaphor - It direct compares trust to a mirror without using comparative words.",
+        "Simile - It compares trust's fragility directly to a broken mirror using 'like'.",
+        "Onomatopoeia - It imitates the physical sound of breaking glass.",
+        "Personification - It gives trust human attributes and emotions."
+      ],
+      correct: 1,
+      explanation: "The quote uses 'like a mirror once broken...', which is a classic Simile comparing trust's fragility directly using the word 'like'."
+    },
+    {
+      category: "Scene Mood Matching",
+      question: "Which mood best captures the 'French class incident' with Bint in Chapter 1?",
+      options: [
+        "High tension and grief as students struggle to pass their final exams.",
+        "Humorous defiance and brilliant lightheartedness as Bint outwits her teacher.",
+        "Tense panic and fear of strict school administrators.",
+        "Boredom and disinterest as students sleep through lessons."
+      ],
+      correct: 1,
+      explanation: "Bint's interaction with her French teacher, where she uses her knowledge to challenge him playfully, creates a lighthearted, humorous, and proud mood in the household."
+    },
+    {
+      category: "Character Concept Matching",
+      question: "Who is Kabir in 'The Life Changer'?",
+      options: [
+        "A notorious gambler and fraudster who eventually swindles Salma's associates of their cash.",
+        "The brilliant French teacher who inspires Bint's love for language.",
+        "The honest shopkeeper who gives free grocery items to Lafayette orphans.",
+        "The Vice Chancellor of University of Lafayette."
+      ],
+      correct: 0,
+      explanation: "Kabir is a gambling addict who tricks Salma's friends out of a large sum of money. He represents the destructive nature of greed and vice."
+    },
+    {
+      category: "Theme & Quote Matching",
+      question: "Who says: 'He who has knowledge but cannot communicate it is no better than him who has no knowledge at all'?",
+      options: [
+        "Daddy (Omar and Bint's father), quoting Dr. Samuel Johnson to emphasize speaking and communication.",
+        "Salma, during her defense before the exam malpractice committee.",
+        "The French teacher, when Bint failed to answer his introductory greetings.",
+        "The District Head of Lafayette, when interrogating Talle."
+      ],
+      correct: 0,
+      explanation: "This famous quote belongs to Dr. Samuel Johnson, and is cited by Daddy to teach his daughters the supreme value of communication and expressive knowledge."
+    },
+    {
+      category: "Character Concept Matching",
+      question: "Which role does HABIB play in the novel?",
+      options: [
+        "A corrupt but wealthy politician who attempts to lure young female students with luxury gifts.",
+        "The university registrar who strictly enforces anti-malpractice rules.",
+        "The local police officer who arrests Kabir at the gambling den.",
+        "Omar's favorite university roommate."
+      ],
+      correct: 0,
+      explanation: "Habib is a wealthy politician who represents external material temptations targeting female campus students, attempting to gain favor through expensive gifts."
+    }
+  ];
+
   // Lock State
   const [isLocked, setIsLocked] = useState(false);
   const [lockReason, setLockReason] = useState('');
@@ -166,6 +272,20 @@ export const JambNovelHub = () => {
           <p className="text-muted-foreground text-xs sm:text-sm max-w-3xl leading-relaxed">
             Master every chapter of <strong className="text-foreground">The Life Changer</strong> and official JAMB Literature texts with chapter summaries, character analyses, key themes, vocabulary drills, and real UTME practice questions.
           </p>
+          <div className="pt-2 flex gap-3">
+            <Button 
+              onClick={() => {
+                setShowMatrixGame(true);
+                setMatrixQIndex(0);
+                setSelectedMatrixAns(null);
+                setShowMatrixExplanation(false);
+                setMatrixScore(0);
+              }}
+              className="bg-amber-500 hover:bg-amber-600 font-bold gap-2 text-xs h-9 px-4 text-slate-950"
+            >
+              <Sparkles className="w-4 h-4 text-slate-950" /> Launch 5-Minute Concept Matrix Quiz Game
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -498,6 +618,155 @@ export const JambNovelHub = () => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Literature Concept Matrix Quiz Game Modal Overlay */}
+      {showMatrixGame && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-md z-50 flex items-center justify-center p-4">
+          <Card className="w-full max-w-2xl border border-amber-500/30 bg-slate-900 text-slate-100 shadow-2xl relative">
+            <CardHeader className="border-b border-slate-800 bg-slate-950 pb-4">
+              <div className="flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] font-bold text-amber-400 tracking-widest uppercase flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                    Concept Matrix Game
+                  </span>
+                  <CardTitle className="text-base sm:text-lg font-bold text-white mt-1">
+                    5-Minute UTME Literature Fast Drill
+                  </CardTitle>
+                </div>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={() => setShowMatrixGame(false)}
+                  className="text-slate-400 hover:text-slate-200"
+                >
+                  Exit Game
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-5 sm:p-6 space-y-6">
+              {matrixQIndex < matrixQuestions.length ? (
+                <>
+                  {/* Current question status */}
+                  <div className="flex justify-between items-center text-xs text-slate-400">
+                    <span>Question {matrixQIndex + 1} of {matrixQuestions.length}</span>
+                    <span className="font-mono text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded-md font-bold">
+                      Score: {matrixScore} XP
+                    </span>
+                  </div>
+
+                  {/* Question Prompt */}
+                  <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
+                    <span className="text-[9px] font-mono font-bold text-indigo-400 tracking-wider bg-indigo-500/10 px-2 py-1 rounded-full uppercase">
+                      {matrixQuestions[matrixQIndex].category}
+                    </span>
+                    <p className="text-sm sm:text-base font-semibold text-white mt-3 leading-relaxed">
+                      {matrixQuestions[matrixQIndex].question}
+                    </p>
+                  </div>
+
+                  {/* Options */}
+                  <div className="space-y-2.5">
+                    {matrixQuestions[matrixQIndex].options.map((opt, i) => {
+                      const isCorrect = i === matrixQuestions[matrixQIndex].correct;
+                      const isSelected = selectedMatrixAns === opt;
+
+                      let btnStyle = "border-slate-800 bg-slate-950 hover:border-amber-500/40 text-slate-200";
+                      if (selectedMatrixAns !== null) {
+                        if (isCorrect) btnStyle = "border-green-500/50 bg-green-500/10 text-green-400 font-semibold";
+                        else if (isSelected) btnStyle = "border-rose-500/50 bg-rose-500/10 text-rose-400 font-semibold";
+                        else btnStyle = "border-slate-800 bg-slate-950/40 text-slate-500 opacity-60";
+                      }
+
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            if (selectedMatrixAns === null) {
+                              setSelectedMatrixAns(opt);
+                              setShowMatrixExplanation(true);
+                              if (isCorrect) setMatrixScore(prev => prev + 10);
+                            }
+                          }}
+                          disabled={selectedMatrixAns !== null}
+                          className={`w-full p-3.5 rounded-xl text-left border text-xs sm:text-sm transition-all flex items-center justify-between ${btnStyle}`}
+                        >
+                          <span className="flex-1">{opt}</span>
+                          {selectedMatrixAns !== null && isCorrect && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0 ml-2" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Explanation panel */}
+                  {showMatrixExplanation && (
+                    <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 text-xs space-y-1.5 animate-in fade-in">
+                      <p className="font-extrabold text-indigo-400 uppercase tracking-wide flex items-center gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400" />
+                        Syllabus Insight & Explanation:
+                      </p>
+                      <p className="text-slate-300 leading-relaxed">
+                        {matrixQuestions[matrixQIndex].explanation}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Next Step Button */}
+                  {selectedMatrixAns !== null && (
+                    <Button 
+                      onClick={() => {
+                        setMatrixQIndex(prev => prev + 1);
+                        setSelectedMatrixAns(null);
+                        setShowMatrixExplanation(false);
+                      }} 
+                      className="w-full bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold h-10"
+                    >
+                      {matrixQIndex < matrixQuestions.length - 1 ? 'Next Question' : 'Complete Flash Quiz'}
+                    </Button>
+                  )}
+                </>
+              ) : (
+                /* Completed matrix quiz screen */
+                <div className="py-6 text-center space-y-6">
+                  <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto border border-amber-500/30">
+                    <Sparkles className="w-8 h-8" />
+                  </div>
+                  <div className="space-y-2">
+                    <h3 className="text-lg font-bold text-white">Fast-Drill Mastery Achieved!</h3>
+                    <p className="text-slate-400 text-xs sm:text-sm max-w-md mx-auto leading-relaxed">
+                      Awesome effort! You completed the 5-Minute Literature & Novel Concept matrix. Practice like this trains your instinctual recall of characters, motifs, and direct syllabus devices!
+                    </p>
+                  </div>
+                  <div className="bg-slate-950 border border-slate-800 p-4 rounded-xl max-w-xs mx-auto">
+                    <p className="text-[10px] uppercase font-bold text-slate-500">Total Reward Granted</p>
+                    <p className="text-2xl font-mono font-extrabold text-amber-400">+{matrixScore} XP Points</p>
+                  </div>
+                  <div className="flex gap-3 justify-center pt-2">
+                    <Button 
+                      onClick={() => {
+                        setMatrixQIndex(0);
+                        setSelectedMatrixAns(null);
+                        setShowMatrixExplanation(false);
+                        setMatrixScore(0);
+                      }}
+                      variant="outline" 
+                      className="text-xs font-semibold border-slate-700 hover:bg-slate-800"
+                    >
+                      Play Again
+                    </Button>
+                    <Button 
+                      onClick={() => setShowMatrixGame(false)}
+                      className="bg-primary hover:bg-primary/90 text-xs font-bold px-5"
+                    >
+                      Return to Syllabus
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
     </div>

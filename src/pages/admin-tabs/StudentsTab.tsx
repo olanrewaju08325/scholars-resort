@@ -873,14 +873,15 @@ export const StudentsTab = () => {
                   <th className="px-4 py-3 font-semibold cursor-pointer hover:text-white" onClick={() => toggleSort('xp')}>
                     <div className="flex items-center gap-1">Score / Streak <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
+                  <th className="px-4 py-3 font-semibold">JAMB Prediction</th>
                   <th className="px-4 py-3 font-semibold text-right">Actions & Controls</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {loading ? (
-                  <tr><td colSpan={8} className="px-4 py-16 text-center text-slate-500">Loading user & guardian records...</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">Loading user & guardian records...</td></tr>
                 ) : paginatedProfiles.length === 0 ? (
-                  <tr><td colSpan={8} className="px-4 py-16 text-center text-slate-500">No accounts match the current filter criteria.</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">No accounts match the current filter criteria.</td></tr>
                 ) : paginatedProfiles.map(user => {
                   const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
                   const isMasterAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim());
@@ -1002,6 +1003,50 @@ export const StudentsTab = () => {
                             </span>
                           </div>
                         ) : (
+                          <span className="text-slate-500 text-xs">—</span>
+                        )}
+                      </td>
+
+                      {/* JAMB Predictor */}
+                      <td className="px-4 py-3">
+                        {user.role === 'student' ? (() => {
+                          const base = 180;
+                          const xpBonus = Math.min(80, Math.floor((user.xp || 0) / 100) * 2);
+                          const streakBonus = Math.min(40, (user.streak_days || 0) * 3);
+                          const premiumBonus = user.has_paid || isMasterAdmin ? 30 : 0;
+                          const predicted = Math.min(385, base + xpBonus + streakBonus + premiumBonus);
+
+                          let colorClass = "bg-rose-500/10 text-rose-400 border-rose-500/20";
+                          let label = "Risk Margin";
+                          let probability = "40% Pass Chance";
+
+                          if (predicted >= 290) {
+                            colorClass = "bg-emerald-500/15 text-emerald-400 border-emerald-500/30";
+                            label = "Excellent (Guaranteed)";
+                            probability = "95% Pass Chance";
+                          } else if (predicted >= 240) {
+                            colorClass = "bg-teal-500/15 text-teal-300 border-teal-500/30";
+                            label = "Strong Candidate";
+                            probability = "85% Pass Chance";
+                          } else if (predicted >= 200) {
+                            colorClass = "bg-amber-500/15 text-amber-300 border-amber-500/30";
+                            label = "Average Pass";
+                            probability = "65% Pass Chance";
+                          }
+
+                          return (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 font-sans">
+                                <span className="text-xs font-mono font-bold text-white bg-slate-850 px-1.5 py-0.5 rounded border border-slate-700/60 shadow-sm">
+                                  {predicted} / 400
+                                </span>
+                              </div>
+                              <div className={`px-1.5 py-0.5 rounded text-[10px] font-semibold w-fit border ${colorClass}`}>
+                                {label} • {probability}
+                              </div>
+                            </div>
+                          );
+                        })() : (
                           <span className="text-slate-500 text-xs">—</span>
                         )}
                       </td>

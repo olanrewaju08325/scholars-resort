@@ -26,6 +26,16 @@ const PracticeSetup = () => {
   const [learningStyle, setLearningStyle] = useState('normal');
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
+  const [mistakeCount, setMistakeCount] = useState(0);
+
+  useEffect(() => {
+    try {
+      const mistakes = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+      setMistakeCount(mistakes.length);
+    } catch (e) {
+      setMistakeCount(0);
+    }
+  }, []);
 
   useEffect(() => {
     const fetchSubjects = async () => {
@@ -45,7 +55,22 @@ const PracticeSetup = () => {
           supabase.from('subjects').select('*').eq('is_active', true),
           { contextName: 'PracticeSetup.subjects', fallbackData: [] }
         );
-        if (res.data) setSubjects(res.data);
+        if (res.data) {
+          setSubjects(res.data);
+          
+          // Auto-select subject if passed via name or id in query
+          const subjectParam = searchParams.get('subject') || searchParams.get('subjectId');
+          if (subjectParam) {
+            const matched = res.data.find((s: any) => 
+              s.id === subjectParam || 
+              s.name.toLowerCase() === subjectParam.toLowerCase() ||
+              s.name.toLowerCase().includes(subjectParam.toLowerCase())
+            );
+            if (matched) {
+              setSelectedSubject(matched.id);
+            }
+          }
+        }
       } catch (err) {
         // Offline fallback
         const packs = getDownloadedPacks();
@@ -73,13 +98,27 @@ const PracticeSetup = () => {
         setTopics([]);
       } else {
         supabase.from('topics').select('*').eq('subject_id', selectedSubject)
-          .then(({ data }) => setTopics(data || []));
+          .then(({ data }) => {
+            const list = data || [];
+            setTopics(list);
+            const topicParam = searchParams.get('topic') || searchParams.get('topicId');
+            if (topicParam) {
+              const matched = list.find((t: any) =>
+                t.id === topicParam ||
+                t.name.toLowerCase() === topicParam.toLowerCase() ||
+                t.name.toLowerCase().includes(topicParam.toLowerCase())
+              );
+              if (matched) {
+                setSelectedTopic(matched.id);
+              }
+            }
+          });
       }
     } else {
       setTopics([]);
       setSelectedTopic('');
     }
-  }, [selectedSubject, subjects]);
+  }, [selectedSubject, subjects, searchParams]);
 
   const handleStart = async () => {
     if (!profile?.has_paid && profile?.role !== 'admin') {
@@ -210,12 +249,24 @@ const PracticeSetup = () => {
                 </select>
               </div>
 
-              <Button onClick={handleStart} className="w-full h-12 text-lg font-bold" disabled={!selectedSubject}>
-                Start Practice Session
-              </Button>
-              <Button variant="ghost" onClick={() => navigate('/dashboard')} className="w-full">
-                Cancel
-              </Button>
+              <div className="space-y-3 pt-4">
+                {mistakeCount > 0 && (
+                  <Button 
+                    variant="destructive" 
+                    onClick={() => navigate('/practice/session', { state: { mode: 'mistakes' } })} 
+                    className="w-full h-12 text-sm font-bold flex items-center justify-center gap-2"
+                  >
+                    <AlertCircle className="w-5 h-5" /> Retake {mistakeCount} Missed Questions
+                  </Button>
+                )}
+                
+                <Button onClick={handleStart} className="w-full h-12 text-lg font-bold" disabled={!selectedSubject}>
+                  Start Practice Session
+                </Button>
+                <Button variant="ghost" onClick={() => navigate('/dashboard')} className="w-full">
+                  Cancel
+                </Button>
+              </div>
             </>
           )}
         </CardContent>

@@ -200,45 +200,70 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
 };
 
 /**
- * Send branded password reset email with recovery PIN fallback
+ * Send branded password reset email with 6-digit OTP verification code
  */
 export const sendPasswordResetEmail = async (
   email: string,
   pin: string,
-  resetUrl: string
+  resetUrl?: string
 ): Promise<{ success: boolean; delivered?: boolean; message: string; error?: string }> => {
-  const subject = '🔒 Scholars Resort - Password Reset Security Code';
+  const subject = `🔐 Your Scholars Resort Verification OTP: ${pin}`;
   const htmlBody = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-      <div style="text-align: center; margin-bottom: 20px;">
-        <h2 style="color: #4f46e5; margin: 0;">Scholars Resort</h2>
-        <p style="color: #64748b; font-size: 14px;">UTME/JAMB Exam Prep & Learning Platform</p>
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; border: 1px solid #e2e8f0; border-radius: 16px; background: #ffffff; color: #1e293b;">
+      <div style="text-align: center; margin-bottom: 24px;">
+        <div style="display: inline-block; padding: 12px; background: #eff6ff; border-radius: 16px; margin-bottom: 12px;">
+          <span style="font-size: 28px;">🔐</span>
+        </div>
+        <h2 style="color: #0f172a; margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.5px;">Scholars Resort</h2>
+        <p style="color: #64748b; font-size: 13px; margin: 4px 0 0 0;">Official UTME & JAMB CBT Learning Platform</p>
       </div>
-      <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
-      <h3 style="color: #0f172a;">Password Reset Security Code</h3>
-      <p style="color: #334155; font-size: 15px; line-height: 1.6;">
-        We received a request to reset your Scholars Resort account password for <strong>${email}</strong>.
-      </p>
-      <div style="background: #f8fafc; border: 1px dashed #cbd5e1; padding: 15px; text-align: center; margin: 20px 0; border-radius: 8px;">
-        <p style="margin: 0 0 5px 0; font-size: 12px; color: #64748b; font-weight: bold; text-transform: uppercase;">Your 6-Digit Verification PIN</p>
-        <span style="font-family: monospace; font-size: 32px; font-weight: bold; color: #4f46e5; letter-spacing: 6px;">${pin}</span>
+
+      <div style="border-top: 1px solid #f1f5f9; padding-top: 24px; margin-bottom: 24px;">
+        <h3 style="color: #0f172a; font-size: 17px; font-weight: 600; margin: 0 0 8px 0;">Security Verification Code (OTP)</h3>
+        <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 16px 0;">
+          A password reset request was initiated for your Scholars Resort account associated with <strong>${email}</strong>.
+        </p>
+        <p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px 0;">
+          Enter the 6-digit One-Time Password (OTP) below into the verification screen to reset your password:
+        </p>
+
+        <!-- OTP Code Highlight Box -->
+        <div style="background: #f8fafc; border: 2px solid #e2e8f0; border-radius: 12px; padding: 24px 16px; text-align: center; margin: 24px 0;">
+          <div style="font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 8px;">
+            One-Time Password (OTP)
+          </div>
+          <div style="font-family: 'Courier New', Courier, monospace, monospace; font-size: 40px; font-weight: 800; color: #2563eb; letter-spacing: 10px; line-height: 1; padding: 8px 0;">
+            ${pin}
+          </div>
+          <div style="font-size: 12px; color: #94a3b8; margin-top: 8px;">
+            ⏳ Valid for 15 minutes • Single use only
+          </div>
+        </div>
+
+        <div style="background: #fffbeb; border: 1px solid #fef3c7; border-radius: 8px; padding: 12px 16px; margin: 20px 0;">
+          <p style="color: #92400e; font-size: 12px; line-height: 1.5; margin: 0;">
+            <strong>Security Notice:</strong> Never share this code with anyone. Scholars Resort staff will never ask for your verification PIN or password.
+          </p>
+        </div>
+
+        <p style="color: #64748b; font-size: 13px; line-height: 1.5; margin: 20px 0 0 0;">
+          If you did not make this request, you can safely ignore this email — your account remains secure and no changes have been made.
+        </p>
       </div>
-      <p style="color: #334155; font-size: 14px;">
-        Click the link below to enter your PIN and choose a new password:
-      </p>
-      <div style="text-align: center; margin: 25px 0;">
-        <a href="${resetUrl}" style="background-color: #4f46e5; color: #ffffff; padding: 12px 24px; border-radius: 8px; font-weight: bold; text-decoration: none; display: inline-block;">Reset Password Now</a>
+
+      <div style="border-top: 1px solid #f1f5f9; padding-top: 20px; text-align: center;">
+        <p style="color: #94a3b8; font-size: 11px; margin: 0; line-height: 1.5;">
+          Scholars Resort Learning Engine • admitwise2@gmail.com<br />
+          Empowering Nigerian Scholars to score 300+ in JAMB UTME
+        </p>
       </div>
-      <p style="color: #94a3b8; font-size: 12px; margin-top: 30px; text-align: center;">
-        If you did not request this password reset, please ignore this email.
-      </p>
     </div>
   `;
 
   const res = await sendPlatformEmail({
     to: email,
     subject,
-    body: `Your Scholars Resort Password Reset 6-digit PIN is: ${pin}. Reset URL: ${resetUrl}`,
+    body: `Your Scholars Resort Password Reset 6-Digit OTP is: ${pin}. Valid for 15 minutes.`,
     html: htmlBody
   });
 
@@ -248,7 +273,7 @@ export const sendPasswordResetEmail = async (
       recipient_email: email.toLowerCase().trim(),
       email_type: 'password_reset',
       subject,
-      metadata: { pin, reset_url: resetUrl, expires_at: expiresAt, used: false },
+      metadata: { pin, reset_url: resetUrl || '', expires_at: expiresAt, used: false },
       status: res.success ? 'delivered' : 'failed',
       sent_at: new Date().toISOString()
     });
@@ -261,7 +286,7 @@ export const sendPasswordResetEmail = async (
     delivered: res.delivered,
     error: res.error,
     message: res.success 
-      ? 'Password reset email dispatched successfully via SMTP server.'
+      ? 'Password reset OTP email dispatched successfully via SMTP server.'
       : `Email dispatch notice: ${res.error || 'SMTP server not configured'}`
   };
 };
