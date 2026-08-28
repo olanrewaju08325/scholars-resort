@@ -178,12 +178,12 @@ export const AdminActivityLog: React.FC = () => {
                   <div className="space-y-1 min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-extrabold text-foreground uppercase tracking-wider text-[11px]">
-                        {act.action}
+                        {String(act.action || 'ACTION')}
                       </span>
                       {getEntityBadge(act.entity)}
                     </div>
                     <p className="text-muted-foreground leading-relaxed break-words font-medium">
-                      {act.details}
+                      {String(act.details || '')}
                     </p>
                   </div>
                 </div>

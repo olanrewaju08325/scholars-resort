@@ -395,7 +395,7 @@ export const AIBrandingAuditTester: React.FC = () => {
                         <div key={idx} className="p-2.5 rounded-md bg-rose-950/30 border border-rose-800/50 flex items-start gap-2.5 text-xs text-rose-200">
                           <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
                           <div>
-                            <span className="font-bold text-rose-300">[{v.type.toUpperCase()}]</span> {v.description} (Matched term: <code className="bg-rose-900/60 px-1 py-0.5 rounded font-mono text-rose-100">{v.term}</code>)
+                            <span className="font-bold text-rose-300">[{String(v?.type || 'VIOLATION').toUpperCase()}]</span> {v.description} (Matched term: <code className="bg-rose-900/60 px-1 py-0.5 rounded font-mono text-rose-100">{v.term}</code>)
                           </div>
                         </div>
                       ))}

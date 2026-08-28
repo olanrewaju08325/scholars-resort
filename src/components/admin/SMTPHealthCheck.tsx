@@ -75,7 +75,7 @@ export const SMTPHealthCheck = ({ currentConfig, onApplyGmailPreset }: SMTPHealt
   };
 
   const copyLogs = () => {
-    const text = logs.map(l => `[${l.timestamp}] [${l.type.toUpperCase()}] ${l.message}${l.detail ? ` (${l.detail})` : ''}`).join('\n');
+    const text = logs.map(l => `[${l.timestamp}] [${String(l?.type || 'INFO').toUpperCase()}] ${l.message}${l.detail ? ` (${l.detail})` : ''}`).join('\n');
     navigator.clipboard.writeText(text);
     toast.success('Diagnostic logs copied to clipboard!');
   };

@@ -93,7 +93,7 @@ export class CbtSnapshotService {
     const snapshot: CbtSessionSnapshot = {
       id: snapshotId,
       createdAt: new Date().toISOString(),
-      sessionTitle: params.sessionTitle || `${params.examMode.toUpperCase()} Diagnostic Snapshot`,
+      sessionTitle: params.sessionTitle || `${String(params.examMode || 'CBT').toUpperCase()} Diagnostic Snapshot`,
       examMode: params.examMode,
       subjectName: params.subjectName || (params.questions[0]?.subject || 'UTME CBT'),
       totalQuestions: params.questions.length,

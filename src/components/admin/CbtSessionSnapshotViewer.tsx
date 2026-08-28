@@ -321,9 +321,9 @@ export const CbtSessionSnapshotViewer: React.FC = () => {
                               </div>
 
                               <div>
-                                {candidateAnswer ? (
+                                {candidateAnswer !== undefined && candidateAnswer !== null && String(candidateAnswer).trim() !== '' ? (
                                   <Badge className={`text-[10px] ${isCorrect ? 'bg-emerald-500/20 text-emerald-500 border-emerald-500/30' : 'bg-red-500/20 text-red-500 border-red-500/30'}`}>
-                                    Answered: {candidateAnswer.toUpperCase()}
+                                    Answered: {String(candidateAnswer).toUpperCase()}
                                   </Badge>
                                 ) : (
                                   <Badge variant="outline" className="text-muted-foreground text-[10px]">

@@ -233,7 +233,7 @@ export function DashboardOverview() {
               <Users className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-xs text-slate-400 font-medium">New Student Signups ({timeframe.toUpperCase()})</p>
+              <p className="text-xs text-slate-400 font-medium">New Student Signups ({String(timeframe || '7d').toUpperCase()})</p>
               <h4 className="text-2xl font-bold font-mono text-slate-100">{totalSignupsInPeriod}</h4>
             </div>
           </CardContent>
@@ -275,7 +275,7 @@ export function DashboardOverview() {
               <Users className="w-4 h-4 text-blue-400" /> User Registration Trajectory
             </CardTitle>
             <CardDescription className="text-slate-400 text-xs">
-              Daily student signups recorded in ScholarsOS database ({timeframe.toUpperCase()}).
+              Daily student signups recorded in ScholarsOS database ({String(timeframe || '7d').toUpperCase()}).
             </CardDescription>
           </CardHeader>
           <CardContent>

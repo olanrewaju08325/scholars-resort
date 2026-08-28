@@ -444,7 +444,7 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
                                   : 'border-blue-500 text-blue-500 bg-blue-500/10'
                               }
                             >
-                              {issue.severity.toUpperCase()}
+                              {String(issue?.severity || 'INFO').toUpperCase()}
                             </Badge>
 
                             <Badge variant="secondary" className="font-mono text-xs">
@@ -524,7 +524,7 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
                               : 'border-rose-500/40 text-rose-500 bg-rose-500/10'
                           }
                         >
-                          {ts.status.toUpperCase()}
+                          {String(ts?.status || 'UNKNOWN').toUpperCase()}
                         </Badge>
                       </div>
                     </div>

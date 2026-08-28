@@ -605,8 +605,8 @@ export const DashboardTab = () => {
                {recentLogs.length > 0 ? recentLogs.map((log) => (
                  <div key={log.id} className="p-4 flex items-center justify-between hover:bg-slate-800/30 transition-colors">
                    <div className="flex flex-col">
-                     <span className="text-sm font-medium">{log.action.replace(/_/g, ' ').toUpperCase()}</span>
-                     <span className="text-xs text-slate-400">{log.profiles?.full_name || 'System'}</span>
+                     <span className="text-sm font-medium">{String(log?.action || 'SYSTEM EVENT').replace(/_/g, ' ').toUpperCase()}</span>
+                     <span className="text-xs text-slate-400">{log?.profiles?.full_name || 'System'}</span>
                    </div>
                    <span className="text-xs text-slate-500 font-mono">
                      {new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}

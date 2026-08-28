@@ -35,7 +35,7 @@ export const FlowValidatorDashboard: React.FC = () => {
 
   const handleRunSingleTrace = async (modeToRun = selectedMode) => {
     setRunningSingle(true);
-    toast.info(`Tracing end-to-end question flow for ${modeToRun.replace(/_/g, ' ').toUpperCase()}...`);
+    toast.info(`Tracing end-to-end question flow for ${String(modeToRun || 'CBT').replace(/_/g, ' ').toUpperCase()}...`);
     try {
       const trace = await FlowValidator.traceModeQuestionFlow(modeToRun, {
         subjectName: selectedSubject,

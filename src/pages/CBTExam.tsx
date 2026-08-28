@@ -784,8 +784,8 @@ const CBTExam = () => {
                 <h1 className="text-lg sm:text-2xl font-bold uppercase text-green-800 dark:text-green-400 mb-1 font-display">Joint Admissions and Matriculation Board</h1>
                 <h2 className="text-base sm:text-xl font-bold text-slate-700 dark:text-slate-200">2026 UTME Examination</h2>
                 <div className="mt-2 text-xs sm:text-sm text-slate-600 dark:text-slate-400 space-y-0.5">
-                  <p><strong>Candidate Name:</strong> {profile?.full_name?.toUpperCase() || 'REGISTERED CANDIDATE'}</p>
-                  <p><strong>Registration Number:</strong> {profile?.id.substring(0, 10).toUpperCase()}UT</p>
+                  <p><strong>Candidate Name:</strong> {String(profile?.full_name || 'REGISTERED CANDIDATE').toUpperCase()}</p>
+                  <p><strong>Registration Number:</strong> {String(profile?.id || 'UTME').substring(0, 10).toUpperCase()}UT</p>
                   <p><strong>Seat Number:</strong> 042</p>
                 </div>
               </div>
@@ -802,7 +802,7 @@ const CBTExam = () => {
               <h3 className="font-bold text-slate-800 dark:text-slate-200 mb-2 border-b border-slate-200 dark:border-border pb-1 text-sm sm:text-base">Registered UTME Subjects</h3>
               <ul className="list-disc pl-5 text-xs sm:text-sm space-y-1 font-semibold text-slate-700 dark:text-slate-300 mb-4">
                 {examSubjectsList.map((s: string, i: number) => (
-                  <li key={i}>{s.toUpperCase()} ({s === 'Use of English' ? '60 Qs' : '40 Qs'})</li>
+                  <li key={i}>{String(s || '').toUpperCase()} ({s === 'Use of English' ? '60 Qs' : '40 Qs'})</li>
                 ))}
               </ul>
 
@@ -857,7 +857,7 @@ const CBTExam = () => {
                 setSessionStartedAt(new Date().toISOString());
               }}
             >
-              START EXAM WITH {startingSubject.toUpperCase()}
+              START EXAM WITH {String(startingSubject || '').toUpperCase()}
             </Button>
           </div>
         </div>
@@ -909,7 +909,7 @@ const CBTExam = () => {
             </h1>
             {!focusMode && (
               <p className="text-[10px] sm:text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium truncate">
-                {profile?.full_name || 'Candidate'} • <span className="font-mono">{profile?.id?.substring(0,6).toUpperCase()}</span>
+                {profile?.full_name || 'Candidate'} • <span className="font-mono">{String(profile?.id || 'UTME01').substring(0,6).toUpperCase()}</span>
               </p>
             )}
           </div>

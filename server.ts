@@ -1578,11 +1578,12 @@ app.get('/api/admin/subject-counts', async (req, res) => {
   try {
     const { data: subjects, error: subError } = await supabase
       .from('subjects')
-      .select('id, name');
+      .select('id, name')
+      .order('name');
 
     if (subError) {
-      console.warn('[Server Admin Subject Counts Warn] Error fetching subjects:', subError.message);
-      return res.status(200).json({ success: false, error: subError.message, counts: {}, totalCounts: {}, canonicalCounts: {}, years: {} });
+      console.error('[Server Admin Subject Counts DB Error]', subError.message);
+      return res.status(500).json({ success: false, error: subError.message });
     }
 
     const counts: Record<string, number> = {};
@@ -1590,55 +1591,57 @@ app.get('/api/admin/subject-counts', async (req, res) => {
     const canonicalCounts: Record<string, number> = {};
     const years: Record<string, string[]> = {};
 
-    if (subjects && subjects.length > 0) {
-      await Promise.all(
-        subjects.map(async (sub) => {
-          // 1. Direct exact count query for active (published) questions
-          const { count: activeCount } = await supabase
-            .from('questions')
-            .select('id', { count: 'exact', head: true })
-            .eq('subject_id', sub.id)
-            .eq('is_active', true);
+    (subjects || []).forEach(sub => {
+      counts[sub.id] = 0;
+      totalCounts[sub.id] = 0;
+      const canonical = String(sub.name || '').trim().toLowerCase();
+      canonicalCounts[canonical] = 0;
+      years[sub.id] = [];
+    });
 
-          // 2. Direct exact count query for total questions (including drafts)
-          const { count: totalCount } = await supabase
-            .from('questions')
-            .select('id', { count: 'exact', head: true })
-            .eq('subject_id', sub.id);
+    // Query questions in single batch to avoid 90 parallel round-trips
+    const { data: questionsData, error: qErr } = await supabase
+      .from('questions')
+      .select('subject_id, exam_year, is_active')
+      .limit(50000);
 
-          const finalActive = activeCount ?? 0;
-          const finalTotal = totalCount ?? 0;
+    if (qErr) {
+      console.error('[Server Admin Subject Counts Questions DB Error]', qErr.message);
+      return res.status(500).json({ success: false, error: qErr.message });
+    }
 
-          counts[sub.id] = finalActive;
-          totalCounts[sub.id] = finalTotal;
+    if (questionsData) {
+      const subjectYearsMap: Record<string, Set<string>> = {};
 
-          const canonical = sub.name.trim().toLowerCase();
-          canonicalCounts[canonical] = finalActive;
-
-          // Fetch distinct exam years with active questions
-          const { data: yearsData } = await supabase
-            .from('questions')
-            .select('exam_year')
-            .eq('subject_id', sub.id)
-            .eq('is_active', true)
-            .not('exam_year', 'is', null)
-            .limit(200);
-
-          if (yearsData && yearsData.length > 0) {
-            const uniqueYears = Array.from(
-              new Set(yearsData.map((y: any) => String(y.exam_year).trim()))
-            ).filter(Boolean).sort().reverse();
-            years[sub.id] = uniqueYears;
-          } else {
-            years[sub.id] = [];
+      questionsData.forEach((q: any) => {
+        if (q.subject_id) {
+          totalCounts[q.subject_id] = (totalCounts[q.subject_id] || 0) + 1;
+          if (q.is_active !== false) {
+            counts[q.subject_id] = (counts[q.subject_id] || 0) + 1;
           }
-        })
-      );
+          if (q.exam_year) {
+            const yr = String(q.exam_year).trim();
+            if (yr && yr.length >= 4) {
+              if (!subjectYearsMap[q.subject_id]) subjectYearsMap[q.subject_id] = new Set();
+              subjectYearsMap[q.subject_id].add(yr);
+            }
+          }
+        }
+      });
+
+      // Populate canonical and years
+      (subjects || []).forEach(sub => {
+        const canonical = String(sub.name || '').trim().toLowerCase();
+        canonicalCounts[canonical] = counts[sub.id] || 0;
+        if (subjectYearsMap[sub.id]) {
+          years[sub.id] = Array.from(subjectYearsMap[sub.id]).sort().reverse();
+        }
+      });
     }
 
     return res.json({ success: true, counts, totalCounts, canonicalCounts, years });
   } catch (err: any) {
-    console.error('[Server Admin Subject Counts Error]', err);
+    console.error('[Server Admin Subject Counts Exception]', err);
     return res.status(500).json({ success: false, error: err.message || 'Failed to fetch subject counts.' });
   }
 });
@@ -1648,7 +1651,11 @@ const serverCbtSnapshots: any[] = [];
 
 // API Route: Get & Save CBT Session Snapshots
 app.get('/api/cbt-snapshots', (req, res) => {
-  return res.json({ success: true, snapshots: serverCbtSnapshots.slice(0, 100) });
+  try {
+    return res.json({ success: true, snapshots: Array.isArray(serverCbtSnapshots) ? serverCbtSnapshots.slice(0, 100) : [] });
+  } catch (err: any) {
+    return res.json({ success: true, snapshots: [] });
+  }
 });
 
 app.post('/api/cbt-snapshots', async (req, res) => {
@@ -2186,16 +2193,20 @@ app.get('/api/profile/:id', async (req, res) => {
       .eq('id', id)
       .maybeSingle();
 
-    if (error && !persistentUserOverrides.has(id)) {
-      console.warn(`[API /api/profile/${id} DB Warn]`, error.message);
+    if (error) {
+      console.error(`[API /api/profile/${id} DB Error]`, error.message);
+      return res.status(500).json({ success: false, error: error.message });
     }
 
-    const merged = mergeProfileWithOverrides(dbProf || { id }, id);
+    if (!dbProf && !persistentUserOverrides.has(id)) {
+      return res.status(404).json({ success: false, error: 'Profile not found' });
+    }
+
+    const merged = mergeProfileWithOverrides(dbProf || {}, id);
     return res.json({ success: true, profile: merged });
   } catch (err: any) {
-    console.error(`[API /api/profile/${id} Error]`, err);
-    const fallback = mergeProfileWithOverrides({ id }, id);
-    return res.json({ success: true, profile: fallback });
+    console.error(`[API /api/profile/${id} Exception]`, err);
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error fetching profile' });
   }
 });
 
@@ -3801,6 +3812,28 @@ app.post('/api/study-rooms', express.json(), (req, res) => {
   return res.json({ success: true, room });
 });
 
+// API 404 handler - ensures unmatched API requests return structured JSON instead of falling through to static/HTML handler
+app.use('/api', (req, res) => {
+  return res.status(404).json({
+    success: false,
+    error: `API endpoint not found: ${req.method} ${req.originalUrl || req.url}`,
+    path: req.originalUrl || req.url,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Global Express API Error Handler - catches any uncaught exceptions in route handlers
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  console.error('[Global Express API Error]', err);
+  if (!res.headersSent) {
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Internal Server Error',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 
 // Vite middleware for development vs static for production
 async function startServer() {
@@ -3830,7 +3863,15 @@ async function startServer() {
 }
 
 // Only launch standalone listener in long-running container or local dev environments (not Vercel Serverless Function)
-if (process.env.VERCEL !== '1' && !process.env.NOW_REGION) {
+const isVercelRuntime = Boolean(process.env.VERCEL || process.env.NOW_REGION || process.env.AWS_LAMBDA_FUNCTION_NAME);
+const isRunningDirectly = typeof process.argv[1] === 'string' && (
+  process.argv[1].endsWith('server.ts') || 
+  process.argv[1].endsWith('server.cjs') || 
+  process.argv[1].endsWith('server.js') ||
+  process.argv[1].includes('/app/applet/server')
+);
+
+if (!isVercelRuntime && isRunningDirectly) {
   startServer();
 }
 

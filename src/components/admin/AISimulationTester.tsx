@@ -170,7 +170,7 @@ export const AISimulationTester: React.FC = () => {
                       ? 'bg-amber-500/20 text-amber-400 border-amber-500/40 text-[10px]' 
                       : 'bg-rose-500/20 text-rose-400 border-rose-500/40 text-[10px]'
                 }>
-                  {result.status.toUpperCase()}
+                  {String(result?.status || 'UNKNOWN').toUpperCase()}
                 </Badge>
               </div>
             </div>

@@ -122,7 +122,7 @@ export const FlowValidatorStatusWidget: React.FC<FlowValidatorStatusWidgetProps>
                         : 'bg-red-500/10 text-red-500 border-red-500/30 text-[10px]'
                     }
                   >
-                    {report.overallHealth.toUpperCase()}
+                    {String(report.overallHealth || 'HEALTHY').toUpperCase()}
                   </Badge>
                 )}
               </CardTitle>

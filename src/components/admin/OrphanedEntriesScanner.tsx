@@ -404,7 +404,7 @@ export function OrphanedEntriesScanner() {
 
                     <div className="shrink-0 text-right">
                       <Badge variant="outline" className="text-[10px] border-amber-500/30 text-amber-400 bg-amber-500/5">
-                        {item.type.toUpperCase()}
+                        {String(item?.type || 'ENTRY').toUpperCase()}
                       </Badge>
                     </div>
                   </div>

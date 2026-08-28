@@ -91,16 +91,19 @@ export const fetchAllAdminActivities = async (): Promise<AdminActivityItem[]> =>
       .limit(100);
 
     if (!error && data && data.length > 0) {
-      const remoteLogs: AdminActivityItem[] = data.map((item: any) => ({
-        id: item.id || `db_${item.created_at}`,
-        action: item.action?.split(':')[0] || 'ACTION',
-        details: item.action?.split(':').slice(1).join(':').trim() || item.action || '',
-        entity: (item.entity_type as any) || 'system',
-        user_email: item.user_email || 'admin@scholarsresort.com',
-        user_name: item.profiles?.full_name || 'Admin User',
-        timestamp: item.created_at || new Date().toISOString(),
-        metadata: item.metadata
-      }));
+      const remoteLogs: AdminActivityItem[] = data.map((item: any) => {
+        const rawAction = String(item.action || 'SYSTEM ACTION');
+        return {
+          id: item.id || `db_${item.created_at}`,
+          action: rawAction.includes(':') ? rawAction.split(':')[0] : rawAction,
+          details: rawAction.includes(':') ? rawAction.split(':').slice(1).join(':').trim() : (item.details || rawAction),
+          entity: (item.entity_type as any) || 'system',
+          user_email: item.user_email || 'admin@scholarsresort.com',
+          user_name: item.profiles?.full_name || 'Admin User',
+          timestamp: item.created_at || new Date().toISOString(),
+          metadata: item.metadata
+        };
+      });
 
       // Merge remote & local logs deduplicated by timestamp
       const combinedMap = new Map<string, AdminActivityItem>();

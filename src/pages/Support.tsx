@@ -251,7 +251,7 @@ export default function Support() {
                       <CardDescription>Ticket ID: {selectedTicket.id.split('-')[0]}</CardDescription>
                     </div>
                     <span className={`px-3 py-1 rounded-full text-xs font-bold ${selectedTicket.status === 'resolved' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                      {selectedTicket.status.toUpperCase()}
+                      {String(selectedTicket.status || 'OPEN').toUpperCase()}
                     </span>
                   </div>
                 </CardHeader>
