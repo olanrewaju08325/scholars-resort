@@ -1679,7 +1679,7 @@ export const QuestionBankTab = () => {
         isOpen={sanityScanModalOpen} 
         onClose={() => setSanityScanModalOpen(false)} 
         questions={questions} 
-        onRefresh={fetchQuestions}
+        onRefresh={fetchData}
       />
     </div>
   );
