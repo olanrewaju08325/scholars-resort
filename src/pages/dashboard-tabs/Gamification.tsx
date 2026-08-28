@@ -26,7 +26,11 @@ export const Gamification = () => {
   const [badgeFilter, setBadgeFilter] = useState<'all' | 'exam' | 'streak' | 'mastery'>('all');
 
   const fetchGamificationData = useCallback(async () => {
-    if (!profile) return;
+    const isUUID = (id: any) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    if (!profile?.id || !isUUID(profile.id)) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
 
     try {

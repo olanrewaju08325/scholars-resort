@@ -767,7 +767,7 @@ export const QuestionBankTab = () => {
                         <Badge variant="outline" className="text-[10px] bg-slate-800/50 cursor-help border-slate-700">LaTeX Supported</Badge>
                       </TooltipTrigger>
                       <TooltipContent>
-                        <p>Wrap math in $$ for block or $ for inline. E.g., $\sqrt{x^2}$</p>
+                        <p>Wrap math in $$ for block or $ for inline. E.g., {"$\\sqrt{x^2}$"}</p>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>

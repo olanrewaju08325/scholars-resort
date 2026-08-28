@@ -307,7 +307,8 @@ export const checkAndAwardBadges = async (
     totalFlashcards?: number;
   }
 ) => {
-  if (!userId) return;
+  const isUUID = (id: any) => typeof id === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  if (!userId || !isUUID(userId)) return;
 
   try {
     // 1. Fetch user's already-earned badges

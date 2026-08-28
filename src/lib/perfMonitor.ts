@@ -36,7 +36,7 @@ class PerformanceMonitor {
     if (this.isInitialized) return;
     
     // Only run in development or non-production environment
-    const isDev = import.meta.env.DEV || process.env.NODE_ENV !== 'production';
+    const isDev = import.meta.env.DEV || (typeof process !== 'undefined' && process.env?.NODE_ENV !== 'production');
     if (!isDev) return;
 
     this.isInitialized = true;

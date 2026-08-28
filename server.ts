@@ -820,199 +820,208 @@ app.get('/api/exam-session/active-status', async (req, res) => {
 
 // API Route: Groq / Server AI Chat Proxy
 app.post('/api/groq-chat', async (req, res) => {
-  const startTime = Date.now();
-  const userId = req.body?.userId || (req.headers['x-user-id'] as string);
+  try {
+    const startTime = Date.now();
+    const userId = req.body?.userId || (req.headers['x-user-id'] as string);
 
-  // Proctor Mode Anti-Cheating check: Lock AI Tutor during live CBT exams
-  let isExamActive = req.headers['x-exam-active'] === 'true' || req.body?.isExamActive === true;
+    // Proctor Mode Anti-Cheating check: Lock AI Tutor during live CBT exams
+    let isExamActive = req.headers['x-exam-active'] === 'true' || req.body?.isExamActive === true;
 
-  if (!isExamActive && userId) {
-    try {
-      const { data: activeSession } = await supabase
-        .from('exam_sessions')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('status', 'in_progress')
-        .eq('is_ai_tutor_locked', true)
-        .maybeSingle();
-      if (activeSession) {
-        isExamActive = true;
-      }
-    } catch (_) {}
-  }
-
-  if (isExamActive) {
-    return res.status(403).json({
-      error: 'AI Tutor access is locked during live proctored CBT exams to enforce academic integrity and prevent cheating.',
-      locked: true
-    });
-  }
-
-  const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
-
-  if (!Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ success: false, error: 'Messages array is required for chat.' });
-  }
-  const customGroqKey = req.headers['x-groq-key'] as string;
-  let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
-
-  if (!groqKey) {
-    // 1. Try DB system_configs table
-    try {
-      const { data: sysKey } = await supabase
-        .from('system_configs')
-        .select('config_value')
-        .eq('config_key', 'groq_settings')
-        .maybeSingle();
-      if (sysKey?.config_value?.apiKey || sysKey?.config_value?.groq) {
-        groqKey = sysKey.config_value.apiKey || sysKey.config_value.groq;
-      }
-    } catch (_) {}
-
-    // 2. Try DB admin_settings table
-    if (!groqKey) {
+    if (!isExamActive && userId) {
       try {
-        const { data: dbKeys } = await supabase
-          .from('admin_settings')
-          .select('setting_value')
-          .in('setting_key', ['ai_api_keys', 'ai_api_settings', 'api_keys']);
-        if (dbKeys) {
-          for (const row of dbKeys) {
-            const val = row.setting_value?.apiKey || row.setting_value?.groq || row.setting_value?.groq_key;
-            if (val && typeof val === 'string' && val.trim().length > 10) {
-              groqKey = val.trim();
-              break;
-            }
-          }
+        const { data: activeSession } = await supabase
+          .from('exam_sessions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('status', 'in_progress')
+          .eq('is_ai_tutor_locked', true)
+          .maybeSingle();
+        if (activeSession) {
+          isExamActive = true;
         }
       } catch (_) {}
     }
-  }
 
-  const candidateModels = [
-    model,
-    'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant',
-    'llama3-70b-8192',
-    'llama3-8b-8192',
-    'gemma2-9b-it'
-  ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
+    if (isExamActive) {
+      return res.status(403).json({
+        error: 'AI Tutor access is locked during live proctored CBT exams to enforce academic integrity and prevent cheating.',
+        locked: true
+      });
+    }
 
-  if (groqKey && groqKey.trim()) {
-    for (const m of candidateModels) {
+    const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ success: false, error: 'Messages array is required for chat.' });
+    }
+    const customGroqKey = req.headers['x-groq-key'] as string;
+    let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+
+    if (!groqKey) {
+      // 1. Try DB system_configs table
       try {
-        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        const { data: sysKey } = await supabase
+          .from('system_configs')
+          .select('config_value')
+          .eq('config_key', 'groq_settings')
+          .maybeSingle();
+        if (sysKey?.config_value?.apiKey || sysKey?.config_value?.groq) {
+          groqKey = sysKey.config_value.apiKey || sysKey.config_value.groq;
+        }
+      } catch (_) {}
+
+      // 2. Try DB admin_settings table
+      if (!groqKey) {
+        try {
+          const { data: dbKeys } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .in('setting_key', ['ai_api_keys', 'ai_api_settings', 'api_keys']);
+          if (dbKeys) {
+            for (const row of dbKeys) {
+              const val = row.setting_value?.apiKey || row.setting_value?.groq || row.setting_value?.groq_key;
+              if (val && typeof val === 'string' && val.trim().length > 10) {
+                groqKey = val.trim();
+                break;
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
+
+    const candidateModels = [
+      model,
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant',
+      'llama3-70b-8192',
+      'llama3-8b-8192',
+      'gemma2-9b-it'
+    ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
+
+    if (groqKey && groqKey.trim()) {
+      for (const m of candidateModels) {
+        try {
+          const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${groqKey.trim()}`
+            },
+            body: JSON.stringify({
+              model: m,
+              messages,
+              temperature: Math.min(2.0, Math.max(0.0, Number(temperature) || 0.7)),
+              max_tokens: 2048
+            })
+          });
+
+          const latencyMs = Date.now() - startTime;
+          const remTokens = response.headers.get('x-ratelimit-remaining-tokens') || response.headers.get('x-ratelimit-remaining-tokens-minute');
+          const limTokens = response.headers.get('x-ratelimit-limit-tokens') || response.headers.get('x-ratelimit-limit-tokens-minute');
+          const resReset = response.headers.get('x-ratelimit-reset-tokens');
+          const remReqs = response.headers.get('x-ratelimit-remaining-requests');
+          const limReqs = response.headers.get('x-ratelimit-limit-requests');
+
+          if (response.ok) {
+            const data = await response.json();
+            const promptTokens = data?.usage?.prompt_tokens || 0;
+            const completionTokens = data?.usage?.completion_tokens || 0;
+            const totalTokens = data?.usage?.total_tokens || (promptTokens + completionTokens);
+
+            addGroqServerLog({
+              model: m,
+              promptTokens,
+              completionTokens,
+              totalTokens,
+              latencyMs,
+              status: 'success',
+              remainingTokens: remTokens || undefined,
+              limitTokens: limTokens || undefined,
+              resetTokens: resReset || undefined,
+              remainingRequests: remReqs || undefined,
+              limitRequests: limReqs || undefined,
+              source: 'server_proxy'
+            });
+
+            data._telemetry = {
+              remainingTokens: remTokens,
+              limitTokens: limTokens,
+              resetTokens: resReset,
+              remainingRequests: remReqs,
+              latencyMs
+            };
+
+            return res.json(data);
+          }
+        } catch (groqErr) {
+          console.warn(`Groq server call failed on model ${m}:`, groqErr);
+        }
+      }
+    }
+
+    // Fallback 1: Gemini API
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    if (geminiKey) {
+      try {
+        const prompt = messages.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${groqKey.trim()}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            model: m,
-            messages,
-            temperature: Math.min(2.0, Math.max(0.0, Number(temperature) || 0.7)),
-            max_tokens: 2048
+            contents: [{ parts: [{ text: prompt }] }]
           })
         });
 
-        const latencyMs = Date.now() - startTime;
-        const remTokens = response.headers.get('x-ratelimit-remaining-tokens') || response.headers.get('x-ratelimit-remaining-tokens-minute');
-        const limTokens = response.headers.get('x-ratelimit-limit-tokens') || response.headers.get('x-ratelimit-limit-tokens-minute');
-        const resReset = response.headers.get('x-ratelimit-reset-tokens');
-        const remReqs = response.headers.get('x-ratelimit-remaining-requests');
-        const limReqs = response.headers.get('x-ratelimit-limit-requests');
-
-        if (response.ok) {
-          const data = await response.json();
-          const promptTokens = data?.usage?.prompt_tokens || 0;
-          const completionTokens = data?.usage?.completion_tokens || 0;
-          const totalTokens = data?.usage?.total_tokens || (promptTokens + completionTokens);
-
-          addGroqServerLog({
-            model: m,
-            promptTokens,
-            completionTokens,
-            totalTokens,
-            latencyMs,
-            status: 'success',
-            remainingTokens: remTokens || undefined,
-            limitTokens: limTokens || undefined,
-            resetTokens: resReset || undefined,
-            remainingRequests: remReqs || undefined,
-            limitRequests: limReqs || undefined,
-            source: 'server_proxy'
-          });
-
-          data._telemetry = {
-            remainingTokens: remTokens,
-            limitTokens: limTokens,
-            resetTokens: resReset,
-            remainingRequests: remReqs,
-            latencyMs
-          };
-
-          return res.json(data);
+        if (geminiRes.ok) {
+          const geminiData = await geminiRes.json();
+          const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
+          if (text) {
+            return res.json({
+              choices: [{ message: { role: 'assistant', content: text } }],
+              usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
+            });
+          }
         }
-      } catch (groqErr) {
-        console.warn(`Groq server call failed on model ${m}:`, groqErr);
+      } catch (gemErr) {
+        console.warn('Server Gemini fallback warning:', gemErr);
       }
     }
-  }
 
-  // Fallback 1: Gemini API
-  const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
-  if (geminiKey) {
-    try {
-      const prompt = messages.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts: [{ text: prompt }] }]
-        })
-      });
+    // Fallback 2: Intelligent Local AI Logic Engine
+    const lastUserMsg = (messages.filter((m: any) => m.role === 'user').pop()?.content || '').toLowerCase();
+    let fallbackReply = "As your AI Scholar Assistant, I've analyzed your question. Focus on mastering key UTME concepts, reviewing past question patterns, and maintaining a timed practice routine for peak performance.";
 
-      if (geminiRes.ok) {
-        const geminiData = await geminiRes.json();
-        const text = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          return res.json({
-            choices: [{ message: { role: 'assistant', content: text } }],
-            usage: { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
-          });
-        }
-      }
-    } catch (gemErr) {
-      console.warn('Server Gemini fallback warning:', gemErr);
+    if (lastUserMsg.includes('hi') || lastUserMsg.includes('hello') || lastUserMsg.includes('hey')) {
+      fallbackReply = "Hello Scholar! I am your AI Scholar Assistant. I am ready to analyze your UTME subject performance, break down complex topics, or quiz you on past questions. What subject or topic would you like to focus on today?";
+    } else if (lastUserMsg.includes('math') || lastUserMsg.includes('calculation') || lastUserMsg.includes('formula')) {
+      fallbackReply = "In UTME Mathematics and Calculation-based subjects:\n1. Always identify the given variables first.\n2. Recall the relevant standard formula before plugging in numbers.\n3. Keep units consistent (SI units).\n4. Eliminate impossible option values quickly to save CBT time.";
+    } else if (lastUserMsg.includes('weak') || lastUserMsg.includes('plan') || lastUserMsg.includes('score')) {
+      fallbackReply = "Based on your study metrics, here is a recommended daily plan:\n- **Phase 1 (Speed Audit)**: 15-minute daily timed drills on weak topics.\n- **Phase 2 (Concept Drill)**: Review syllabus explanations for missed questions.\n- **Phase 3 (Full Mock)**: Weekly 4-subject CBT simulation to build exam stamina.";
     }
+
+    addGroqServerLog({
+      model: 'fallback-engine',
+      promptTokens: 50,
+      completionTokens: 100,
+      totalTokens: 150,
+      latencyMs: Date.now() - startTime,
+      status: 'success',
+      source: 'server_proxy'
+    });
+
+    return res.json({
+      choices: [{ message: { role: 'assistant', content: fallbackReply } }],
+      usage: { prompt_tokens: 50, completion_tokens: 100, total_tokens: 150 }
+    });
+  } catch (globalErr: any) {
+    console.error('CRITICAL: Unexpected internal server error in /api/groq-chat:', globalErr);
+    return res.status(500).json({
+      success: false,
+      error: 'Internal Server Error',
+      message: globalErr?.message || String(globalErr)
+    });
   }
-
-  // Fallback 2: Intelligent Local AI Logic Engine
-  const lastUserMsg = (messages.filter((m: any) => m.role === 'user').pop()?.content || '').toLowerCase();
-  let fallbackReply = "As your AI Scholar Assistant, I've analyzed your question. Focus on mastering key UTME concepts, reviewing past question patterns, and maintaining a timed practice routine for peak performance.";
-
-  if (lastUserMsg.includes('hi') || lastUserMsg.includes('hello') || lastUserMsg.includes('hey')) {
-    fallbackReply = "Hello Scholar! I am your AI Scholar Assistant. I am ready to analyze your UTME subject performance, break down complex topics, or quiz you on past questions. What subject or topic would you like to focus on today?";
-  } else if (lastUserMsg.includes('math') || lastUserMsg.includes('calculation') || lastUserMsg.includes('formula')) {
-    fallbackReply = "In UTME Mathematics and Calculation-based subjects:\n1. Always identify the given variables first.\n2. Recall the relevant standard formula before plugging in numbers.\n3. Keep units consistent (SI units).\n4. Eliminate impossible option values quickly to save CBT time.";
-  } else if (lastUserMsg.includes('weak') || lastUserMsg.includes('plan') || lastUserMsg.includes('score')) {
-    fallbackReply = "Based on your study metrics, here is a recommended daily plan:\n- **Phase 1 (Speed Audit)**: 15-minute daily timed drills on weak topics.\n- **Phase 2 (Concept Drill)**: Review syllabus explanations for missed questions.\n- **Phase 3 (Full Mock)**: Weekly 4-subject CBT simulation to build exam stamina.";
-  }
-
-  addGroqServerLog({
-    model: 'fallback-engine',
-    promptTokens: 50,
-    completionTokens: 100,
-    totalTokens: 150,
-    latencyMs: Date.now() - startTime,
-    status: 'success',
-    source: 'server_proxy'
-  });
-
-  return res.json({
-    choices: [{ message: { role: 'assistant', content: fallbackReply } }],
-    usage: { prompt_tokens: 50, completion_tokens: 100, total_tokens: 150 }
-  });
 });
 
 // Endpoint to log client-side Groq call telemetry to server store
@@ -3800,22 +3809,32 @@ app.post('/api/admin/materials/upload-file', async (req, res) => {
 
 // API Route: Peer Study Rooms List & Creation
 app.get('/api/study-rooms', (req, res) => {
-  return res.json({ success: true, rooms: getActiveStudyRoomsList() });
+  try {
+    return res.json({ success: true, rooms: getActiveStudyRoomsList() });
+  } catch (err: any) {
+    console.error('Error in GET /api/study-rooms:', err);
+    return res.status(500).json({ success: false, error: err?.message || String(err), rooms: [] });
+  }
 });
 
 app.post('/api/study-rooms', express.json(), (req, res) => {
-  const { title, subject, hostName } = req.body || {};
-  if (!title) {
-    return res.status(400).json({ success: false, error: 'Room title is required.' });
+  try {
+    const { title, subject, hostName } = req.body || {};
+    if (!title) {
+      return res.status(400).json({ success: false, error: 'Room title is required.' });
+    }
+    const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const room = createStudyRoom({
+      roomId,
+      title: title.trim(),
+      subject: subject || 'General',
+      hostName: hostName || 'Scholar Student'
+    });
+    return res.json({ success: true, room });
+  } catch (err: any) {
+    console.error('Error in POST /api/study-rooms:', err);
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
   }
-  const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
-  const room = createStudyRoom({
-    roomId,
-    title: title.trim(),
-    subject: subject || 'General',
-    hostName: hostName || 'Scholar Student'
-  });
-  return res.json({ success: true, room });
 });
 
 // API 404 handler - ensures unmatched API requests return structured JSON instead of falling through to static/HTML handler
