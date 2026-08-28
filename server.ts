@@ -849,6 +849,10 @@ app.post('/api/groq-chat', async (req, res) => {
   }
 
   const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
+
+  if (!Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ success: false, error: 'Messages array is required for chat.' });
+  }
   const customGroqKey = req.headers['x-groq-key'] as string;
   let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 
@@ -1670,10 +1674,12 @@ app.post('/api/cbt-snapshots', async (req, res) => {
       serverCbtSnapshots.length = 200;
     }
 
-    // Persist to audit_logs
+    // Persist to audit_logs safely
     try {
+      const uId = snapshot.user?.id;
+      const isValidUuid = uId && typeof uId === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(uId.trim());
       await supabase.from('audit_logs').insert({
-        user_id: snapshot.user?.id && snapshot.user.id.length > 10 ? snapshot.user.id : null,
+        user_id: isValidUuid ? uId.trim() : null,
         action: `CBT Session Snapshot Captured: ${snapshot.id}`,
         entity_type: 'cbt_snapshot',
         entity_id: snapshot.id,

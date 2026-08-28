@@ -79,10 +79,23 @@ export class SafeStringParser {
   }
 
   /**
+   * Normalizes Unicode, strips replacement characters (), and cleans control characters
+   */
+  public static normalizeUnicode(input: any): string {
+    const text = this.ensureString(input);
+    if (!text) return '';
+    return text
+      .normalize('NFKC')
+      .replace(/\ufffd/g, '')
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F]/g, '');
+  }
+
+  /**
    * Sanitizes question text, options, explanations, and hints safely
    */
   public static sanitizeContent(input: any): string {
-    const cleaned = this.stripHtmlAndWhitespace(input);
+    const normalized = this.normalizeUnicode(input);
+    const cleaned = this.stripHtmlAndWhitespace(normalized);
     return this.stripEmojis(cleaned);
   }
 }

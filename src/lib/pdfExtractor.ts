@@ -121,12 +121,17 @@ export async function extractDocumentWithOcrOrText(file: File): Promise<Document
         fileName: file.name
       };
 
-    } catch (pdfErr) {
-      console.warn('PDF.js parsing warning, falling back to text stream reader:', pdfErr);
+    } catch (pdfErr: any) {
+      console.error('PDF.js parsing error:', pdfErr);
+      throw new Error('Unable to parse PDF structure. Please ensure the PDF contains searchable text or upload as scanned page images.');
     }
   }
 
-  // 3. Fallback for Plain Text, CSV, TXT, JSON, MD
+  // 3. Fallback for Plain Text, CSV, TXT, JSON, MD (Non-PDF only)
+  if (fileExt === 'pdf' || file.type === 'application/pdf') {
+    throw new Error('PDF file could not be parsed as text. Please upload text-searchable PDFs.');
+  }
+
   const textContent = await file.text();
   return {
     isScanned: false,
