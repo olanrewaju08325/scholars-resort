@@ -3,7 +3,6 @@ import http from 'http';
 import cors from 'cors';
 import path from 'path';
 import nodemailer from 'nodemailer';
-import { createServer as createViteServer } from 'vite';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI } from '@google/genai';
 import { setupStudyRoomWebSocket, getActiveStudyRoomsList, createStudyRoom } from './src/services/studyRoomSocketServer';
@@ -3811,6 +3810,7 @@ async function startServer() {
   setupStudyRoomWebSocket(httpServer);
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
@@ -3829,4 +3829,10 @@ async function startServer() {
   });
 }
 
-startServer();
+// Only launch standalone listener in long-running container or local dev environments (not Vercel Serverless Function)
+if (process.env.VERCEL !== '1' && !process.env.NOW_REGION) {
+  startServer();
+}
+
+export default app;
+export { app };
