@@ -22,11 +22,12 @@ const apiMockPlugin = () => ({
               return res.end(JSON.stringify({ error: 'Missing otp or to_email' }));
             }
 
+            const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || '';
             const transporter = nodemailer.createTransport({
               service: 'gmail',
               auth: {
-                user: 'admitwise2@gmail.com',
-                pass: 'fliwopndlqxipara'
+                user: process.env.SMTP_USER || 'admitwise2@gmail.com',
+                pass: smtpPass
               }
             });
 
@@ -59,9 +60,10 @@ const apiMockPlugin = () => ({
         req.on('end', async () => {
           try {
             const { guardianEmail, guardianName, studentName, totalExams, avgScore, streak } = JSON.parse(body);
+            const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || '';
             const transporter = nodemailer.createTransport({
               service: 'gmail',
-              auth: { user: 'admitwise2@gmail.com', pass: 'fliwopndlqxipara' }
+              auth: { user: process.env.SMTP_USER || 'admitwise2@gmail.com', pass: smtpPass }
             });
             await transporter.sendMail({
               from: '"Scholars Resort" <admitwise2@gmail.com>',
@@ -93,9 +95,10 @@ const apiMockPlugin = () => ({
         req.on('end', async () => {
           try {
             const { userId, amount, proofUrl, planId } = JSON.parse(body);
+            const smtpPass = process.env.SMTP_PASS || process.env.GMAIL_PASS || '';
             const transporter = nodemailer.createTransport({
               service: 'gmail',
-              auth: { user: 'admitwise2@gmail.com', pass: 'fliwopndlqxipara' }
+              auth: { user: process.env.SMTP_USER || 'admitwise2@gmail.com', pass: smtpPass }
             });
             await transporter.sendMail({
               from: '"Scholars Resort System" <admitwise2@gmail.com>',
@@ -126,10 +129,6 @@ const apiMockPlugin = () => ({
 // https://vite.dev/config/
 export default defineConfig({
   define: {
-    'process.env.GROQ_API_KEY': JSON.stringify(process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || ''),
-    'process.env.VITE_GROQ_API_KEY': JSON.stringify(process.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY || ''),
-    'import.meta.env.VITE_GROQ_API_KEY': JSON.stringify(process.env.VITE_GROQ_API_KEY || process.env.GROQ_API_KEY || ''),
-    'import.meta.env.GROQ_API_KEY': JSON.stringify(process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || ''),
     'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || 'https://syoodykedvqaoeplmamd.supabase.co'),
     'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5b29keWtlZHZxYW9lcGxtYW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNjEyMTIsImV4cCI6MjEwMDkzNzIxMn0.GV7jgq04Qha6W1JENvc-ntVt9zSOLDx7vTaTxZlOTq4')
   },

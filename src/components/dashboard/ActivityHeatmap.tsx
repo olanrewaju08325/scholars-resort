@@ -37,14 +37,17 @@ export const ActivityHeatmap = () => {
       } catch {}
 
       try {
-        const { data: sessionData } = await supabase
-          .from('exam_sessions')
-          .select('submitted_at, created_at')
-          .eq('user_id', profile.id)
-          .gte('created_at', isoThreshold);
+        const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+        const sessRes = await safeSupabaseQuery<any[]>(
+          supabase
+            .from('exam_sessions')
+            .select('*')
+            .eq('user_id', profile.id),
+          { contextName: 'ActivityHeatmap.exam_sessions', fallbackValue: [] }
+        );
 
-        sessionData?.forEach(sess => {
-          const rawDate = sess.submitted_at || sess.created_at;
+        (sessRes.data || []).forEach(sess => {
+          const rawDate = sess.submitted_at || sess.created_at || sess.started_at;
           if (rawDate) {
             const d = new Date(rawDate).toISOString().split('T')[0];
             logsByDate[d] = (logsByDate[d] || 0) + 1;

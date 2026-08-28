@@ -1,18 +1,49 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import nodemailer from 'nodemailer';
+import { verifyAdmin, authSupabase } from './_auth';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  }
+
+  const auth = await verifyAdmin(req);
+  if (!auth.authorized) {
+    return res.status(auth.status).json({ success: false, error: auth.error });
   }
 
   const startTime = Date.now();
   const { host, port, user, pass, fromEmail, testRecipient } = req.body || {};
 
-  const targetHost = host || process.env.SMTP_HOST;
+  let targetPass = pass;
+  // If pass is omitted or masked, lookup stored secret from env or db
+  if (!targetPass || targetPass.includes('•')) {
+    targetPass = process.env.SMTP_PASS || process.env.GMAIL_PASS;
+    if (!targetPass) {
+      try {
+        const { data: sysData } = await authSupabase
+          .from('system_configs')
+          .select('config_value')
+          .eq('config_key', 'smtp_settings')
+          .maybeSingle();
+        if (sysData?.config_value?.pass) {
+          targetPass = sysData.config_value.pass;
+        }
+      } catch (_) {}
+    }
+  }
+
+  const targetHost = host || process.env.SMTP_HOST || 'smtp.gmail.com';
   const targetPort = Number(port || process.env.SMTP_PORT || 587);
-  const targetUser = user || process.env.SMTP_USER;
-  const targetPass = pass || process.env.SMTP_PASS;
+  const targetUser = user || process.env.SMTP_USER || process.env.GMAIL_USER || 'admitwise2@gmail.com';
   const targetFrom = fromEmail || process.env.SMTP_FROM || 'admitwise2@gmail.com';
   const recipient = testRecipient || targetUser || 'admitwise2@gmail.com';
 

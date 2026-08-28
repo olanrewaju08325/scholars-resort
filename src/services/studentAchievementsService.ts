@@ -121,11 +121,13 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
   }
 
   try {
-    // 1. Fetch user unlocked achievements from Supabase
-    const { data: userAchievements } = await supabase
-      .from('achievements')
-      .select('badge_key, created_at')
-      .eq('user_id', userId);
+    // 1. Fetch user unlocked achievements from Supabase user_badges
+    const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+    const userAchRes = await safeSupabaseQuery<any[]>(
+      supabase.from('user_badges').select('badge_key, created_at').eq('user_id', userId),
+      { contextName: 'StudentAchievementsService.user_badges', fallbackValue: [] }
+    );
+    const userAchievements = userAchRes.data || [];
 
     const unlockedMap = new Map<string, string>();
     (userAchievements || []).forEach((ach: any) => {
@@ -141,12 +143,12 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
 
     const streakDays = profile?.streak_days || 0;
 
-    // 3. Fetch completed exam sessions count & metrics
-    const { data: examSessions } = await supabase
-      .from('exam_sessions')
-      .select('id, score, total_questions, created_at, status')
-      .eq('user_id', userId)
-      .eq('status', 'completed');
+    // 3. Fetch completed exam sessions count & metrics safely
+    const examSessRes = await safeSupabaseQuery<any[]>(
+      supabase.from('exam_sessions').select('id, score, total_questions, created_at, status').eq('user_id', userId).eq('status', 'completed'),
+      { contextName: 'StudentAchievementsService.exam_sessions', fallbackValue: [] }
+    );
+    const examSessions = examSessRes.data || [];
 
     const totalExamsCompleted = examSessions?.length || 0;
 
@@ -272,7 +274,7 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
         const badgeDef = ACHIEVEMENTS_CATALOG.find(b => b.key === key);
         if (badgeDef) {
           try {
-            await supabase.from('achievements').insert({
+            await supabase.from('user_badges').insert({
               user_id: userId,
               badge_key: badgeDef.key,
               title: badgeDef.title,

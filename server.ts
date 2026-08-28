@@ -42,6 +42,69 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Authentication & Authorization Middlewares
+async function verifyUserToken(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Missing or invalid Authorization header.' });
+  }
+
+  const token = authHeader.split(' ')[1]?.trim();
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Access token is missing.' });
+  }
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired access token.' });
+    }
+
+    (req as any).user = user;
+    next();
+  } catch (err: any) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Token verification failed.' });
+  }
+}
+
+async function verifyAdminToken(req: express.Request, res: express.Response, next: express.NextFunction) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Missing or invalid Authorization header.' });
+  }
+
+  const token = authHeader.split(' ')[1]?.trim();
+  if (!token) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Access token is missing.' });
+  }
+
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      return res.status(401).json({ success: false, error: 'Unauthorized: Invalid or expired access token.' });
+    }
+
+    const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    const userEmail = (user.email || '').toLowerCase().trim();
+
+    const { data: prof } = await supabase.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
+    const profRole = prof?.role;
+    const profEmail = (prof?.email || '').toLowerCase().trim();
+
+    const isAdmin = profRole === 'admin' || profRole === 'superadmin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || AUTHORIZED_ADMIN_EMAILS.includes(profEmail);
+
+    if (!isAdmin) {
+      return res.status(403).json({ success: false, error: 'Forbidden: Enterprise Administrator privileges required.' });
+    }
+
+    (req as any).user = user;
+    (req as any).adminUser = user;
+    next();
+  } catch (err: any) {
+    return res.status(401).json({ success: false, error: 'Unauthorized: Admin authentication check failed.' });
+  }
+}
+
 let cachedWorkingSmtpConfig: any = null;
 
 // Helper to resolve SMTP settings from DB (system_configs, admin_settings) or env or request
@@ -806,13 +869,18 @@ app.post('/api/groq-chat', async (req, res) => {
     // 2. Try DB admin_settings table
     if (!groqKey) {
       try {
-        const { data: dbKey } = await supabase
+        const { data: dbKeys } = await supabase
           .from('admin_settings')
           .select('setting_value')
-          .eq('setting_key', 'ai_api_keys')
-          .maybeSingle();
-        if (dbKey?.setting_value?.groq || dbKey?.setting_value?.groq_key) {
-          groqKey = dbKey.setting_value.groq || dbKey.setting_value.groq_key;
+          .in('setting_key', ['ai_api_keys', 'ai_api_settings', 'api_keys']);
+        if (dbKeys) {
+          for (const row of dbKeys) {
+            const val = row.setting_value?.apiKey || row.setting_value?.groq || row.setting_value?.groq_key;
+            if (val && typeof val === 'string' && val.trim().length > 10) {
+              groqKey = val.trim();
+              break;
+            }
+          }
         }
       } catch (_) {}
     }
@@ -822,7 +890,8 @@ app.post('/api/groq-chat', async (req, res) => {
     model,
     'llama-3.3-70b-versatile',
     'llama-3.1-8b-instant',
-    'mixtral-8x7b-32768',
+    'llama3-70b-8192',
+    'llama3-8b-8192',
     'gemma2-9b-it'
   ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
@@ -892,7 +961,7 @@ app.post('/api/groq-chat', async (req, res) => {
   if (geminiKey) {
     try {
       const prompt = messages.map((m: any) => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`, {
+      const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -1273,7 +1342,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 // =======================================================
 
 // API Route: Get all system configs (system_configs & admin_settings)
-app.get('/api/admin/system-configs', async (req, res) => {
+app.get('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
   try {
     const configs: any = {
       groq: {
@@ -1354,7 +1423,7 @@ app.get('/api/admin/system-configs', async (req, res) => {
 });
 
 // API Route: Save system configs to system_configs & admin_settings
-app.post('/api/admin/system-configs', async (req, res) => {
+app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
   try {
     const { groq, smtp, platform } = req.body;
 
@@ -1457,7 +1526,7 @@ app.post('/api/admin/system-configs', async (req, res) => {
 });
 
 // API Route: Test Groq API Key connectivity
-app.post('/api/admin/test-groq', async (req, res) => {
+app.post('/api/admin/test-groq', verifyAdminToken, async (req, res) => {
   const startTime = Date.now();
   try {
     const { apiKey, model = 'llama-3.3-70b-versatile' } = req.body;
@@ -2189,7 +2258,7 @@ app.post('/api/onboarding/complete', async (req, res) => {
 });
 
 // API Route: Server-Side Premium Subscription Grant (Bypasses Client-Side RLS)
-app.post('/api/admin/subscriptions/grant', async (req, res) => {
+app.post('/api/admin/subscriptions/grant', verifyAdminToken, async (req, res) => {
   const { user_id, plan_name = 'Lifetime Access (Gifted)', duration_years = 100 } = req.body;
   if (!user_id) {
     return res.status(400).json({ success: false, error: 'user_id is required' });
@@ -2266,7 +2335,7 @@ app.post('/api/admin/subscriptions/grant', async (req, res) => {
 });
 
 // API Route: Revoke Premium Subscription
-app.post('/api/admin/subscriptions/revoke', async (req, res) => {
+app.post('/api/admin/subscriptions/revoke', verifyAdminToken, async (req, res) => {
   const { user_id } = req.body;
   if (!user_id) {
     return res.status(400).json({ success: false, error: 'user_id is required' });
@@ -2294,7 +2363,7 @@ app.post('/api/admin/subscriptions/revoke', async (req, res) => {
 });
 
 // API Route: Full User Directory for Admin (Merged with Real-Time Server Overrides)
-app.get('/api/admin/users/directory', async (req, res) => {
+app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
   try {
     const { data: dbProfiles, error } = await supabase
       .from('profiles')
@@ -2323,7 +2392,7 @@ app.get('/api/admin/users/directory', async (req, res) => {
 });
 
 // API Route: Question Bank - Bulk & Single Insert (Server Admin Client)
-app.post('/api/questions/insert', async (req, res) => {
+app.post('/api/questions/insert', verifyAdminToken, async (req, res) => {
   const { questions } = req.body;
   if (!questions || !Array.isArray(questions) || questions.length === 0) {
     return res.status(400).json({ success: false, error: 'Array of questions is required.' });
@@ -2339,6 +2408,155 @@ app.post('/api/questions/insert', async (req, res) => {
   } catch (err: any) {
     console.error('[Server Questions Insert Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server insert failed.' });
+  }
+});
+
+// API Route: Server-Side OCR & Vision Content Extraction for Scanned PDFs, Images & Documents
+app.post('/api/admin/ocr-extract', verifyAdminToken, async (req, res) => {
+  try {
+    const { images, text, fileName = 'document', subjectHint = '' } = req.body;
+
+    if ((!images || !Array.isArray(images) || images.length === 0) && (!text || typeof text !== 'string' || text.trim().length === 0)) {
+      return res.status(400).json({ success: false, error: 'At least one page image (base64) or document text string is required for OCR processing.' });
+    }
+
+    const geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    const groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+
+    let extractedQuestions: any[] = [];
+    let processingProvider = 'none';
+
+    const systemPrompt = `You are a high-precision Educational Content OCR and Exam Question Ingestion Engine for Nigerian JAMB/UTME exams.
+Your task is to transcribe and extract ALL multiple-choice examination questions from the provided document/scanned page images.
+
+CRITICAL HARD CONSTRAINTS:
+1. DO NOT INVENT, FABRICATE, OR HALLUCINATE ANY QUESTION TEXT, OPTIONS, OR ANSWERS. Extract ONLY what is physically visible in the document.
+2. PRESERVE SCIENTIFIC, CHEMICAL, AND MATHEMATICAL NOTATION EXACTLY:
+   - Chemistry: Formulas like H₂SO₄, NaOH, CaCO₃, SO₄²⁻, chemical equations, reaction arrows.
+   - Mathematics: Exponents like x², square roots like √x, fractions like \\frac{a}{b} or a/b, Greek symbols like α, β, θ, equations.
+   - Physics: Units like m/s², N/m², vectors, equations.
+3. IDENTIFY ALL MULTIPLE-CHOICE OPTIONS (A, B, C, D). If options are partially missing or unclear, extract what is visible and set "needs_review": true.
+4. If a question depends on or references a diagram, figure, chart, circuit, or graph in the document page, set "has_diagram": true and include a brief description in "diagram_description".
+5. Subject context hint: "${subjectHint || 'UTME Exam Question'}".
+
+Return ONLY a STRICT JSON array of objects with NO markdown formatting outside the JSON array:
+[
+  {
+    "question_number": "1",
+    "question_text": "Exact transcribed question text with KaTeX/Unicode math and chemistry formatting",
+    "options": ["A) Option A text", "B) Option B text", "C) Option C text", "D) Option D text"],
+    "correct_answer": "A",
+    "explanation": "Extracted solution or explanation if printed on document, else empty string",
+    "subject": "${subjectHint || 'General'}",
+    "topic": "Detected topic or empty string",
+    "has_diagram": false,
+    "diagram_description": "",
+    "confidence": "high",
+    "needs_review": false,
+    "review_reason": ""
+  }
+]`;
+
+    // Strategy 1: Gemini Vision API (Multimodal base64 page images)
+    if (images && images.length > 0 && geminiKey) {
+      try {
+        const parts: any[] = [{ text: systemPrompt }];
+
+        for (const imgDataUrl of images.slice(0, 8)) {
+          const match = imgDataUrl.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+          if (match) {
+            parts.push({
+              inlineData: {
+                mimeType: match[1],
+                data: match[2]
+              }
+            });
+          }
+        }
+
+        const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            generationConfig: {
+              temperature: 0.1,
+              responseMimeType: 'application/json'
+            }
+          })
+        });
+
+        if (geminiRes.ok) {
+          const gemData = await geminiRes.json();
+          const respText = gemData?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          const cleanedText = respText.replace(/```json/gi, '').replace(/```/g, '').trim();
+          try {
+            const parsed = JSON.parse(cleanedText);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              extractedQuestions = parsed;
+              processingProvider = 'gemini-1.5-flash-vision';
+            }
+          } catch (pErr) {
+            console.warn('Gemini vision JSON parse warning:', pErr);
+          }
+        }
+      } catch (gemErr) {
+        console.warn('Gemini vision OCR error:', gemErr);
+      }
+    }
+
+    // Strategy 2: Groq Vision / LLM API Fallback
+    if (extractedQuestions.length === 0) {
+      try {
+        const promptText = text || 'Extracted document text block for question extraction';
+        const groqMessages = [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: `Transcribe and extract questions from document: '${fileName}'\n\nContent:\n${promptText}` }
+        ];
+
+        const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${groqKey || process.env.GROQ_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'llama-3.3-70b-versatile',
+            messages: groqMessages,
+            temperature: 0.1
+          })
+        });
+
+        if (groqRes.ok) {
+          const groqData = await groqRes.json();
+          const content = groqData.choices?.[0]?.message?.content || '';
+          const cleanedText = content.replace(/```json/gi, '').replace(/```/g, '').trim();
+          try {
+            const parsed = JSON.parse(cleanedText);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              extractedQuestions = parsed;
+              processingProvider = 'groq-llama-3.3-70b';
+            }
+          } catch (pErr) {
+            console.warn('Groq OCR JSON parse warning:', pErr);
+          }
+        }
+      } catch (groqErr) {
+        console.warn('Groq OCR fallback error:', groqErr);
+      }
+    }
+
+    return res.json({
+      success: true,
+      provider: processingProvider,
+      count: extractedQuestions.length,
+      questions: extractedQuestions,
+      isScannedPdf: !!(images && images.length > 0)
+    });
+
+  } catch (err: any) {
+    console.error('OCR Extraction error:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Server OCR processing failed.' });
   }
 });
 
@@ -2422,7 +2640,7 @@ app.post('/api/admin/device/reset', async (req, res) => {
 });
 
 // API Route: Admin User Status Update (Suspend, Ban, Reactivate)
-app.post('/api/admin/users/status', async (req, res) => {
+app.post('/api/admin/users/status', verifyAdminToken, async (req, res) => {
   const { user_id, status, reason } = req.body;
   if (!user_id || !status) {
     return res.status(400).json({ success: false, error: 'user_id and status are required.' });
@@ -2511,7 +2729,7 @@ app.post('/api/admin/users/status', async (req, res) => {
 });
 
 // API Route: Admin User Role Update
-app.post('/api/admin/users/role', async (req, res) => {
+app.post('/api/admin/users/role', verifyAdminToken, async (req, res) => {
   const { user_id, role } = req.body;
   if (!user_id || !role) {
     return res.status(400).json({ success: false, error: 'user_id and role are required.' });
@@ -2554,7 +2772,7 @@ app.post('/api/admin/users/role', async (req, res) => {
 });
 
 // API Route: Admin User Complete Deletion
-app.post('/api/admin/users/delete', async (req, res) => {
+app.post('/api/admin/users/delete', verifyAdminToken, async (req, res) => {
   const { user_id } = req.body;
   if (!user_id) {
     return res.status(400).json({ success: false, error: 'user_id is required.' });
@@ -2597,10 +2815,18 @@ app.post('/api/admin/users/delete', async (req, res) => {
 });
 
 // API Route: Guardian Portal - Link Student by Student Identifier / Invite Code
-app.post('/api/guardian/link', async (req, res) => {
-  const { guardianId, studentId, inviteCode } = req.body;
+app.post('/api/guardian/link', verifyUserToken, async (req, res) => {
+  const reqUser = (req as any).user;
+  const { guardianId = reqUser?.id, studentId, inviteCode } = req.body;
   if (!guardianId || (!studentId && !inviteCode)) {
     return res.status(400).json({ success: false, error: 'guardianId and (studentId or inviteCode) are required.' });
+  }
+
+  // Authorize: Only allow linking for self unless enterprise admin
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const isAdmin = AUTHORIZED_ADMIN_EMAILS.includes((reqUser?.email || '').toLowerCase().trim());
+  if (reqUser.id !== guardianId && !isAdmin) {
+    return res.status(403).json({ success: false, error: 'Unauthorized: Cannot modify ward relationships for another account.' });
   }
 
   try {
@@ -2878,11 +3104,19 @@ app.post('/api/guardian/send-weekly-reports', async (req, res) => {
   }
 });
 
-// API Route: Guardian Portal - Get Linked Students (strictly scoped by guardian_id)
-app.get('/api/guardian/students', async (req, res) => {
-  const guardianId = req.query.guardianId as string;
+// API Route: Guardian Portal - Get Linked Students (strictly scoped by authenticated user or guardian_id)
+app.get('/api/guardian/students', verifyUserToken, async (req, res) => {
+  const reqUser = (req as any).user;
+  const guardianId = (req.query.guardianId as string) || reqUser?.id;
   if (!guardianId) {
-    return res.status(400).json({ success: false, error: 'guardianId query parameter is required.' });
+    return res.status(400).json({ success: false, error: 'guardianId is required.' });
+  }
+
+  // Authorize: Only allow querying own guardian records unless enterprise admin
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const isAdmin = AUTHORIZED_ADMIN_EMAILS.includes((reqUser?.email || '').toLowerCase().trim());
+  if (reqUser.id !== guardianId && !isAdmin) {
+    return res.status(403).json({ success: false, error: 'Unauthorized access to guardian ward directory.' });
   }
 
   try {
@@ -2958,11 +3192,20 @@ app.get('/api/guardian/students', async (req, res) => {
 });
 
 // API Route: Guardian Portal - Get Comprehensive Student Performance & Analytics
-app.post('/api/guardian/student-details', async (req, res) => {
-  const { guardianId, studentId } = req.body;
+app.post('/api/guardian/student-details', verifyUserToken, async (req, res) => {
+  const reqUser = (req as any).user;
+  const guardianId = req.body.guardianId || reqUser?.id;
+  const { studentId } = req.body;
 
   if (!guardianId || !studentId) {
     return res.status(400).json({ success: false, error: 'Both guardianId and studentId are required.' });
+  }
+
+  // Security Check: Verify requesting user is either the guardian or an enterprise admin
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const isAdmin = AUTHORIZED_ADMIN_EMAILS.includes((reqUser?.email || '').toLowerCase().trim());
+  if (reqUser.id !== guardianId && !isAdmin) {
+    return res.status(403).json({ success: false, error: 'Unauthorized: Cannot access analytics for another guardian.' });
   }
 
   try {

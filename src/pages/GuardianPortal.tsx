@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
+import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
@@ -52,7 +53,7 @@ const GuardianPortal = () => {
       // 1. Try server-side Supabase joined endpoint first
       let loadedStudents: any[] | null = null;
       try {
-        const response = await fetch(`/api/guardian/students?guardianId=${encodeURIComponent(profile.id)}`);
+        const response = await authFetch(`/api/guardian/students?guardianId=${encodeURIComponent(profile.id)}`);
         if (response.ok) {
           const json = await response.json();
           if (json.success && Array.isArray(json.students)) {
@@ -167,7 +168,7 @@ const GuardianPortal = () => {
 
       // 1. Try server-side analytical endpoint
       try {
-        const response = await fetch('/api/guardian/student-details', {
+        const response = await authFetch('/api/guardian/student-details', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ guardianId: profile.id, studentId })

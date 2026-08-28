@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/utils';
+import { authFetch } from '@/lib/apiAuth';
 import { 
   Users, Download, ShieldCheck, Search, Filter, ArrowUpDown, 
   ChevronLeft, ChevronRight, Flame, Smartphone, RefreshCw,
@@ -93,7 +94,7 @@ export const StudentsTab = () => {
     try {
       let profData: any[] = [];
       try {
-        const res = await fetch(getApiUrl('/api/admin/users/directory'));
+        const res = await authFetch(getApiUrl('/api/admin/users/directory'));
         const json = await res.json();
         if (json && json.success && Array.isArray(json.profiles)) {
           profData = json.profiles;
@@ -298,7 +299,7 @@ export const StudentsTab = () => {
     try {
       // 1. Call server API (non-blocking)
       try {
-        await fetch(getApiUrl('/api/admin/users/status'), {
+        await authFetch(getApiUrl('/api/admin/users/status'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -353,7 +354,7 @@ export const StudentsTab = () => {
   const handleReactivateUser = async (user: Profile) => {
     try {
       try {
-        await fetch(getApiUrl('/api/admin/users/status'), {
+        await authFetch(getApiUrl('/api/admin/users/status'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -413,7 +414,7 @@ export const StudentsTab = () => {
       async () => {
         try {
           try {
-            await fetch(getApiUrl('/api/admin/users/delete'), {
+            await authFetch(getApiUrl('/api/admin/users/delete'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ user_id: user.id })
@@ -443,7 +444,7 @@ export const StudentsTab = () => {
   const handleRoleChange = async (userId: string, newRole: string) => {
     try {
       try {
-        await fetch(getApiUrl('/api/admin/users/role'), {
+        await authFetch(getApiUrl('/api/admin/users/role'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ user_id: userId, role: newRole })
@@ -496,7 +497,7 @@ export const StudentsTab = () => {
             .update({ has_paid: true, updated_at: new Date().toISOString() })
             .eq('id', user.id);
 
-          await fetch(getApiUrl('/api/admin/subscriptions/grant'), {
+          await authFetch(getApiUrl('/api/admin/subscriptions/grant'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -561,7 +562,7 @@ export const StudentsTab = () => {
         try {
           const ids = Array.from(selectedIds);
           for (const id of ids) {
-            fetch(getApiUrl('/api/admin/subscriptions/grant'), {
+            authFetch(getApiUrl('/api/admin/subscriptions/grant'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ user_id: id })
@@ -587,7 +588,7 @@ export const StudentsTab = () => {
       `Reset registered hardware device for ${user.full_name || user.email}? This will permit them to bind a new device on their next sign-in.`,
       async () => {
         try {
-          fetch(getApiUrl('/api/admin/device/reset'), {
+          authFetch(getApiUrl('/api/admin/device/reset'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id })

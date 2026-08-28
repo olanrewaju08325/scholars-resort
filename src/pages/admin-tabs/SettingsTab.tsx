@@ -43,7 +43,7 @@ export const SettingsTab = () => {
   const [smtpHost, setSmtpHost] = useState('smtp.gmail.com');
   const [smtpPort, setSmtpPort] = useState('587');
   const [smtpUser, setSmtpUser] = useState('admitwise2@gmail.com');
-  const [smtpPass, setSmtpPass] = useState('fliwopndlqxipara');
+  const [smtpPass, setSmtpPass] = useState('');
   const [smtpFrom, setSmtpFrom] = useState('Scholars Resort <admitwise2@gmail.com>');
   const [smtpSecure, setSmtpSecure] = useState(false);
   const [showSmtpPass, setShowSmtpPass] = useState(false);
@@ -205,13 +205,7 @@ export const SettingsTab = () => {
           setting_key: 'api_keys',
           setting_value: {
             paystack: paystackKey,
-            stripe: stripeKey,
-            smtp_host: smtpHost,
-            smtp_port: smtpPort,
-            smtp_user: smtpUser,
-            smtp_pass: smtpPass,
-            smtp_from: smtpFrom,
-            groq: groqKey
+            stripe: stripeKey
           }
         }
       ], { onConflict: 'setting_key' });

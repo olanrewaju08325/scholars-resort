@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,11 +24,7 @@ export const ScholarshipTab = () => {
   const [discountValue, setDiscountValue] = useState(10);
   const [maxUses, setMaxUses] = useState(100);
 
-  useEffect(() => {
-    fetchCodes();
-  }, []);
-
-  const fetchCodes = async () => {
+  const fetchCodes = useCallback(async () => {
     setLoading(true);
     const { data, error } = await supabase
       .from('discount_codes')
@@ -39,7 +35,11 @@ export const ScholarshipTab = () => {
       setCodes(data);
     }
     setLoading(false);
-  };
+  }, []);
+
+  useEffect(() => {
+    fetchCodes();
+  }, [fetchCodes]);
 
   const handleCreateCode = async (e: React.FormEvent) => {
     e.preventDefault();

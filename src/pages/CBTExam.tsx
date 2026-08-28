@@ -1189,6 +1189,15 @@ const CBTExam = () => {
           >
             <div className="text-base md:text-xl leading-relaxed font-medium text-foreground">
               <MathText text={q.question_text} />
+              {q.image_url && (
+                <div className="my-4 flex justify-start">
+                  <img 
+                    src={q.image_url} 
+                    alt="Question diagram" 
+                    className="max-h-72 max-w-full object-contain rounded-lg border border-border shadow-xs bg-white p-2" 
+                  />
+                </div>
+              )}
             </div>
             
             <div className="grid grid-cols-1 gap-3 md:gap-4 max-w-3xl">

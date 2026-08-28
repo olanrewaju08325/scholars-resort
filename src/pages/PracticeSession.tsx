@@ -74,6 +74,7 @@ const PracticeSession = () => {
   // AI State
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
   const [aiExplanation, setAiExplanation] = useState<string | null>(null);
+  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
 
   const currentQ = questions[currentIndex];
   const selectedAns = currentQ ? answersMap[currentQ.id] || null : null;
@@ -403,7 +404,6 @@ const PracticeSession = () => {
 
   const q = currentQ;
   const answeredCount = Object.keys(answersMap).length;
-  const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
 
   const handleTakeSnapshot = async () => {
     setIsCapturingSnapshot(true);
@@ -568,6 +568,16 @@ const PracticeSession = () => {
               <p className="text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium">
                 {cleanQuestionText(q.question_text || q.question)}
               </p>
+
+              {q.image_url && (
+                <div className="my-4 flex justify-center">
+                  <img 
+                    src={q.image_url} 
+                    alt="Question diagram or visual figure" 
+                    className="max-h-72 max-w-full object-contain rounded-xl border border-border shadow-xs bg-white p-2" 
+                  />
+                </div>
+              )}
               
               <div className="space-y-3 md:space-y-4">
                 {q.options.map((opt: string, i: number) => {

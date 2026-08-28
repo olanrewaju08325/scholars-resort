@@ -6,12 +6,28 @@ const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi
 
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
-
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// 60-second in-memory cache for serverless invocation reuse
+let cachedData: any = null;
+let lastCacheTime = 0;
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  }
+
+  if (cachedData && (Date.now() - lastCacheTime < 60000)) {
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
+    return res.status(200).json(cachedData);
   }
 
   try {
@@ -20,32 +36,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .select('id, name');
 
     if (subError) {
-      return res.status(200).json({ success: false, error: subError.message, counts: {}, years: {} });
+      return res.status(200).json({ success: false, error: subError.message, counts: {}, totalCounts: {}, canonicalCounts: {}, years: {} });
     }
 
     const counts: Record<string, number> = {};
+    const totalCounts: Record<string, number> = {};
     const canonicalCounts: Record<string, number> = {};
     const years: Record<string, string[]> = {};
 
     if (subjects && subjects.length > 0) {
       await Promise.all(
         subjects.map(async (sub) => {
-          // Exact count from Database using head: true
-          const { count, error: countError } = await supabase
+          const { count: activeCount } = await supabase
             .from('questions')
             .select('id', { count: 'exact', head: true })
             .eq('subject_id', sub.id)
             .eq('is_active', true);
 
-          if (!countError && count !== null) {
-            counts[sub.id] = count;
-            const canonical = sub.name.trim().toLowerCase();
-            canonicalCounts[canonical] = count;
-          } else {
-            counts[sub.id] = 0;
-          }
+          const { count: totalCount } = await supabase
+            .from('questions')
+            .select('id', { count: 'exact', head: true })
+            .eq('subject_id', sub.id);
 
-          // Fetch past years with active questions
+          const finalActive = activeCount ?? 0;
+          const finalTotal = totalCount ?? 0;
+
+          counts[sub.id] = finalActive;
+          totalCounts[sub.id] = finalTotal;
+          canonicalCounts[sub.name.trim().toLowerCase()] = finalActive;
+
           const { data: yearsData } = await supabase
             .from('questions')
             .select('exam_year')
@@ -54,9 +73,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             .not('exam_year', 'is', null)
             .limit(100);
 
-          if (yearsData) {
-            const uniqueYears = Array.from(new Set(yearsData.map(y => String(y.exam_year)).filter(Boolean))).sort();
-            years[sub.id] = uniqueYears;
+          if (yearsData && yearsData.length > 0) {
+            years[sub.id] = Array.from(
+              new Set(yearsData.map((y: any) => String(y.exam_year).trim()))
+            ).filter(Boolean).sort().reverse();
           } else {
             years[sub.id] = [];
           }
@@ -64,13 +84,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       );
     }
 
-    return res.status(200).json({
-      success: true,
-      counts,
-      canonicalCounts,
-      years
-    });
+    cachedData = { success: true, counts, totalCounts, canonicalCounts, years };
+    lastCacheTime = Date.now();
+
+    res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate');
+    return res.status(200).json(cachedData);
   } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message || 'Failed to fetch subject counts.' });
+    return res.status(500).json({ success: false, error: err.message });
   }
 }

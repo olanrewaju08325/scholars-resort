@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { callGroqAPI } from '@/services/aiService';
+import { callGroqAPI, setLocalGroqApiKey } from '@/services/aiService';
 import { aiRateLimiter } from '@/services/aiRateLimiter';
 import type { AIQuotaStatus } from '@/services/aiRateLimiter';
 import { AISimulationTester } from '@/components/admin/AISimulationTester';
@@ -116,14 +116,16 @@ export const AdminAITab = () => {
 
   const handleUpdateKey = async () => {
     if (!newKeyInput.trim()) {
-      toast.error('Please enter a valid Groq/Gemini API Key.');
+      toast.error('Please enter a valid Groq API Key.');
       return;
     }
     setUpdatingKey(true);
     try {
-      const updated = await aiRateLimiter.updateKeyAndResetQuota(newKeyInput.trim(), 'gemini', 100000);
+      setLocalGroqApiKey(newKeyInput.trim());
+      const updated = await aiRateLimiter.updateKeyAndResetQuota(newKeyInput.trim(), 'groq', 100000);
       setQuotaStatus(updated);
       setNewKeyInput('');
+      toast.success('Groq API Key updated successfully!');
     } catch (e: any) {
       toast.error(e.message);
     } finally {

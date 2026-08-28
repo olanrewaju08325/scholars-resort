@@ -79,12 +79,6 @@ export const QuestionBankTab = () => {
     isDeleting: false
   });
 
-  useEffect(() => {
-    const handleQuestionsUpdated = () => fetchData();
-    window.addEventListener('questions_updated', handleQuestionsUpdated);
-    return () => window.removeEventListener('questions_updated', handleQuestionsUpdated);
-  }, []);
-
   const fetchData = async () => {
     let dbQuestions: any[] = [];
     try {
@@ -134,6 +128,9 @@ export const QuestionBankTab = () => {
 
   useEffect(() => {
     fetchData();
+    const handleQuestionsUpdated = () => fetchData();
+    window.addEventListener('questions_updated', handleQuestionsUpdated);
+    return () => window.removeEventListener('questions_updated', handleQuestionsUpdated);
   }, []);
 
   useEffect(() => {

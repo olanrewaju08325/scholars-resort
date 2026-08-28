@@ -1,6 +1,7 @@
 import React from 'react';
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/utils';
+import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 
 export interface FileUploadOptions {
@@ -63,15 +64,24 @@ export const convertFileToBase64 = (file: File): Promise<string> => {
 /**
  * XHR Upload Helper with progress tracking for server proxy route
  */
-const uploadPayloadViaXHR = (
+const uploadPayloadViaXHR = async (
   url: string,
   payload: any,
   onUploadProgress?: (pct: number) => void
 ): Promise<any> => {
+  let token = '';
+  try {
+    const { data } = await supabase.auth.getSession();
+    token = data.session?.access_token || '';
+  } catch (_) {}
+
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', url);
     xhr.setRequestHeader('Content-Type', 'application/json');
+    if (token) {
+      xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+    }
 
     if (xhr.upload) {
       xhr.upload.onprogress = (evt) => {
@@ -276,7 +286,7 @@ export const uploadMaterialFile = async (options: FileUploadOptions): Promise<Fi
 
   // 4. Metadata updates
   try {
-    await fetch(getApiUrl('/api/admin/materials/upload-metadata'), {
+    await authFetch(getApiUrl('/api/admin/materials/upload-metadata'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -504,7 +514,7 @@ USING (true);`;
  */
 export const checkStorageDiagnostics = async (): Promise<StorageDiagnosticsResponse> => {
   try {
-    const response = await fetch(getApiUrl('/api/admin/storage/verify'));
+    const response = await authFetch(getApiUrl('/api/admin/storage/verify'));
     if (response.ok) {
       const data: StorageDiagnosticsResponse = await response.json();
       return data;

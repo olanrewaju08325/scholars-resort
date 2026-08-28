@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getApiUrl } from '@/lib/utils';
+import { authFetch } from '@/lib/apiAuth';
 import { checkLibraryMaterialsPermissions } from '@/services/fileUploadService';
 import { BulkUploadManager } from '@/components/admin/BulkUploadManager';
 import { StorageDiagnostics } from '@/components/admin/StorageDiagnostics';
@@ -111,7 +112,7 @@ WITH CHECK (bucket_id IN ('study-materials', 'materials', 'library'));`;
   const fetchBucketDiagnostics = async (showToast = false) => {
     setDiagnosticsLoading(true);
     try {
-      const res = await fetch(getApiUrl('/api/admin/storage/verify'));
+      const res = await authFetch(getApiUrl('/api/admin/storage/verify'));
       if (res.ok) {
         const data = await res.json();
         setBucketDiagnostics(data);
@@ -270,7 +271,7 @@ WITH CHECK (bucket_id IN ('study-materials', 'materials', 'library'));`;
         const base64Data = await fileToBase64(fileObj);
         onProgress?.(80, 'Processing file payload via backend proxy...');
 
-        const response = await fetch(getApiUrl('/api/admin/materials/upload-file'), {
+        const response = await authFetch(getApiUrl('/api/admin/materials/upload-file'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -321,7 +322,7 @@ WITH CHECK (bucket_id IN ('study-materials', 'materials', 'library'));`;
 
     // Server-side metadata insert (Bypasses Client RLS)
     try {
-      await fetch(getApiUrl('/api/admin/materials/upload-metadata'), {
+      await authFetch(getApiUrl('/api/admin/materials/upload-metadata'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -494,7 +495,7 @@ WITH CHECK (bucket_id IN ('study-materials', 'materials', 'library'));`;
         setMaterials(prev => prev.filter(m => m.id !== id && (!title || m.title?.toLowerCase().trim() !== title.toLowerCase().trim())));
 
         try {
-          await fetch(getApiUrl('/api/admin/materials/delete'), {
+          await authFetch(getApiUrl('/api/admin/materials/delete'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id, title, file_path: filePath })

@@ -37,20 +37,20 @@ export const Badges: React.FC = () => {
     if (!user?.id) return;
     try {
       setLoading(true);
-      // Fetch user's unlocked achievements from Supabase
-      const { data: unlockedData, error: achErr } = await supabase
-        .from('achievements')
-        .select('*')
-        .eq('user_id', user.id);
+      // Fetch user's unlocked achievements from Supabase user_badges
+      const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+      const achRes = await safeSupabaseQuery<any[]>(
+        supabase.from('user_badges').select('*').eq('user_id', user.id),
+        { contextName: 'Badges.fetchBadges.user_badges', fallbackValue: [] }
+      );
+      const unlockedData = achRes.data || [];
 
-      if (achErr) console.warn('Fetch achievements error:', achErr);
-
-      // Fetch completed exam sessions
-      const { data: allSessions } = await supabase
-        .from('exam_sessions')
-        .select('score, total_questions, created_at, status')
-        .eq('user_id', user!.id)
-        .eq('status', 'completed');
+      // Fetch completed exam sessions safely
+      const sessRes = await safeSupabaseQuery<any[]>(
+        supabase.from('exam_sessions').select('score, total_questions, created_at, status').eq('user_id', user.id).eq('status', 'completed'),
+        { contextName: 'Badges.fetchBadges.exam_sessions', fallbackValue: [] }
+      );
+      const allSessions = sessRes.data || [];
 
       const completedCount = allSessions?.length || 0;
       
@@ -106,13 +106,15 @@ export const Badges: React.FC = () => {
         for (const key of toUnlock) {
           const def = BADGE_DEFINITIONS.find((d) => d.key === key);
           if (def) {
-            await supabase.from('achievements').insert({
-              user_id: user!.id,
-              badge_key: key,
-              title: def.title,
-              description: def.description,
-              icon: def.icon
-            });
+            try {
+              await supabase.from('user_badges').insert({
+                user_id: user.id,
+                badge_key: key,
+                title: def.title,
+                description: def.description,
+                icon: def.icon
+              });
+            } catch {}
             unlockedKeysMap.set(key, new Date().toISOString());
             triggerConfetti();
             playSuccessChime();

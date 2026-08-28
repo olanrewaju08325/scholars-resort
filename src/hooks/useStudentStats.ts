@@ -20,13 +20,16 @@ export function useStudentStats() {
     if (!profile) return;
 
     const fetchStats = async () => {
-      // 1. Fetch completed exam sessions
-      const { data: sessions } = await supabase
-        .from('exam_sessions')
-        .select('score, total_questions, started_at, submitted_at')
-        .eq('user_id', profile.id)
-        .eq('status', 'submitted')
-        .order('submitted_at', { ascending: true });
+      // 1. Fetch completed exam sessions safely
+      const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+      const sessRes = await safeSupabaseQuery<any[]>(
+        supabase
+          .from('exam_sessions')
+          .select('score, total_questions, started_at, created_at, status')
+          .eq('user_id', profile.id),
+        { contextName: 'useStudentStats.exam_sessions', fallbackValue: [] }
+      );
+      const sessions = (sessRes.data || []).filter(s => s.status === 'submitted' || s.status === 'completed');
 
       let examsTaken = 0;
       let totalScore = 0;

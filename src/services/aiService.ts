@@ -68,24 +68,30 @@ export function safeParseAIJSON<T = any>(rawText: string, fallbackValue?: T): T 
   throw new Error(`Failed to parse JSON from AI output: ${rawText.substring(0, 100)}...`);
 }
 
-// Cached API Key
+// In-memory Cached API Key (never saved to localStorage for security)
 let cachedGroqKey: string | null = null;
+
+// Purge any legacy credentials from localStorage
+try {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('groq_api_key');
+    localStorage.removeItem('groq_key');
+    localStorage.removeItem('gemini_api_key');
+  }
+} catch (_) {}
 
 export const setLocalGroqApiKey = (key: string) => {
   if (key && key.trim()) {
     cachedGroqKey = key.trim();
-    localStorage.setItem('groq_api_key', key.trim());
     return true;
   }
   return false;
 };
 
 export const getGroqApiKey = async (): Promise<string> => {
-  // 1. Check local environment or localStorage
+  // 1. Check local environment variable or in-memory session cache
   const envKey = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GROQ_API_KEY || import.meta.env?.GROQ_API_KEY)) || 
-                 (typeof process !== 'undefined' && (process.env?.GROQ_API_KEY || process.env?.VITE_GROQ_API_KEY)) ||
-                 localStorage.getItem('groq_api_key') || 
-                 localStorage.getItem('groq_key');
+                 (typeof process !== 'undefined' && (process.env?.GROQ_API_KEY || process.env?.VITE_GROQ_API_KEY));
                  
   if (envKey && envKey.trim().length > 10 && !envKey.includes('placeholder')) {
     return envKey.trim();
@@ -98,14 +104,13 @@ export const getGroqApiKey = async (): Promise<string> => {
     const { data } = await supabase
       .from('admin_settings')
       .select('setting_key, setting_value')
-      .in('setting_key', ['ai_api_keys', 'api_keys', 'groq_api_key', 'ai_config', 'global_config']);
+      .in('setting_key', ['ai_api_keys', 'ai_api_settings', 'api_keys', 'groq_api_key', 'ai_config', 'global_config']);
 
     if (data) {
       for (const row of data) {
-        const val = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key || (typeof row.setting_value === 'string' ? row.setting_value : '');
+        const val = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key || row.setting_value?.apiKey || (typeof row.setting_value === 'string' ? row.setting_value : '');
         if (typeof val === 'string' && val.trim().length > 10 && !val.includes('placeholder')) {
           cachedGroqKey = val.trim();
-          localStorage.setItem('groq_api_key', cachedGroqKey);
           return cachedGroqKey;
         }
       }
@@ -126,7 +131,6 @@ export const getGroqApiKey = async (): Promise<string> => {
       const val = pConfig.value.groq_api_key || pConfig.value.groq;
       if (typeof val === 'string' && val.trim().length > 10) {
         cachedGroqKey = val.trim();
-        localStorage.setItem('groq_api_key', cachedGroqKey);
         return cachedGroqKey;
       }
     }
@@ -140,8 +144,7 @@ let cachedGeminiKey: string | null = null;
 
 export const getGeminiApiKey = async (): Promise<string> => {
   const envKey = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GEMINI_API_KEY || import.meta.env?.GEMINI_API_KEY)) || 
-                 (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY)) ||
-                 localStorage.getItem('gemini_api_key');
+                 (typeof process !== 'undefined' && (process.env?.GEMINI_API_KEY || process.env?.VITE_GEMINI_API_KEY));
                  
   if (envKey && envKey.trim().length > 10 && !envKey.includes('placeholder')) {
     return envKey.trim();
@@ -160,7 +163,6 @@ export const getGeminiApiKey = async (): Promise<string> => {
         const val = row.setting_value?.gemini || row.setting_value?.gemini_key || row.setting_value?.gemini_api_key || (typeof row.setting_value === 'string' ? row.setting_value : '');
         if (typeof val === 'string' && val.trim().length > 10 && !val.includes('placeholder')) {
           cachedGeminiKey = val.trim();
-          localStorage.setItem('gemini_api_key', cachedGeminiKey);
           return cachedGeminiKey;
         }
       }
@@ -176,7 +178,7 @@ export const callGeminiAPI = async (messages: Array<{ role: string; content: str
 
   try {
     const prompt = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key=${key}`, {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -428,18 +430,7 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     }
   }
 
-  // 2. Fallback to Gemini API if available
-  try {
-    const geminiRes = await callGeminiAPI(messages);
-    if (geminiRes) {
-      aiCircuitBreaker.recordSuccess();
-      return stripThinkTags(geminiRes);
-    }
-  } catch {
-    aiCircuitBreaker.recordFailure();
-  }
-
-  // 3. Fallback to Local Express AI proxy without edge function
+  // 2. Primary Groq Server Proxy (uses server Groq API Key or DB config)
   try {
     const localRes = await fetch('/api/groq-chat', {
       method: 'POST',
@@ -448,10 +439,22 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
     });
     if (localRes.ok) {
       const data = await localRes.json();
-      if (data?.text || data?.content) {
+      const textVal = data?.choices?.[0]?.message?.content || data?.text || data?.content;
+      if (textVal) {
         aiCircuitBreaker.recordSuccess();
-        return stripThinkTags(data?.text || data?.content || '');
+        return stripThinkTags(textVal);
       }
+    }
+  } catch {
+    aiCircuitBreaker.recordFailure();
+  }
+
+  // 3. Secondary Fallback to Gemini API if available
+  try {
+    const geminiRes = await callGeminiAPI(messages);
+    if (geminiRes) {
+      aiCircuitBreaker.recordSuccess();
+      return stripThinkTags(geminiRes);
     }
   } catch {
     aiCircuitBreaker.recordFailure();

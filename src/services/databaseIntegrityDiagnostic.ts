@@ -208,7 +208,7 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
   try {
     const { data: dbQuestions, error: qErr } = await supabase
       .from('questions')
-      .select('id, question_text, subject_id, topic_id, options, correct_answer, answer_index, subjects(name)');
+      .select('id, question_text, subject_id, topic_id, options, correct_answer, subjects(name)');
 
     if (qErr) {
       issues.push({
@@ -247,7 +247,7 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
         }
 
         // Missing Correct Answer
-        if (!q.correct_answer && q.answer_index === undefined && q.answer_index === null) {
+        if (!q.correct_answer && (q as any).correct_option === undefined && (q as any).answer_index === undefined) {
           questionMetrics.missingAnswerCount++;
         }
 

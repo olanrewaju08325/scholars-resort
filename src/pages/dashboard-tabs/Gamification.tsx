@@ -36,18 +36,11 @@ export const Gamification = () => {
         setUserXP(userData.xp);
       }
 
-      // 2. Fetch badges earned by user from both user_badges and achievements
-      const [userBadgesRes, achRes] = await Promise.allSettled([
-        supabase.from('user_badges').select('badge_id').eq('student_id', profile.id),
-        supabase.from('achievements').select('badge_key').eq('user_id', profile.id)
-      ]);
-
+      // 2. Fetch badges earned by user from user_badges
+      const userBadgesRes = await supabase.from('user_badges').select('*').or(`student_id.eq.${profile.id},user_id.eq.${profile.id}`);
       const earnedSet = new Set<string>();
-      if (userBadgesRes.status === 'fulfilled' && userBadgesRes.value.data) {
-        userBadgesRes.value.data.forEach((ub: any) => earnedSet.add(ub.badge_id));
-      }
-      if (achRes.status === 'fulfilled' && achRes.value.data) {
-        achRes.value.data.forEach((ach: any) => earnedSet.add(ach.badge_key));
+      if (userBadgesRes.data) {
+        userBadgesRes.data.forEach((ub: any) => earnedSet.add(ub.badge_id || ub.badge_key));
       }
 
       setEarnedBadgeKeys(earnedSet);

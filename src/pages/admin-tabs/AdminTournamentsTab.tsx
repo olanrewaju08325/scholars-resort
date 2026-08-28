@@ -52,10 +52,6 @@ export const AdminTournamentsTab = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const { confirmAction, ConfirmElement } = useConfirm();
 
-  useEffect(() => {
-    fetchTournaments();
-  }, []);
-
   const fetchTournaments = async () => {
     setLoading(true);
     const { data, error } = await supabase
@@ -65,6 +61,10 @@ export const AdminTournamentsTab = () => {
     if (!error && data) setTournaments(data);
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetchTournaments();
+  }, []);
 
   const fetchParticipants = async (tournamentId: string) => {
     try {

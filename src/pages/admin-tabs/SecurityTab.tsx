@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/utils';
+import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 import { ShieldAlert, Shield, Search, UserX, UserCheck, Ban, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -116,7 +117,7 @@ export const SecurityTab = () => {
       async () => {
         try {
           try {
-            await fetch(getApiUrl('/api/admin/users/status'), {
+            await authFetch(getApiUrl('/api/admin/users/status'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -158,7 +159,7 @@ export const SecurityTab = () => {
       async () => {
         try {
           try {
-            await fetch(getApiUrl('/api/admin/users/status'), {
+            await authFetch(getApiUrl('/api/admin/users/status'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

@@ -1,5 +1,13 @@
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/apiAuth';
+
+// Security Cleanup: Purge any legacy API keys from localStorage
+try {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem('groq_api_key');
+  }
+} catch (_) {}
 
 export interface GroqSystemConfig {
   apiKey: string;
@@ -90,7 +98,7 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
 
   try {
     // 1. Try server-side API first for fresh, secure server configs
-    const res = await fetch('/api/admin/system-configs');
+    const res = await authFetch('/api/admin/system-configs');
     if (res.ok) {
       const data = await res.json();
       if (data.configs) {
@@ -104,12 +112,15 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
 
   // 2. Direct Supabase Query fallback
   try {
-    // Check system_configs table
-    const { data: sysConfigs, error: sysErr } = await supabase
-      .from('system_configs')
-      .select('*');
+    const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+    // Check system_configs table safely
+    const sysRes = await safeSupabaseQuery<any[]>(
+      supabase.from('system_configs').select('*'),
+      { contextName: 'SystemConfigService.system_configs', fallbackValue: [] }
+    );
+    const sysConfigs = sysRes.data || [];
 
-    if (!sysErr && sysConfigs && sysConfigs.length > 0) {
+    if (sysConfigs.length > 0) {
       sysConfigs.forEach((row: any) => {
         if (row.config_key === 'groq_settings' && row.config_value) {
           result.groq = { ...result.groq, ...row.config_value };
@@ -121,8 +132,12 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
       });
     }
 
-    // Check admin_settings table for backward compatibility
-    const { data: adminRows } = await supabase.from('admin_settings').select('*');
+    // Check admin_settings table safely
+    const adminRes = await safeSupabaseQuery<any[]>(
+      supabase.from('admin_settings').select('*'),
+      { contextName: 'SystemConfigService.admin_settings', fallbackValue: [] }
+    );
+    const adminRows = adminRes.data || [];
     if (adminRows && adminRows.length > 0) {
       adminRows.forEach((row: any) => {
         if (row.setting_key === 'ai_api_keys' && row.setting_value) {
@@ -152,9 +167,9 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
     console.warn('[SystemConfigService] Notice loading configs:', err);
   }
 
-  // Local storage fallback for dev
+  // Fallback to environment variable if set
   if (!result.groq.apiKey) {
-    result.groq.apiKey = localStorage.getItem('groq_api_key') || import.meta.env.VITE_GROQ_API_KEY || '';
+    result.groq.apiKey = import.meta.env.VITE_GROQ_API_KEY || '';
   }
 
   return result;
@@ -166,7 +181,7 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
 export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{ success: boolean; error?: string }> {
   try {
     // 1. Post to Server-Side API Endpoint for immediate runtime synchronization
-    const apiRes = await fetch('/api/admin/system-configs', {
+    const apiRes = await authFetch('/api/admin/system-configs', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(configs)
@@ -175,10 +190,6 @@ export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{
     if (apiRes.ok) {
       const data = await apiRes.json();
       if (data.success) {
-        // Also persist locally in browser for quick offline lookup
-        if (configs.groq.apiKey) {
-          localStorage.setItem('groq_api_key', configs.groq.apiKey);
-        }
         return { success: true };
       }
     }
@@ -244,10 +255,6 @@ export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{
       ], { onConflict: 'setting_key' });
     } catch (_) {}
 
-    if (configs.groq.apiKey) {
-      localStorage.setItem('groq_api_key', configs.groq.apiKey);
-    }
-
     return { success: true };
   } catch (err: any) {
     console.error('[SystemConfigService] Save error:', err);
@@ -260,7 +267,7 @@ export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{
  */
 export async function testGroqConnection(apiKey: string, model: string = 'llama-3.3-70b-versatile'): Promise<{ ok: boolean; latencyMs?: number; message?: string }> {
   try {
-    const res = await fetch('/api/admin/test-groq', {
+    const res = await authFetch('/api/admin/test-groq', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ apiKey, model })
@@ -282,10 +289,10 @@ export async function testGroqConnection(apiKey: string, model: string = 'llama-
  */
 export async function testSmtpConnection(smtp: SmtpSystemConfig, targetEmail?: string): Promise<{ ok: boolean; message?: string }> {
   try {
-    const res = await fetch('/api/admin/test-smtp', {
+    const res = await authFetch('/api/admin/test-smtp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ smtpConfig: smtp, targetEmail })
+      body: JSON.stringify({ host: smtp.host, port: smtp.port, user: smtp.user, pass: smtp.pass, fromEmail: smtp.from, testRecipient: targetEmail })
     });
 
     if (res.ok) {

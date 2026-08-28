@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { authFetch } from '@/lib/apiAuth';
 
 export interface EmailPayload {
   to: string;
@@ -15,7 +16,7 @@ export async function sendPlatformEmail(payload: EmailPayload): Promise<{ succes
   try {
     let response: Response;
     try {
-      response = await fetch('/api/send-email', {
+      response = await authFetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

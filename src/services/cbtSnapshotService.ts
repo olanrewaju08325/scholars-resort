@@ -144,24 +144,28 @@ export class CbtSnapshotService {
 
     // 2. Persist to server / Supabase audit & snapshots
     try {
-      await fetch('/api/cbt-snapshots', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(snapshot)
-      }).catch(() => {});
+      try {
+        await fetch('/api/cbt-snapshots', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(snapshot)
+        });
+      } catch {}
 
       // Also log activity entry
-      await supabase.from('activity_logs').insert({
-        user_id: params.userProfile?.id || null,
-        action: `CBT Session Snapshot Captured: ${snapshot.id}`,
-        metadata: {
-          examMode: params.examMode,
-          totalQ: params.questions.length,
-          answeredQ: Object.keys(params.answers).length
-        }
-      }).catch(() => {});
+      try {
+        await supabase.from('activity_logs').insert({
+          user_id: params.userProfile?.id || null,
+          action: `CBT Session Snapshot Captured: ${snapshot.id}`,
+          metadata: {
+            examMode: params.examMode,
+            totalQ: params.questions.length,
+            answeredQ: Object.keys(params.answers).length
+          }
+        });
+      } catch {}
     } catch (persistErr) {
-      console.warn('[CbtSnapshotService] Non-blocking cloud persistence error:', persistErr);
+      console.warn('[CbtSnapshotService] Non-blocking cloud persistence notice:', persistErr);
     }
 
     return snapshot;

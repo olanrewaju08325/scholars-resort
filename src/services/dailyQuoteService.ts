@@ -75,17 +75,7 @@ export class DailyQuoteService {
         return res1.data[currentHour % res1.data.length];
       }
 
-      // 2. Try motivational_quotes table
-      const res2 = await SafeDataFetcher<DailyQuoteItem[]>(
-        supabase.from('motivational_quotes').select('*').order('created_at', { ascending: false }),
-        { contextName: 'DailyQuoteService.motivational_quotes' }
-      );
-
-      if (res2.data && res2.data.length > 0) {
-        return res2.data[currentHour % res2.data.length];
-      }
-
-      // 3. If both empty, seed daily_quotes table
+      // If empty, seed daily_quotes table
       await this.seedDailyQuotes();
     } catch (e) {
       console.warn('DailyQuoteService fetch warning:', e);
@@ -109,8 +99,9 @@ export class DailyQuoteService {
         created_at: new Date().toISOString()
       }));
 
-      await supabase.from('daily_quotes').insert(payload).catch(() => {});
-      await supabase.from('motivational_quotes').insert(payload).catch(() => {});
+      try {
+        await supabase.from('daily_quotes').insert(payload);
+      } catch {}
     } catch (e) {
       console.warn('DailyQuoteService seed warning:', e);
     }
@@ -131,8 +122,9 @@ export class DailyQuoteService {
         created_at: new Date().toISOString()
       };
 
-      await supabase.from('daily_quotes').insert(payload).catch(() => {});
-      await supabase.from('motivational_quotes').insert(payload).catch(() => {});
+      try {
+        await supabase.from('daily_quotes').insert(payload);
+      } catch {}
       return true;
     } catch {
       return false;

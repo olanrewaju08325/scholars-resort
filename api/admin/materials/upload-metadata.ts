@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { createClient } from '@supabase/supabase-js';
+import { verifyAdmin } from '../../_auth';
 
 const DEFAULT_SUPABASE_URL = 'https://syoodykedvqaoeplmamd.supabase.co';
 const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5b29keWtlZHZxYW9lcGxtYW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNjEyMTIsImV4cCI6MjEwMDkzNzIxMn0.GV7jgq04Qha6W1JENvc-ntVt9zSOLDx7vTaTxZlOTq4';
@@ -10,8 +11,21 @@ const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SU
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method Not Allowed' });
+  }
+
+  const auth = await verifyAdmin(req);
+  if (!auth.authorized) {
+    return res.status(auth.status).json({ success: false, error: auth.error });
   }
 
   const { title, description, subject_id, topic_id, file_path, is_premium } = req.body;

@@ -97,7 +97,7 @@ class AIRateLimiter {
           warningThresholdPercent: val.warningThresholdPercent || 80,
           warningTriggered: Boolean(val.warningTriggered),
           apiKey: val.apiKey || '',
-          provider: val.provider || 'gemini',
+          provider: val.provider || 'groq',
           lastUpdated: val.lastUpdated || new Date().toISOString()
         };
       }
@@ -106,12 +106,12 @@ class AIRateLimiter {
     }
 
     return {
-      tokensUsed: 12400,
+      tokensUsed: 0,
       totalLimit: 100000,
       warningThresholdPercent: 80,
       warningTriggered: false,
       apiKey: '',
-      provider: 'gemini',
+      provider: 'groq',
       lastUpdated: new Date().toISOString()
     };
   }
@@ -119,7 +119,7 @@ class AIRateLimiter {
   /**
    * Admin function to update API key and reset quota usage counter
    */
-  public async updateKeyAndResetQuota(newApiKey: string, provider: 'gemini' | 'groq' = 'gemini', newTotalLimit: number = 100000) {
+  public async updateKeyAndResetQuota(newApiKey: string, provider: 'gemini' | 'groq' = 'groq', newTotalLimit: number = 100000) {
     try {
       const newStatus: AIQuotaStatus = {
         tokensUsed: 0,

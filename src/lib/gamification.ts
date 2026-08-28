@@ -310,18 +310,11 @@ export const checkAndAwardBadges = async (
   if (!userId) return;
 
   try {
-    // 1. Fetch user's already-earned badges from both tables for safety
-    const [userBadgesRes, achRes] = await Promise.allSettled([
-      supabase.from('user_badges').select('badge_id').eq('student_id', userId),
-      supabase.from('achievements').select('badge_key').eq('user_id', userId)
-    ]);
-
+    // 1. Fetch user's already-earned badges
+    const userBadgesRes = await supabase.from('user_badges').select('*').or(`student_id.eq.${userId},user_id.eq.${userId}`);
     const earnedBadgeIds = new Set<string>();
-    if (userBadgesRes.status === 'fulfilled' && userBadgesRes.value.data) {
-      userBadgesRes.value.data.forEach((ub: any) => earnedBadgeIds.add(ub.badge_id));
-    }
-    if (achRes.status === 'fulfilled' && achRes.value.data) {
-      achRes.value.data.forEach((ach: any) => earnedBadgeIds.add(ach.badge_key));
+    if (userBadgesRes.data) {
+      userBadgesRes.data.forEach((ub: any) => earnedBadgeIds.add(ub.badge_id || ub.badge_key));
     }
 
     // 2. Fetch extra context if not passed in
@@ -409,18 +402,9 @@ export const checkAndAwardBadges = async (
 
     // Award badges, grant +100 XP each, and play celebration
     for (const badge of badgesToAward) {
-      // Insert to user_badges & achievements
+      // Insert to user_badges
       try {
-        await Promise.allSettled([
-          supabase.from('user_badges').insert({ student_id: userId, badge_id: badge.key }),
-          supabase.from('achievements').insert({
-            user_id: userId,
-            badge_key: badge.key,
-            title: badge.name,
-            description: badge.description,
-            icon: badge.icon
-          })
-        ]);
+        await supabase.from('user_badges').insert({ student_id: userId, user_id: userId, badge_id: badge.key, badge_key: badge.key, title: badge.name });
       } catch (err) {
         console.warn('Badge insertion notice:', err);
       }

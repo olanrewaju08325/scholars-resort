@@ -13,13 +13,18 @@ const Leaderboard = () => {
 
   const { data: boardData, loading } = useLiveFetch<any[]>(
     async () => {
-      const { data: exams, error: examErr } = await supabase
-        .from('exam_sessions')
-        .select('user_id, score_percent, total_questions')
-        .eq('status', 'submitted');
+      const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+      const examRes = await safeSupabaseQuery<any[]>(
+        supabase
+          .from('exam_sessions')
+          .select('user_id, score, total_questions, status')
+          .limit(100),
+        { contextName: 'Leaderboard.exam_sessions', fallbackValue: [] }
+      );
+      const exams = (examRes.data || []).filter(e => e.status === 'submitted' || e.status === 'completed');
 
-      if (examErr || !exams || exams.length === 0) {
-        return { data: [], error: examErr };
+      if (!exams || exams.length === 0) {
+        return { data: [], error: null };
       }
 
       const userIds = Array.from(new Set(exams.map(e => e.user_id).filter(Boolean)));

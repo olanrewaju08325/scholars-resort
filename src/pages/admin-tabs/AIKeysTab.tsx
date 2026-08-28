@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
+import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 import { 
   Key, ShieldCheck, RefreshCw, Zap, Activity, CheckCircle2, XCircle, 
@@ -172,7 +173,7 @@ export const AIKeysTab = () => {
       if (limitErr) throw limitErr;
 
       // 3. Post to API route for immediate runtime server cache update
-      fetch('/api/admin/system-configs', {
+      authFetch('/api/admin/system-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -184,7 +185,6 @@ export const AIKeysTab = () => {
         })
       }).catch(() => {});
 
-      localStorage.setItem('groq_api_key', groqKey.trim());
       toast.success("Groq API Key and Token Limits saved successfully to system_configs table!");
       loadTelemetryData();
     } catch (err: any) {

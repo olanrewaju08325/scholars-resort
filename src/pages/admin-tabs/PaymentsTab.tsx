@@ -5,6 +5,7 @@ import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { CheckCircle, XCircle, CreditCard, Activity, Link2, Eye, ExternalLink, FileText } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { sendPaymentApprovedEmail } from '@/services/emailService';
@@ -161,7 +162,7 @@ export const PaymentsTab = () => {
 
           if (studentProfile?.email) {
             try {
-              await fetch('/api/send-email', {
+              await authFetch('/api/send-email', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

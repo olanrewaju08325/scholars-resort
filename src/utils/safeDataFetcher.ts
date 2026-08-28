@@ -32,14 +32,14 @@ async function logErrorToDatabase(contextName: string, status: number | string, 
   try {
     // Insert into both platform_error_logs and error_logs for admin tray visibility
     await Promise.allSettled([
-      supabase.from('platform_error_logs').insert(payload).catch(() => {}),
+      supabase.from('platform_error_logs').insert(payload),
       supabase.from('error_logs').insert({
         message: payload.error_message,
         source: contextName,
         status_code: status,
         details: JSON.stringify(metadata || {}),
         created_at: payload.created_at
-      }).catch(() => {})
+      })
     ]);
   } catch {
     // Ignore background logging failures

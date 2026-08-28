@@ -6,6 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Upload, FileText, Sparkles, Loader2, CheckCircle2, BookOpen, BrainCircuit, ShieldCheck, Tag, Info } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { analyzeDocumentWithGroq } from '@/services/aiService';
+import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 
 interface PdfStudyMaterialUploaderProps {
@@ -203,7 +204,7 @@ export const PdfStudyMaterialUploader: React.FC<PdfStudyMaterialUploaderProps> =
       const matFilePath = publicUrl || 'text_paste';
 
       try {
-        const metadataResponse = await fetch('/api/admin/materials/upload-metadata', {
+        const metadataResponse = await authFetch('/api/admin/materials/upload-metadata', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

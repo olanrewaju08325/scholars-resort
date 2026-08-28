@@ -38,18 +38,17 @@ export const JAMBScorePredictor = () => {
     setResult(null);
 
     try {
-      // Fetch actual performance data
-      const { data: sessions, error: sessErr } = await supabase
-        .from('exam_sessions')
-        .select('score, total_questions, created_at, submitted_at')
-        .eq('user_id', profile.id)
-        .eq('status', 'submitted')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (sessErr) {
-        console.warn('[JAMBScorePredictor] exam_sessions query notice:', sessErr);
-      }
+      // Fetch actual performance data safely
+      const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
+      const sessRes = await safeSupabaseQuery<any[]>(
+        supabase
+          .from('exam_sessions')
+          .select('*')
+          .eq('user_id', profile.id)
+          .limit(10),
+        { contextName: 'JAMBScorePredictor.exam_sessions', fallbackValue: [] }
+      );
+      const sessions = (sessRes.data || []).filter(s => s.status === 'submitted' || s.status === 'completed');
 
       let answers: any[] = [];
       try {

@@ -102,6 +102,8 @@ function AppContent() {
             <Route element={<AppLayout />}>
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/cbt" element={<CBTCenter />} />
+              <Route path="/cbt-center" element={<CBTCenter />} />
+              <Route path="/cbt-exam" element={<CBTCenter />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/plan" element={<StudyPlan />} />
               <Route path="/practice" element={<PracticeSetup />} />

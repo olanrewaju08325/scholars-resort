@@ -83,7 +83,7 @@ export function useDailyMotivation() {
       if (supabase && navigator.onLine) {
         const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
         const qRes = await safeSupabaseQuery<any[]>(
-          supabase.from('motivational_quotes').select('*').order('created_at', { ascending: false }),
+          supabase.from('daily_quotes').select('*').order('created_at', { ascending: false }),
           { contextName: 'useDailyMotivation', fallbackValue: [] }
         );
         const data = qRes.data || [];
@@ -132,7 +132,7 @@ export function useDailyMotivation() {
         user_id: user?.id || null,
         created_at: new Date().toISOString()
       }));
-      await supabase.from('motivational_quotes').insert(payload);
+      await supabase.from('daily_quotes').insert(payload);
     } catch (e) {
       console.warn('Initial quote seed handled:', e);
     }
@@ -149,7 +149,7 @@ export function useDailyMotivation() {
 
       // 2. Insert into Supabase DB
       if (navigator.onLine && supabase) {
-        const { data } = await supabase.from('motivational_quotes').insert({
+        const { data } = await supabase.from('daily_quotes').insert({
           quote: newQuote.quote,
           author: newQuote.author,
           focus: newQuote.focus,
