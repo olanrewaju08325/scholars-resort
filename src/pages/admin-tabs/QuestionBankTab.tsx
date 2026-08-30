@@ -228,7 +228,10 @@ export const QuestionBankTab = () => {
     };
 
     try {
-      if (isEditing && currentId) {
+      const isUUID = (str: any) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
+      const isLocalQuestion = currentId && (String(currentId).startsWith('local_') || !isUUID(currentId));
+
+      if (isEditing && currentId && !isLocalQuestion) {
         // Try Supabase client first
         const { error } = await supabase.from('questions').update(payload).eq('id', currentId);
         if (error) {
@@ -249,8 +252,9 @@ export const QuestionBankTab = () => {
 
         toast.success('Question updated successfully.');
       } else {
-        const newId = `q_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-        const fullPayload = { id: newId, ...payload, created_at: new Date().toISOString() };
+        // This is a new insert or migrating a local custom question to the DB!
+        const newUuid = crypto.randomUUID();
+        const fullPayload = { id: newUuid, ...payload, created_at: new Date().toISOString() };
 
         let saved = false;
         const { error } = await supabase.from('questions').insert(fullPayload);
@@ -268,9 +272,18 @@ export const QuestionBankTab = () => {
           const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
           local.unshift(fullPayload);
           localStorage.setItem('scholar_custom_questions', JSON.stringify(local));
+          toast.success('Question saved locally.');
+        } else {
+          // If we migrated a local question, remove it from local storage
+          if (isLocalQuestion) {
+            try {
+              const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
+              const filtered = local.filter((q: any) => q.id !== currentId);
+              localStorage.setItem('scholar_custom_questions', JSON.stringify(filtered));
+            } catch {}
+          }
+          toast.success('Question created and published successfully.');
         }
-
-        toast.success('Question created and published successfully.');
       }
       resetForm();
       fetchData();
