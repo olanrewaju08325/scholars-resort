@@ -952,7 +952,7 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
                                     <div className="flex items-center gap-2">
                                       <Badge variant="secondary">{q.subjects?.name || 'No Subject'}</Badge>
                                       <Badge variant="outline" className="font-mono capitalize">{q.difficulty || 'medium'}</Badge>
-                                      {q.exam_year && <Badge variant="outline">Year: {q.exam_year}</Badge>}
+                                      {(q.year || q.exam_year) && <Badge variant="outline">Year: {q.year || q.exam_year}</Badge>}
                                       {q.is_active ? (
                                         <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">LIVE IN CBT</Badge>
                                       ) : (

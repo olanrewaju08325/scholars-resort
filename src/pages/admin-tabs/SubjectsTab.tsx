@@ -82,7 +82,7 @@ export const SubjectsTab = () => {
         // Fetch ALL dynamic questions without row caps (up to 50,000 records)
         const { data: qData, count: totalDbCount } = await supabase
           .from('questions')
-          .select('id, subject_id, exam_year', { count: 'exact' })
+          .select('id, subject_id, year', { count: 'exact' })
           .limit(50000);
 
         totalQs = totalDbCount || qData?.length || 0;
@@ -100,7 +100,7 @@ export const SubjectsTab = () => {
           qData.forEach((q: any) => {
             const rawSub = q.subject_id;
             const canonical = normalizeSubjectName(rawSub || '');
-            const exYear = q.exam_year || '';
+            const exYear = q.year || '';
 
             // Find matching subject by ID or canonical name
             const matchedSub = loadedSubjects.find(s => 
@@ -259,14 +259,14 @@ export const SubjectsTab = () => {
         return;
       }
 
-      // Bulk update exam_year in chunks
+      // Bulk update year in chunks
       const chunkSize = 100;
       let updated = 0;
       for (let i = 0; i < targetIds.length; i += chunkSize) {
         const chunk = targetIds.slice(i, i + chunkSize);
         await supabase
           .from('questions')
-          .update({ exam_year: targetYearToApply })
+          .update({ year: targetYearToApply })
           .in('id', chunk);
         updated += chunk.length;
       }

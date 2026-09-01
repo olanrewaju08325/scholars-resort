@@ -41,6 +41,31 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// API Route: Health Monitoring Service
+app.get('/api/health', async (req, res) => {
+  try {
+    // Perform dynamic check of Database Connectivity
+    const { data, error } = await supabase.from('profiles').select('id', { count: 'exact', head: true });
+    if (error) {
+      throw error;
+    }
+    return res.json({
+      status: 'healthy',
+      uptime: process.uptime(),
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    console.error('[Health Check Error]', err.message || err);
+    return res.status(500).json({
+      status: 'unhealthy',
+      database: 'disconnected',
+      error: err.message || 'Database connection check failed',
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Authentication & Authorization Middlewares
 async function verifyUserToken(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
@@ -362,8 +387,9 @@ app.post('/api/send-email', async (req, res) => {
 });
 
 // API Route: Bulk Email Dispatch Service
-app.post('/api/send-bulk-email', async (req, res) => {
-  const { target = 'all', subject, body, html, recipients: explicitRecipients, adminId } = req.body;
+app.post('/api/send-bulk-email', verifyAdminToken, async (req, res) => {
+  const adminId = (req as any).user?.id;
+  const { target = 'all', subject, body, html, recipients: explicitRecipients } = req.body;
 
   if (!subject || (!body && !html)) {
     return res.status(400).json({ success: false, error: 'Subject and email body are required.' });
@@ -794,10 +820,30 @@ app.post('/api/exam-session/end', async (req, res) => {
 });
 
 // API Route: Exam Session Handler - Query AI Tutor Lock Status for User
-app.get('/api/exam-session/active-status', async (req, res) => {
+app.get('/api/exam-session/active-status', verifyUserToken, async (req, res) => {
   const userId = req.query.userId as string;
   if (!userId) {
-    return res.json({ is_ai_tutor_locked: false });
+    return res.status(400).json({ success: false, error: 'userId query parameter is required.' });
+  }
+
+  const authenticatedUser = (req as any).user;
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const userEmail = (authenticatedUser.email || '').toLowerCase().trim();
+
+  // Ensure user is querying their own active status or they are an admin
+  let isAuthorized = authenticatedUser.id === userId;
+  if (!isAuthorized) {
+    const { data: prof } = await supabase.from('profiles').select('role, email').eq('id', authenticatedUser.id).maybeSingle();
+    const profRole = prof?.role;
+    const profEmail = (prof?.email || '').toLowerCase().trim();
+    const isAdmin = profRole === 'admin' || profRole === 'superadmin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || AUTHORIZED_ADMIN_EMAILS.includes(profEmail);
+    if (isAdmin) {
+      isAuthorized = true;
+    }
+  }
+
+  if (!isAuthorized) {
+    return res.status(403).json({ success: false, error: 'Forbidden: You can only query your own active exam status.' });
   }
 
   try {
@@ -1059,7 +1105,7 @@ app.post('/api/groq-telemetry/log', (req, res) => {
 });
 
 // Endpoint to fetch real-time Groq API usage telemetry & server logs
-app.get('/api/groq-telemetry', async (req, res) => {
+app.get('/api/groq-telemetry', verifyAdminToken, async (req, res) => {
   try {
     const customGroqKey = req.headers['x-groq-key'] as string;
     const groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
@@ -2197,9 +2243,29 @@ function mergeProfileWithOverrides(dbProfile: any, userId?: string) {
 }
 
 // API Route: Authoritative Profile Fetch (Merged with Server Grants & Overrides)
-app.get('/api/profile/:id', async (req, res) => {
+app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ success: false, error: 'User ID is required' });
+
+  const authenticatedUser = (req as any).user;
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const userEmail = (authenticatedUser.email || '').toLowerCase().trim();
+
+  // Ensure user is fetching their own profile or they are an admin
+  let isAuthorized = authenticatedUser.id === id;
+  if (!isAuthorized) {
+    const { data: prof } = await supabase.from('profiles').select('role, email').eq('id', authenticatedUser.id).maybeSingle();
+    const profRole = prof?.role;
+    const profEmail = (prof?.email || '').toLowerCase().trim();
+    const isAdmin = profRole === 'admin' || profRole === 'superadmin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || AUTHORIZED_ADMIN_EMAILS.includes(profEmail);
+    if (isAdmin) {
+      isAuthorized = true;
+    }
+  }
+
+  if (!isAuthorized) {
+    return res.status(403).json({ success: false, error: 'Forbidden: You can only retrieve your own private profile.' });
+  }
 
   try {
     const { data: dbProf, error } = await supabase
@@ -2591,7 +2657,7 @@ Return ONLY a STRICT JSON array of objects with NO markdown formatting outside t
 });
 
 // API Route: Question Bank - Delete
-app.delete('/api/questions/:id', async (req, res) => {
+app.delete('/api/questions/:id', verifyAdminToken, async (req, res) => {
   const { id } = req.params;
   try {
     // Attempt dependent cleanup
@@ -2613,7 +2679,7 @@ app.delete('/api/questions/:id', async (req, res) => {
 });
 
 // API Route: Question Bank - Update
-app.put('/api/questions/:id', async (req, res) => {
+app.put('/api/questions/:id', verifyAdminToken, async (req, res) => {
   const { id } = req.params;
   const updates = req.body;
   try {
@@ -2628,7 +2694,7 @@ app.put('/api/questions/:id', async (req, res) => {
 });
 
 // API Route: Admin Device Reset & Exemption Management
-app.post('/api/admin/device/reset', async (req, res) => {
+app.post('/api/admin/device/reset', verifyAdminToken, async (req, res) => {
   const { user_id, email } = req.body;
   const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
 
@@ -2844,640 +2910,9 @@ app.post('/api/admin/users/delete', verifyAdminToken, async (req, res) => {
   }
 });
 
-// API Route: Guardian Portal - Link Student by Student Identifier / Invite Code
-app.post('/api/guardian/link', verifyUserToken, async (req, res) => {
-  const reqUser = (req as any).user;
-  const { guardianId = reqUser?.id, studentId, inviteCode } = req.body;
-  if (!guardianId || (!studentId && !inviteCode)) {
-    return res.status(400).json({ success: false, error: 'guardianId and (studentId or inviteCode) are required.' });
-  }
-
-  // Authorize: Only allow linking for self unless enterprise admin
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  const isAdmin = AUTHORIZED_ADMIN_EMAILS.includes((reqUser?.email || '').toLowerCase().trim());
-  if (reqUser.id !== guardianId && !isAdmin) {
-    return res.status(403).json({ success: false, error: 'Unauthorized: Cannot modify ward relationships for another account.' });
-  }
-
-  try {
-    let resolvedStudentId = studentId;
-
-    if (!resolvedStudentId && inviteCode) {
-      const { data: matched } = await supabase
-        .from('profiles')
-        .select('id')
-        .or(`invite_code.eq.${inviteCode.trim().toUpperCase()},id.eq.${inviteCode.trim()}`)
-        .maybeSingle();
-
-      if (matched) resolvedStudentId = matched.id;
-    }
-
-    if (!resolvedStudentId) {
-      return res.status(404).json({ success: false, error: 'Student account not found with the provided code.' });
-    }
-
-    // Insert into relationships
-    await Promise.allSettled([
-      supabase.from('guardian_student_relationships').upsert({
-        guardian_id: guardianId,
-        student_id: resolvedStudentId,
-        status: 'active',
-        created_at: new Date().toISOString()
-      }),
-      supabase.from('guardian_links').upsert({
-        guardian_id: guardianId,
-        student_id: resolvedStudentId,
-        status: 'active',
-        created_at: new Date().toISOString()
-      })
-    ]);
-
-    return res.json({ success: true, message: 'Student ward successfully linked to guardian.' });
-  } catch (err: any) {
-    console.error('[API /api/guardian/link Error]', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// API Route: Guardian Portal - Student Invites Parent / Guardian
-app.post('/api/guardian/invite', async (req, res) => {
-  const { studentId, parentEmail, studentName, baseUrl } = req.body;
-  if (!studentId) {
-    return res.status(400).json({ success: false, error: 'studentId is required.' });
-  }
-
-  try {
-    // 1. Fetch student profile to get or generate invite_code
-    const { data: prof } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, invite_code')
-      .eq('id', studentId)
-      .maybeSingle();
-
-    if (!prof) {
-      return res.status(404).json({ success: false, error: 'Student profile not found.' });
-    }
-
-    let code = prof.invite_code;
-    if (!code) {
-      code = `SCH-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      await supabase.from('profiles').update({ invite_code: code }).eq('id', studentId);
-    }
-
-    // 2. Save invitation record in guardian_links
-    await supabase.from('guardian_links').upsert({
-      student_id: studentId,
-      invitation_code: code,
-      status: 'pending',
-      created_at: new Date().toISOString()
-    });
-
-    const appOrigin = baseUrl || req.headers.origin || 'https://ais-dev-ity2upo7enzaao2otb7fcf-761006180903.europe-west2.run.app';
-    const connectUrl = `${appOrigin}/guardian-connect?code=${code}`;
-
-    // 3. Send email to parent if email address is provided
-    let emailSent = false;
-    if (parentEmail && parentEmail.trim()) {
-      try {
-        const sName = studentName || prof.full_name || prof.email || 'Your Student Ward';
-        const mailOptions = {
-          from: `"Scholars Resort Guardian Portal" <${process.env.SMTP_USER || 'admitwise2@gmail.com'}>`,
-          to: parentEmail.trim(),
-          subject: `Academic Monitoring Invitation: Connect to ${sName} on Scholars Resort`,
-          html: `
-            <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-              <div style="text-align: center; margin-bottom: 24px;">
-                <h1 style="color: #ea580c; margin: 0; font-size: 24px;">Scholars Resort Guardian Portal</h1>
-                <p style="color: #64748b; font-size: 14px; margin-top: 4px;">Empowering Parents with Real-Time UTME / JAMB Analytics</p>
-              </div>
-
-              <div style="background: #fff7ed; border-left: 4px solid #ea580c; padding: 16px; margin-bottom: 24px; border-radius: 4px;">
-                <p style="margin: 0; color: #9a3412; font-size: 15px; font-weight: bold;">
-                  ${sName} has invited you to monitor their academic preparation.
-                </p>
-              </div>
-
-              <p style="color: #334155; font-size: 14px; line-height: 1.6;">
-                As a linked guardian on Scholars Resort, you will be able to track CBT mock exam scores, daily study streaks, subject accuracy, time spent practicing, and receive automated weekly progress reports directly to your inbox.
-              </p>
-
-              <div style="background: #f8fafc; border: 1px dashed #cbd5e1; padding: 20px; text-align: center; border-radius: 8px; margin: 24px 0;">
-                <span style="font-size: 12px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; display: block; margin-bottom: 8px;">Your Student Invitation Code</span>
-                <span style="font-family: monospace; font-size: 28px; font-weight: bold; color: #ea580c; letter-spacing: 3px;">${code}</span>
-              </div>
-
-              <div style="text-align: center; margin: 28px 0;">
-                <a href="${connectUrl}" style="background-color: #ea580c; color: #ffffff; padding: 14px 28px; font-size: 15px; font-weight: bold; border-radius: 8px; text-decoration: none; display: inline-block;">
-                  Accept Invitation & Link Account
-                </a>
-              </div>
-
-              <p style="color: #94a3b8; font-size: 12px; text-align: center; margin-top: 32px;">
-                Or copy and paste this link into your browser: <br/>
-                <a href="${connectUrl}" style="color: #ea580c;">${connectUrl}</a>
-              </p>
-            </div>
-          `
-        };
-
-        if (transporter) {
-          await transporter.sendMail(mailOptions);
-          emailSent = true;
-        }
-      } catch (eErr) {
-        console.warn('[Guardian Invite Email Warning]', eErr);
-      }
-    }
-
-    return res.json({
-      success: true,
-      invitationCode: code,
-      connectUrl,
-      emailSent,
-      message: emailSent ? `Invitation sent successfully to ${parentEmail}!` : 'Invitation generated successfully.'
-    });
-
-  } catch (err: any) {
-    console.error('[API /api/guardian/invite Error]', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// API Route: Guardian Portal - Dispatch Weekly Automated Email Reports
-app.post('/api/guardian/send-weekly-reports', async (req, res) => {
-  const { guardianId } = req.body;
-
-  try {
-    // 1. Query active relationships
-    let relsQuery = supabase.from('guardian_student_relationships').select('*').eq('status', 'active');
-    if (guardianId) {
-      relsQuery = relsQuery.eq('guardian_id', guardianId);
-    }
-
-    const { data: rels } = await relsQuery;
-    if (!rels || rels.length === 0) {
-      return res.json({ success: true, sentCount: 0, message: 'No active student-guardian links found.' });
-    }
-
-    const guardianIds = Array.from(new Set(rels.map((r: any) => r.guardian_id).filter(Boolean)));
-    const studentIds = Array.from(new Set(rels.map((r: any) => r.student_id).filter(Boolean)));
-
-    // Fetch profiles
-    const { data: guardianProfiles } = await supabase.from('profiles').select('id, full_name, email').in('id', guardianIds);
-    const { data: studentProfiles } = await supabase.from('profiles').select('id, full_name, email, target_score, target_university, streak_days, xp, utme_subjects').in('id', studentIds);
-
-    const guardianMap: Record<string, any> = {};
-    (guardianProfiles || []).forEach((g: any) => { guardianMap[g.id] = g; });
-
-    const studentMap: Record<string, any> = {};
-    (studentProfiles || []).forEach((s: any) => { studentMap[s.id] = s; });
-
-    let sentCount = 0;
-
-    for (const rel of rels) {
-      const g = guardianMap[rel.guardian_id];
-      const s = studentMap[rel.student_id];
-
-      if (!g || !g.email || !s) continue;
-
-      // Calculate past 7 days statistics
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString();
-      const { data: recentExams } = await supabase
-        .from('exam_sessions')
-        .select('score, total_questions, submitted_at, status')
-        .eq('user_id', s.id)
-        .eq('status', 'submitted')
-        .gte('submitted_at', sevenDaysAgo);
-
-      const examCount = recentExams?.length || 0;
-      let totalQuestions = 0;
-      let totalScorePct = 0;
-
-      (recentExams || []).forEach((ex: any) => {
-        totalQuestions += ex.total_questions || 40;
-        const pct = ex.total_questions ? (ex.score / ex.total_questions) * 100 : 0;
-        totalScorePct += pct;
-      });
-
-      const avgAccuracy = examCount > 0 ? Math.round(totalScorePct / examCount) : 0;
-      const streak = s.streak_days || 0;
-      const targetScore = s.target_score || 300;
-      const sName = s.full_name || s.email || 'Student Ward';
-
-      const mailOptions = {
-        from: `"Scholars Resort Guardian Portal" <${process.env.SMTP_USER || 'admitwise2@gmail.com'}>`,
-        to: g.email,
-        subject: `Weekly Academic Progress Report for ${sName} | Scholars Resort`,
-        html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
-            <div style="text-align: center; margin-bottom: 24px; border-bottom: 2px solid #ea580c; padding-bottom: 16px;">
-              <h1 style="color: #ea580c; margin: 0; font-size: 22px;">Weekly Student Progress Report</h1>
-              <p style="color: #64748b; font-size: 13px; margin-top: 4px;">Student Ward: <strong>${sName}</strong></p>
-            </div>
-
-            <p style="color: #334155; font-size: 14px;">
-              Dear <strong>${g.full_name || 'Parent / Guardian'}</strong>,<br/>
-              Here is the automated weekly performance summary for <strong>${sName}</strong> covering their UTME exam prep over the last 7 days.
-            </p>
-
-            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin: 20px 0;">
-              <div style="background: #fff7ed; padding: 14px; border-radius: 8px; border: 1px solid #ffedd5;">
-                <span style="font-size: 11px; color: #9a3412; text-transform: uppercase; font-weight: bold;">Daily Study Streak</span>
-                <p style="font-size: 24px; font-weight: bold; color: #ea580c; margin: 4px 0 0 0;">🔥 ${streak} Days</p>
-              </div>
-
-              <div style="background: #f0fdf4; padding: 14px; border-radius: 8px; border: 1px solid #dcfce7;">
-                <span style="font-size: 11px; color: #166534; text-transform: uppercase; font-weight: bold;">Weekly Mock Exams</span>
-                <p style="font-size: 24px; font-weight: bold; color: #16a34a; margin: 4px 0 0 0;">${examCount} Sessions</p>
-              </div>
-
-              <div style="background: #eff6ff; padding: 14px; border-radius: 8px; border: 1px solid #dbeafe;">
-                <span style="font-size: 11px; color: #1e40af; text-transform: uppercase; font-weight: bold;">Average Practice Accuracy</span>
-                <p style="font-size: 24px; font-weight: bold; color: #2563eb; margin: 4px 0 0 0;">${avgAccuracy}%</p>
-              </div>
-
-              <div style="background: #faf5ff; padding: 14px; border-radius: 8px; border: 1px solid #f3e8ff;">
-                <span style="font-size: 11px; color: #6b21a8; text-transform: uppercase; font-weight: bold;">JAMB Target Score</span>
-                <p style="font-size: 24px; font-weight: bold; color: #9333ea; margin: 4px 0 0 0;">${targetScore} / 400</p>
-              </div>
-            </div>
-
-            <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
-              <h3 style="margin: 0 0 8px 0; font-size: 14px; color: #1e293b;">Study Habits & Insights</h3>
-              <ul style="margin: 0; padding-left: 20px; color: #475569; font-size: 13px; line-height: 1.6;">
-                <li>Registered UTME Subjects: ${s.utme_subjects?.join(', ') || 'English, Mathematics, Physics, Chemistry'}</li>
-                <li>Total Practice Questions Solved: ${totalQuestions} questions</li>
-                <li>Consistency Assessment: ${streak >= 5 ? 'Excellent daily consistency!' : streak >= 2 ? 'Moderate consistency. Encourage daily practice.' : 'Needs encouragement to build a daily study routine.'}</li>
-              </ul>
-            </div>
-
-            <div style="text-align: center; margin-top: 24px;">
-              <a href="${req.headers.origin || 'https://ais-dev-ity2upo7enzaao2otb7fcf-761006180903.europe-west2.run.app'}/guardian" style="background-color: #1e293b; color: #ffffff; padding: 12px 24px; font-size: 14px; font-weight: bold; border-radius: 6px; text-decoration: none; display: inline-block;">
-                Open Guardian Portal Dashboard
-              </a>
-            </div>
-          </div>
-        `
-      };
-
-      if (transporter) {
-        await transporter.sendMail(mailOptions);
-        sentCount++;
-      }
-    }
-
-    return res.json({ success: true, sentCount, message: `Weekly progress reports emailed to ${sentCount} linked guardians.` });
-
-  } catch (err: any) {
-    console.error('[API /api/guardian/send-weekly-reports Error]', err);
-    return res.status(500).json({ success: false, error: err.message });
-  }
-});
-
-// API Route: Guardian Portal - Get Linked Students (strictly scoped by authenticated user or guardian_id)
-app.get('/api/guardian/students', verifyUserToken, async (req, res) => {
-  const reqUser = (req as any).user;
-  const guardianId = (req.query.guardianId as string) || reqUser?.id;
-  if (!guardianId) {
-    return res.status(400).json({ success: false, error: 'guardianId is required.' });
-  }
-
-  // Authorize: Only allow querying own guardian records unless enterprise admin
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  const isAdmin = AUTHORIZED_ADMIN_EMAILS.includes((reqUser?.email || '').toLowerCase().trim());
-  if (reqUser.id !== guardianId && !isAdmin) {
-    return res.status(403).json({ success: false, error: 'Unauthorized access to guardian ward directory.' });
-  }
-
-  try {
-    let studentIds: string[] = [];
-    
-    // 1. Try guardian_student_relationships table first
-    try {
-      const { data: rels, error: relErr } = await supabase
-        .from('guardian_student_relationships')
-        .select('*')
-        .eq('guardian_id', guardianId)
-        .eq('status', 'active');
-      
-      if (!relErr && rels && rels.length > 0) {
-        studentIds = Array.from(new Set(rels.map((r: any) => r.student_id).filter(Boolean)));
-      }
-    } catch {
-      // fallback
-    }
-
-    // 2. Fallback to guardian_links table
-    if (studentIds.length === 0) {
-      const { data: links, error: linkErr } = await supabase
-        .from('guardian_links')
-        .select('*')
-        .eq('guardian_id', guardianId)
-        .eq('status', 'active');
-
-      if (!linkErr && links && links.length > 0) {
-        studentIds = Array.from(new Set(links.map((l: any) => l.student_id).filter(Boolean)));
-      }
-    }
-
-    if (studentIds.length === 0) {
-      return res.json({ success: true, students: [] });
-    }
-
-    // 3. Join profiles for linked students
-    const { data: profiles, error: profErr } = await supabase
-      .from('profiles')
-      .select('id, full_name, email, has_paid, target_score, target_university, target_course, streak_days, xp, last_active, created_at')
-      .in('id', studentIds);
-
-    if (profErr) {
-      return res.status(500).json({ success: false, error: profErr.message });
-    }
-
-    const profileMap: Record<string, any> = {};
-    (profiles || []).forEach((p: any) => { profileMap[p.id] = p; });
-
-    const formatted = studentIds.map((sId: string) => {
-      const p = profileMap[sId] || {};
-      return {
-        id: sId,
-        name: p.full_name || p.email || 'Student Ward',
-        email: p.email || '',
-        has_paid: !!p.has_paid,
-        target_score: p.target_score || 320,
-        target_university: p.target_university || '',
-        target_course: p.target_course || '',
-        xp: p.xp || 0,
-        streak_days: p.streak_days || 0,
-        last_active: p.last_active,
-        status: 'active'
-      };
-    });
-
-    return res.json({ success: true, students: formatted });
-  } catch (err: any) {
-    console.error('[API /api/guardian/students Error]', err);
-    return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
-  }
-});
-
-// API Route: Guardian Portal - Get Comprehensive Student Performance & Analytics
-app.post('/api/guardian/student-details', verifyUserToken, async (req, res) => {
-  const reqUser = (req as any).user;
-  const guardianId = req.body.guardianId || reqUser?.id;
-  const { studentId } = req.body;
-
-  if (!guardianId || !studentId) {
-    return res.status(400).json({ success: false, error: 'Both guardianId and studentId are required.' });
-  }
-
-  // Security Check: Verify requesting user is either the guardian or an enterprise admin
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  const isAdmin = AUTHORIZED_ADMIN_EMAILS.includes((reqUser?.email || '').toLowerCase().trim());
-  if (reqUser.id !== guardianId && !isAdmin) {
-    return res.status(403).json({ success: false, error: 'Unauthorized: Cannot access analytics for another guardian.' });
-  }
-
-  try {
-    // 1. Security Check: verify guardian is actively linked to this student
-    let isLinked = false;
-    try {
-      const { data: rel } = await supabase
-        .from('guardian_student_relationships')
-        .select('id')
-        .eq('guardian_id', guardianId)
-        .eq('student_id', studentId)
-        .eq('status', 'active')
-        .maybeSingle();
-      if (rel) isLinked = true;
-    } catch {}
-
-    if (!isLinked) {
-      try {
-        const { data: link } = await supabase
-          .from('guardian_links')
-          .select('id')
-          .eq('guardian_id', guardianId)
-          .eq('student_id', studentId)
-          .eq('status', 'active')
-          .maybeSingle();
-        if (link) isLinked = true;
-      } catch {}
-    }
-
-    if (!isLinked) {
-      return res.status(403).json({ success: false, error: 'Unauthorized: Student is not linked to this guardian account.' });
-    }
-
-    // 2. Fetch Student Profile (Merged with server overrides)
-    const { data: dbStudentProfile } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', studentId)
-      .maybeSingle();
-
-    const studentProfile = mergeProfileWithOverrides(dbStudentProfile || { id: studentId }, studentId);
-
-    if (!studentProfile) {
-      return res.status(404).json({ success: false, error: 'Student record not found.' });
-    }
-
-    // 3. Fetch Real Exam Sessions
-    const { data: sessions } = await supabase
-      .from('exam_sessions')
-      .select('*')
-      .eq('user_id', studentId)
-      .order('created_at', { ascending: false });
-
-    // 4. Fetch Real Payments
-    const { data: payments } = await supabase
-      .from('manual_payments')
-      .select('*')
-      .eq('user_id', studentId)
-      .order('created_at', { ascending: false });
-
-    // 5. Fetch Real Answers
-    const { data: answerData } = await supabase
-      .from('session_answers')
-      .select('question_id, is_correct, created_at, time_spent_seconds')
-      .eq('user_id', studentId)
-      .order('created_at', { ascending: false })
-      .limit(300);
-
-    // 6. Subject Accuracy & Weak Areas
-    const subjectScores: Record<string, { correct: number; total: number }> = {};
-    if (answerData && answerData.length > 0) {
-      const qIds = Array.from(new Set(answerData.map((a: any) => a.question_id).filter(Boolean)));
-      if (qIds.length > 0) {
-        const { data: qList } = await supabase
-          .from('questions')
-          .select('id, subject_id')
-          .in('id', qIds.slice(0, 100));
-
-        const subIds = Array.from(new Set((qList || []).map((q: any) => q.subject_id).filter(Boolean)));
-        let subMap: Record<string, string> = {};
-        if (subIds.length > 0) {
-          const { data: subs } = await supabase.from('subjects').select('id, name').in('id', subIds);
-          (subs || []).forEach((s: any) => { subMap[s.id] = s.name; });
-        }
-
-        const qSubjectMap: Record<string, string> = {};
-        (qList || []).forEach((q: any) => {
-          if (q.subject_id && subMap[q.subject_id]) {
-            qSubjectMap[q.id] = subMap[q.subject_id];
-          }
-        });
-
-        answerData.forEach((a: any) => {
-          const subName = qSubjectMap[a.question_id] || 'General Studies';
-          if (!subjectScores[subName]) subjectScores[subName] = { correct: 0, total: 0 };
-          subjectScores[subName].total++;
-          if (a.is_correct) subjectScores[subName].correct++;
-        });
-      }
-    }
-
-    if (Object.keys(subjectScores).length === 0 && sessions && sessions.length > 0) {
-      sessions.forEach((s: any) => {
-        const subName = s.subject_name || s.subject || 'UTME Mock Exam';
-        if (!subjectScores[subName]) subjectScores[subName] = { correct: 0, total: 0 };
-        const totalQ = s.total_questions || 50;
-        const score = s.score || 0;
-        subjectScores[subName].total += totalQ;
-        subjectScores[subName].correct += Math.min(score, totalQ);
-      });
-    }
-
-    const weakSubjects = Object.entries(subjectScores)
-      .map(([name, s]) => ({ name, rate: s.total > 0 ? s.correct / s.total : 1 }))
-      .sort((a, b) => a.rate - b.rate)
-      .slice(0, 3)
-      .map(s => s.name);
-
-    // 7. Global Rank
-    let globalRank = 1;
-    try {
-      const { count: higherCount } = await supabase
-        .from('profiles')
-        .select('id', { count: 'exact', head: true })
-        .gt('xp', studentProfile.xp || 0);
-      globalRank = (higherCount || 0) + 1;
-    } catch {}
-
-    // 8. Exam History & Scores
-    const submittedSessions = (sessions || []).filter((s: any) => s.status === 'submitted' || (s.score && s.score > 0));
-    let avgScore = 0;
-    const target = studentProfile.target_score || 320;
-    let readiness = 0;
-    let history: any[] = [];
-
-    if (submittedSessions.length > 0) {
-      const totalEquiv = submittedSessions.reduce((acc: number, curr: any) => {
-        const raw = curr.score || 0;
-        const totalQ = curr.total_questions || 50;
-        return acc + Math.round((raw / totalQ) * 400);
-      }, 0);
-      avgScore = Math.round(totalEquiv / submittedSessions.length);
-      readiness = Math.min(100, Math.max(15, Math.round((avgScore / target) * 85 + (submittedSessions.length * 3))));
-
-      history = submittedSessions.slice(0, 6).map((s: any) => {
-        const raw = s.score || 0;
-        const totalQ = s.total_questions || 50;
-        const mins = s.time_spent_seconds ? Math.floor(s.time_spent_seconds / 60) : null;
-        const dateStr = s.submitted_at || s.created_at;
-        return {
-          date: dateStr ? new Date(dateStr).toLocaleDateString() : 'Recent',
-          score: Math.round((raw / totalQ) * 400),
-          percent: Math.round((raw / totalQ) * 100),
-          time: mins ? `${mins} min` : 'N/A'
-        };
-      });
-    }
-
-    // 9. Focus Time in past 7 days
-    const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    let weeklyFocusSeconds = 0;
-    (sessions || []).forEach((s: any) => {
-      const sDate = new Date(s.created_at || s.submitted_at || 0);
-      if (sDate >= sevenDaysAgo && s.time_spent_seconds) {
-        weeklyFocusSeconds += Number(s.time_spent_seconds);
-      }
-    });
-    (answerData || []).forEach((a: any) => {
-      const aDate = new Date(a.created_at || 0);
-      if (aDate >= sevenDaysAgo && a.time_spent_seconds) {
-        weeklyFocusSeconds += Number(a.time_spent_seconds);
-      }
-    });
-    const focusHours = Math.floor(weeklyFocusSeconds / 3600);
-    const focusMins = Math.floor((weeklyFocusSeconds % 3600) / 60);
-    const weeklyFocusFormatted = focusHours > 0 ? `${focusHours}h ${focusMins}m` : `${focusMins || (submittedSessions.length > 0 ? submittedSessions.length * 20 : 0)}m`;
-
-    // 10. 14-Day Activity Heatmap
-    const heatmapDays: { date: string; count: number; intensity: number }[] = [];
-    const activityCountByDay: Record<string, number> = {};
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      activityCountByDay[d.toISOString().split('T')[0]] = 0;
-    }
-    (sessions || []).forEach((s: any) => {
-      const day = (s.created_at || '').split('T')[0];
-      if (activityCountByDay[day] !== undefined) activityCountByDay[day] += 1;
-    });
-    (answerData || []).forEach((a: any) => {
-      const day = (a.created_at || '').split('T')[0];
-      if (activityCountByDay[day] !== undefined) activityCountByDay[day] += 1;
-    });
-    Object.entries(activityCountByDay).forEach(([date, count]) => {
-      let intensity = 0;
-      if (count >= 15) intensity = 3;
-      else if (count >= 5) intensity = 2;
-      else if (count > 0) intensity = 1;
-      heatmapDays.push({ date, count, intensity });
-    });
-
-    const daysActiveInWeek = heatmapDays.slice(7).filter(d => d.count > 0).length;
-    const attendanceRate = Math.min(100, Math.round((daysActiveInWeek / 7) * 100));
-
-    const defaultSubjects = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
-    const subjectProgress = Object.keys(subjectScores).length > 0
-      ? Object.entries(subjectScores).map(([sub, s]) => ({
-          sub,
-          progress: s.total > 0 ? Math.min(100, Math.round((s.correct / s.total) * 100)) : 0
-        }))
-      : defaultSubjects.map(sub => ({ sub, progress: 0 }));
-
-    return res.json({
-      success: true,
-      data: {
-        id: studentProfile.id,
-        name: studentProfile.full_name || studentProfile.email || 'Student Ward',
-        email: studentProfile.email || '',
-        has_paid: !!studentProfile.has_paid,
-        score: avgScore,
-        weakSubjects: weakSubjects.length > 0 ? weakSubjects : ['No weak areas identified yet'],
-        recentActivity: history.length > 0 ? `Mock Exam on ${history[0].date}` : (studentProfile.last_active ? `Active on ${new Date(studentProfile.last_active).toLocaleDateString()}` : 'No activity logged yet'),
-        readiness,
-        target,
-        globalRank,
-        weeklyFocusTime: weeklyFocusFormatted,
-        attendanceRate: attendanceRate > 0 ? `${attendanceRate}%` : (studentProfile.streak_days ? `${Math.min(100, studentProfile.streak_days * 15)}%` : '0%'),
-        heatmap: heatmapDays,
-        payments: (payments || []).map((p: any) => ({
-          date: new Date(p.created_at).toLocaleDateString(),
-          amount: `₦${Number(p.amount || 0).toLocaleString()}`,
-          ref: p.id ? p.id.substring(0, 8).toUpperCase() : 'REC-AUTOPAY',
-          status: p.status || 'approved'
-        })),
-        syllabus: subjectProgress,
-        history
-      }
-    });
-  } catch (err: any) {
-    console.error('[API /api/guardian/student-details Error]', err);
-    return res.status(500).json({ success: false, error: err.message || 'Internal server error.' });
-  }
+// Guardian Portal endpoints are completely disabled and removed
+app.all('/api/guardian/*all', (req, res) => {
+  res.status(410).json({ success: false, error: 'Guardian Portal is disabled and no longer supported on Scholars Resort.' });
 });
 
 // API Route: Admin Materials Metadata Upload & Persistence Handler

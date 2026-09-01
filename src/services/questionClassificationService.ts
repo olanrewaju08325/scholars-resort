@@ -295,7 +295,7 @@ export class QuestionClassificationService {
               answer: q1.correct_option || q1.answer || 'A',
               subjectName: q1.subjects?.name || q1.subject_name || 'General',
               topicName: q1.topics?.name || q1.topic_name,
-              year: q1.exam_year,
+              year: q1.year !== undefined && q1.year !== null ? q1.year : q1.exam_year,
               isActive: q1.is_active ?? true
             },
             questionB: {
@@ -305,7 +305,7 @@ export class QuestionClassificationService {
               answer: q2.correct_option || q2.answer || 'A',
               subjectName: q2.subjects?.name || q2.subject_name || 'General',
               topicName: q2.topics?.name || q2.topic_name,
-              year: q2.exam_year,
+              year: q2.year !== undefined && q2.year !== null ? q2.year : q2.exam_year,
               isActive: q2.is_active ?? true
             },
             similarityScore: similarity,

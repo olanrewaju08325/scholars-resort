@@ -481,8 +481,9 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
         }
 
         // 12. Invalid year value
-        if (q.exam_year !== null && q.exam_year !== undefined && q.exam_year !== '') {
-          const yrNum = Number(q.exam_year);
+        const qYear = q.year !== undefined && q.year !== null ? q.year : q.exam_year;
+        if (qYear !== null && qYear !== undefined && qYear !== '') {
+          const yrNum = Number(qYear);
           if (isNaN(yrNum) || yrNum < 1970 || yrNum > 2026) {
             auditMetrics.invalidYear++;
             isNeedsReview = true;

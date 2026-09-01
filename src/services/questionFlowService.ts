@@ -405,7 +405,7 @@ export class QuestionFlowService {
             }
 
             if (config.examYear) {
-              query = query.eq('exam_year', config.examYear);
+              query = query.eq('year', config.examYear);
             }
 
             const { data, error } = await query.limit(targetCount * 2);
