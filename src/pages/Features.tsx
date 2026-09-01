@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import { Footer } from '@/components/Footer';
-import { BrainCircuit, BookOpen, Target, Sparkles, Trophy, Users, ShieldCheck } from 'lucide-react';
+import { BrainCircuit, BookOpen, Target, Sparkles, Trophy, Users, ShieldCheck, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Features() {
@@ -81,11 +81,11 @@ export default function Features() {
           {/* Feature 4 */}
           <div className="bg-card border border-border p-8 rounded-2xl shadow-sm hover:shadow-premium transition-shadow">
             <div className="w-14 h-14 bg-green-500/10 rounded-xl flex items-center justify-center text-green-500 mb-6">
-              <Users className="w-7 h-7" />
+              <BarChart3 className="w-7 h-7" />
             </div>
-            <h3 className="text-xl font-bold font-display mb-3">Guardian Portal</h3>
+            <h3 className="text-xl font-bold font-display mb-3">Performance Analytics</h3>
             <p className="text-muted-foreground leading-relaxed">
-              Keep parents in the loop. Guardians can link accounts to monitor progress, view mock results, and encourage consistency.
+              Real-time score tracking, speed analytics, national percentile rankings, and comprehensive topic-by-topic breakdowns.
             </p>
           </div>
 

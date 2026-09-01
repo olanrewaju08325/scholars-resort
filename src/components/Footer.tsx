@@ -35,7 +35,7 @@ export const Footer = () => {
           <div>
             <h4 className="font-bold mb-4 uppercase tracking-wider text-xs text-foreground font-display">Portals & Resources</h4>
             <ul className="space-y-3 text-sm">
-              <li><Link to="/guardian-info" className="text-foreground/80 hover:text-primary font-medium transition-colors flex items-center gap-1">Guardian Portal <ArrowUpRight className="w-3 h-3 text-primary" /></Link></li>
+              <li><Link to="/novel-hub" className="text-foreground/80 hover:text-primary font-medium transition-colors flex items-center gap-1">JAMB Novel Hub <ArrowUpRight className="w-3 h-3 text-primary" /></Link></li>
               <li><Link to="/career-guide" className="text-foreground/80 hover:text-primary font-medium transition-colors">UTME Career Guide</Link></li>
               <li><Link to="/help" className="text-foreground/80 hover:text-primary font-medium transition-colors">Help Center & FAQs</Link></li>
             </ul>

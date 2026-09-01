@@ -15,14 +15,11 @@ import { CorrectionQueueTab } from "./admin-tabs/CorrectionQueueTab";
 // Sub-modules
 import { DashboardTab } from './admin-tabs/DashboardTab';
 import { StudentsTab } from './admin-tabs/StudentsTab';
-import { QuestionBankTab } from './admin-tabs/QuestionBankTab';
 import { PaymentsTab } from './admin-tabs/PaymentsTab';
 import { SystemHealthTab } from './admin-tabs/SystemHealthTab';
 import { SettingsTab } from './admin-tabs/SettingsTab';
-import { SubjectsTab } from './admin-tabs/SubjectsTab';
 import { SupportTab } from './admin-tabs/SupportTab';
 import { AdminTournamentsTab } from './admin-tabs/AdminTournamentsTab';
-import { AdminAITab } from './admin-tabs/AdminAITab';
 import { AnalyticsTab } from './admin-tabs/AnalyticsTab';
 import { LogsTab } from './admin-tabs/LogsTab';
 import { BackupsTab } from './admin-tabs/BackupsTab';
@@ -34,19 +31,14 @@ import { ScholarshipTab } from './admin-tabs/ScholarshipTab';
 import { ContentCalendarTab } from './admin-tabs/ContentCalendarTab';
 import { ReferralTab } from './admin-tabs/ReferralTab';
 import { TelemetryTab } from './admin-tabs/TelemetryTab';
-import { AIPromptStudioTab } from './admin-tabs/AIPromptStudioTab';
 import { SecurityTab } from './admin-tabs/SecurityTab';
 import { WeeklyChallengesAdminTab } from './admin-tabs/WeeklyChallengesAdminTab';
-import { ContentStudioTab } from './admin-tabs/ContentStudioTab';
 import { PlatformHealthTab } from './admin-tabs/PlatformHealthTab';
-import { AIKeysTab } from './admin-tabs/AIKeysTab';
 import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 import { initAdminOfflineSync } from '@/services/offlineSyncService';
 import { MaterialsTab } from './admin-tabs/MaterialsTab';
 import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
-import { SyllabusAdminTab } from './admin-tabs/SyllabusAdminTab';
 import { BadgesAdminTab } from './admin-tabs/BadgesAdminTab';
-import { ImageQuestionManagerTab } from './admin-tabs/ImageQuestionManagerTab';
 import { DatabaseDiagnosticsTab } from './admin-tabs/DatabaseDiagnosticsTab';
 import { EnvironmentCleanupTab } from './admin-tabs/EnvironmentCleanupTab';
 import { FlowValidatorDashboard } from '@/components/admin/FlowValidatorDashboard';
@@ -54,6 +46,11 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { AdminNotificationSystem } from '@/components/admin/AdminNotificationSystem';
 import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
 import { AdminSessionTimeout } from '@/components/admin/AdminSessionTimeout';
+
+// Consolidated Tab Modules
+import { QuestionBankContentStudioTab } from './admin-tabs/QuestionBankContentStudioTab';
+import { AcademicTaxonomyHubTab } from './admin-tabs/AcademicTaxonomyHubTab';
+import { AICommandCenterTab } from './admin-tabs/AICommandCenterTab';
 
 export default function Admin() {
   const { profile, user, signOut } = useAuth();
@@ -96,85 +93,145 @@ export default function Admin() {
   }
 
 
-  const navItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'announcements', label: 'Announcements', icon: Megaphone },
-    { id: 'bulk-email', label: 'Bulk Email', icon: Mail },
-    { id: 'revenue', label: 'Revenue', icon: DollarSign },
-    { id: 'scholarships', label: 'Scholarships', icon: Gift },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'referrals', label: 'Referrals', icon: Network },
-    { id: 'telemetry', label: 'Platform Telemetry', icon: Globe },
-    { id: 'ai-studio', label: 'AI Prompt Studio', icon: Brain },
-    { id: 'ai-keys', label: 'AI Provider Keys', icon: Key },
-    { id: 'weekly-challenges', label: 'Weekly Challenges', icon: Swords },
-    { id: 'insights', label: 'Student Insights', icon: Activity },
-    { id: "correction-queue", label: "Correction Queue", icon: AlertTriangle },
-    { id: 'analytics', label: 'Analytics', icon: BarChart },
-    { id: 'security', label: 'Security', icon: ShieldAlert },
-    { id: 'students', label: 'Users & Guardians', icon: Users },
-    { id: 'materials', label: 'Library Resource Manager', icon: BookOpen },
-    { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
-    { id: 'syllabus', label: 'Dynamic Syllabus', icon: BookOpen },
-    { id: 'badges', label: 'Gamification Badges', icon: Trophy },
-    { id: 'image-questions', label: 'Image & Diagram Questions', icon: FileQuestion },
-    { id: 'subjects', label: 'Subjects & Topics', icon: BookOpen },
-    { id: 'content-studio', label: 'Content Studio', icon: FileQuestion },
-    { id: 'questions', label: 'Question Bank', icon: FileQuestion },
-    { id: 'tournaments', label: 'Tournaments', icon: Trophy },
-    { id: 'payments', label: 'Admin Payments', icon: CreditCard },
-    { id: 'support', label: 'Support Center', icon: MessageSquare },
-    { id: 'ai', label: 'AI Assistant', icon: Sparkles },
-    { id: 'logs', label: 'Audit Logs', icon: List },
-    { id: 'backups', label: 'Backups', icon: DatabaseBackup },
-    { id: 'flow-validator', label: 'CBT Flow Validator', icon: ShieldCheck },
-    { id: 'db-diagnostics', label: 'Database Diagnostic Suite', icon: Activity },
-    { id: 'env-cleanup', label: 'Environment Cleanup', icon: Trash2 },
-    { id: 'smtp-health', label: 'SMTP Health Check', icon: Mail },
-    { id: 'health', label: 'System Health', icon: Activity },
-    { id: 'platform-health', label: 'Platform Monitor', icon: Activity },
-    { id: 'settings', label: 'Settings', icon: Settings },
+  const navGroups = [
+    {
+      group: 'Overview',
+      items: [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'analytics', label: 'Analytics', icon: BarChart },
+        { id: 'insights', label: 'Student Insights', icon: Activity },
+        { id: 'telemetry', label: 'Platform Telemetry', icon: Globe },
+      ]
+    },
+    {
+      group: 'Academic',
+      items: [
+        { id: 'question-bank-studio', label: 'Question Bank & Content Studio', icon: FileQuestion },
+        { id: 'academic-taxonomy', label: 'Academic Taxonomy Hub', icon: BookOpen },
+        { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
+        { id: 'materials', label: 'Resource Library', icon: BookOpen },
+      ]
+    },
+    {
+      group: 'Students',
+      items: [
+        { id: 'students', label: 'Users Directory', icon: Users },
+        { id: 'support', label: 'Support Center', icon: MessageSquare },
+        { id: 'correction-queue', label: 'Correction Queue', icon: AlertTriangle },
+      ]
+    },
+    {
+      group: 'Exams & Competitions',
+      items: [
+        { id: 'flow-validator', label: 'CBT Flow Validator', icon: ShieldCheck },
+        { id: 'tournaments', label: 'Tournaments', icon: Trophy },
+        { id: 'weekly-challenges', label: 'Weekly Challenges', icon: Swords },
+        { id: 'badges', label: 'Gamification Badges', icon: Trophy },
+      ]
+    },
+    {
+      group: 'AI',
+      items: [
+        { id: 'ai-command-center', label: 'AI Command Center', icon: Sparkles },
+      ]
+    },
+    {
+      group: 'Business',
+      items: [
+        { id: 'revenue', label: 'Revenue & Sales', icon: DollarSign },
+        { id: 'payments', label: 'Payment Transactions', icon: CreditCard },
+        { id: 'scholarships', label: 'Scholarships', icon: Gift },
+        { id: 'referrals', label: 'Referrals', icon: Network },
+      ]
+    },
+    {
+      group: 'Communication',
+      items: [
+        { id: 'announcements', label: 'Announcements', icon: Megaphone },
+        { id: 'bulk-email', label: 'Bulk Email', icon: Mail },
+        { id: 'calendar', label: 'Content Calendar', icon: Calendar },
+      ]
+    },
+    {
+      group: 'System',
+      items: [
+        { id: 'security', label: 'Security & Auth', icon: ShieldAlert },
+        { id: 'logs', label: 'Audit Logs', icon: List },
+        { id: 'health', label: 'System Health', icon: Activity },
+        { id: 'platform-health', label: 'Platform Monitor', icon: Activity },
+        { id: 'db-diagnostics', label: 'Database Diagnostics', icon: Activity },
+        { id: 'backups', label: 'Database Backups', icon: DatabaseBackup },
+        { id: 'env-cleanup', label: 'Environment Cleanup', icon: Trash2 },
+        { id: 'settings', label: 'Settings & Config', icon: Settings },
+      ]
+    }
   ];
+
+  const allNavItems = navGroups.flatMap(g => g.items);
 
   const renderModule = () => {
     switch(activeModule) {
       case 'dashboard': return <DashboardTab />;
+      case 'analytics': return <AnalyticsTab />;
+      case 'insights': return <StudentInsightsTab />;
+      case 'telemetry': return <TelemetryTab />;
+
+      // Academic (Consolidated)
+      case 'question-bank-studio':
+      case 'questions':
+      case 'image-questions':
+      case 'content-studio': 
+        return <QuestionBankContentStudioTab />;
+
+      case 'academic-taxonomy':
+      case 'subjects':
+      case 'syllabus': 
+        return <AcademicTaxonomyHubTab />;
+
+      case 'literature': return <AdminLiteratureTab />;
+      case 'materials': return <MaterialsTab />;
+
+      // Students
+      case 'students': return <StudentsTab />;
+      case 'support': return <SupportTab />;
+      case 'correction-queue': return <CorrectionQueueTab />;
+
+      // Exams & Competitions
+      case 'flow-validator': return <FlowValidatorDashboard />;
+      case 'tournaments': return <AdminTournamentsTab />;
+      case 'weekly-challenges': return <WeeklyChallengesAdminTab />;
+      case 'badges': return <BadgesAdminTab />;
+
+      // AI (Consolidated)
+      case 'ai-command-center':
+      case 'ai':
+      case 'ai-studio':
+      case 'ai-keys': 
+        return <AICommandCenterTab />;
+
+      // Business
+      case 'revenue': return <RevenueReportingTab />;
+      case 'payments': return <PaymentsTab />;
+      case 'scholarships': return <ScholarshipTab />;
+      case 'referrals': return <ReferralTab />;
+
+      // Communication
       case 'announcements': return <AnnouncementsTab />;
       case 'bulk-email': return <BulkEmailTab />;
-      case 'revenue': return <RevenueReportingTab />;
-      case 'scholarships': return <ScholarshipTab />;
       case 'calendar': return <ContentCalendarTab />;
-      case 'referrals': return <ReferralTab />;
-      case 'telemetry': return <TelemetryTab />;
-      case 'ai-studio': return <AIPromptStudioTab />;
-      case 'ai-keys': return <AIKeysTab />;
-      case 'weekly-challenges': return <WeeklyChallengesAdminTab />;
-      case 'insights': return <StudentInsightsTab />;
-      case 'analytics': return <AnalyticsTab />;
+
+      // System
       case 'security': return <SecurityTab />;
-      case 'students': return <StudentsTab />;
-      case 'materials': return <MaterialsTab />;
-      case 'literature': return <AdminLiteratureTab />;
-      case 'syllabus': return <SyllabusAdminTab />;
-      case 'badges': return <BadgesAdminTab />;
-      case 'image-questions': return <ImageQuestionManagerTab />;
-      case 'subjects': return <SubjectsTab />;
-      case 'content-studio': return <ContentStudioTab />;
-      case 'questions': return <QuestionBankTab />;
-      case 'payments': return <PaymentsTab />;
-      case "correction-queue": return <CorrectionQueueTab />;
-      case 'smtp-health': return <SettingsTab />;
+      case 'logs': return <LogsTab />;
       case 'health': return <SystemHealthTab />;
       case 'platform-health': return <PlatformHealthTab />;
-      case 'support': return <SupportTab />;
-      case 'settings': return <SettingsTab />;
-      case 'tournaments': return <AdminTournamentsTab />;
-      case 'ai': return <AdminAITab />;
-      case 'logs': return <LogsTab />;
-      case 'backups': return <BackupsTab />;
-      case 'flow-validator': return <FlowValidatorDashboard />;
       case 'db-diagnostics': return <DatabaseDiagnosticsTab />;
+      case 'backups': return <BackupsTab />;
       case 'env-cleanup': return <EnvironmentCleanupTab />;
+      case 'settings':
+      case 'smtp-health': 
+        return <SettingsTab />;
+
       default: return <DashboardTab />;
     }
   };
@@ -197,23 +254,34 @@ export default function Admin() {
           </Button>
         </div>
         
-        <nav className="flex-1 overflow-y-auto py-4 px-2 space-y-1">
-          {navItems.map(item => (
-            <button
-              key={item.id}
-              onClick={() => setActiveModule(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-md transition-colors text-sm font-medium
-                ${activeModule === item.id 
-                  ? 'bg-primary/10 text-primary' 
-                  : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                }
-                ${isSidebarCollapsed ? 'justify-center' : 'justify-start'}
-              `}
-              title={isSidebarCollapsed ? item.label : undefined}
-            >
-              <item.icon className={`w-5 h-5 ${activeModule === item.id ? 'text-primary' : ''}`} />
-              {!isSidebarCollapsed && <span>{item.label}</span>}
-            </button>
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-4 custom-scrollbar">
+          {navGroups.map((grp) => (
+            <div key={grp.group} className="space-y-1">
+              {!isSidebarCollapsed && (
+                <div className="px-3 text-[10px] font-bold uppercase tracking-wider text-muted-foreground/70">
+                  {grp.group}
+                </div>
+              )}
+              <div className="space-y-0.5">
+                {grp.items.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveModule(item.id)}
+                    className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-xs font-medium
+                      ${activeModule === item.id 
+                        ? 'bg-primary text-primary-foreground font-semibold shadow-xs' 
+                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                      }
+                      ${isSidebarCollapsed ? 'justify-center' : 'justify-start'}
+                    `}
+                    title={isSidebarCollapsed ? `${grp.group}: ${item.label}` : undefined}
+                  >
+                    <item.icon className={`w-4 h-4 shrink-0 ${activeModule === item.id ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                    {!isSidebarCollapsed && <span className="truncate">{item.label}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         
@@ -238,17 +306,26 @@ export default function Admin() {
       {/* Mobile Menu Dropdown */}
       {isMobileMenuOpen && (
         <div className="md:hidden absolute top-16 left-0 w-full h-[calc(100vh-4rem)] bg-background z-50 overflow-y-auto border-b border-border">
-          <nav className="p-4 space-y-2">
-            {navItems.map(item => (
-              <button
-                key={item.id}
-                onClick={() => { setActiveModule(item.id); setIsMobileMenuOpen(false); }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-md transition-colors text-sm font-medium
-                  ${activeModule === item.id ? 'bg-primary text-primary-foreground' : 'text-muted-foreground bg-card border border-border'}
-                `}
-              >
-                <item.icon className="w-5 h-5" /> {item.label}
-              </button>
+          <nav className="p-4 space-y-4">
+            {navGroups.map((grp) => (
+              <div key={grp.group} className="space-y-1.5">
+                <div className="px-2 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  {grp.group}
+                </div>
+                <div className="grid grid-cols-1 gap-1">
+                  {grp.items.map((item) => (
+                    <button
+                      key={item.id}
+                      onClick={() => { setActiveModule(item.id); setIsMobileMenuOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-xs font-medium
+                        ${activeModule === item.id ? 'bg-primary text-primary-foreground font-semibold' : 'text-muted-foreground bg-card border border-border'}
+                      `}
+                    >
+                      <item.icon className="w-4 h-4" /> {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
             <Button variant="destructive" onClick={signOut} className="w-full mt-4 gap-2">
               <LogOut className="w-4 h-4" /> Logout
@@ -281,14 +358,6 @@ export default function Admin() {
               className="hidden lg:flex items-center gap-2 text-xs font-semibold text-primary border-primary/30 hover:bg-primary/10"
             >
               <LayoutDashboard className="w-3.5 h-3.5" /> Student Dashboard
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => navigate('/guardian')}
-              className="hidden lg:flex items-center gap-2 text-xs font-semibold text-muted-foreground hover:text-foreground"
-            >
-              <Users className="w-3.5 h-3.5" /> Guardian Portal
             </Button>
             <AdminSessionTimeout timeoutMinutes={15} warningSeconds={60} />
             <AdminThemeToggle />

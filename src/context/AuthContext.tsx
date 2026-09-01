@@ -7,7 +7,7 @@ import type { User } from '@supabase/supabase-js';
 
 export interface Profile {
   id: string;
-  role: 'student' | 'guardian' | 'admin' | 'suspended';
+  role: 'student' | 'admin' | 'suspended';
   full_name: string;
   email?: string;
   phone?: string;
@@ -158,19 +158,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.warn(`[AuthContext] No profile record found for user ${userId}. Creating default profile...`);
         const userEmail = (user?.email || '').toLowerCase().trim();
         const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
-        const metaRole = user?.user_metadata?.role;
-        const pendingInvite = localStorage.getItem('pending_guardian_code');
-        const assignedRole: Profile['role'] = isAdminEmail 
-          ? 'admin' 
-          : (metaRole === 'guardian' || metaRole === 'parent' || !!pendingInvite ? 'guardian' : 'student');
-        const isGuardian = assignedRole === 'guardian';
+        const assignedRole: Profile['role'] = isAdminEmail ? 'admin' : 'student';
 
         const newProfile: Partial<Profile> = {
           id: userId,
           role: assignedRole,
-          full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
+          full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Scholar Student',
           email: user?.email || '',
-          has_paid: isAdminEmail || isGuardian ? true : false,
+          has_paid: isAdminEmail ? true : false,
           onboarding_completed: isAdminEmail ? true : false,
           streak_days: 0,
           xp: 0,
@@ -207,19 +202,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (isMounted.current) {
         const userEmail = (user?.email || '').toLowerCase().trim();
         const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
-        const metaRole = user?.user_metadata?.role;
-        const fallbackRole: Profile['role'] = isAdminEmail 
-          ? 'admin' 
-          : (metaRole === 'guardian' || metaRole === 'parent' ? 'guardian' : 'student');
-        const isGuardian = fallbackRole === 'guardian';
+        const fallbackRole: Profile['role'] = isAdminEmail ? 'admin' : 'student';
 
         if (!profile) {
           commitProfile({
             id: userId,
             role: fallbackRole,
-            full_name: user?.user_metadata?.full_name || (isGuardian ? 'Parent/Guardian' : 'Scholar Student'),
+            full_name: user?.user_metadata?.full_name || 'Scholar Student',
             email: user?.email || '',
-            has_paid: isAdminEmail || isGuardian ? true : false,
+            has_paid: isAdminEmail ? true : false,
             onboarding_completed: isAdminEmail ? true : false,
             xp: 0,
             coins: 0,

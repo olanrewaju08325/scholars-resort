@@ -22,6 +22,8 @@ export interface ModeQuestionQueryConfig {
   subjectId?: string; // UUID or subject name
   subjectIds?: string[]; // Array of subject UUIDs or names (e.g. for Full Mock)
   topicId?: string;
+  subtopicId?: string;
+  sourceType?: 'jamb_past' | 'custom' | 'ai_generated' | 'tournament';
   count?: number;
   examYear?: number | string;
   difficulty?: 'easy' | 'medium' | 'hard' | 'mixed' | 'adaptive';
@@ -141,6 +143,87 @@ export class QuestionFlowService {
         } catch (err: any) {
           isMistakeFallbackNeeded = true;
           warnings.push(`Error loading failed questions: ${err.message || err}. Falling back.`);
+        }
+      } else if (config.learningStyle === 'weakness' && config.userId) {
+        try {
+          const { data: userAnswers, error: answersError } = await supabase
+            .from('session_answers')
+            .select('question_id, is_correct')
+            .eq('user_id', config.userId)
+            .limit(300);
+
+          if (!answersError && userAnswers && userAnswers.length > 0) {
+            const qIds = Array.from(new Set(userAnswers.map(a => a.question_id).filter(Boolean)));
+            if (qIds.length > 0) {
+              const { data: questionsData } = await supabase
+                .from('questions')
+                .select('id, topic_id')
+                .in('id', qIds.slice(0, 150));
+
+              if (questionsData && questionsData.length > 0) {
+                const qTopicMap: Record<string, string> = {};
+                questionsData.forEach(q => {
+                  if (q.topic_id) qTopicMap[q.id] = q.topic_id;
+                });
+
+                const topicScores: Record<string, { correct: number; total: number }> = {};
+                userAnswers.forEach(ans => {
+                  const topicId = qTopicMap[ans.question_id];
+                  if (topicId) {
+                    if (!topicScores[topicId]) topicScores[topicId] = { correct: 0, total: 0 };
+                    topicScores[topicId].total++;
+                    if (ans.is_correct) topicScores[topicId].correct++;
+                  }
+                });
+
+                const weakTopicIds = Object.entries(topicScores)
+                  .map(([topicId, scores]) => ({
+                    topicId,
+                    accuracy: (scores.correct / scores.total) * 100
+                  }))
+                  .filter(t => t.accuracy < 65)
+                  .sort((a, b) => a.accuracy - b.accuracy)
+                  .map(t => t.topicId);
+
+                if (weakTopicIds.length > 0) {
+                  let query = supabase
+                    .from('questions')
+                    .select('*, subjects(id, name), topics(id, name)')
+                    .eq('is_active', true)
+                    .in('topic_id', weakTopicIds.slice(0, 5));
+
+                  if (config.subjectId && config.subjectId !== 'all') {
+                    const matchedIds = await resolveSubjectIdsByNameOrAlias(config.subjectId);
+                    const validUuids = matchedIds.filter(isUUID);
+                    if (validUuids.length > 0) {
+                      query = query.in('subject_id', validUuids);
+                    }
+                  }
+
+                  const { data: weakQs, error: weakQsError } = await query.limit(targetCount);
+                  if (!weakQsError && weakQs && weakQs.length > 0) {
+                    rawQuestions = weakQs;
+                    subjectsQueried.push('Adaptive Weakness Focus');
+                    isMistakeFallbackNeeded = false;
+                  } else {
+                    isMistakeFallbackNeeded = true;
+                  }
+                } else {
+                  isMistakeFallbackNeeded = true;
+                }
+              } else {
+                isMistakeFallbackNeeded = true;
+              }
+            } else {
+              isMistakeFallbackNeeded = true;
+            }
+          } else {
+            isMistakeFallbackNeeded = true;
+            warnings.push(`No performance history found on record for this user. Practicing with standard questions.`);
+          }
+        } catch (err: any) {
+          isMistakeFallbackNeeded = true;
+          warnings.push(`Error loading adaptive weakness questions: ${err.message || err}. Falling back.`);
         }
       } else {
         isMistakeFallbackNeeded = true;
@@ -336,8 +419,17 @@ export class QuestionFlowService {
         }
       }
 
+      // Deduplicate rawQuestions by unique ID to enforce strictly distinct questions per set
+      const seenIds = new Set<string>();
+      const uniqueRawQuestions = rawQuestions.filter(q => {
+        if (!q.id) return true;
+        if (seenIds.has(q.id)) return false;
+        seenIds.add(q.id);
+        return true;
+      });
+
       // Process and Normalize Questions through ContentNormalizer (strips extraneous tags, numbers, headers)
-      const normalizedList = ContentNormalizer.normalizeStream(rawQuestions);
+      const normalizedList = ContentNormalizer.normalizeStream(uniqueRawQuestions);
       
       // Shuffle and slice to target count (unless empty)
       const finalQuestions = (config.mode === 'full_mock' || config.mode === 'ai_generated_mock')

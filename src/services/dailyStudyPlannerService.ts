@@ -129,13 +129,13 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
   // Also include offline completed sessions
   const offlineSessions = getCompletedOfflineSessions();
   
-  // Categorize weak (<60%) and strong (>=75%) topics
+  // Categorize weak (<65%) and strong (>=75%) topics
   const weakTopics: { subject: string; topic: string; accuracy: number }[] = [];
   const strongTopics: { subject: string; topic: string; accuracy: number }[] = [];
 
   Object.values(topicStatsMap).forEach(st => {
     const accuracy = st.total > 0 ? Math.round((st.correct / st.total) * 100) : 0;
-    if (accuracy < 60) {
+    if (accuracy < 65) {
       weakTopics.push({ subject: st.subject, topic: st.topic, accuracy });
     } else if (accuracy >= 75) {
       strongTopics.push({ subject: st.subject, topic: st.topic, accuracy });
@@ -210,13 +210,13 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
       timeSlot: 'morning',
       slotLabel: 'Morning Focus',
       slotTime: '08:00 AM – 09:00 AM',
-      title: `Intensive Drill: ${topWeak.topic}`,
+      title: `Remedial Drill: ${topWeak.topic}`,
       subject: topWeak.subject,
       topic: topWeak.topic,
       durationMinutes: 45,
       priority: 'high',
-      priorityLabel: 'Critical Focus Area',
-      recommendationReason: `Your past performance shows ${topWeak.accuracy}% accuracy on this topic.`,
+      priorityLabel: 'Remedial Focus Area',
+      recommendationReason: `Auto-injected remedial task: Your accuracy on ${topWeak.topic} is currently ${topWeak.accuracy}%, which is below the 65% mastery threshold.`,
       actionType: 'drill',
       isCompleted: false
     });
@@ -246,13 +246,13 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
       timeSlot: 'midday',
       slotLabel: 'Mid-Day Practice',
       slotTime: '12:00 PM – 01:00 PM',
-      title: `Concept Review: ${secondWeak.topic}`,
+      title: `Remedial Review: ${secondWeak.topic}`,
       subject: secondWeak.subject,
       topic: secondWeak.topic,
       durationMinutes: 30,
       priority: 'high',
-      priorityLabel: 'Weakness Target',
-      recommendationReason: `Past score: ${secondWeak.accuracy}%. Review explanations and solve 15 questions.`,
+      priorityLabel: 'Remedial Target',
+      recommendationReason: `Auto-injected remedial review: Your accuracy on ${secondWeak.topic} is currently ${secondWeak.accuracy}%, which is below the 65% mastery threshold.`,
       actionType: 'review',
       isCompleted: false
     });

@@ -13,6 +13,8 @@ import {
 } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { SanityScanModal } from "@/components/admin/SanityScanModal";
+import { DuplicateInspectionModal } from "@/components/admin/DuplicateInspectionModal";
+import { QuestionClassificationService, type DuplicatePair } from "@/services/questionClassificationService";
 import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
@@ -29,6 +31,9 @@ import {
   type CsvParseResult 
 } from '@/lib/csvQuestionParser';
 import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
+
+const isUUID = (str: any): boolean => 
+  typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
 
 export const QuestionBankTab = () => {
   const [questions, setQuestions] = useState<any[]>([]);
@@ -73,11 +78,38 @@ export const QuestionBankTab = () => {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [searchFilter, setSearchFilter] = useState('');
   const [subjectFilter, setSubjectFilter] = useState('all');
+  const [topicFilter, setTopicFilter] = useState<'all' | 'mapped' | 'unmapped'>('all');
   const [isVirtualView, setIsVirtualView] = useState(true);
+  const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
+  const [duplicatePairs, setDuplicatePairs] = useState<DuplicatePair[]>([]);
+  const [classifying, setClassifying] = useState(false);
   const [bulkDeleteDialogConfig, setBulkDeleteDialogConfig] = useState({
     isOpen: false,
     isDeleting: false
   });
+
+  const handleRunDuplicateInspection = () => {
+    const pairs = QuestionClassificationService.detectDuplicatePairs(questions);
+    setDuplicatePairs(pairs);
+    setDuplicateModalOpen(true);
+    if (pairs.length === 0) {
+      toast.info('No potential duplicate question stems detected in directory!');
+    }
+  };
+
+  const handleRunAutoClassifySyllabus = async () => {
+    setClassifying(true);
+    toast.info('Running intelligent syllabus classifier across database...');
+    try {
+      const res = await QuestionClassificationService.autoMapUnmappedQuestionsInDb();
+      toast.success(`Classification complete! ${res.highMapped} mapped high-confidence, ${res.pendingQueued} in review queue.`);
+      fetchData();
+    } catch (err: any) {
+      toast.error(`Classification error: ${err.message}`);
+    } finally {
+      setClassifying(false);
+    }
+  };
 
   const fetchData = async () => {
     let dbQuestions: any[] = [];
@@ -228,7 +260,6 @@ export const QuestionBankTab = () => {
     };
 
     try {
-      const isUUID = (str: any) => typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
       const isLocalQuestion = currentId && (String(currentId).startsWith('local_') || !isUUID(currentId));
 
       if (isEditing && currentId && !isLocalQuestion) {
@@ -310,9 +341,14 @@ export const QuestionBankTab = () => {
         } catch {}
 
         try {
-          // Delete from server or DB
-          const { error } = await supabase.from('questions').delete().eq('id', id);
-          if (error) {
+          // Delete from server or DB safely checking UUID format
+          if (isUUID(id)) {
+            const { error } = await supabase.from('questions').delete().eq('id', id);
+            if (error) {
+              await fetch(`/api/questions/${id}`, { method: 'DELETE' }).catch(() => null);
+            }
+          } else {
+            // Delete locally-only custom question
             await fetch(`/api/questions/${id}`, { method: 'DELETE' }).catch(() => null);
           }
           toast.success('Question deleted successfully.');
@@ -338,8 +374,17 @@ export const QuestionBankTab = () => {
     } catch {}
 
     try {
-      const { error } = await supabase.from('questions').update({ is_active: nextStatus }).eq('id', id);
-      if (error) {
+      if (isUUID(id)) {
+        const { error } = await supabase.from('questions').update({ is_active: nextStatus }).eq('id', id);
+        if (error) {
+          await fetch(`/api/questions/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ is_active: nextStatus })
+          }).catch(() => null);
+        }
+      } else {
+        // Handle local question toggle status
         await fetch(`/api/questions/${id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -356,9 +401,14 @@ export const QuestionBankTab = () => {
     return questions.filter(q => {
       const matchSub = subjectFilter === 'all' || q.subject_id === subjectFilter;
       const matchSearch = !searchFilter || q.question_text?.toLowerCase().includes(searchFilter.toLowerCase());
-      return matchSub && matchSearch;
+      const matchTopic = topicFilter === 'all' 
+        ? true 
+        : topicFilter === 'mapped' 
+        ? Boolean(q.topic_id) 
+        : !q.topic_id;
+      return matchSub && matchSearch && matchTopic;
     });
-  }, [questions, subjectFilter, searchFilter]);
+  }, [questions, subjectFilter, searchFilter, topicFilter]);
 
   const handleSelectAllToggle = () => {
     if (selectedIds.length >= filteredQuestions.length && filteredQuestions.length > 0) {
@@ -400,8 +450,15 @@ export const QuestionBankTab = () => {
 
     try {
       if (navigator.onLine) {
-        const { error } = await supabase.from('questions').delete().in('id', idsToDelete);
-        if (error) {
+        const validUuidsToDelete = idsToDelete.filter(isUUID);
+        let errorOccurred = false;
+
+        if (validUuidsToDelete.length > 0) {
+          const { error } = await supabase.from('questions').delete().in('id', validUuidsToDelete);
+          if (error) errorOccurred = true;
+        }
+
+        if (errorOccurred) {
           await queueOfflineOperation('bulk_question', 'bulk_delete', { ids: idsToDelete });
           toast.info('Database busy. Saved mass deletion to offline queue.');
         } else {
@@ -425,7 +482,10 @@ export const QuestionBankTab = () => {
     setQuestions(prev => prev.map(q => idsToUpdate.includes(q.id) ? { ...q, is_active: targetActive } : q));
 
     try {
-      await supabase.from('questions').update({ is_active: targetActive }).in('id', idsToUpdate);
+      const validUuidsToUpdate = idsToUpdate.filter(isUUID);
+      if (validUuidsToUpdate.length > 0) {
+        await supabase.from('questions').update({ is_active: targetActive }).in('id', validUuidsToUpdate);
+      }
       logAdminActivity('BATCH_STATUS_TOGGLE', `Set ${idsToUpdate.length} question(s) to ${targetActive ? 'Approved/Published' : 'Draft'}`, 'question_bank', { count: idsToUpdate.length, status: targetActive });
       toast.success(`Updated ${idsToUpdate.length} question(s) to ${targetActive ? 'Approved/Published' : 'Draft'}.`);
     } catch {
@@ -997,6 +1057,39 @@ export const QuestionBankTab = () => {
                  <Button 
                    variant="outline"
                    size="sm"
+                   onClick={handleRunDuplicateInspection}
+                   className="text-xs font-semibold gap-1.5 h-8 border-amber-500/40 hover:bg-amber-500/10 text-amber-500"
+                 >
+                   <Copy className="w-3.5 h-3.5 text-amber-500" /> Duplicate Inspector
+                 </Button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 Side-by-side duplicate question stem scanner and resolution inspector.
+               </TooltipContent>
+             </Tooltip>
+
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <Button 
+                   variant="outline"
+                   size="sm"
+                   disabled={classifying}
+                   onClick={handleRunAutoClassifySyllabus}
+                   className="text-xs font-semibold gap-1.5 h-8 border-purple-500/40 hover:bg-purple-500/10 text-purple-400"
+                 >
+                   {classifying ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-purple-400" />}
+                   Auto-Classify Syllabus
+                 </Button>
+               </TooltipTrigger>
+               <TooltipContent>
+                 Run AI keyword classification across database questions to auto-map syllabus topics.
+               </TooltipContent>
+             </Tooltip>
+             <Tooltip>
+               <TooltipTrigger asChild>
+                 <Button 
+                   variant="outline"
+                   size="sm"
                    onClick={() => exportQuestionsToCSV(filteredQuestions, `Question_Bank_${subjectFilter}_${Date.now()}.csv`)}
                    className="text-xs font-semibold gap-1.5 h-8"
                  >
@@ -1077,6 +1170,15 @@ export const QuestionBankTab = () => {
                    {subjects.map(s => (
                       <option key={s.id} value={s.id}>{s.name} ({subjectCounts[s.id] ?? 0})</option>
                     ))}
+                 </select>
+                 <select 
+                   value={topicFilter} 
+                   onChange={e => setTopicFilter(e.target.value as any)} 
+                   className="h-9 text-xs bg-background border border-border rounded-md px-2 text-foreground font-semibold"
+                 >
+                   <option value="all">All Taxonomy Status</option>
+                   <option value="mapped">Mapped Topics Only</option>
+                   <option value="unmapped">Unmapped Queue (Pending)</option>
                  </select>
                </div>
              </div>
@@ -1692,6 +1794,12 @@ export const QuestionBankTab = () => {
         isOpen={sanityScanModalOpen} 
         onClose={() => setSanityScanModalOpen(false)} 
         questions={questions} 
+        onRefresh={fetchData}
+      />
+      <DuplicateInspectionModal
+        isOpen={duplicateModalOpen}
+        onClose={() => setDuplicateModalOpen(false)}
+        duplicatePairs={duplicatePairs}
         onRefresh={fetchData}
       />
     </div>

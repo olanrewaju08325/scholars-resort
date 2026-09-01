@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { logAdminActivity } from '@/services/adminActivityService';
+import { QuestionClassificationService } from '@/services/questionClassificationService';
 
 export const SyllabusAdminTab = () => {
   const [subjects, setSubjects] = useState<any[]>([]);
@@ -189,6 +190,22 @@ export const SyllabusAdminTab = () => {
           <p className="text-muted-foreground">Configure subject topics, learning objectives, and recommended study tasks fetched dynamically for students.</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button 
+            variant="outline" 
+            onClick={async () => {
+              toast.info('Synchronizing canonical 20-subject syllabus hierarchy to database...');
+              const res = await QuestionClassificationService.syncCanonicalSyllabusToDatabase();
+              if (res.success) {
+                toast.success(res.message);
+                fetchTopicsForSubject(selectedSubjectId);
+              } else {
+                toast.error(res.message);
+              }
+            }}
+            className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
+          >
+            <BookOpen className="w-4 h-4 mr-2 text-purple-400" /> Sync 20-Subject Syllabus
+          </Button>
           <Button variant="outline" onClick={fetchSubjects}>
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh Subjects
           </Button>

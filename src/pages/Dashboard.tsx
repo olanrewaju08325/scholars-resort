@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useStudentStats } from '@/hooks/useStudentStats';
 import { WelcomeHero } from '@/components/dashboard/WelcomeHero';
@@ -8,13 +7,11 @@ import { AnnouncementBanner } from '@/components/AnnouncementBanner';
 import { DailyMission } from '@/components/dashboard/DailyMission';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { AIRecommendations } from '@/components/AIRecommendations';
-import { QuickActions } from '@/components/dashboard/QuickActions';
 import { ActivityHeatmap } from '@/components/dashboard/ActivityHeatmap';
 import { LeaderboardPreview } from '@/components/dashboard/LeaderboardPreview';
 import { TournamentPreview } from '@/components/dashboard/TournamentPreview';
 import { NotificationsMenu } from '@/components/NotificationsMenu';
 import { Gamification } from '@/pages/dashboard-tabs/Gamification';
-import { GuardianConnections } from '@/pages/dashboard-tabs/GuardianConnections';
 import { WeeklyChallenge } from '@/components/dashboard/WeeklyChallenge';
 import { StudyGoalTracker } from '@/components/dashboard/StudyGoalTracker';
 import { JAMBCountdown } from '@/components/dashboard/JAMBCountdown';
@@ -41,6 +38,8 @@ import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { motion } from 'framer-motion';
 import { Sparkles, BookOpen, BarChart2, Clock, Trophy, Layers } from 'lucide-react';
 import { DailyFiveQuestionDrill } from "@/components/dashboard/DailyFiveQuestionDrill";
+import { CbtHubGrid } from '@/components/dashboard/CbtHubGrid';
+import { MasteryLoopTracker } from '@/components/dashboard/MasteryLoopTracker';
 
 type MobileTab = 'all' | 'practice' | 'analytics' | 'tools' | 'social';
 
@@ -50,13 +49,6 @@ export default function Dashboard() {
   const { examsTaken, averageScore, streak, history, statsLoading } = useStudentStats();
   const stats = { examsTaken, averageScore, streak, history };
   const [mobileTab, setMobileTab] = useState<MobileTab>('all');
-
-  const navigate = useNavigate();
-  useEffect(() => {
-    if (profile?.role === 'guardian') {
-      navigate('/guardian');
-    }
-  }, [profile, navigate]);
 
   if (statsLoading || loading || !profile) {
     return <DashboardSkeleton />;
@@ -78,7 +70,8 @@ export default function Dashboard() {
         </div>
       </header>
 
-        <DailyFiveQuestionDrill userId={profile.id} />
+      <DailyFiveQuestionDrill userId={profile.id} />
+      
       <div className="container max-w-7xl mx-auto p-3 sm:p-4 space-y-6 mt-2 sm:mt-4 w-full max-w-full min-w-0">
         
         {/* Real-time Platform Announcements Banner */}
@@ -92,17 +85,27 @@ export default function Dashboard() {
           <WelcomeHero profile={profile} stats={stats} />
         </motion.div>
 
+        {/* Scholars Resort CBT Practice & Exam Modules */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.05 }} className="min-w-0 w-full">
+          <CbtHubGrid />
+        </motion.div>
+
+        {/* Adaptive Mastery Loop Tracker */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.06 }} className="min-w-0 w-full">
+          <MasteryLoopTracker userId={profile.id} />
+        </motion.div>
+
         {/* Daily High-Yield Study Tip Widget */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.04 }} className="min-w-0 w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }} className="min-w-0 w-full">
           <DailyStudyTip />
         </motion.div>
 
         {/* JAMB Score Predictor */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }} className="min-w-0 w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="min-w-0 w-full">
           <JambScorePredictorCard history={stats.history} />
         </motion.div>
 
-        {/* Mobile View Filter Tabs - Ensures 100% feature access with easy mobile navigation */}
+        {/* Mobile View Filter Tabs - Easy tabbed access */}
         <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 p-1 bg-muted/60 rounded-xl border border-border w-full max-w-full">
           <button
             onClick={() => setMobileTab('all')}
@@ -176,10 +179,6 @@ export default function Dashboard() {
                 {/* Daily Practice Goal Tracker Component */}
                 <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }} className="min-w-0 w-full">
                   <DailyGoalTracker />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="min-w-0 w-full">
-                  <QuickActions />
                 </motion.div>
 
                 {/* Visual Study Streak Calendar Component */}
@@ -302,10 +301,6 @@ export default function Dashboard() {
                 <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.6 }} className="min-w-0 w-full">
                   <LeaderboardPreview />
                 </motion.div>
-
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.8 }} className="min-w-0 w-full">
-                  <GuardianConnections />
-                </motion.div>
               </>
             )}
 
@@ -315,3 +310,4 @@ export default function Dashboard() {
     </div>
   );
 }
+

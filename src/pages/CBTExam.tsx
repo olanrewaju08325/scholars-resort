@@ -21,6 +21,7 @@ import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { cleanQuestionText, cleanOptionText } from '@/utils/questionUtils';
 import { QuestionFlowService } from '@/services/questionFlowService';
+import { validateUtmeSubjectCombination } from '@/utils/subjectTaxonomy';
 import { useFocusLock } from '@/hooks/useFocusLock';
 import { FocusLockOverlay } from '@/components/FocusLockOverlay';
 import { toast } from 'sonner';
@@ -220,17 +221,11 @@ const CBTExam = () => {
       }
 
       // JAMB 180-Question Master Logic via QuestionFlowService
-      let userSubs = profile.utme_subjects || [];
-      if (!userSubs || userSubs.length < 4) {
-        userSubs = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
-      }
-      
-      const normalizedSubs = userSubs.map((s: string) => normalizeSubjectName(s));
-      const hasEnglish = normalizedSubs.includes('Use of English');
-      
-      const finalSubjects = hasEnglish 
-        ? ['Use of English', ...normalizedSubs.filter((s: string) => s !== 'Use of English').slice(0, 3)]
-        : ['Use of English', ...normalizedSubs.slice(0, 3)];
+      const userSubs = profile.utme_subjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+      const validation = validateUtmeSubjectCombination(userSubs);
+      const finalSubjects = validation.isValid 
+        ? validation.normalizedSubjects 
+        : ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
 
       setExamSubjectsList(finalSubjects);
       

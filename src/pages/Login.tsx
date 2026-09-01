@@ -65,43 +65,33 @@ const Login = () => {
         setError(error.message);
       }
     } else {
-      const pendingCode = localStorage.getItem('pending_guardian_code');
-      if (pendingCode) {
-        navigate(`/guardian-connect?code=${pendingCode}`);
+      // Fetch user profile role to route directly to designated dashboard
+      let targetRoute = '/dashboard';
+      const isAdminEmail = AUTHORIZED_ADMIN_EMAILS.includes(cleanEmail);
+
+      if (isAdminEmail) {
+        targetRoute = '/scholarresortadmin@benedict';
       } else {
-        // Fetch user profile role to route directly to designated dashboard
-        let targetRoute = '/dashboard';
-        const userMetaRole = authData?.user?.user_metadata?.role;
-        const isAdminEmail = AUTHORIZED_ADMIN_EMAILS.includes(cleanEmail);
-
-        if (isAdminEmail) {
-          targetRoute = '/scholarresortadmin@benedict';
-        } else if (userMetaRole === 'guardian' || userMetaRole === 'parent') {
-          targetRoute = '/guardian';
-        } else {
-          try {
-            const { data: prof } = await supabase
-              .from('profiles')
-              .select('role, onboarding_completed')
-              .eq('id', authData.user.id)
-              .maybeSingle();
-            
-            if (prof?.role === 'admin') {
-              targetRoute = '/scholarresortadmin@benedict';
-            } else if (prof?.role === 'guardian') {
-              targetRoute = '/guardian';
-            } else if (prof?.role === 'student' && prof?.onboarding_completed === false) {
-              targetRoute = '/onboarding';
-            }
-          } catch {
-            // fallback to default
+        try {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('role, onboarding_completed')
+            .eq('id', authData.user.id)
+            .maybeSingle();
+          
+          if (prof?.role === 'admin') {
+            targetRoute = '/scholarresortadmin@benedict';
+          } else if (prof?.role === 'student' && prof?.onboarding_completed === false) {
+            targetRoute = '/onboarding';
           }
+        } catch {
+          // fallback to default
         }
-
-        // Support ?from= redirect if specified
-        const fromPath = searchParams.get('from');
-        navigate(fromPath || targetRoute);
       }
+
+      // Support ?from= redirect if specified
+      const fromPath = searchParams.get('from');
+      navigate(fromPath || targetRoute);
     }
     setLoading(false);
   };

@@ -849,7 +849,7 @@ app.post('/api/groq-chat', async (req, res) => {
       });
     }
 
-    const { messages, model = 'llama-3.3-70b-versatile', temperature = 0.7 } = req.body;
+    const { messages, model = 'groq/compound-mini', temperature = 0.7 } = req.body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ success: false, error: 'Messages array is required for chat.' });
@@ -892,11 +892,11 @@ app.post('/api/groq-chat', async (req, res) => {
 
     const candidateModels = [
       model,
+      'groq/compound-mini',
+      'groq/compound',
+      'qwen/qwen3.6-27b',
       'llama-3.3-70b-versatile',
-      'llama-3.1-8b-instant',
-      'llama3-70b-8192',
-      'llama3-8b-8192',
-      'gemma2-9b-it'
+      'llama-3.1-8b-instant'
     ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
     if (groqKey && groqKey.trim()) {

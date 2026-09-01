@@ -8,11 +8,14 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { downloadPerformanceSummaryPdf } from '@/lib/performanceSummaryPdf';
+import { getCanonicalSubjectById, normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
 
 const WeaknessDrill = () => {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [weakTopics, setWeakTopics] = useState<any[]>([]);
+  const [allClassifiedTopics, setAllClassifiedTopics] = useState<any[]>([]);
+  const [selectedSubTab, setSelectedSubTab] = useState<'Weak' | 'Developing' | 'Strong' | 'Mastered'>('Weak');
   const [mistakeCount, setMistakeCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [isExporting, setIsExporting] = useState(false);
@@ -28,7 +31,7 @@ const WeaknessDrill = () => {
           name: w.name,
           subjectName: w.subjects?.name || 'General',
           accuracy: w.accuracy,
-          attempts: 10
+          attempts: w.attempts || 10
         }))
       });
       toast.success('Weak Topics & Performance Summary PDF downloaded!');
@@ -52,6 +55,7 @@ const WeaknessDrill = () => {
 
         if (!answers || answers.length === 0) {
           setWeakTopics([]);
+          setAllClassifiedTopics([]);
           setMistakeCount(0);
           setLoading(false);
           return;
@@ -93,35 +97,68 @@ const WeaknessDrill = () => {
         let subjectNameMap: Record<string, string> = {};
         if (subjectIds.length > 0) {
           const { data: subjects } = await supabase.from('subjects').select('id, name').in('id', subjectIds);
-          (subjects || []).forEach((s: any) => { subjectNameMap[s.id] = s.name; });
+          (subjects || []).forEach((s: any) => { 
+            subjectNameMap[s.id] = normalizeToCanonicalSubjectName(s.name); 
+          });
         }
 
         const topicScores: Record<string, { correct: number; total: number; topicName: string; subjectId: string; subjectName: string }> = {};
 
         answers.forEach((a: any) => {
           const q = qMap[a.question_id];
-          if (!q?.topic_id || !topicNameMap[q.topic_id]) return;
-          const key = q.topic_id;
+          if (!q) return;
+          
+          const topicName = q.topic_id && topicNameMap[q.topic_id] 
+            ? topicNameMap[q.topic_id] 
+            : 'Topic Classification Pending';
+          const key = q.topic_id || `pending_${q.subject_id || 'general'}`;
+          
+          const canonicalSub = getCanonicalSubjectById(q.subject_id);
+          const resolvedSubName = canonicalSub?.name || subjectNameMap[q.subject_id] || 'General Studies';
+          
           if (!topicScores[key]) {
             topicScores[key] = { 
               correct: 0, 
               total: 0, 
-              topicName: topicNameMap[q.topic_id], 
+              topicName: topicName, 
               subjectId: q.subject_id || '', 
-              subjectName: subjectNameMap[q.subject_id] || 'General Studies' 
+              subjectName: resolvedSubName
             };
           }
           topicScores[key].total++;
           if (a.is_correct) topicScores[key].correct++;
         });
 
-        const weak = Object.entries(topicScores)
-          .filter(([, v]) => v.total >= 3)
-          .map(([id, v]) => ({ id, name: v.topicName, subject_id: v.subjectId, subjects: { name: v.subjectName }, accuracy: Math.round((v.correct / v.total) * 100) }))
-          .sort((a, b) => a.accuracy - b.accuracy)
-          .slice(0, 6);
+        const classified = Object.entries(topicScores)
+          .map(([id, v]) => {
+            const accuracy = Math.round((v.correct / v.total) * 100);
+            const attempts = v.total;
+            let level: 'Weak' | 'Developing' | 'Strong' | 'Mastered' = 'Weak';
+            
+            if (accuracy > 85 && attempts >= 15) {
+              level = 'Mastered';
+            } else if (accuracy >= 65) {
+              level = 'Strong';
+            } else if (accuracy >= 50) {
+              level = 'Developing';
+            } else {
+              level = 'Weak';
+            }
 
-        setWeakTopics(weak.length > 0 ? weak : []);
+            return {
+              id,
+              name: v.topicName,
+              subject_id: v.subjectId,
+              subjects: { name: v.subjectName },
+              accuracy,
+              attempts,
+              level
+            };
+          })
+          .sort((a, b) => a.accuracy - b.accuracy);
+
+        setAllClassifiedTopics(classified);
+        setWeakTopics(classified.filter(t => t.level === 'Weak'));
       } catch (e) {
         console.error('[WeaknessDrill] Error loading weakness data:', e);
       }
@@ -189,14 +226,42 @@ const WeaknessDrill = () => {
               <CardHeader>
                 <div className="flex items-center gap-2 mb-2">
                   <Target className="w-5 h-5 text-amber-500" />
-                  <CardTitle className="text-xl font-display">Low Accuracy Topics</CardTitle>
+                  <CardTitle className="text-xl font-display">Syllabus Topic Mastery</CardTitle>
                 </div>
-                <CardDescription>We've analyzed your past performance. Focus on these topics to increase your JAMB score.</CardDescription>
+                <CardDescription>We've analyzed your past performance. Focus on weak and developing topics to increase your JAMB score.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {!loading && allClassifiedTopics.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mb-4 border-b pb-4 border-border">
+                    {(['Weak', 'Developing', 'Strong', 'Mastered'] as const).map(lvl => {
+                      const count = allClassifiedTopics.filter(t => t.level === lvl).length;
+                      const isActive = selectedSubTab === lvl;
+                      let btnColor = 'border-muted text-muted-foreground hover:bg-muted/10';
+                      if (isActive) {
+                        if (lvl === 'Weak') btnColor = 'bg-red-500/10 text-red-500 border-red-500/30';
+                        else if (lvl === 'Developing') btnColor = 'bg-amber-500/10 text-amber-500 border-amber-500/30';
+                        else if (lvl === 'Strong') btnColor = 'bg-blue-500/10 text-blue-500 border-blue-500/30';
+                        else if (lvl === 'Mastered') btnColor = 'bg-green-500/10 text-green-500 border-green-500/30';
+                      }
+                      return (
+                        <button
+                          key={lvl}
+                          onClick={() => setSelectedSubTab(lvl)}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-semibold border transition-all flex items-center gap-1.5 ${btnColor}`}
+                        >
+                          <span>{lvl}</span>
+                          <span className="text-xs bg-muted text-foreground px-1.5 py-0.5 rounded-full font-bold">
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {loading ? (
                   <div className="text-center text-muted-foreground py-8">Analyzing your performance history...</div>
-                ) : weakTopics.length === 0 ? (
+                ) : allClassifiedTopics.length === 0 ? (
                   <div className="text-center py-10 space-y-3">
                     <Target className="w-12 h-12 mx-auto text-muted-foreground/30" />
                     <p className="font-semibold text-muted-foreground">No weaknesses identified yet.</p>
@@ -205,17 +270,29 @@ const WeaknessDrill = () => {
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {weakTopics.map(topic => (
-                      <div key={topic.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-background shadow-sm hover:shadow-premium transition-shadow">
-                        <div>
-                          <h4 className="font-bold">{topic.name}</h4>
-                          <p className="text-sm text-muted-foreground">{topic.subjects?.name} • Accuracy: <span className="text-amber-500 font-bold">{topic.accuracy}%</span></p>
-                        </div>
-                        <Button onClick={() => handleStartDrill(topic.id, topic.subject_id, 'weakness')}>
-                          Start Drill
-                        </Button>
+                    {allClassifiedTopics.filter(t => t.level === selectedSubTab).length === 0 ? (
+                      <div className="text-center py-8 text-muted-foreground text-sm border border-dashed rounded-xl border-border bg-muted/10">
+                        No topics currently classified as {selectedSubTab}.
                       </div>
-                    ))}
+                    ) : (
+                      allClassifiedTopics.filter(t => t.level === selectedSubTab).map(topic => (
+                        <div key={topic.id} className="flex items-center justify-between p-4 border border-border rounded-xl bg-background shadow-sm hover:shadow-premium transition-shadow">
+                          <div>
+                            <h4 className="font-bold">{topic.name}</h4>
+                            <p className="text-sm text-muted-foreground">
+                              {topic.subjects?.name} • Accuracy: <span className={`font-bold ${
+                                topic.level === 'Weak' ? 'text-red-500' :
+                                topic.level === 'Developing' ? 'text-amber-500' :
+                                topic.level === 'Strong' ? 'text-blue-500' : 'text-green-500'
+                              }`}>{topic.accuracy}%</span> • Attempts: <span className="font-semibold">{topic.attempts}</span>
+                            </p>
+                          </div>
+                          <Button onClick={() => handleStartDrill(topic.id, topic.subject_id, 'weakness')}>
+                            {topic.level === 'Mastered' ? 'Practice Mastered' : topic.level === 'Strong' ? 'Practice Topic' : 'Start Drill'}
+                          </Button>
+                        </div>
+                      ))
+                    )}
                   </div>
                 )}
               </CardContent>

@@ -7,6 +7,7 @@ import { StudySchedule } from '@/components/study-plan/StudySchedule';
 import { BurnoutDetector } from '@/components/study-plan/BurnoutDetector';
 import { AIRecommendations } from '@/components/AIRecommendations';
 import { JAMBScorePredictor } from '@/components/dashboard/JAMBScorePredictor';
+import { MasteryLoopTracker } from '@/components/dashboard/MasteryLoopTracker';
 import { Calendar, Quote } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -65,6 +66,10 @@ export default function StudyPlan() {
           
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }}>
             <PomodoroTimer />
+          </motion.div>
+
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.15 }}>
+            <MasteryLoopTracker userId={profile?.id || ''} />
           </motion.div>
 
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }}>

@@ -68,8 +68,8 @@ export const SettingsTab = () => {
   const [card3Desc, setCard3Desc] = useState("We measure your speed and accuracy per topic to recommend customized drills before exam day.");
   const [card4Title, setCard4Title] = useState("National Mocks & Battles");
   const [card4Desc, setCard4Desc] = useState("Compete against thousands of Nigerian students in weekly live tournaments and view your national percentile.");
-  const [card5Title, setCard5Title] = useState("Guardian & Parent Portal");
-  const [card5Desc, setCard5Desc] = useState("Parents receive transparent weekly email progress summaries and live dashboard tracking for peace of mind.");
+  const [card5Title, setCard5Title] = useState("AI Smart Tutor & Adaptive Path");
+  const [card5Desc, setCard5Desc] = useState("Get 24/7 step-by-step problem resolution, customized weak-topic drills, and AI study recommendations.");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

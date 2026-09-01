@@ -10,6 +10,8 @@ import { MathText } from '@/components/MathText';
 import { triggerConfetti, playSuccessChime } from '@/lib/celebration';
 import { generateExamResultPdf } from '@/lib/pdfExport';
 import { exportPracticeReportPdf } from '@/lib/practiceReportExporter';
+import { ContentNormalizer } from '@/utils/ContentNormalizer';
+import { normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
 
 interface ResultsState {
   score?: number;
@@ -73,7 +75,8 @@ const Results = () => {
         const topicCounts: Record<string, { total: number; correct: number; subject: string }> = {};
         questions.forEach((q) => {
           const tName = q.topic_name || q.topics?.name || 'UTME Core Concept';
-          const sName = q.subject_name || q.subjects?.name || 'General';
+          const rawSName = q.subject_name || q.subjects?.name || 'Use of English';
+          const sName = normalizeToCanonicalSubjectName(rawSName);
           const userAnswer = answers[q.id];
           const isCorrect = userAnswer === q.correct_answer;
 
@@ -277,17 +280,19 @@ Give a short, clear explanation of WHY the correct answer is right, using a simp
                     </CardHeader>
                     <CardContent className="p-6">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-5">
-                        {(q.options || []).map((opt: string, i: number) => {
+                        {(q.options || []).map((opt: any, i: number) => {
                           const label = String.fromCharCode(65 + i);
-                          const isCorrectOpt = opt === q.correct_answer;
-                          const isUserOpt = opt === userAnswer;
+                          const optText = ContentNormalizer.cleanOptionText(opt);
+                          const optRaw = typeof opt === 'object' && opt !== null ? (opt.text || opt.value || opt.id || '') : String(opt || '');
+                          const isCorrectOpt = optText === q.correct_answer || optRaw === q.correct_answer || (typeof opt === 'object' && opt?.id === q.correct_answer) || (label === q.correct_answer);
+                          const isUserOpt = optText === userAnswer || optRaw === userAnswer || (typeof opt === 'object' && opt?.id === userAnswer) || (label === userAnswer);
                           let cls = 'border-border bg-muted/20 text-foreground';
                           if (isCorrectOpt) cls = 'border-green-500 bg-green-500/10 text-green-300 font-semibold';
                           else if (isUserOpt && !isCorrectOpt) cls = 'border-red-500 bg-red-500/10 text-red-300 line-through';
                           return (
                             <div key={i} className={`p-3 rounded-lg border text-sm flex items-center gap-2 ${cls}`}>
                               <span className="font-mono shrink-0">{label}.</span>
-                              <span>{opt}</span>
+                              <span className="break-words">{optText}</span>
                               {isCorrectOpt && <CheckCircle className="ml-auto w-4 h-4 text-green-500 shrink-0" />}
                               {isUserOpt && !isCorrectOpt && <XCircle className="ml-auto w-4 h-4 text-red-500 shrink-0" />}
                             </div>

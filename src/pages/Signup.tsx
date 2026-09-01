@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { BookOpen, Shield, Lock, Mail, Eye, EyeOff, User, Phone, Users, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { BookOpen, Shield, Lock, Mail, Eye, EyeOff, User, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,27 +10,6 @@ import { sendWelcomeEmail } from '@/services/emailService';
 
 const Signup = () => {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const roleParam = searchParams.get('role');
-  const inviteCode = searchParams.get('invite');
-
-  const [accountRole, setAccountRole] = useState<'student' | 'guardian'>(
-    roleParam === 'guardian' || inviteCode ? 'guardian' : 'student'
-  );
-
-  useEffect(() => {
-    if (inviteCode) {
-      localStorage.setItem('pending_guardian_code', inviteCode.trim().toUpperCase());
-      setAccountRole('guardian');
-    }
-  }, [inviteCode]);
-
-  useEffect(() => {
-    if (roleParam === 'guardian') {
-      setAccountRole('guardian');
-    }
-  }, [roleParam]);
-
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -58,7 +37,7 @@ const Signup = () => {
           data: {
             full_name: fullName.trim(),
             phone_number: phone.trim(),
-            role: accountRole,
+            role: 'student',
           }
         }
       });
@@ -71,22 +50,13 @@ const Signup = () => {
         }
       } else {
         // Automatically dispatch welcome email via SMTP in background
-        sendWelcomeEmail(email.trim(), fullName.trim(), accountRole).catch(e => console.warn('Welcome email error:', e));
+        sendWelcomeEmail(email.trim(), fullName.trim(), 'student').catch(e => console.warn('Welcome email error:', e));
 
         // If session was returned right away
         if (data.session) {
-          const pendingCode = localStorage.getItem('pending_guardian_code');
-          if (accountRole === 'guardian' && pendingCode) {
-            navigate(`/guardian-connect?code=${pendingCode}`);
-          } else if (accountRole === 'guardian') {
-            navigate('/guardian');
-          } else {
-            navigate('/onboarding');
-          }
+          navigate('/onboarding');
         } else {
-          const pendingCode = localStorage.getItem('pending_guardian_code');
-          const redirectParam = pendingCode ? `&redirect=${encodeURIComponent(`/guardian-connect?code=${pendingCode}`)}` : '';
-          navigate(`/login?verify=true${redirectParam}`);
+          navigate('/login?verify=true');
         }
       }
     } catch (err: any) {
@@ -109,28 +79,16 @@ const Signup = () => {
         </Link>
         
         <div className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary mb-4 w-max">
-          ⭐ {accountRole === 'guardian' ? 'Parent & Guardian Portal' : 'Join Thousands of Future Scholars'}
+          ⭐ Join Thousands of Future Scholars
         </div>
         
         <h1 className="text-5xl font-display font-bold leading-tight mb-6">
-          {accountRole === 'guardian' ? (
-            <>
-              Monitor & Guide<br/>
-              <span className="text-primary">Academic Excellence</span><br/>
-              Every Day.
-            </>
-          ) : (
-            <>
-              Your Journey to<br/>
-              <span className="text-primary">JAMB Success</span><br/>
-              Starts Here!
-            </>
-          )}
+          Your Journey to<br/>
+          <span className="text-primary">JAMB Success</span><br/>
+          Starts Here!
         </h1>
         <p className="text-lg text-muted-foreground mb-12 max-w-md">
-          {accountRole === 'guardian'
-            ? 'Track real-time CBT test results, view weekly subject mastery reports, and keep your child motivated with transparent progress insights.'
-            : 'Create your account and get access to thousands of practice questions, CBT exams, AI tutor, and personalized performance tracking.'}
+          Create your account and get access to thousands of past questions, full CBT exams, AI tutor, and personalized performance tracking.
         </p>
 
         <div className="mt-auto pt-12 border-t border-border flex gap-4 text-sm font-medium text-muted-foreground">
@@ -150,50 +108,10 @@ const Signup = () => {
             <CardHeader className="text-center space-y-2 mb-1">
               <CardTitle className="text-2xl font-display">Create Your Account</CardTitle>
               <CardDescription>
-                {accountRole === 'guardian'
-                  ? 'Sign up to monitor your child’s academic progress and CBT scores.'
-                  : 'Join Scholars Resort and start preparing for JAMB the smart way.'}
+                Join Scholars Resort and start preparing for JAMB the smart way.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Role Selection Switcher */}
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground font-medium">Select Account Type</Label>
-                <div className="grid grid-cols-2 gap-2 p-1 bg-muted rounded-xl border border-border">
-                  <button
-                    type="button"
-                    onClick={() => setAccountRole('student')}
-                    className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                      accountRole === 'student'
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <BookOpen className="w-3.5 h-3.5" />
-                    <span>Student</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setAccountRole('guardian')}
-                    className={`flex items-center justify-center gap-2 py-2 px-3 rounded-lg text-xs font-semibold transition-all ${
-                      accountRole === 'guardian'
-                        ? 'bg-primary text-primary-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                  >
-                    <Users className="w-3.5 h-3.5" />
-                    <span>Parent / Guardian</span>
-                  </button>
-                </div>
-              </div>
-
-              {inviteCode && (
-                <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl flex items-center gap-2 text-xs text-primary font-medium">
-                  <Sparkles className="w-4 h-4 shrink-0 text-primary" />
-                  <span>Student invitation code applied: <strong>{inviteCode.toUpperCase()}</strong></span>
-                </div>
-              )}
-
               {error && (
                 <div className="bg-destructive/15 text-destructive p-3 rounded-md text-sm">
                   {error}
@@ -202,12 +120,12 @@ const Signup = () => {
 
               <form onSubmit={handleSignup} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="fullName">{accountRole === 'guardian' ? 'Parent / Guardian Full Name' : 'Student Full Name'}</Label>
+                  <Label htmlFor="fullName">Full Name</Label>
                   <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       id="fullName"
-                      placeholder={accountRole === 'guardian' ? 'e.g. Mr. Adebayo Ogunlesi' : 'e.g. John Doe'}
+                      placeholder="e.g. John Doe"
                       className="pl-10"
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
@@ -294,7 +212,7 @@ const Signup = () => {
                   className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold shadow-md h-11 mt-2" 
                   disabled={loading}
                 >
-                  {loading ? "Creating Account..." : accountRole === 'guardian' ? "Create Guardian Account" : "Create Student Account"}
+                  {loading ? "Creating Account..." : "Create Student Account"}
                 </Button>
               </form>
             </CardContent>

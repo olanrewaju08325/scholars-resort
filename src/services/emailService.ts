@@ -295,11 +295,9 @@ export const sendPasswordResetEmail = async (
  */
 export const sendWelcomeEmail = async (
   email: string,
-  name: string,
-  role: 'student' | 'guardian' = 'student'
+  name: string
 ): Promise<{ success: boolean; delivered?: boolean; message: string }> => {
   const subject = `🎓 Welcome to Scholars Resort, ${name || 'Scholar'}!`;
-  const isGuardian = role === 'guardian';
   
   const htmlBody = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
@@ -310,9 +308,7 @@ export const sendWelcomeEmail = async (
       <hr style="border: 0; border-top: 1px solid #e2e8f0; margin: 20px 0;" />
       <h3 style="color: #0f172a; margin-top: 0;">Welcome aboard, ${name || 'Scholar'}! 🚀</h3>
       <p style="color: #334155; font-size: 15px; line-height: 1.6;">
-        ${isGuardian 
-          ? 'Thank you for registering as a Guardian on Scholars Resort. You can now monitor your student\'s study hours, CBT test scores, and performance analytics in real time.'
-          : 'Thank you for creating your account on Scholars Resort. You now have access to high-yield JAMB UTME prep tools designed to boost your score above 300!'}
+        Thank you for creating your account on Scholars Resort. You now have access to high-yield JAMB UTME prep tools designed to boost your score above 300!
       </p>
       <div style="background: #f8fafc; border-left: 4px solid #4f46e5; padding: 16px; margin: 20px 0; border-radius: 0 8px 8px 0;">
         <h4 style="margin: 0 0 8px 0; color: #1e293b;">Your Learning Arsenal:</h4>

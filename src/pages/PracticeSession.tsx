@@ -408,9 +408,13 @@ const PracticeSession = () => {
   const handleTakeSnapshot = async () => {
     setIsCapturingSnapshot(true);
     try {
+      const firstQ = questions[0];
+      const selectedSubject = state?.subjectName || firstQ?.subject_name || 'UTME Practice';
+      const selectedYear = firstQ?.year || 'All Years';
+
       const snap = await CbtSnapshotService.captureSnapshot({
         examMode: (state?.mode as any) || 'subject',
-        sessionTitle: `Practice: ${selectedSubject} (${selectedYear || 'All Years'})`,
+        sessionTitle: `Practice: ${selectedSubject} (${selectedYear})`,
         questions,
         answers: answersMap,
         currentQuestionIndex: currentIndex,

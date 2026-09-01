@@ -27,7 +27,7 @@ export default function Privacy() {
               </ul>
               
               <h2 className="text-xl font-bold text-white mt-6 mb-4">3. Data Sharing</h2>
-              <p>We only share information with your consent, to comply with laws, to provide you with services, to protect your rights, or to fulfill business obligations. If you link a Guardian Account, your academic progress and login telemetry will be shared with the linked guardian.</p>
+              <p>We only share information with your consent, to comply with laws, to provide you with services, to protect your rights, or to fulfill business obligations.</p>
               
               <h2 className="text-xl font-bold text-white mt-6 mb-4">4. Data Security</h2>
               <p>We have implemented appropriate technical and organizational security measures designed to protect the security of any personal information we process, including Row Level Security (RLS) on our databases.</p>

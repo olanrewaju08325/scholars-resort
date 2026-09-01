@@ -1,13 +1,16 @@
+import { normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
+
 export interface JambPredictionResult {
-  estimatedScore: number; // Out of 400
-  confidenceLevel: 'High' | 'Medium' | 'Low';
+  hasData: boolean;
+  estimatedScore: number | null; // Out of 400
+  confidenceLevel: 'High' | 'Medium' | 'Low' | 'Insufficient Data';
   subjectBreakdown: Array<{
     subjectName: string;
     estimatedSubjectScore: number; // Out of 100
     accuracy: number;
     readinessGrade: 'A+' | 'A' | 'B' | 'C' | 'D' | 'E';
   }>;
-  overallReadinessPercent: number;
+  overallReadinessPercent: number | null;
   recommendations: string[];
 }
 
@@ -18,16 +21,15 @@ export interface JambPredictionResult {
 export function calculateEstimatedJambScore(examHistory: any[]): JambPredictionResult {
   if (!examHistory || examHistory.length === 0) {
     return {
-      estimatedScore: 200,
-      confidenceLevel: 'Low',
-      subjectBreakdown: [
-        { subjectName: 'Use of English', estimatedSubjectScore: 50, accuracy: 50, readinessGrade: 'C' },
-        { subjectName: 'Mathematics / Physics', estimatedSubjectScore: 50, accuracy: 50, readinessGrade: 'C' },
-        { subjectName: 'Chemistry / Biology', estimatedSubjectScore: 50, accuracy: 50, readinessGrade: 'C' },
-        { subjectName: 'Commerce / Government', estimatedSubjectScore: 50, accuracy: 50, readinessGrade: 'C' },
-      ],
-      overallReadinessPercent: 50,
-      recommendations: ['Complete at least 3 full CBT Mock Exams to unlock high-confidence JAMB score prediction!']
+      hasData: false,
+      estimatedScore: null,
+      confidenceLevel: 'Insufficient Data',
+      subjectBreakdown: [],
+      overallReadinessPercent: null,
+      recommendations: [
+        'Take your first CBT mock exam or subject practice session to establish your baseline projected score.',
+        'Complete at least 3 full CBT Mock Exams to unlock high-confidence JAMB aggregate projection.'
+      ]
     };
   }
 
@@ -41,7 +43,8 @@ export function calculateEstimatedJambScore(examHistory: any[]): JambPredictionR
     totalScoreSum += score;
     count++;
 
-    const subjName = session.subjects?.name || session.subject_name || 'General JAMB';
+    const rawSub = session.subjects?.name || session.subject_name || 'Use of English';
+    const subjName = normalizeToCanonicalSubjectName(rawSub);
     const existing = subjectMap.get(subjName) || { totalScore: 0, count: 0 };
     subjectMap.set(subjName, {
       totalScore: existing.totalScore + score,

@@ -37,7 +37,7 @@ export default function Landing() {
   const [card2, setCard2] = useState({ title: "Exact CBT Replica", desc: "Our exam interface mimics the official JAMB UTME testing environment, including timer controls, question grid navigation, and key shortcuts." });
   const [card3, setCard3] = useState({ title: "Weakness Analytics", desc: "We measure your speed and accuracy per topic to recommend customized drills before exam day." });
   const [card4, setCard4] = useState({ title: "National Mocks & Battles", desc: "Compete against thousands of Nigerian students in weekly live tournaments and view your national percentile." });
-  const [card5, setCard5] = useState({ title: "Guardian & Parent Portal", desc: "Parents receive transparent weekly email progress summaries and live dashboard tracking for peace of mind." });
+  const [card5, setCard5] = useState({ title: "AI Smart Tutor & Adaptive Path", desc: "Get 24/7 step-by-step problem resolution, customized weak-topic drills, and AI study recommendations." });
 
   useEffect(() => {
     const fetchData = async () => {

@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { getDownloadedPacks } from '@/lib/offlineStore';
 import { SafeDataFetcher } from '@/utils/safeDataFetcher';
+import { getCanonicalSubjectId, normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
 
 const PracticeSetup = () => {
   const { profile } = useAuth();
@@ -61,10 +62,11 @@ const PracticeSetup = () => {
           // Auto-select subject if passed via name or id in query
           const subjectParam = searchParams.get('subject') || searchParams.get('subjectId');
           if (subjectParam) {
+            const canonicalId = getCanonicalSubjectId(subjectParam);
             const matched = res.data.find((s: any) => 
               s.id === subjectParam || 
-              s.name.toLowerCase() === subjectParam.toLowerCase() ||
-              s.name.toLowerCase().includes(subjectParam.toLowerCase())
+              (canonicalId && s.id === canonicalId) ||
+              s.name.toLowerCase() === subjectParam.toLowerCase()
             );
             if (matched) {
               setSelectedSubject(matched.id);

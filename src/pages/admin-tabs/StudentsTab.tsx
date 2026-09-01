@@ -11,7 +11,7 @@ import { authFetch } from '@/lib/apiAuth';
 import { 
   Users, Download, ShieldCheck, Search, Filter, ArrowUpDown, 
   ChevronLeft, ChevronRight, Flame, Smartphone, RefreshCw,
-  UserCheck, Shield, HeartHandshake, Eye, GraduationCap, Phone, 
+  UserCheck, Shield, Eye, GraduationCap, Phone, 
   Mail, CheckCircle, XCircle, Unlock, Ban, AlertTriangle, 
   Trash2, UserX, ShieldAlert, Check
 } from 'lucide-react';
@@ -22,7 +22,7 @@ interface Profile {
   id: string;
   email: string;
   full_name: string | null;
-  role: 'student' | 'guardian' | 'admin' | string;
+  role: 'student' | 'admin' | string;
   status?: 'active' | 'suspended' | 'banned' | string;
   is_banned?: boolean;
   is_suspended?: boolean;
@@ -41,23 +41,14 @@ interface Profile {
   updated_at: string;
 }
 
-interface GuardianLink {
-  id: string;
-  guardian_id: string;
-  student_id: string;
-  status: string;
-  created_at: string;
-}
-
 export const StudentsTab = () => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [guardianLinks, setGuardianLinks] = useState<GuardianLink[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const { confirmAction, ConfirmElement } = useConfirm();
 
-  // Active Category: 'all' | 'student' | 'guardian' | 'admin'
-  const [activeCategory, setActiveCategory] = useState<'all' | 'student' | 'guardian' | 'admin'>('all');
+  // Active Category: 'all' | 'student' | 'admin'
+  const [activeCategory, setActiveCategory] = useState<'all' | 'student' | 'admin'>('all');
 
   // Filtering & Sorting
   const [searchTerm, setSearchTerm] = useState('');
@@ -75,12 +66,6 @@ export const StudentsTab = () => {
   // Detail Modal State
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
-
-  // Link Guardian Modal State
-  const [isLinkModalOpen, setIsLinkModalOpen] = useState(false);
-  const [linkGuardianId, setLinkGuardianId] = useState('');
-  const [linkStudentId, setLinkStudentId] = useState('');
-  const [linkingLoading, setLinkingLoading] = useState(false);
 
   // Ban / Suspend Modal State
   const [isBanModalOpen, setIsBanModalOpen] = useState(false);
@@ -109,12 +94,6 @@ export const StudentsTab = () => {
         profData = dbProf || [];
       }
 
-      // 2. Fetch guardian links
-      const { data: linkData } = await supabase
-        .from('guardian_links')
-        .select('*')
-        .eq('status', 'active');
-
       if (profData) {
         let localOverrides: Record<string, any> = {};
         try {
@@ -127,7 +106,7 @@ export const StudentsTab = () => {
           const overrides = localOverrides[rawP.id] || {};
           const p = { ...rawP, ...overrides };
           const isMasterAdmin = p.email && ADMIN_EMAILS.includes(p.email.toLowerCase().trim());
-          const effectiveRole = isMasterAdmin ? 'admin' : (p.role || 'student');
+          const effectiveRole = isMasterAdmin ? 'admin' : (p.role === 'admin' ? 'admin' : 'student');
           const effectiveStatus = p.is_banned ? 'banned' : (p.is_suspended || p.status === 'suspended' ? 'suspended' : (p.status || 'active'));
           
           return {
@@ -141,10 +120,6 @@ export const StudentsTab = () => {
         });
         setProfiles(enriched);
       }
-
-      if (linkData) {
-        setGuardianLinks(linkData);
-      }
     } catch (err) {
       console.error('Failed to load user directory:', err);
     } finally {
@@ -157,38 +132,14 @@ export const StudentsTab = () => {
     fetchAllData();
   }, [fetchAllData]);
 
-  // Helper map for fast guardian/student lookup
-  const { studentToGuardians, guardianToStudents } = useMemo(() => {
-    const sMap: Record<string, Profile[]> = {};
-    const gMap: Record<string, Profile[]> = {};
-
-    const profileLookup = new Map<string, Profile>(profiles.map(p => [p.id, p]));
-
-    guardianLinks.forEach(link => {
-      const guardian = profileLookup.get(link.guardian_id);
-      const student = profileLookup.get(link.student_id);
-
-      if (guardian && student) {
-        if (!sMap[student.id]) sMap[student.id] = [];
-        sMap[student.id].push(guardian);
-
-        if (!gMap[guardian.id]) gMap[guardian.id] = [];
-        gMap[guardian.id].push(student);
-      }
-    });
-
-    return { studentToGuardians: sMap, guardianToStudents: gMap };
-  }, [profiles, guardianLinks]);
-
   // Metric counts
   const stats = useMemo(() => {
     const total = profiles.length;
     const students = profiles.filter(p => p.role === 'student').length;
-    const guardians = profiles.filter(p => p.role === 'guardian').length;
     const admins = profiles.filter(p => p.role === 'admin').length;
     const paid = profiles.filter(p => p.has_paid).length;
     const suspendedOrBanned = profiles.filter(p => p.status === 'banned' || p.status === 'suspended').length;
-    return { total, students, guardians, admins, paid, suspendedOrBanned };
+    return { total, students, admins, paid, suspendedOrBanned };
   }, [profiles]);
 
   // Processed Data
@@ -440,7 +391,7 @@ export const StudentsTab = () => {
     );
   };
 
-  // Change Role (Admin, Student, Guardian)
+  // Change Role (Admin, Student)
   const handleRoleChange = async (userId: string, newRole: string) => {
     try {
       try {
@@ -608,42 +559,6 @@ export const StudentsTab = () => {
     );
   };
 
-  // Link Guardian to Student
-  const handleCreateGuardianLink = async () => {
-    if (!linkGuardianId || !linkStudentId) {
-      toast.error('Please select both a Guardian and a Student.');
-      return;
-    }
-
-    if (linkGuardianId === linkStudentId) {
-      toast.error('A user cannot be linked as their own guardian.');
-      return;
-    }
-
-    setLinkingLoading(true);
-    try {
-      const { data, error } = await supabase.from('guardian_links').insert({
-        guardian_id: linkGuardianId,
-        student_id: linkStudentId,
-        status: 'active'
-      }).select().single();
-
-      if (error) throw error;
-
-      toast.success('Guardian and Student linked successfully!');
-      if (data) {
-        setGuardianLinks(prev => [...prev, data]);
-      }
-      setIsLinkModalOpen(false);
-      setLinkGuardianId('');
-      setLinkStudentId('');
-    } catch (err: any) {
-      toast.error(`Failed to link accounts: ${err.message}`);
-    } finally {
-      setLinkingLoading(false);
-    }
-  };
-
   // Export CSV
   const exportToCSV = () => {
     if (processedProfiles.length === 0) return;
@@ -670,10 +585,10 @@ export const StudentsTab = () => {
         <div>
           <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2 text-slate-900 dark:text-white">
             <Users className="w-6 h-6 text-primary shrink-0" /> 
-            Users & Guardians Directory
+            Users Directory
           </h2>
           <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm">
-            Manage registered Students, Parent/Guardian accounts, role privileges, bans, suspensions, and subscriptions.
+            Manage registered Students, Admin accounts, role privileges, bans, suspensions, and subscriptions.
           </p>
         </div>
         <div className="flex gap-2 flex-wrap shrink-0">
@@ -686,15 +601,6 @@ export const StudentsTab = () => {
           >
             <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             Refresh
-          </Button>
-
-          <Button
-            size="sm"
-            onClick={() => setIsLinkModalOpen(true)}
-            className="bg-blue-600 hover:bg-blue-700 text-white gap-1.5 text-xs font-semibold"
-          >
-            <HeartHandshake className="w-3.5 h-3.5" />
-            Link Guardian & Student
           </Button>
 
           {selectedIds.size > 0 && (
@@ -715,7 +621,7 @@ export const StudentsTab = () => {
       </div>
 
       {/* Directory Stat Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Card 
           onClick={() => { setActiveCategory('all'); setCurrentPage(1); }}
           className={`cursor-pointer transition-all border ${activeCategory === 'all' ? 'bg-slate-800 text-white border-primary shadow-md' : 'bg-card hover:bg-muted/50 border-border'}`}
@@ -742,21 +648,6 @@ export const StudentsTab = () => {
             </div>
             <div className="w-9 h-9 rounded-xl bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800/40 flex items-center justify-center text-blue-600 dark:text-blue-400">
               <GraduationCap className="w-5 h-5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card 
-          onClick={() => { setActiveCategory('guardian'); setCurrentPage(1); }}
-          className={`cursor-pointer transition-all border ${activeCategory === 'guardian' ? 'bg-slate-800 text-white border-purple-500 shadow-md' : 'bg-card hover:bg-muted/50 border-border'}`}
-        >
-          <CardContent className="p-4 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-purple-500 font-medium">Guardians & Parents</p>
-              <p className="text-xl font-bold text-purple-600 dark:text-purple-400 mt-1">{stats.guardians}</p>
-            </div>
-            <div className="w-9 h-9 rounded-xl bg-purple-50 dark:bg-purple-950/60 border border-purple-200 dark:border-purple-800/40 flex items-center justify-center text-purple-600 dark:text-purple-400">
-              <HeartHandshake className="w-5 h-5" />
             </div>
           </CardContent>
         </Card>
@@ -799,14 +690,6 @@ export const StudentsTab = () => {
                 }`}
               >
                 Students ({stats.students})
-              </button>
-              <button
-                onClick={() => { setActiveCategory('guardian'); setCurrentPage(1); }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                  activeCategory === 'guardian' ? 'bg-purple-600 text-white' : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                Parents & Guardians ({stats.guardians})
               </button>
               <button
                 onClick={() => { setActiveCategory('admin'); setCurrentPage(1); }}
@@ -870,7 +753,7 @@ export const StudentsTab = () => {
                   <th className="px-4 py-3 font-semibold cursor-pointer hover:text-white" onClick={() => toggleSort('has_paid')}>
                     <div className="flex items-center gap-1">Subscription <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
-                  <th className="px-4 py-3 font-semibold">Associated Network</th>
+                  <th className="px-4 py-3 font-semibold">Target Course / Institution</th>
                   <th className="px-4 py-3 font-semibold cursor-pointer hover:text-white" onClick={() => toggleSort('xp')}>
                     <div className="flex items-center gap-1">Score / Streak <ArrowUpDown className="w-3 h-3" /></div>
                   </th>
@@ -880,14 +763,12 @@ export const StudentsTab = () => {
               </thead>
               <tbody className="divide-y divide-slate-800/60">
                 {loading ? (
-                  <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">Loading user & guardian records...</td></tr>
+                  <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">Loading user records...</td></tr>
                 ) : paginatedProfiles.length === 0 ? (
                   <tr><td colSpan={9} className="px-4 py-16 text-center text-slate-500">No accounts match the current filter criteria.</td></tr>
                 ) : paginatedProfiles.map(user => {
                   const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
                   const isMasterAdmin = user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim());
-                  const guardians = studentToGuardians[user.id] || [];
-                  const wards = guardianToStudents[user.id] || [];
                   const isBanned = user.status === 'banned' || user.is_banned;
                   const isSuspended = user.status === 'suspended' || user.is_suspended;
 
@@ -932,7 +813,6 @@ export const StudentsTab = () => {
                           className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none cursor-pointer hover:border-slate-500"
                         >
                           <option value="student">Student</option>
-                          <option value="guardian">Guardian / Parent</option>
                           <option value="admin">Administrator</option>
                         </select>
                       </td>
@@ -967,31 +847,14 @@ export const StudentsTab = () => {
                         )}
                       </td>
 
-                      {/* Associated Network */}
+                      {/* Target Course / Institution */}
                       <td className="px-4 py-3 text-xs">
-                        {user.role === 'guardian' ? (
-                          wards.length > 0 ? (
-                            <div className="space-y-0.5">
-                              <span className="text-purple-300 font-semibold">{wards.length} Ward(s):</span>
-                              <div className="text-slate-400 text-[11px] truncate max-w-[140px]">
-                                {wards.map(w => w.full_name || w.email).join(', ')}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-slate-500 italic">No wards linked</span>
-                          )
-                        ) : (
-                          guardians.length > 0 ? (
-                            <div className="space-y-0.5">
-                              <span className="text-blue-300 font-semibold">{guardians.length} Guardian(s):</span>
-                              <div className="text-slate-400 text-[11px] truncate max-w-[140px]">
-                                {guardians.map(g => g.full_name || g.email).join(', ')}
-                              </div>
-                            </div>
-                          ) : (
-                            <span className="text-slate-500">Self-monitored</span>
-                          )
-                        )}
+                        <div className="font-medium text-slate-200 truncate max-w-[150px]">
+                          {user.target_course || 'Course Not Set'}
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate max-w-[150px]">
+                          {user.target_university || 'Institution Not Set'}
+                        </div>
                       </td>
 
                       {/* Score / Streak */}
@@ -1298,7 +1161,6 @@ export const StudentsTab = () => {
                       className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 outline-none"
                     >
                       <option value="student">Student</option>
-                      <option value="guardian">Guardian / Parent</option>
                       <option value="admin">Administrator</option>
                     </select>
                   </div>
@@ -1346,44 +1208,6 @@ export const StudentsTab = () => {
                 </div>
               </div>
 
-              {/* Linked Network Details */}
-              <div className="p-3 bg-slate-950/60 rounded-xl border border-slate-800 space-y-2">
-                <p className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                  <HeartHandshake className="w-4 h-4 text-purple-400" />
-                  {selectedUser.role === 'guardian' ? 'Linked Wards & Students' : 'Linked Parents & Guardians'}
-                </p>
-                {selectedUser.role === 'guardian' ? (
-                  (guardianToStudents[selectedUser.id] || []).length > 0 ? (
-                    <div className="space-y-1">
-                      {(guardianToStudents[selectedUser.id] || []).map(student => (
-                        <div key={student.id} className="text-xs flex justify-between items-center bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800">
-                          <div>
-                            <span className="font-semibold text-slate-200">{student.full_name || 'Student'}</span>
-                            <span className="text-slate-500 ml-1">({student.email})</span>
-                          </div>
-                          <span className="text-[10px] text-primary font-mono">{student.xp || 0} XP</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500 italic">No students linked to this guardian yet.</p>
-                  )
-                ) : (
-                  (studentToGuardians[selectedUser.id] || []).length > 0 ? (
-                    <div className="space-y-1">
-                      {(studentToGuardians[selectedUser.id] || []).map(g => (
-                        <div key={g.id} className="text-xs flex justify-between items-center bg-slate-900 px-2.5 py-1.5 rounded border border-slate-800">
-                          <span className="font-semibold text-slate-200">{g.full_name || 'Guardian'}</span>
-                          <span className="text-slate-400">{g.email}</span>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-slate-500 italic">No guardian linked to this student yet.</p>
-                  )
-                )}
-              </div>
-
               {/* Quick Actions */}
               <div className="flex gap-2 pt-2">
                 <Button 
@@ -1427,68 +1251,6 @@ export const StudentsTab = () => {
               </div>
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Link Guardian and Student Dialog */}
-      <Dialog open={isLinkModalOpen} onOpenChange={setIsLinkModalOpen}>
-        <DialogContent className="bg-slate-900 border-slate-800 text-slate-100 max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-lg font-bold text-white">
-              <HeartHandshake className="w-5 h-5 text-purple-400" />
-              Link Guardian & Student
-            </DialogTitle>
-            <DialogDescription className="text-slate-400 text-xs">
-              Establish a direct parent-student link so the guardian can track mock test scores and weekly progress.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 pt-2">
-            <div>
-              <label className="text-xs text-slate-400 font-semibold mb-1 block">Select Guardian / Parent</label>
-              <select
-                value={linkGuardianId}
-                onChange={(e) => setLinkGuardianId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 outline-none"
-              >
-                <option value="">-- Choose Guardian Account --</option>
-                {profiles.filter(p => p.role === 'guardian').map(g => (
-                  <option key={g.id} value={g.id}>
-                    {g.full_name || 'Anonymous'} ({g.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs text-slate-400 font-semibold mb-1 block">Select Student / Ward</label>
-              <select
-                value={linkStudentId}
-                onChange={(e) => setLinkStudentId(e.target.value)}
-                className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs text-slate-200 outline-none"
-              >
-                <option value="">-- Choose Student Account --</option>
-                {profiles.filter(p => p.role === 'student').map(s => (
-                  <option key={s.id} value={s.id}>
-                    {s.full_name || 'Anonymous'} ({s.email})
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex gap-2 pt-3">
-              <Button variant="outline" className="w-1/3 text-xs" onClick={() => setIsLinkModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                className="w-2/3 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold"
-                onClick={handleCreateGuardianLink}
-                disabled={linkingLoading || !linkGuardianId || !linkStudentId}
-              >
-                {linkingLoading ? 'Linking Accounts...' : 'Establish Link'}
-              </Button>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

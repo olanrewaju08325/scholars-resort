@@ -28,11 +28,10 @@ export const GettingStarted = () => {
       
       try {
         const { count: examCount } = await supabase.from('exam_sessions').select('*', { count: 'exact', head: true }).eq('user_id', profile.id);
-        const { count: linkCount } = await supabase.from('guardian_links').select('*', { count: 'exact', head: true }).eq('student_id', profile.id).eq('status', 'active');
         
         setTasks([
-          { id: 1, title: 'Complete your first practice session', icon: <BookOpen className="w-5 h-5 text-blue-500" />, done: (examCount || 0) > 0, link: '/practice/setup' },
-          { id: 2, title: 'Link a Guardian Account', icon: <Users className="w-5 h-5 text-emerald-500" />, done: (linkCount || 0) > 0, link: '/dashboard/guardian' },
+          { id: 1, title: 'Complete your first practice session', icon: <BookOpen className="w-5 h-5 text-blue-500" />, done: (examCount || 0) > 0, link: '/practice' },
+          { id: 2, title: 'Set up your UTME Study Plan', icon: <CheckCircle2 className="w-5 h-5 text-emerald-500" />, done: !!profile.exam_date, link: '/plan' },
           { id: 3, title: 'Explore the Help Center', icon: <HelpCircle className="w-5 h-5 text-purple-500" />, done: true, link: '/help' },
         ]);
       } catch {

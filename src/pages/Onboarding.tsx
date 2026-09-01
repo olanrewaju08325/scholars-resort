@@ -12,13 +12,14 @@ import { getApiUrl } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  getAllCanonicalSubjects, 
+  validateUtmeSubjectCombination, 
+  normalizeToCanonicalSubjectName 
+} from '@/utils/subjectTaxonomy';
 
-const JAMB_SUBJECTS = [
-  'Use of English', 'Mathematics', 'Physics', 'Chemistry',
-  'Biology', 'Economics', 'Government', 'Literature in English',
-  'CRS / IRS', 'Geography', 'Accounting', 'Commerce',
-  'Agricultural Science', 'Civic Education', 'History', 'Computer Studies'
-];
+const CANONICAL_LIST = getAllCanonicalSubjects();
+const JAMB_SUBJECTS = CANONICAL_LIST.map(s => s.name);
 
 const TOP_UNIVERSITIES = [
   'University of Lagos (UNILAG)', 'University of Ibadan (UI)', 
@@ -36,12 +37,10 @@ const Onboarding = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
 
-  // Immediate role redirection - guardians and admins should never see student onboarding
+  // Immediate role redirection - admins should never see student onboarding
   useEffect(() => {
     if (profile) {
-      if (profile.role === 'guardian') {
-        navigate('/guardian', { replace: true });
-      } else if (profile.role === 'admin' || (profile.email && ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(profile.email.toLowerCase().trim()))) {
+      if (profile.role === 'admin' || (profile.email && ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(profile.email.toLowerCase().trim()))) {
         navigate('/dashboard', { replace: true });
       } else if (profile.onboarding_completed) {
         navigate('/dashboard', { replace: true });
@@ -69,10 +68,13 @@ const Onboarding = () => {
   };
 
   const handleComplete = async () => {
-    if (!profile || selectedSubjects.length !== 4) {
-      toast.error('Please select exactly 4 UTME subjects');
+    if (!profile) return;
+    const validation = validateUtmeSubjectCombination(selectedSubjects);
+    if (!validation.isValid) {
+      toast.error(validation.error || 'Please select exactly 4 UTME subjects including Use of English');
       return;
     }
+    const finalSubjects = validation.normalizedSubjects;
     setLoading(true);
     
     try {
@@ -84,7 +86,7 @@ const Onboarding = () => {
           target_score: parseInt(targetScore) || 270,
           target_university: targetUni || 'Not Specified',
           daily_study_goal_minutes: parseInt(dailyGoal) || 60,
-          utme_subjects: selectedSubjects,
+          utme_subjects: finalSubjects,
           intended_course: intendedCourse || null,
         })
       });
@@ -99,7 +101,7 @@ const Onboarding = () => {
         target_university: targetUni || 'Not Specified',
         daily_study_goal_minutes: parseInt(dailyGoal) || 60,
         onboarding_completed: true,
-        utme_subjects: selectedSubjects,
+        utme_subjects: finalSubjects,
         intended_course: intendedCourse || null,
       }).eq('id', profile.id);
 

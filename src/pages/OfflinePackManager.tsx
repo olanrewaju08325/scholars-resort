@@ -111,8 +111,8 @@ export const OfflinePackManager = () => {
       {/* Header Banner */}
       <div className="p-8 rounded-2xl bg-gradient-to-r from-blue-900/40 via-indigo-900/30 to-slate-900/40 border border-blue-500/30 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-blue-500 text-slate-950 uppercase tracking-wider">
-            <HardDrive className="w-3.5 h-3.5" /> TestDriller-Style Offline CBT Center
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold bg-primary text-primary-foreground uppercase tracking-wider">
+            <HardDrive className="w-3.5 h-3.5" /> Scholars Resort Offline CBT Center
           </div>
           <div className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 ${
             isOffline ? 'bg-amber-500/20 text-amber-500 border border-amber-500/30' : 'bg-green-500/20 text-green-500 border border-green-500/30'

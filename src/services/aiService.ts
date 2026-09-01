@@ -370,64 +370,60 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
 
   const candidateModels = [
     model,
+    'groq/compound-mini',
+    'groq/compound',
+    'qwen/qwen3.6-27b',
     'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant',
-    'mixtral-8x7b-32768',
-    'gemma2-9b-it'
+    'llama-3.1-8b-instant'
   ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
-  // 1. If Circuit Breaker is active and client has API key, attempt Groq directly
-  if (aiCircuitBreaker.canAttempt() && apiKey && apiKey.length > 15 && !apiKey.includes('placeholder')) {
-    for (const currentModel of candidateModels) {
-      try {
-        const sanitizedMessages = messages.map(m => ({
-          role: m.role === 'tutor' ? 'assistant' : (m.role || 'user'),
-          content: String(m.content || '').trim()
-        })).filter(m => m.content.length > 0);
+  // 1. Primary: Server Proxy (/api/groq-chat) which uses Server env or Supabase DB keys securely
+  try {
+    const sanitizedMessages = messages.map(m => ({
+      role: m.role === 'tutor' ? 'assistant' : (m.role || 'user'),
+      content: String(m.content || '').trim()
+    })).filter(m => m.content.length > 0);
 
-        // Inject structured system prompt if not present in conversational requests
-        const hasSystemMsg = sanitizedMessages.some(m => m.role === 'system');
-        if (!hasSystemMsg && !sanitizedMessages.some(m => m.content.includes('STRICT JSON'))) {
-          sanitizedMessages.unshift({
-            role: 'system',
-            content: STRUCTURED_STUDENT_RESPONSE_SYSTEM_PROMPT
-          });
-        }
+    const hasSystemMsg = sanitizedMessages.some(m => m.role === 'system');
+    if (!hasSystemMsg && !sanitizedMessages.some(m => m.content.includes('STRICT JSON'))) {
+      sanitizedMessages.unshift({
+        role: 'system',
+        content: STRUCTURED_STUDENT_RESPONSE_SYSTEM_PROMPT
+      });
+    }
 
-        const response = await fetch('/api/groq-chat', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-groq-key': apiKey
-          },
-          body: JSON.stringify({
-            model: currentModel,
-            messages: sanitizedMessages,
-            temperature: Math.min(2.0, Math.max(0.0, Number(temperature) || 0.7))
-          })
+    const response = await fetch('/api/groq-chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(apiKey ? { 'x-groq-key': apiKey } : {})
+      },
+      body: JSON.stringify({
+        model: model || 'groq/compound-mini',
+        messages: sanitizedMessages,
+        temperature: Math.min(2.0, Math.max(0.0, Number(temperature) || 0.7))
+      })
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      const content = data?.choices?.[0]?.message?.content || data?.text || data?.content;
+
+      if (content) {
+        aiCircuitBreaker.recordSuccess();
+        reportGroqCallTelemetry({
+          model: data?.model || model || 'groq/compound-mini',
+          promptTokens: data?.usage?.prompt_tokens || 150,
+          completionTokens: data?.usage?.completion_tokens || 250,
+          totalTokens: data?.usage?.total_tokens || 400,
+          status: 'success'
         });
 
-        if (response.ok) {
-          const data = await response.json();
-          const content = data?.text || data?.content;
-
-          if (content) {
-            aiCircuitBreaker.recordSuccess();
-            reportGroqCallTelemetry({
-              model: currentModel,
-              promptTokens: 150,
-              completionTokens: 250,
-              totalTokens: 400,
-              status: 'success'
-            });
-
-            return stripThinkTags(content);
-          }
-        }
-      } catch (err: any) {
-        aiCircuitBreaker.recordFailure();
+        return stripThinkTags(content);
       }
     }
+  } catch (err: any) {
+    aiCircuitBreaker.recordFailure();
   }
 
   // 2. Primary Groq Server Proxy (uses server Groq API Key or DB config)

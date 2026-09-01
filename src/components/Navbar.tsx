@@ -22,7 +22,6 @@ const Navbar = () => {
           <Link to="/" className="text-sm font-semibold text-foreground hover:text-primary transition-colors">Home</Link>
           <Link to="/features" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">Features</Link>
           <Link to="/pricing" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">Pricing</Link>
-          <Link to="/guardian-info" className="text-sm font-semibold text-muted-foreground hover:text-foreground transition-colors">Guardians</Link>
           
           <div className="h-4 w-px bg-border mx-1" />
           
@@ -55,7 +54,6 @@ const Navbar = () => {
           <Link to="/" onClick={closeMobileMenu} className="text-sm font-semibold text-foreground py-1">Home</Link>
           <Link to="/features" onClick={closeMobileMenu} className="text-sm font-semibold text-muted-foreground hover:text-foreground py-1">Features</Link>
           <Link to="/pricing" onClick={closeMobileMenu} className="text-sm font-semibold text-muted-foreground hover:text-foreground py-1">Pricing</Link>
-          <Link to="/guardian-info" onClick={closeMobileMenu} className="text-sm font-semibold text-muted-foreground hover:text-foreground py-1">Guardians</Link>
           <div className="flex gap-3 pt-4 border-t border-border">
             <Button asChild variant="outline" className="flex-1 font-semibold" onClick={closeMobileMenu}>
               <Link to="/login">Log In</Link>

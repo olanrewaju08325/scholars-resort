@@ -116,7 +116,6 @@ export const AppLayout = () => {
   const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
   const userEmail = (user?.email || profile?.email || '').toLowerCase().trim();
   const isAdmin = profile?.role === 'admin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail);
-  const isGuardian = profile?.role === 'guardian';
 
   // Structured Navigation Groups
   const studentNavGroups = [
@@ -161,29 +160,7 @@ export const AppLayout = () => {
     }
   ];
 
-  const guardianNavGroups = [
-    {
-      groupTitle: 'Guardian Hub',
-      items: [
-        { label: 'Guardian Portal', icon: Users, path: '/guardian' },
-        { label: 'Student Journey', icon: MapPin, path: '/journey-map' },
-        { label: 'JAMB Novel Hub', icon: BookOpen, path: '/novel-hub' },
-        { label: 'Career Guide', icon: Compass, path: '/career-guide' },
-        { label: 'Course Eligibility', icon: GraduationCap, path: '/eligibility-checker' },
-      ]
-    },
-    {
-      groupTitle: 'Resources & Support',
-      items: [
-        { label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
-        { label: 'Resource Library', icon: BookOpen, path: '/library' },
-        { label: 'Support & Help', icon: HelpCircle, path: '/support' },
-        { label: 'My Profile', icon: User, path: '/profile' },
-      ]
-    }
-  ];
-
-  const activeNavGroups = isGuardian ? guardianNavGroups : studentNavGroups;
+  const activeNavGroups = studentNavGroups;
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -418,7 +395,7 @@ export const AppLayout = () => {
                     <span className="text-[11px] text-muted-foreground truncate">{user?.email}</span>
                     <span className="inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider text-primary mt-0.5">
                       <CheckCircle2 className="w-2.5 h-2.5" />
-                      {isAdmin ? 'Administrator' : isGuardian ? 'Guardian Account' : 'UTME Candidate'}
+                      {isAdmin ? 'Administrator' : 'UTME Candidate'}
                     </span>
                   </div>
                 </div>
@@ -579,6 +556,64 @@ export const AppLayout = () => {
       
       {/* Student Account & Logout Modal */}
       <StudentLogoutDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog} />
+
+      {/* ========================================================================= */}
+      {/* Mobile Bottom Navigation Bar (Persistent on Mobile)                       */}
+      {/* ========================================================================= */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur-md border-t border-border flex items-center justify-around py-1.5 px-1 shadow-lg">
+        <Link
+          to="/dashboard"
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+            isActive('/dashboard') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Home className="w-5 h-5" />
+          <span>Home</span>
+        </Link>
+        <Link
+          to="/cbt"
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+            isActive('/cbt') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Timer className="w-5 h-5" />
+          <span>CBT</span>
+        </Link>
+        <Link
+          to="/practice"
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+            isActive('/practice') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <PlayCircle className="w-5 h-5" />
+          <span>Practice</span>
+        </Link>
+        <Link
+          to="/plan"
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+            isActive('/plan') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <CalendarDays className="w-5 h-5" />
+          <span>Study Plan</span>
+        </Link>
+        <Link
+          to="/weakness"
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
+            isActive('/weakness') ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Sparkles className="w-5 h-5 text-purple-500" />
+          <span>AI Tutor</span>
+        </Link>
+        <button
+          onClick={() => setDrawerOpen(true)}
+          className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-[10px] font-bold transition-all text-muted-foreground hover:text-foreground`}
+        >
+          <Menu className="w-5 h-5" />
+          <span>More</span>
+        </button>
+      </nav>
     </div>
   );
 };

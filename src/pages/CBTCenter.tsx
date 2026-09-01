@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Link } from 'react-router-dom';
 import { 
   Timer, BrainCircuit, Calendar, Swords, BookOpen, 
-  History, Trophy, Target, Zap, RotateCcw, Monitor 
+  History, Trophy, Target, Zap, RotateCcw, Monitor, CheckCircle2, ArrowRight
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import { getCanonicalSubjectByName, normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
 
 export default function CBTCenter() {
   const [activeTab, setActiveTab] = useState<'practice' | 'mocks' | 'tournaments'>('practice');
@@ -17,6 +18,8 @@ export default function CBTCenter() {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
+  const userSubjects = (profile?.utme_subjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'])
+    .map((s: string) => normalizeToCanonicalSubjectName(s));
 
   useEffect(() => {
     const fetchActiveSession = async () => {
@@ -143,6 +146,44 @@ export default function CBTCenter() {
       >
         {activeTab === 'practice' && (
           <div className="space-y-6">
+            {/* Quick UTME Subject Drill Bar */}
+            <div className="p-4 rounded-xl bg-card border border-border">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div>
+                  <h3 className="font-bold text-sm text-foreground flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-primary" /> Your 4 Registered UTME Subjects
+                  </h3>
+                  <p className="text-xs text-muted-foreground">Jump directly into single-subject practice or topic drilling</p>
+                </div>
+                <Link to="/profile" className="text-xs text-primary hover:underline font-medium">
+                  Change Subjects
+                </Link>
+              </div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+                {userSubjects.map((subName) => {
+                  const canonical = getCanonicalSubjectByName(subName);
+                  const subId = canonical?.id || '';
+                  return (
+                    <button
+                      key={subName}
+                      onClick={() => navigate(`/practice?mode=subject&subjectId=${subId}`)}
+                      className="p-3 rounded-lg bg-muted/40 hover:bg-primary/10 hover:border-primary/40 border border-border text-left transition-all group flex flex-col justify-between"
+                    >
+                      <div className="flex items-center justify-between w-full mb-1.5">
+                        <span className="text-xs font-semibold truncate text-foreground group-hover:text-primary transition-colors">
+                          {subName}
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                      <span className="text-[10px] text-muted-foreground uppercase tracking-wider">
+                        {canonical?.category || 'UTME Core'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
               {practiceModes.map((mode, i) => (
                 <Card 

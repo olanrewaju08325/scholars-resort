@@ -126,7 +126,7 @@ export const PlatformHealthTab = () => {
     setDbTestRunning(true);
     const tablesToTest = [
       'profiles', 'questions', 'subjects', 'topics', 'exam_sessions', 
-      'session_answers', 'guardian_links', 'subscriptions', 'manual_payments', 
+      'session_answers', 'subscriptions', 'manual_payments', 
       'activity_logs', 'study_logs', 'notifications', 'announcements', 
       'weekly_challenges', 'badges', 'user_badges', 'support_tickets',
       'platform_error_logs', 'ai_usage'

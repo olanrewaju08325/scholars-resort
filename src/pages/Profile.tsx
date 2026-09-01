@@ -9,13 +9,23 @@ import { toast } from 'sonner';
 import { Badges } from '@/components/Badges';
 import { useBatterySaver } from '@/lib/batterySaver';
 import { exportOfflineDataAsJson } from '@/lib/offlineExport';
+import { 
+  getAllCanonicalSubjects, 
+  validateUtmeSubjectCombination, 
+  normalizeToCanonicalSubjectName 
+} from '@/utils/subjectTaxonomy';
+
+const CANONICAL_SUBJECTS = getAllCanonicalSubjects();
 
 export default function Profile() {
   const { profile, user } = useAuth();
   const { isBatterySaver, toggleBatterySaver } = useBatterySaver();
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
-  const [utmeSubjects, setUtmeSubjects] = useState<string[]>(profile?.utme_subjects || ['Use of English']);
+  const [utmeSubjects, setUtmeSubjects] = useState<string[]>(() => {
+    const raw = profile?.utme_subjects || ['Use of English'];
+    return raw.map((s: string) => normalizeToCanonicalSubjectName(s));
+  });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -29,7 +39,12 @@ export default function Profile() {
   };
 
   const handleSave = async () => {
-    if (!fullName.trim() || !user || utmeSubjects.length !== 4) return;
+    if (!fullName.trim() || !user) return;
+    const validation = validateUtmeSubjectCombination(utmeSubjects);
+    if (!validation.isValid) {
+      toast.error(validation.error || 'Please select exactly 4 UTME subjects including Use of English');
+      return;
+    }
     setLoading(true);
     
     try {
@@ -37,15 +52,15 @@ export default function Profile() {
         .from('profiles')
         .update({ 
           full_name: fullName.trim(),
-          utme_subjects: utmeSubjects
+          utme_subjects: validation.normalizedSubjects
         })
         .eq('id', user.id);
 
       if (error) throw error;
       
       toast.success('Profile updated successfully!');
+      setUtmeSubjects(validation.normalizedSubjects);
       setIsEditing(false);
-      // Note: We don't have a direct context refresher here, but it's enough for UX.
     } catch (e: any) {
       toast.error(e.message || 'Failed to update profile');
     } finally {
@@ -111,24 +126,27 @@ export default function Profile() {
                   <div className="space-y-2 bg-muted/20 p-4 rounded-lg border border-border">
                     <p className="text-xs text-muted-foreground mb-3">Select your 4 JAMB subjects. English is mandatory.</p>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-[200px] overflow-y-auto pr-2 custom-scrollbar">
-                      {['Use of English', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Economics', 'Government', 'Literature', 'CRS', 'Geography', 'Accounting', 'Commerce'].map(sub => (
-                        <label key={sub} className="flex items-center gap-2 text-sm">
-                          <input 
-                            type="checkbox" 
-                            checked={utmeSubjects.includes(sub)}
-                            disabled={sub === 'Use of English' || (!utmeSubjects.includes(sub) && utmeSubjects.length >= 4)}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                if (utmeSubjects.length < 4) setUtmeSubjects([...utmeSubjects, sub]);
-                              } else {
-                                if (sub !== 'Use of English') setUtmeSubjects(utmeSubjects.filter(s => s !== sub));
-                              }
-                            }}
-                            className="rounded border-border text-primary focus:ring-primary"
-                          />
-                          <span className={sub === 'Use of English' ? 'text-primary font-bold' : ''}>{sub}</span>
-                        </label>
-                      ))}
+                      {CANONICAL_SUBJECTS.map(subj => {
+                        const sub = subj.name;
+                        return (
+                          <label key={subj.id} className="flex items-center gap-2 text-sm">
+                            <input 
+                              type="checkbox" 
+                              checked={utmeSubjects.includes(sub)}
+                              disabled={sub === 'Use of English' || (!utmeSubjects.includes(sub) && utmeSubjects.length >= 4)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  if (utmeSubjects.length < 4) setUtmeSubjects([...utmeSubjects, sub]);
+                                } else {
+                                  if (sub !== 'Use of English') setUtmeSubjects(utmeSubjects.filter(s => s !== sub));
+                                }
+                              }}
+                              className="rounded border-border text-primary focus:ring-primary"
+                            />
+                            <span className={sub === 'Use of English' ? 'text-primary font-bold' : ''}>{sub}</span>
+                          </label>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (

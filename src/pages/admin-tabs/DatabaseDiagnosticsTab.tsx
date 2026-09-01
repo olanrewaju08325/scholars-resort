@@ -15,6 +15,7 @@ import {
   repairDatabaseIntegrity
 } from '@/services/databaseIntegrityDiagnostic';
 import type { DatabaseDiagnosticReport } from '@/services/databaseIntegrityDiagnostic';
+import { supabase } from '@/lib/supabase';
 import { QuestionFlowService, type ModeAuditReport, type ExamMode, type QuestionFlowResult } from '@/services/questionFlowService';
 import { SchemaValidationReport } from '@/components/admin/SchemaValidationReport';
 import { FlowValidatorDashboard } from '@/components/admin/FlowValidatorDashboard';
@@ -27,13 +28,49 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
   const [report, setReport] = useState<DatabaseDiagnosticReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [repairing, setRepairing] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'issues' | 'tables' | 'breakdown' | 'coverage' | 'literature' | 'modes' | 'schema_migration' | 'flow_validator' | 'ai_branding_audit' | 'ai_simulation'>('modes');
+  const [activeTab, setActiveTab] = useState<'issues' | 'tables' | 'breakdown' | 'coverage' | 'literature' | 'modes' | 'schema_migration' | 'flow_validator' | 'ai_branding_audit' | 'ai_simulation' | 'question_audit'>('question_audit');
   const [issueFilter, setIssueFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
   
+  // Question Bank QA state
+  const [auditQuestions, setAuditQuestions] = useState<any[]>([]);
+  const [loadingAuditQuestions, setLoadingAuditQuestions] = useState<boolean>(false);
+  const [selectedAuditCategory, setSelectedAuditCategory] = useState<'VALID' | 'DRAFT' | 'NEEDS_REVIEW' | 'DUPLICATE_CANDIDATE' | 'TAXONOMY_PENDING' | 'INVALID'>('INVALID');
+
   // Mode Question Flow Audit State
   const [modeAudit, setModeAudit] = useState<ModeAuditReport | null>(null);
   const [auditingModes, setAuditingModes] = useState<boolean>(false);
   const [testingMode, setTestingMode] = useState<ExamMode | null>(null);
+
+  const loadAuditQuestions = async (category: typeof selectedAuditCategory) => {
+    if (!report || !report.questionAudit) return;
+    const ids = report.questionAudit.questionsByClassification[category] || [];
+    if (ids.length === 0) {
+      setAuditQuestions([]);
+      return;
+    }
+    
+    setLoadingAuditQuestions(true);
+    try {
+      const { data, error } = await supabase
+        .from('questions')
+        .select('*, subjects(name)')
+        .in('id', ids.slice(0, 50));
+        
+      if (error) throw error;
+      setAuditQuestions(data || []);
+    } catch (err) {
+      console.error('Error loading audit questions:', err);
+      toast.error('Failed to load audited questions.');
+    } finally {
+      setLoadingAuditQuestions(false);
+    }
+  };
+
+  useEffect(() => {
+    if (report && activeTab === 'question_audit') {
+      loadAuditQuestions(selectedAuditCategory);
+    }
+  }, [selectedAuditCategory, activeTab, report]);
 
   const fetchDiagnostics = async () => {
     setLoading(true);
@@ -341,6 +378,10 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
           {/* Tabbed Section */}
           <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
             <TabsList className="bg-card/60 border border-border/50 p-1 flex flex-wrap gap-1">
+              <TabsTrigger value="question_audit" className="gap-2 text-xs">
+                <ShieldCheck className="w-4 h-4 text-rose-400" />
+                Question Integrity QA
+              </TabsTrigger>
               <TabsTrigger value="modes" className="gap-2 text-xs">
                 <Activity className="w-4 h-4 text-emerald-400" />
                 Mode Flows (4)
@@ -603,6 +644,369 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            {/* Question Integrity & QA Audit Tab */}
+            <TabsContent value="question_audit" className="mt-6 space-y-6">
+              {report?.questionAudit ? (
+                <>
+                  {/* KPI Stat Cards Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
+                    {/* VALID */}
+                    <div 
+                      onClick={() => setSelectedAuditCategory('VALID')}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedAuditCategory === 'VALID' 
+                          ? 'border-emerald-500 bg-emerald-500/10 shadow-lg shadow-emerald-500/5' 
+                          : 'border-border/50 bg-card/40 hover:bg-card/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-emerald-400">Valid</span>
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-white block mt-2">
+                        {report.questionAudit.metrics.validCount}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block mt-1">Live in CBT</span>
+                    </div>
+
+                    {/* DRAFT */}
+                    <div 
+                      onClick={() => setSelectedAuditCategory('DRAFT')}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedAuditCategory === 'DRAFT' 
+                          ? 'border-slate-500 bg-slate-500/10 shadow-lg shadow-slate-500/5' 
+                          : 'border-border/50 bg-card/40 hover:bg-card/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-slate-300">Draft</span>
+                        <FileText className="w-3.5 h-3.5 text-slate-400" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-white block mt-2">
+                        {report.questionAudit.metrics.draftCount}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block mt-1">Safe Drafts</span>
+                    </div>
+
+                    {/* NEEDS_REVIEW */}
+                    <div 
+                      onClick={() => setSelectedAuditCategory('NEEDS_REVIEW')}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedAuditCategory === 'NEEDS_REVIEW' 
+                          ? 'border-amber-500 bg-amber-500/10 shadow-lg shadow-amber-500/5' 
+                          : 'border-border/50 bg-card/40 hover:bg-card/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-amber-400">Needs Review</span>
+                        <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-white block mt-2">
+                        {report.questionAudit.metrics.needsReviewCount}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block mt-1">Minor formatting</span>
+                    </div>
+
+                    {/* DUPLICATE_CANDIDATE */}
+                    <div 
+                      onClick={() => setSelectedAuditCategory('DUPLICATE_CANDIDATE')}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedAuditCategory === 'DUPLICATE_CANDIDATE' 
+                          ? 'border-purple-500 bg-purple-500/10 shadow-lg shadow-purple-500/5' 
+                          : 'border-border/50 bg-card/40 hover:bg-card/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-purple-400">Duplicates</span>
+                        <Layers className="w-3.5 h-3.5 text-purple-500" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-white block mt-2">
+                        {report.questionAudit.metrics.duplicateCandidateCount}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block mt-1">Stem matches</span>
+                    </div>
+
+                    {/* TAXONOMY_PENDING */}
+                    <div 
+                      onClick={() => setSelectedAuditCategory('TAXONOMY_PENDING')}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedAuditCategory === 'TAXONOMY_PENDING' 
+                          ? 'border-cyan-500 bg-cyan-500/10 shadow-lg shadow-cyan-500/5' 
+                          : 'border-border/50 bg-card/40 hover:bg-card/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-cyan-400">Taxonomy Pending</span>
+                        <BookOpen className="w-3.5 h-3.5 text-cyan-500" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-white block mt-2">
+                        {report.questionAudit.metrics.taxonomyPendingCount}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block mt-1">Missing topics</span>
+                    </div>
+
+                    {/* INVALID */}
+                    <div 
+                      onClick={() => setSelectedAuditCategory('INVALID')}
+                      className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                        selectedAuditCategory === 'INVALID' 
+                          ? 'border-rose-500 bg-rose-500/10 shadow-lg shadow-rose-500/5' 
+                          : 'border-border/50 bg-card/40 hover:bg-card/60'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] uppercase font-bold text-rose-400">Broken / Invalid</span>
+                        <XCircle className="w-3.5 h-3.5 text-rose-500" />
+                      </div>
+                      <span className="text-2xl font-bold font-mono text-white block mt-2">
+                        {report.questionAudit.metrics.invalidCount}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground block mt-1">Critical defects</span>
+                    </div>
+                  </div>
+
+                  {/* Defect Statistics Panel */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Left 2 columns: Defect Lists */}
+                    <Card className="md:col-span-2 border-border/50 bg-card/60">
+                      <CardHeader>
+                        <CardTitle className="text-base font-bold">Defect / Warning Checklist Breakdown</CardTitle>
+                        <CardDescription>
+                          A detailed audit of the entire question repository against strict UTME format guidelines.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {/* 1. Missing text */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Missing Question Text</span>
+                          <Badge variant={report.questionAudit.metrics.missingText > 0 ? 'destructive' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.missingText}
+                          </Badge>
+                        </div>
+
+                        {/* 2. Malformed options */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Malformed Options Arrays</span>
+                          <Badge variant={report.questionAudit.metrics.malformedOptions > 0 ? 'destructive' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.malformedOptions}
+                          </Badge>
+                        </div>
+
+                        {/* 3. Incorrect option count */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Incorrect Option Counts</span>
+                          <Badge variant={report.questionAudit.metrics.incorrectOptionCounts > 0 ? 'destructive' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.incorrectOptionCounts}
+                          </Badge>
+                        </div>
+
+                        {/* 4. Missing answer */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Missing Correct Answer</span>
+                          <Badge variant={report.questionAudit.metrics.missingAnswer > 0 ? 'destructive' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.missingAnswer}
+                          </Badge>
+                        </div>
+
+                        {/* 5. Invalid answer reference */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Unmatched Answer Text</span>
+                          <Badge variant={report.questionAudit.metrics.invalidAnswerRef > 0 ? 'destructive' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.invalidAnswerRef}
+                          </Badge>
+                        </div>
+
+                        {/* 6. Invalid subject */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Missing Subject Links</span>
+                          <Badge variant={report.questionAudit.metrics.invalidSubjectId > 0 ? 'destructive' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.invalidSubjectId}
+                          </Badge>
+                        </div>
+
+                        {/* 7. Invalid topic */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Orphaned Topics</span>
+                          <Badge variant={report.questionAudit.metrics.invalidTopicId > 0 ? 'secondary' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.invalidTopicId}
+                          </Badge>
+                        </div>
+
+                        {/* 8. Malformed LaTeX */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Unbalanced LaTeX Formulas</span>
+                          <Badge variant={report.questionAudit.metrics.malformedLatex > 0 ? 'secondary' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.malformedLatex}
+                          </Badge>
+                        </div>
+
+                        {/* 9. Broken image URLs */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Suspicious Image URLs</span>
+                          <Badge variant={report.questionAudit.metrics.brokenImageUrls > 0 ? 'secondary' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.brokenImageUrls}
+                          </Badge>
+                        </div>
+
+                        {/* 10. Missing explanation */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Missing Explanations</span>
+                          <Badge variant={report.questionAudit.metrics.missingExplanations > 0 ? 'secondary' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.missingExplanations}
+                          </Badge>
+                        </div>
+
+                        {/* 11. Invalid difficulty */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Invalid Difficulty Types</span>
+                          <Badge variant={report.questionAudit.metrics.invalidDifficulty > 0 ? 'secondary' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.invalidDifficulty}
+                          </Badge>
+                        </div>
+
+                        {/* 12. Invalid exam year */}
+                        <div className="flex items-center justify-between p-2.5 rounded-lg bg-background/50 border border-border/30">
+                          <span className="text-xs font-medium text-slate-300">Invalid Calendar Years</span>
+                          <Badge variant={report.questionAudit.metrics.invalidYear > 0 ? 'secondary' : 'outline'} className="font-mono text-[10px]">
+                            {report.questionAudit.metrics.invalidYear}
+                          </Badge>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* Right Column: QA Intelligence Info */}
+                    <Card className="border-border/50 bg-card/60">
+                      <CardHeader>
+                        <CardTitle className="text-base font-bold">Auto-Classification Pipeline</CardTitle>
+                        <CardDescription>
+                          How Scholars Resort secures academic and platform data integrity:
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4 text-xs text-slate-300">
+                        <div className="space-y-1">
+                          <h5 className="font-bold text-white">1. Zero-Mock Policy</h5>
+                          <p className="text-muted-foreground leading-relaxed">
+                            Questions with dummy text, "lorem ipsum", or placeholder titles are identified and flagged for purge or repair.
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <h5 className="font-bold text-white">2. Safe Classification</h5>
+                          <p className="text-muted-foreground leading-relaxed">
+                            Instead of deleting questions with formatting or metadata errors, they are safely categorized as <span className="font-semibold text-amber-400">Needs Review</span> or <span className="font-semibold text-rose-400">Invalid</span> so student progress remains untouched.
+                          </p>
+                        </div>
+                        <div className="space-y-1">
+                          <h5 className="font-bold text-white">3. LaTeX Integrity Guard</h5>
+                          <p className="text-muted-foreground leading-relaxed">
+                            Scans formulas for odd, unbalanced dollar signs to ensure rendering doesn't crash on student screens.
+                          </p>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Question Browser Category Panel */}
+                  <Card className="border-border/50 bg-card/60">
+                    <CardHeader className="pb-3 border-b border-border/40">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                          <CardTitle className="text-base font-bold flex items-center gap-2">
+                            <Activity className="w-4 h-4 text-primary" />
+                            Question Bank Browser: <span className="text-primary font-mono">{selectedAuditCategory}</span>
+                          </CardTitle>
+                          <CardDescription>
+                            Showing a sample of up to 50 questions flagged in this audit category.
+                          </CardDescription>
+                        </div>
+                        <Badge variant="outline" className="font-mono">
+                          {report.questionAudit.questionsByClassification[selectedAuditCategory]?.length || 0} Total in DB
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      {loadingAuditQuestions ? (
+                        <div className="py-12 text-center">
+                          <RefreshCw className="w-8 h-8 animate-spin text-primary mx-auto mb-2" />
+                          <span className="text-xs text-muted-foreground">Loading questions...</span>
+                        </div>
+                      ) : auditQuestions.length === 0 ? (
+                        <div className="py-12 text-center text-muted-foreground">
+                          No questions currently in this category. Perfect!
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-border/40 max-h-[500px] overflow-y-auto">
+                          {auditQuestions.map((q) => {
+                            let opts: string[] = [];
+                            try {
+                              opts = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+                            } catch {}
+                            return (
+                              <div key={q.id} className="p-4 hover:bg-muted/20 transition-colors space-y-2">
+                                <div className="flex items-start justify-between gap-4 text-xs">
+                                  <div className="space-y-1">
+                                    <span className="font-bold text-slate-300">
+                                      ID: <span className="font-mono text-muted-foreground">{q.id}</span>
+                                    </span>
+                                    <div className="flex items-center gap-2">
+                                      <Badge variant="secondary">{q.subjects?.name || 'No Subject'}</Badge>
+                                      <Badge variant="outline" className="font-mono capitalize">{q.difficulty || 'medium'}</Badge>
+                                      {q.exam_year && <Badge variant="outline">Year: {q.exam_year}</Badge>}
+                                      {q.is_active ? (
+                                        <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 text-[10px]">LIVE IN CBT</Badge>
+                                      ) : (
+                                        <Badge className="bg-slate-500/20 text-slate-300 border-slate-500/30 text-[10px]">DRAFT MODE</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <p className="text-sm font-medium text-white font-serif bg-background/40 p-3 rounded-lg border border-border/20">
+                                  {q.question_text}
+                                </p>
+
+                                {Array.isArray(opts) && opts.length > 0 && (
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs pt-1">
+                                    {opts.map((opt, idx) => {
+                                      const letter = String.fromCharCode(65 + idx);
+                                      const isCorrect = String(opt).trim() === String(q.correct_answer).trim();
+                                      return (
+                                        <div 
+                                          key={idx} 
+                                          className={`p-2 rounded border ${
+                                            isCorrect 
+                                              ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold' 
+                                              : 'border-border/30 bg-background/20 text-muted-foreground'
+                                          }`}
+                                        >
+                                          {letter}) {opt}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+
+                                {q.explanation && (
+                                  <div className="text-xs text-muted-foreground pt-1 bg-muted/10 p-2 rounded border border-border/20">
+                                    <span className="font-semibold text-slate-300 block mb-0.5">Explanation:</span>
+                                    {q.explanation}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </>
+              ) : (
+                <div className="py-12 text-center">
+                  <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-2" />
+                  <span className="text-xs text-muted-foreground">Integrity Report payload missing or malformed.</span>
+                </div>
+              )}
             </TabsContent>
 
             {/* Mode Question Flows & Zero-Mock Verification Tab */}

@@ -17,9 +17,9 @@ const FAQS = [
     answer: 'After you upload your payment receipt via the Pricing page, our administrators review and activate your account within 5-15 minutes during operating hours. You will receive an in-app notice and an email confirmation at admitwise2@gmail.com.'
   },
   {
-    category: 'guardian',
-    question: 'How can my parents view my results?',
-    answer: 'Your parents or guardians can create a Guardian Account. From their portal, they click "Link Student" and enter your unique Scholar Email. Once linked, they can view your practice performance, subject strengths, and mock exam ranks.'
+    category: 'ai_tutor',
+    question: 'How does the AI Tutor work?',
+    answer: 'The AI Smart Tutor provides 24/7 step-by-step problem resolution, customized weak-topic drills, and automated study plan recommendations based on your performance analytics.'
   },
   {
     category: 'billing',
@@ -108,9 +108,9 @@ export default function Help() {
             </Card>
 
             <Card 
-              onClick={() => setActiveCategory(activeCategory === 'guardian' ? null : 'guardian')}
+              onClick={() => setActiveCategory(activeCategory === 'ai_tutor' ? null : 'ai_tutor')}
               className={`border transition-all cursor-pointer shadow-md ${
-                activeCategory === 'guardian' 
+                activeCategory === 'ai_tutor' 
                   ? 'border-primary bg-primary/10 ring-2 ring-primary/30' 
                   : 'bg-card text-card-foreground border-border hover:border-primary/50'
               }`}
@@ -119,8 +119,8 @@ export default function Help() {
                 <div className="w-12 h-12 rounded-2xl bg-purple-500/10 flex items-center justify-center">
                   <ShieldCheck className="w-6 h-6 text-purple-500" />
                 </div>
-                <h3 className="font-bold text-foreground text-base">Guardian Accounts</h3>
-                <p className="text-xs text-muted-foreground">Student linking, progress tracking, and report cards</p>
+                <h3 className="font-bold text-foreground text-base">AI Tutor & Study Tools</h3>
+                <p className="text-xs text-muted-foreground">Step-by-step explanations, study plans, and weak topic drills</p>
               </CardContent>
             </Card>
           </div>

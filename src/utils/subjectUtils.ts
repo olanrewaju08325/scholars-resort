@@ -1,5 +1,32 @@
 import { supabase } from '@/lib/supabase';
 import { ContentNormalizer } from './ContentNormalizer';
+import {
+  CANONICAL_UTME_SUBJECTS,
+  normalizeToCanonicalSubjectName,
+  getCanonicalSubjectId,
+  getCanonicalSubjectByName,
+  getCanonicalSubjectById,
+  getAllCanonicalSubjects,
+  isCompulsorySubject,
+  validateUtmeSubjectCombination,
+  CANONICAL_SYLLABUS_TOPICS,
+  type CanonicalSubject,
+  type SubjectCategory
+} from './subjectTaxonomy';
+
+export {
+  CANONICAL_UTME_SUBJECTS,
+  normalizeToCanonicalSubjectName,
+  getCanonicalSubjectId,
+  getCanonicalSubjectByName,
+  getCanonicalSubjectById,
+  getAllCanonicalSubjects,
+  isCompulsorySubject,
+  validateUtmeSubjectCombination,
+  CANONICAL_SYLLABUS_TOPICS,
+  type CanonicalSubject,
+  type SubjectCategory
+};
 
 export interface JambSubjectInfo {
   id: string;
@@ -9,175 +36,20 @@ export interface JambSubjectInfo {
   icon: string;
 }
 
-export const OFFICIAL_JAMB_SUBJECTS: JambSubjectInfo[] = [
-  {
-    id: 'use-of-english',
-    name: 'Use of English',
-    aliases: ['use of english', 'english', 'english language', 'eng', 'english-language', 'use-of-english'],
-    category: 'compulsory',
-    icon: 'book-open'
-  },
-  {
-    id: 'mathematics',
-    name: 'Mathematics',
-    aliases: ['mathematics', 'math', 'maths', 'general mathematics', 'general maths'],
-    category: 'sciences',
-    icon: 'calculator'
-  },
-  {
-    id: 'physics',
-    name: 'Physics',
-    aliases: ['physics', 'phy'],
-    category: 'sciences',
-    icon: 'atom'
-  },
-  {
-    id: 'chemistry',
-    name: 'Chemistry',
-    aliases: ['chemistry', 'chem'],
-    category: 'sciences',
-    icon: 'flask-conical'
-  },
-  {
-    id: 'biology',
-    name: 'Biology',
-    aliases: ['biology', 'bio'],
-    category: 'sciences',
-    icon: 'dna'
-  },
-  {
-    id: 'agricultural-science',
-    name: 'Agricultural Science',
-    aliases: ['agricultural science', 'agric', 'agricultural-science', 'agric science'],
-    category: 'sciences',
-    icon: 'sprout'
-  },
-  {
-    id: 'economics',
-    name: 'Economics',
-    aliases: ['economics', 'econ'],
-    category: 'commercial',
-    icon: 'trending-up'
-  },
-  {
-    id: 'commerce',
-    name: 'Commerce',
-    aliases: ['commerce', 'comm'],
-    category: 'commercial',
-    icon: 'shopping-bag'
-  },
-  {
-    id: 'government',
-    name: 'Government',
-    aliases: ['government', 'govt'],
-    category: 'arts',
-    icon: 'landmark'
-  },
-  {
-    id: 'literature-in-english',
-    name: 'Literature in English',
-    aliases: ['literature in english', 'literature', 'lit in eng', 'lit-in-eng', 'lit'],
-    category: 'arts',
-    icon: 'book-type'
-  },
-  {
-    id: 'christian-religious-studies',
-    name: 'Christian Religious Studies',
-    aliases: ['christian religious studies', 'crs', 'crk', 'christian religious knowledge'],
-    category: 'arts',
-    icon: 'cross'
-  },
-  {
-    id: 'islamic-religious-studies',
-    name: 'Islamic Religious Studies',
-    aliases: ['islamic religious studies', 'irs', 'irk', 'islamic religious knowledge'],
-    category: 'arts',
-    icon: 'moon'
-  },
-  {
-    id: 'geography',
-    name: 'Geography',
-    aliases: ['geography', 'geo'],
-    category: 'arts',
-    icon: 'globe'
-  },
-  {
-    id: 'history',
-    name: 'History',
-    aliases: ['history', 'hist'],
-    category: 'arts',
-    icon: 'scroll'
-  },
-  {
-    id: 'principles-of-accounts',
-    name: 'Principles of Accounts',
-    aliases: ['principles of accounts', 'accounts', 'accounting', 'acc'],
-    category: 'commercial',
-    icon: 'file-spreadsheet'
-  },
-  {
-    id: 'hausa',
-    name: 'Hausa',
-    aliases: ['hausa'],
-    category: 'arts',
-    icon: 'languages'
-  },
-  {
-    id: 'igbo',
-    name: 'Igbo',
-    aliases: ['igbo'],
-    category: 'arts',
-    icon: 'languages'
-  },
-  {
-    id: 'yoruba',
-    name: 'Yoruba',
-    aliases: ['yoruba'],
-    category: 'arts',
-    icon: 'languages'
-  },
-  {
-    id: 'french',
-    name: 'French',
-    aliases: ['french'],
-    category: 'arts',
-    icon: 'languages'
-  }
-];
+export const OFFICIAL_JAMB_SUBJECTS: JambSubjectInfo[] = CANONICAL_UTME_SUBJECTS.map(s => ({
+  id: s.id,
+  name: s.name,
+  aliases: s.aliases,
+  category: s.category,
+  icon: s.icon
+}));
 
 /**
  * Normalizes any variation of a subject name to its canonical JAMB name.
  * e.g., "English", "English Language", "use-of-english" -> "Use of English"
  */
 export const normalizeSubjectName = (inputName: string): string => {
-  if (!inputName || typeof inputName !== 'string') return 'Use of English';
-  
-  const clean = inputName.trim().toLowerCase().replace(/_/g, ' ').replace(/-/g, ' ');
-  
-  for (const sub of OFFICIAL_JAMB_SUBJECTS) {
-    if (sub.name.toLowerCase() === clean) return sub.name;
-    if (sub.id.toLowerCase() === clean) return sub.name;
-    if (sub.aliases.some(alias => alias.toLowerCase() === clean)) {
-      return sub.name;
-    }
-  }
-
-  // Substring fallback
-  if (clean.includes('english') || clean.includes('use of eng')) return 'Use of English';
-  if (clean.includes('math')) return 'Mathematics';
-  if (clean.includes('physic')) return 'Physics';
-  if (clean.includes('chem')) return 'Chemistry';
-  if (clean.includes('bio')) return 'Biology';
-  if (clean.includes('agric')) return 'Agricultural Science';
-  if (clean.includes('econ')) return 'Economics';
-  if (clean.includes('gov')) return 'Government';
-  if (clean.includes('lit')) return 'Literature in English';
-  if (clean.includes('crs') || clean.includes('christian')) return 'Christian Religious Studies';
-  if (clean.includes('irs') || clean.includes('islamic')) return 'Islamic Religious Studies';
-  if (clean.includes('account')) return 'Principles of Accounts';
-
-  // Capitalize nicely if not found
-  return inputName.trim();
+  return normalizeToCanonicalSubjectName(inputName);
 };
 
 /**

@@ -19,7 +19,7 @@ const Pricing = () => {
   const studentId = searchParams.get('student_id');
   const [studentName, setStudentName] = useState<string | null>(null);
 
-  // Fetch guardian's target student name (if paying for someone else)
+  // Fetch target student name (if paying on behalf of someone else)
   useEffect(() => {
     if (studentId) {
       supabase

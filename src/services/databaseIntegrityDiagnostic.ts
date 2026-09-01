@@ -35,12 +35,14 @@ export interface SubjectMetrics {
   officialSubjectsCount: number;
   missingOfficialSubjects: string[];
   inactiveCount: number;
+  emptySubjects?: string[];
 }
 
 export interface TopicMetrics {
   totalCount: number;
   orphanedTopicsCount: number;
   topicsWithoutQuestionsCount: number;
+  emptyTopics?: string[];
 }
 
 export interface UserProgressMetrics {
@@ -57,6 +59,45 @@ export interface LiteratureMetrics {
   lifeChangerQuestionsCount: number;
 }
 
+export interface QuestionAuditMetrics {
+  totalAudited: number;
+  validCount: number;
+  draftCount: number;
+  needsReviewCount: number;
+  duplicateCandidateCount: number;
+  taxonomyPendingCount: number;
+  invalidCount: number;
+
+  // Specific defect counts
+  missingText: number;
+  malformedOptions: number;
+  incorrectOptionCounts: number;
+  missingAnswer: number;
+  invalidAnswerRef: number;
+  invalidSubjectId: number;
+  invalidTopicId: number;
+  invalidSubtopicId: number;
+  duplicateStems: number;
+  duplicateOptions: number;
+  malformedLatex: number;
+  brokenImageUrls: number;
+  missingExplanations: number;
+  invalidDifficulty: number;
+  invalidYear: number;
+}
+
+export interface QuestionAuditReport {
+  metrics: QuestionAuditMetrics;
+  questionsByClassification: {
+    VALID: string[];
+    DRAFT: string[];
+    NEEDS_REVIEW: string[];
+    DUPLICATE_CANDIDATE: string[];
+    TAXONOMY_PENDING: string[];
+    INVALID: string[];
+  };
+}
+
 export interface DatabaseDiagnosticReport {
   timestamp: string;
   overallHealthScore: number; // 0 - 100%
@@ -70,6 +111,7 @@ export interface DatabaseDiagnosticReport {
   literature: LiteratureMetrics;
   issues: DetailedIssue[];
   tableSummaries: TableDiagnosticItem[];
+  questionAudit?: QuestionAuditReport;
 }
 
 /**
@@ -181,12 +223,51 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
         warningCount++;
       }
 
+      // 2a. Find subjects with 0 topics
+      if (dbSubjects) {
+        const topicsBySubject = new Set(dbTopics.map((t) => t.subject_id).filter(Boolean));
+        const emptySubjects = dbSubjects
+          .filter((s) => !topicsBySubject.has(s.id))
+          .map((s) => s.name);
+        
+        subjectMetrics.emptySubjects = emptySubjects;
+        if (emptySubjects.length > 0) {
+          issues.push({
+            id: 'sub-empty-topics',
+            table: 'subjects',
+            severity: 'warning',
+            category: 'Taxonomy Coverage',
+            message: `Found ${emptySubjects.length} subjects with zero syllabus topics: ${emptySubjects.join(', ')}`,
+            recommendation: 'Register at least one topic for each official subject in Syllabus Admin.',
+          });
+          warningCount++;
+        }
+      }
+
+      // 2b. Find topics with 0 subtopics/objectives
+      const emptyTopics = dbTopics
+        .filter((t) => !t.learning_objectives || !Array.isArray(t.learning_objectives) || t.learning_objectives.length === 0)
+        .map((t) => t.name);
+
+      topicMetrics.emptyTopics = emptyTopics;
+      if (emptyTopics.length > 0) {
+        issues.push({
+          id: 'top-empty-objectives',
+          table: 'topics',
+          severity: 'warning',
+          category: 'Taxonomy Coverage',
+          message: `Found ${emptyTopics.length} topics with zero registered subtopics/objectives.`,
+          recommendation: 'Configure learning objectives for empty topics in the Academic Taxonomy Hub.',
+        });
+        warningCount++;
+      }
+
       tableSummaries.push({
         tableName: 'topics',
         totalRecords: dbTopics.length,
-        status: orphaned.length === 0 ? 'passed' : 'warning',
-        issuesCount: orphaned.length,
-        details: `${dbTopics.length} syllabus topics registered. ${orphaned.length} orphaned.`,
+        status: orphaned.length === 0 && emptyTopics.length === 0 ? 'passed' : 'warning',
+        issuesCount: orphaned.length + emptyTopics.length,
+        details: `${dbTopics.length} syllabus topics registered. ${orphaned.length} orphaned. ${emptyTopics.length} empty.`,
       });
     }
   } catch (err: any) {
@@ -205,10 +286,45 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
     subjectBreakdown: {},
   };
 
+  let auditMetrics: QuestionAuditMetrics = {
+    totalAudited: 0,
+    validCount: 0,
+    draftCount: 0,
+    needsReviewCount: 0,
+    duplicateCandidateCount: 0,
+    taxonomyPendingCount: 0,
+    invalidCount: 0,
+    
+    missingText: 0,
+    malformedOptions: 0,
+    incorrectOptionCounts: 0,
+    missingAnswer: 0,
+    invalidAnswerRef: 0,
+    invalidSubjectId: 0,
+    invalidTopicId: 0,
+    invalidSubtopicId: 0,
+    duplicateStems: 0,
+    duplicateOptions: 0,
+    malformedLatex: 0,
+    brokenImageUrls: 0,
+    missingExplanations: 0,
+    invalidDifficulty: 0,
+    invalidYear: 0,
+  };
+
+  const questionsByClassification = {
+    VALID: [] as string[],
+    DRAFT: [] as string[],
+    NEEDS_REVIEW: [] as string[],
+    DUPLICATE_CANDIDATE: [] as string[],
+    TAXONOMY_PENDING: [] as string[],
+    INVALID: [] as string[],
+  };
+
   try {
     const { data: dbQuestions, error: qErr } = await supabase
       .from('questions')
-      .select('id, question_text, subject_id, topic_id, options, correct_answer, subjects(name)');
+      .select('*, subjects(name)');
 
     if (qErr) {
       issues.push({
@@ -222,16 +338,39 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
       criticalCount++;
     } else if (dbQuestions) {
       questionMetrics.totalCount = dbQuestions.length;
+      auditMetrics.totalAudited = dbQuestions.length;
+
+      // Pre-pass: exact normalized stem duplicate detection
+      const seenStems = new Map<string, string>(); // normalized stem -> original question ID
+      const duplicateIds = new Set<string>();
+      
+      dbQuestions.forEach((q) => {
+        const text = q.question_text || '';
+        const normStem = text.toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+        if (normStem.length > 10) {
+          if (seenStems.has(normStem)) {
+            duplicateIds.add(q.id);
+            duplicateIds.add(seenStems.get(normStem)!);
+          } else {
+            seenStems.set(normStem, q.id);
+          }
+        }
+      });
 
       dbQuestions.forEach((q) => {
-        // Missing Subject ID
-        if (!q.subject_id) questionMetrics.missingSubjectIdCount++;
+        let isInvalid = false;
+        let isTaxonomyPending = false;
+        let isDuplicateCandidate = false;
+        let isNeedsReview = false;
 
-        // Missing Topic ID
-        if (!q.topic_id) questionMetrics.missingTopicIdCount++;
+        // 1. Missing or empty question text
+        if (!q.question_text || q.question_text.trim() === '') {
+          auditMetrics.missingText++;
+          isInvalid = true;
+        }
 
-        // Invalid options formatting
-        let parsedOpts: any[] = [];
+        // 2. Options array check
+        let parsedOpts: string[] = [];
         if (typeof q.options === 'string') {
           try {
             parsedOpts = JSON.parse(q.options);
@@ -242,12 +381,140 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
           parsedOpts = q.options;
         }
 
-        if (!parsedOpts || parsedOpts.length < 2) {
-          questionMetrics.invalidOptionsCount++;
+        if (!Array.isArray(parsedOpts)) {
+          auditMetrics.malformedOptions++;
+          isInvalid = true;
+        } else if (parsedOpts.length < 2 || parsedOpts.length > 5) {
+          auditMetrics.incorrectOptionCounts++;
+          isInvalid = true;
         }
 
-        // Missing Correct Answer
-        if (!q.correct_answer && (q as any).correct_option === undefined && (q as any).answer_index === undefined) {
+        // 3. Missing or invalid answer check
+        if (!q.correct_answer && q.correct_option === undefined && q.answer_index === undefined) {
+          auditMetrics.missingAnswer++;
+          isInvalid = true;
+        } else if (parsedOpts.length >= 2) {
+          // If correct_answer is provided, check if it matches an option or is valid option letter
+          const ansStr = String(q.correct_answer || '').trim();
+          const hasMatch = parsedOpts.some(opt => String(opt).trim() === ansStr);
+          const isLetter = ['A', 'B', 'C', 'D', 'E'].includes(ansStr);
+          if (!hasMatch && !isLetter) {
+            auditMetrics.invalidAnswerRef++;
+            isInvalid = true;
+          }
+        }
+
+        // 4. Subject ID check
+        if (!q.subject_id) {
+          auditMetrics.invalidSubjectId++;
+          isInvalid = true;
+        }
+
+        // 5. Taxonomy checking (Topic / Subtopic)
+        if (!q.topic_id || q.topic_id === 'null' || q.topic_id === '') {
+          auditMetrics.invalidTopicId++;
+          isTaxonomyPending = true;
+        }
+        if (!q.subtopic_id) {
+          auditMetrics.invalidSubtopicId++;
+        }
+
+        // 6. Duplicate stems check
+        if (duplicateIds.has(q.id)) {
+          auditMetrics.duplicateStems++;
+          isDuplicateCandidate = true;
+        }
+
+        // 7. Duplicate options check
+        if (parsedOpts.length >= 2) {
+          const seenOpts = new Set<string>();
+          let hasDup = false;
+          parsedOpts.forEach(o => {
+            if (o) {
+              const clean = String(o).trim().toLowerCase();
+              if (seenOpts.has(clean)) hasDup = true;
+              seenOpts.add(clean);
+            }
+          });
+          if (hasDup) {
+            auditMetrics.duplicateOptions++;
+            isNeedsReview = true;
+          }
+        }
+
+        // 8. Malformed LaTeX
+        if (q.question_text) {
+          let latexCount = 0;
+          for (let i = 0; i < q.question_text.length; i++) {
+            if (q.question_text[i] === '$' && (i === 0 || q.question_text[i - 1] !== '\\')) {
+              latexCount++;
+            }
+          }
+          if (latexCount % 2 !== 0) {
+            auditMetrics.malformedLatex++;
+            isNeedsReview = true;
+          }
+        }
+
+        // 9. Broken image or diagram URL
+        const imageUrl = q.image_url || q.diagram_url || (q as any).image_path;
+        if (imageUrl) {
+          const lower = String(imageUrl).toLowerCase();
+          if (lower.includes('placeholder') || lower.includes('dummy') || lower.includes('localhost') || (!lower.startsWith('http://') && !lower.startsWith('https://') && !lower.startsWith('/'))) {
+            auditMetrics.brokenImageUrls++;
+            isNeedsReview = true;
+          }
+        }
+
+        // 10. Missing explanation where required
+        if (!q.explanation || q.explanation.trim().length < 10) {
+          auditMetrics.missingExplanations++;
+          if (q.difficulty === 'hard') {
+            isNeedsReview = true;
+          }
+        }
+
+        // 11. Invalid difficulty value
+        if (q.difficulty && !['easy', 'medium', 'hard'].includes(String(q.difficulty).toLowerCase())) {
+          auditMetrics.invalidDifficulty++;
+          isNeedsReview = true;
+        }
+
+        // 12. Invalid year value
+        if (q.exam_year !== null && q.exam_year !== undefined && q.exam_year !== '') {
+          const yrNum = Number(q.exam_year);
+          if (isNaN(yrNum) || yrNum < 1970 || yrNum > 2026) {
+            auditMetrics.invalidYear++;
+            isNeedsReview = true;
+          }
+        }
+
+        // Now categorize!
+        if (isInvalid) {
+          auditMetrics.invalidCount++;
+          questionsByClassification.INVALID.push(q.id);
+        } else if (isDuplicateCandidate) {
+          auditMetrics.duplicateCandidateCount++;
+          questionsByClassification.DUPLICATE_CANDIDATE.push(q.id);
+        } else if (isTaxonomyPending) {
+          auditMetrics.taxonomyPendingCount++;
+          questionsByClassification.TAXONOMY_PENDING.push(q.id);
+        } else if (isNeedsReview) {
+          auditMetrics.needsReviewCount++;
+          questionsByClassification.NEEDS_REVIEW.push(q.id);
+        } else if (q.is_active === false) {
+          auditMetrics.draftCount++;
+          questionsByClassification.DRAFT.push(q.id);
+        } else {
+          auditMetrics.validCount++;
+          questionsByClassification.VALID.push(q.id);
+        }
+
+        // Standard metrics compatibility
+        if (!q.subject_id) questionMetrics.missingSubjectIdCount++;
+        if (!q.topic_id) questionMetrics.missingTopicIdCount++;
+        if (!Array.isArray(parsedOpts) || parsedOpts.length < 2) questionMetrics.invalidOptionsCount++;
+        if (!q.correct_answer && q.correct_option === undefined && q.answer_index === undefined) {
           questionMetrics.missingAnswerCount++;
         }
 
@@ -379,6 +646,34 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
         details: `${userMetrics.submittedExamSessions} completed exam submissions recorded in database.`,
       });
     }
+
+    const { data: dbProgress, error: progErr } = await supabase
+      .from('user_progress')
+      .select('id, user_id, subject_id');
+      
+    if (!progErr && dbProgress) {
+      userMetrics.totalPracticeLogs = dbProgress.length;
+      const orphanedProg = dbProgress.filter(p => !p.user_id || !p.subject_id).length;
+      if (orphanedProg > 0) {
+        issues.push({
+          id: 'prog-orphaned',
+          table: 'user_progress',
+          severity: 'warning',
+          category: 'Data Link Defect',
+          message: `Found ${orphanedProg} practice progress logs with broken links to users or subjects.`,
+          recommendation: 'Prune orphaned progress logs with broken foreign keys.',
+        });
+        warningCount++;
+      }
+      
+      tableSummaries.push({
+        tableName: 'user_progress',
+        totalRecords: dbProgress.length,
+        status: orphanedProg === 0 ? 'passed' : 'warning',
+        issuesCount: orphanedProg,
+        details: `${dbProgress.length} user practice state and mastery records loaded.`,
+      });
+    }
   } catch (err) {
     console.warn('Exam sessions diagnostic error:', err);
   }
@@ -453,6 +748,10 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
     literature: literatureMetrics,
     issues,
     tableSummaries,
+    questionAudit: {
+      metrics: auditMetrics,
+      questionsByClassification
+    }
   };
 };
 

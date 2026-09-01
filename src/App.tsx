@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ThemeProvider } from './context/ThemeContext';
 import { syncWithSupabase } from './lib/sync';
@@ -27,9 +27,6 @@ const Privacy = lazy(() => import('./pages/Privacy'));
 const AcceptableUse = lazy(() => import('./pages/AcceptableUse'));
 const PracticeSetup = lazy(() => import('./pages/PracticeSetup'));
 const PracticeSession = lazy(() => import('./pages/PracticeSession'));
-const GuardianPortal = lazy(() => import('./pages/GuardianPortal'));
-const GuardianLanding = lazy(() => import('./pages/GuardianLanding'));
-const GuardianConnect = lazy(() => import('./pages/GuardianConnect'));
 const CareerGuide = lazy(() => import('./pages/CareerGuide'));
 const Flashcards = lazy(() => import('./pages/Flashcards'));
 const Library = lazy(() => import('./pages/Library'));
@@ -87,9 +84,6 @@ function AppContent() {
           <Route path="/signup" element={<Signup />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
-          <Route path="/guardian-info" element={<GuardianLanding />} />
-          <Route path="/guardian-connect" element={<GuardianConnect />} />
-          <Route path="/guardian/connect" element={<GuardianConnect />} />
           <Route path="/onboarding" element={<Onboarding />} />
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/features" element={<Features />} />
@@ -107,7 +101,6 @@ function AppContent() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/plan" element={<StudyPlan />} />
               <Route path="/practice" element={<PracticeSetup />} />
-              <Route path="/guardian" element={<GuardianPortal />} />
               <Route path="/career-guide" element={<CareerGuide />} />
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/library" element={<Library />} />
