@@ -144,7 +144,7 @@ export const ImageQuestionManagerTab = () => {
         if (error) throw error;
         toast.success('Image-based question updated successfully!');
       } else {
-        const newId = `local_img_${Math.random().toString(36).substring(2, 9)}`;
+        const newId = crypto.randomUUID();
         const insertPayload = { id: newId, ...payload, created_at: new Date().toISOString() };
         
         const { error } = await supabase.from('questions').insert(insertPayload);

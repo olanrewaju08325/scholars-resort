@@ -1,5 +1,5 @@
 import { supabase } from '@/lib/supabase';
-import { DEFAULT_JAMB_BOOKS, type LiteratureBook } from '@/data/jambNovelsData';
+import type { LiteratureBook } from '@/data/jambNovelsData';
 
 const STORAGE_KEY = 'scholars_resort_jamb_novels';
 const SETTING_KEY = 'jamb_novels_db';
@@ -109,7 +109,7 @@ export const uploadTextbookFileToSupabaseStorage = async (file: File): Promise<{
   });
 };
 
-// Retrieve all books (first checks Supabase, then localStorage, or auto-seeds defaults)
+// Retrieve all books (checks Supabase admin_settings, then localStorage, or returns empty list)
 export const fetchJambBooks = async (): Promise<LiteratureBook[]> => {
   try {
     // 1. Try Supabase admin_settings
@@ -134,7 +134,7 @@ export const fetchJambBooks = async (): Promise<LiteratureBook[]> => {
     const local = localStorage.getItem(STORAGE_KEY);
     if (local) {
       const parsed = JSON.parse(local);
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed;
       }
     }
@@ -142,14 +142,7 @@ export const fetchJambBooks = async (): Promise<LiteratureBook[]> => {
     console.warn('Could not parse local novel storage:', err);
   }
 
-  // 3. First-time initialization: Auto-seed DEFAULT_JAMB_BOOKS to Supabase so Admin can manage real records
-  try {
-    await saveJambBooks(DEFAULT_JAMB_BOOKS);
-  } catch (e) {
-    console.warn('Failed to seed default novels to Supabase:', e);
-  }
-
-  return DEFAULT_JAMB_BOOKS;
+  return [];
 };
 
 // Save books (updates Supabase and localStorage)

@@ -95,7 +95,7 @@ export const BadgesAdminTab = () => {
 
       const updatedList = currentBadgeId 
         ? badges.map(b => b.id === currentBadgeId ? { ...b, ...payload } : b)
-        : [...badges, { id: `badge_${Math.random().toString(36).substring(2, 9)}`, ...payload, created_at: new Date().toISOString() }];
+        : [...badges, { id: crypto.randomUUID(), ...payload, created_at: new Date().toISOString() }];
 
       // Save to Supabase admin_settings / badges table
       try {

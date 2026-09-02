@@ -1,51 +1,26 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Search, Compass, BookOpen, GraduationCap, Target, CheckSquare } from 'lucide-react';
+import { Search, Compass, BookOpen, GraduationCap, Target, CheckSquare, RefreshCw } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useLiveFetch } from '@/hooks/useLiveFetch';
 import { DataLoading } from '@/components/DataLoading';
-
-// Mock static data for V2
-const CAREER_DATA = [
-  {
-    category: 'Medical & Health Sciences',
-    courses: [
-      { name: 'Medicine and Surgery', subjects: ['English', 'Biology', 'Chemistry', 'Physics'], requirements: '5 O\'Level credits including Math & English' },
-      { name: 'Nursing Science', subjects: ['English', 'Biology', 'Chemistry', 'Physics'], requirements: '5 O\'Level credits including Math & English' },
-      { name: 'Pharmacy', subjects: ['English', 'Biology', 'Chemistry', 'Physics'], requirements: '5 O\'Level credits including Math & English' },
-    ]
-  },
-  {
-    category: 'Engineering & Technology',
-    courses: [
-      { name: 'Computer Science', subjects: ['English', 'Mathematics', 'Physics', 'Chemistry'], requirements: '5 O\'Level credits including Math & English' },
-      { name: 'Mechanical Engineering', subjects: ['English', 'Mathematics', 'Physics', 'Chemistry'], requirements: '5 O\'Level credits including Math & English' },
-      { name: 'Electrical Engineering', subjects: ['English', 'Mathematics', 'Physics', 'Chemistry'], requirements: '5 O\'Level credits including Math & English' },
-    ]
-  },
-  {
-    category: 'Arts & Humanities',
-    courses: [
-      { name: 'Law', subjects: ['English', 'Literature in English', 'Government', 'CRS/IRS'], requirements: '5 O\'Level credits including Lit & English' },
-      { name: 'Mass Communication', subjects: ['English', 'Literature in English', 'Government', 'Any other Arts/Social Science'], requirements: '5 O\'Level credits including Math & English' },
-    ]
-  },
-  {
-    category: 'Social & Management Sciences',
-    courses: [
-      { name: 'Accounting', subjects: ['English', 'Mathematics', 'Economics', 'Government/Commerce'], requirements: '5 O\'Level credits including Math, English & Economics' },
-      { name: 'Economics', subjects: ['English', 'Mathematics', 'Economics', 'Government'], requirements: '5 O\'Level credits including Math, English & Economics' },
-    ]
-  }
-];
+import { fetchCareerGuideData, type CareerCategory } from '@/services/careerGuideService';
 
 const CareerGuide = () => {
   const [activeView, setActiveView] = useState<'guide' | 'syllabus'>('guide');
   const [searchTerm, setSearchTerm] = useState('');
   
+  // Dynamic Career Guide state loaded from admin_settings
+  const { data: careerData, loading: loadingCareers } = useLiveFetch<CareerCategory[]>(
+    async () => {
+      return await fetchCareerGuideData();
+    },
+    { contextName: 'CareerGuideData', fallbackData: [] }
+  );
+
   // Live syllabus state loaded from Supabase topics via useLiveFetch
   const { data: rawSyllabus, loading: loadingSyllabus } = useLiveFetch<any[]>(
     async () => {
@@ -72,7 +47,8 @@ const CareerGuide = () => {
     done: !!localChecked[t.id || t.name]
   }));
 
-  const filteredData = CAREER_DATA.map(category => ({
+  const sourceData = careerData && careerData.length > 0 ? careerData : [];
+  const filteredData = sourceData.map(category => ({
     ...category,
     courses: category.courses.filter(course => 
       course.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

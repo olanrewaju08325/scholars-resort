@@ -115,7 +115,7 @@ export const SyllabusAdminTab = () => {
         if (error) throw error;
         toast.success('Syllabus topic updated successfully!');
       } else {
-        const newId = `topic_${Math.random().toString(36).substring(2, 9)}`;
+        const newId = crypto.randomUUID();
         const insertPayload = { id: newId, ...payload, created_at: new Date().toISOString() };
         const { error } = await supabase.from('topics').insert(insertPayload);
         

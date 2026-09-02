@@ -258,6 +258,29 @@ export const JambNovelHub = () => {
     );
   }
 
+  if (books.length === 0) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center p-4">
+        <Card className="max-w-md w-full bg-card border-border text-card-foreground shadow-xl text-center p-8 space-y-6">
+          <div className="w-16 h-16 rounded-full bg-primary/10 text-primary flex items-center justify-center mx-auto border border-primary/20">
+            <BookOpen className="w-8 h-8" />
+          </div>
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold font-display">No Prescribed Texts Published</h2>
+            <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">
+              There are currently no JAMB UTME literature novels or textbooks configured in the database. When the administration publishes prescribed texts, they will appear here.
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
+            <Button asChild className="font-bold text-xs">
+              <Link to="/dashboard">Return to Dashboard</Link>
+            </Button>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto space-y-6">
       {/* Hero Banner */}

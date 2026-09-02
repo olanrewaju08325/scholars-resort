@@ -1,5 +1,3 @@
-import { callGroqAPI } from '@/services/aiService';
-import { fetchQuestionsForSubject } from '@/utils/subjectUtils';
 import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,135 +21,113 @@ export const WeeklyChallenge = () => {
     setLoading(true);
     try {
       const now = new Date().toISOString().split('T')[0];
-      let userSubj = 'Use of English';
 
-      if (profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0) {
-        userSubj = profile.utme_subjects[Math.floor(Math.random() * profile.utme_subjects.length)];
-      } else {
-        const subRes = await safeSupabaseQuery(
-          supabase.from('subjects').select('name').limit(10),
-          { contextName: 'WeeklyChallenge.fetchSubjects', fallbackValue: [] }
-        );
-        if (subRes.data && subRes.data.length > 0) {
-          userSubj = subRes.data[Math.floor(Math.random() * subRes.data.length)].name;
-        }
-      }
-
-      const challengesRes = await safeSupabaseQuery(
-        supabase
-          .from('weekly_challenges')
-          .select('*')
-          .eq('is_active', true)
-          .lte('week_start', now)
-          .gte('week_end', now)
-          .limit(1),
-        {
-          contextName: 'WeeklyChallenge.fetchChallenges',
-          sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeWeeklyChallenge),
-          fallbackValue: []
-        }
-      );
-
-      if (challengesRes.data && challengesRes.data.length > 0) {
-        const c = challengesRes.data[0];
-        setChallenge(c);
-
-        if (profile?.id) {
-          const subRes = await safeSupabaseQuery(
-            supabase
-              .from('weekly_challenge_submissions')
-              .select('*')
-              .eq('challenge_id', c.id)
-              .eq('user_id', profile.id)
-              .maybeSingle(),
-            { contextName: 'WeeklyChallenge.fetchSubmission', fallbackValue: null }
-          );
-          if (subRes.data) setSubmission(subRes.data);
-        }
-
-        const countRes = await safeSupabaseQuery(
+      // 1. Try weekly_challenges table
+      let activeChallenge: any = null;
+      try {
+        const challengesRes = await safeSupabaseQuery(
           supabase
-            .from('weekly_challenge_submissions')
-            .select('*', { count: 'exact', head: true })
-            .eq('challenge_id', c.id),
-          { contextName: 'WeeklyChallenge.fetchParticipantCount', fallbackValue: [] }
+            .from('weekly_challenges')
+            .select('*')
+            .eq('is_active', true)
+            .lte('week_start', now)
+            .gte('week_end', now)
+            .limit(1),
+          {
+            contextName: 'WeeklyChallenge.fetchChallenges',
+            sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeWeeklyChallenge),
+            fallbackValue: []
+          }
         );
-        setParticipantCount(countRes.count || 0);
-        setLoading(false);
-        return;
+
+        if (challengesRes.data && challengesRes.data.length > 0) {
+          activeChallenge = challengesRes.data[0];
+        }
+      } catch {}
+
+      // 2. If no table row found, check admin_settings.weekly_challenges_db
+      if (!activeChallenge) {
+        try {
+          const { data: settingData } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'weekly_challenges_db')
+            .maybeSingle();
+
+          if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+            const list = settingData.setting_value;
+            // Match active within window or most recent active
+            const matched = list.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now) 
+              || list.find((c: any) => c.is_active);
+            if (matched) {
+              activeChallenge = matched;
+            }
+          }
+        } catch (err) {
+          console.warn('Could not fetch weekly challenges from admin_settings:', err);
+        }
       }
 
-      const prompt = `Generate 1 challenging JAMB UTME examination question for subject "${userSubj}". 
-Return strictly JSON object format without markdown block backticks:
-{
-  "question": "Clear, high-yield question string",
-  "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
-  "answer": "A",
-  "explanation": "Detailed step-by-step reasoning."
-}`;
-
-      const aiResponse = await callGroqAPI([
-        { role: 'system', content: 'You are an expert JAMB UTME test writer.' },
-        { role: 'user', content: prompt }
-      ]);
-
-      if (aiResponse) {
+      // 3. If local fallback exists
+      if (!activeChallenge) {
         try {
-          const jsonMatch = aiResponse.match(/\{[\s\S]*\}/);
-          const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : aiResponse);
-
-          if (parsed.question && Array.isArray(parsed.options) && parsed.answer) {
-            const nextSunday = new Date();
-            nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()));
-
-            setChallenge({
-              id: `ai_challenge_${userSubj.toLowerCase().replace(/\s+/g, '_')}_${now}`,
-              title: `AI Weekly High-Yield Challenge: ${userSubj}`,
-              subject: userSubj,
-              xp_reward: 100,
-              week_start: now,
-              week_end: nextSunday.toISOString().split('T')[0],
-              question_data: {
-                question: parsed.question,
-                options: parsed.options,
-                answer: String(parsed.answer).replace(/[^A-D]/g, '') || 'A',
-                explanation: parsed.explanation || 'Step-by-step solution based on JAMB UTME syllabus.'
+          const localRaw = localStorage.getItem('scholar_weekly_challenges');
+          if (localRaw) {
+            const parsed = JSON.parse(localRaw);
+            if (Array.isArray(parsed)) {
+              const matched = parsed.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now)
+                || parsed.find((c: any) => c.is_active);
+              if (matched) {
+                activeChallenge = matched;
               }
-            });
-            setParticipantCount(1);
-            setLoading(false);
-            return;
+            }
           }
         } catch {}
       }
 
-      const qData = await fetchQuestionsForSubject(userSubj, 10);
+      if (activeChallenge) {
+        setChallenge(activeChallenge);
 
-      if (qData && qData.length > 0) {
-        const dbQ = qData[Math.floor(Math.random() * qData.length)];
-        const opts = typeof dbQ.options === 'string' ? JSON.parse(dbQ.options) : dbQ.options;
-        const nextSunday = new Date();
-        nextSunday.setDate(nextSunday.getDate() + (7 - nextSunday.getDay()));
-
-        setChallenge({
-          id: `db_challenge_${dbQ.id}`,
-          title: `UTME Master Challenge: ${dbQ.subjects?.name || userSubj}`,
-          subject: dbQ.subjects?.name || userSubj,
-          xp_reward: 100,
-          week_start: now,
-          week_end: nextSunday.toISOString().split('T')[0],
-          question_data: {
-            question: dbQ.question_text,
-            options: Array.isArray(opts) ? opts : ['A) Option 1', 'B) Option 2', 'C) Option 3', 'D) Option 4'],
-            answer: dbQ.correct_answer?.substring(0, 1)?.toUpperCase() || 'A',
-            explanation: dbQ.explanation || 'Detailed solution from question bank.'
+        if (profile?.id) {
+          try {
+            const subRes = await safeSupabaseQuery(
+              supabase
+                .from('weekly_challenge_submissions')
+                .select('*')
+                .eq('challenge_id', activeChallenge.id)
+                .eq('user_id', profile.id)
+                .maybeSingle(),
+              { contextName: 'WeeklyChallenge.fetchSubmission', fallbackValue: null }
+            );
+            if (subRes.data) {
+              setSubmission(subRes.data);
+            } else {
+              const localSub = localStorage.getItem(`wc_sub_${activeChallenge.id}_${profile.id}`);
+              if (localSub) setSubmission(JSON.parse(localSub));
+            }
+          } catch {
+            const localSub = localStorage.getItem(`wc_sub_${activeChallenge.id}_${profile.id}`);
+            if (localSub) setSubmission(JSON.parse(localSub));
           }
-        });
-        setParticipantCount(0);
+
+          try {
+            const countRes = await safeSupabaseQuery(
+              supabase
+                .from('weekly_challenge_submissions')
+                .select('*', { count: 'exact', head: true })
+                .eq('challenge_id', activeChallenge.id),
+              { contextName: 'WeeklyChallenge.fetchParticipantCount', fallbackValue: [] }
+            );
+            setParticipantCount(countRes.count || 0);
+          } catch {
+            setParticipantCount(0);
+          }
+        }
         setLoading(false);
         return;
       }
 
+      // If no admin challenge is published, truthfully show no challenge
       setChallenge(null);
     } catch {
       setChallenge(null);

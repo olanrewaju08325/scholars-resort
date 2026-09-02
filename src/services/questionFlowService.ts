@@ -114,7 +114,7 @@ export class QuestionFlowService {
             if (failedQIds.length > 0) {
               let query = supabase
                 .from('questions')
-                .select('*, subjects(id, name), topics(id, name)')
+                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
                 .in('id', failedQIds);
               
               if (config.subjectId && config.subjectId !== 'all') {
@@ -188,7 +188,7 @@ export class QuestionFlowService {
                 if (weakTopicIds.length > 0) {
                   let query = supabase
                     .from('questions')
-                    .select('*, subjects(id, name), topics(id, name)')
+                    .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
                     .eq('is_active', true)
                     .in('topic_id', weakTopicIds.slice(0, 5));
 
@@ -241,7 +241,7 @@ export class QuestionFlowService {
 
             let query = supabase
               .from('questions')
-              .select('*, subjects(id, name), topics(id, name)')
+              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
               .eq('is_active', true);
 
             if (validUuids.length > 0) {
@@ -269,7 +269,7 @@ export class QuestionFlowService {
 
             let query = supabase
               .from('questions')
-              .select('*, subjects(id, name), topics(id, name)')
+              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
               .eq('is_active', true);
 
             if (config.topicId && config.topicId !== 'all') {
@@ -298,7 +298,7 @@ export class QuestionFlowService {
             const subId = config.subjectId || 'all';
             let query = supabase
               .from('questions')
-              .select('*, subjects(id, name), topics(id, name)')
+              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
               .eq('is_active', true);
 
             if (subId !== 'all') {
@@ -323,19 +323,27 @@ export class QuestionFlowService {
             break;
           }
 
+
           case 'full_mock':
           case 'ai_generated_mock': {
             // Standard UTME: 4 Subjects (Use of English [60 Qs] + 3 Core Subjects [40 Qs each] = 180 total)
-            let targetSubs = config.subjectIds || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
-            if (targetSubs.length < 4) {
-              targetSubs = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+            let targetSubs = config.subjectIds && config.subjectIds.length > 0 ? config.subjectIds : [];
+            
+            if (targetSubs.length === 0) {
+              return { questions: [], error: 'Please complete your UTME subject registration to take a Full Mock.' };
             }
 
             const normalizedSubs = Array.from(new Set(targetSubs.map(s => normalizeSubjectName(s))));
+            
+            // Prioritize English if they registered for it, otherwise just use their registered subjects
             const hasEnglish = normalizedSubs.includes('Use of English');
-            const finalSubjects = hasEnglish
-              ? ['Use of English', ...normalizedSubs.filter(s => s !== 'Use of English').slice(0, 3)]
-              : ['Use of English', ...normalizedSubs.slice(0, 3)];
+            let finalSubjects = normalizedSubs;
+            if (hasEnglish) {
+               finalSubjects = ['Use of English', ...normalizedSubs.filter(s => s !== 'Use of English').slice(0, 3)];
+            } else {
+               finalSubjects = normalizedSubs.slice(0, 4);
+            }
+
 
             subjectsQueried.push(...finalSubjects);
 
@@ -346,7 +354,7 @@ export class QuestionFlowService {
 
               let subQuery = supabase
                 .from('questions')
-                .select('*, subjects(id, name), topics(id, name)')
+                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
                 .eq('is_active', true);
 
               if (validUuids.length > 0) {
@@ -375,7 +383,7 @@ export class QuestionFlowService {
             subjectsQueried.push('Daily Challenge');
             const { data, error } = await supabase
               .from('questions')
-              .select('*, subjects(id, name), topics(id, name)')
+              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
               .eq('is_active', true)
               .limit(45);
 
@@ -397,7 +405,7 @@ export class QuestionFlowService {
 
             let query = supabase
               .from('questions')
-              .select('*, subjects(id, name), topics(id, name)')
+              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
               .eq('is_active', true);
 
             if (validUuids.length > 0) {
@@ -536,7 +544,7 @@ export class QuestionFlowService {
     const config: ModeQuestionQueryConfig = {
       mode,
       subjectId: sampleConfig?.subjectId || 'use-of-english',
-      subjectIds: sampleConfig?.subjectIds || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'],
+      subjectIds: sampleConfig?.subjectIds || [],
       count: sampleConfig?.count,
       difficulty: sampleConfig?.difficulty || 'mixed',
       ...sampleConfig
@@ -566,7 +574,7 @@ export class QuestionFlowService {
 
     for (const mode of modes) {
       const res = await this.verifyModeQuestionFlow(mode, {
-        subjectIds: sampleSubjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry']
+        subjectIds: sampleSubjects || []
       });
       results[mode] = res;
       if (res.success && res.validation.schemaValid) {

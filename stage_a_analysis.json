@@ -1,0 +1,682 @@
+[
+  {
+    "index": 1,
+    "id": "0100b102-2fa3-4a17-90f3-dc65cf401cd2",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "If a bad debt previously written off is subsequently repaid...",
+    "ca": "expense in the balance sheet",
+    "opts": [
+      "the amount collected is recorded as an",
+      "income in the profit and loss account",
+      "income in the balance sheet",
+      "addition cash in the profit and loss account"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"expense in the balance sheet\" is not present among the 4 options: [\"the amount collected is recorded as an\",\"income in the profit and loss account\",\"income in the balance sheet\",\"addition cash in the profit and loss account\"]."
+  },
+  {
+    "index": 2,
+    "id": "4868dbd1-4d77-40b3-90b4-23874c37936a",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "Using the same stock data as the previous question and the L...",
+    "ca": "N264",
+    "opts": [
+      "the ending inventory cost is",
+      "N136",
+      "N176",
+      "N196"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"N264\" is not present among the 4 options: [\"the ending inventory cost is\",\"N136\",\"N176\",\"N196\"]."
+  },
+  {
+    "index": 3,
+    "id": "f38233e9-16b9-43eb-96ef-2bab934167e2",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "The major difference between the receipt and payment account...",
+    "ca": "is a T-account",
+    "opts": [
+      "is kept by the treasurer",
+      "the latter is not",
+      "deals with all receipts and payments in the year regardless of the time it relates to",
+      "the latter is for just that year"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"is a T-account\" is not present among the 4 options: [\"is kept by the treasurer\",\"the latter is not\",\"deals with all receipts and payments in the year regardless of the time it relates to\",\"the latter is for just that year\"]."
+  },
+  {
+    "index": 4,
+    "id": "764bc19b-05ca-44dd-81b4-8a704b005881",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "Using the same information as the previous question...",
+    "ca": "1:2",
+    "opts": [
+      "what is the profit sharing ratio if it is based on capital contributed by Ada and Udo?",
+      "2:1",
+      "3:2",
+      "2:3"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"1:2\" is not present among the 4 options: [\"what is the profit sharing ratio if it is based on capital contributed by Ada and Udo?\",\"2:1\",\"3:2\",\"2:3\"]."
+  },
+  {
+    "index": 5,
+    "id": "6babd0a3-062e-4f6b-879e-729a09922f3b",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following statements are true about the spring ...",
+    "ca": "II",
+    "opts": [
+      "I and IV",
+      "II and III",
+      "III and IV",
+      "I"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"II\" and options, but no exact match."
+  },
+  {
+    "index": 6,
+    "id": "527f36a7-7b95-442b-96bb-035c87aad1c8",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following types of motion are oscillatory? I. A...",
+    "ca": "III and IV",
+    "opts": [
+      "I and II only",
+      "I",
+      "II and III",
+      "II"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"III and IV\" and options, but no exact match."
+  },
+  {
+    "index": 7,
+    "id": "a980c946-f522-4c6e-b5b2-8df23f93bcbb",
+    "subject": "Physics",
+    "qTextSnippet": "A convex mirror is used as a driving mirror because I. Its i...",
+    "ca": "II and III only / I only",
+    "opts": [
+      "I and III only",
+      "I and II only",
+      "II and III only",
+      "I"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"II and III only / I only\" and options, but no exact match."
+  },
+  {
+    "index": 8,
+    "id": "27254008-7c06-474f-aab1-c7aab38eef64",
+    "subject": "Commerce",
+    "qTextSnippet": "A bank statement is a document...",
+    "ca": "used for regular withdrawal of moeny from a savings account",
+    "opts": [
+      "ordering a bank to pay on demand a stated sum of money",
+      "containing records of receipts",
+      "payments and balance on an account",
+      "used for paying money into a bank account"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"used for regular withdrawal of moeny from a savings account\" is not present among the 4 options: [\"ordering a bank to pay on demand a stated sum of money\",\"containing records of receipts\",\"payments and balance on an account\",\"used for paying money into a bank account\"]."
+  },
+  {
+    "index": 9,
+    "id": "d590e380-2698-4620-a80d-f58db3ef3591",
+    "subject": "Physics",
+    "qTextSnippet": "A narrow beam of white light can be split up into different ...",
+    "ca": "green and red colours.",
+    "opts": [
+      "White light is an electromagnetic wave",
+      "The prism has all the colours of the white light",
+      "White light has undergone total internal reflection in the prism",
+      "Different colours of white light travel with different speeds in glass. / White light consists of yellow"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"green and red colours.\" is not present among the 4 options: [\"White light is an electromagnetic wave\",\"The prism has all the colours of the white light\",\"White light has undergone total internal reflection in the prism\",\"Different colours of white light travel with different speeds in glass. / White light consists of yellow\"]."
+  },
+  {
+    "index": 10,
+    "id": "cabc312c-97f0-44ce-a5ef-73b08d931d08",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the graphs (Fig 3) represents the current-voltage (...",
+    "ca": "D (rising curve that plateaus) / E (curve that rises then falls)",
+    "opts": [
+      "A (straight line through origin",
+      "increasing)",
+      "B (line dropping then rising)",
+      "C (straight line decreasing from I-axis to V-axis)"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"D (rising curve that plateaus) / E (curve that rises then falls)\" is not present among the 4 options: [\"A (straight line through origin\",\"increasing)\",\"B (line dropping then rising)\",\"C (straight line decreasing from I-axis to V-axis)\"]."
+  },
+  {
+    "index": 11,
+    "id": "1cce8f51-0955-4b34-ace7-6144016d168d",
+    "subject": "Physics",
+    "qTextSnippet": "On which of the following does the operation of a moving coi...",
+    "ca": "II and III",
+    "opts": [
+      "I only",
+      "II only",
+      "III only",
+      "II and III / I"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"II and III\" and options, but no exact match."
+  },
+  {
+    "index": 12,
+    "id": "fb92c375-7ab2-4c29-89aa-6ebde6ceb2d2",
+    "subject": "Physics",
+    "qTextSnippet": "A ball attached to one end of a string moves anticlockwise a...",
+    "ca": "Straight line tangent upward",
+    "opts": [
+      "Straight line tangent",
+      "curving toward the circle (path A)",
+      "Straight line tangent",
+      "away from circle (path B)"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"Straight line tangent upward\" and options, but no exact match."
+  },
+  {
+    "index": 13,
+    "id": "8b7064e4-af5b-4940-bcaf-7c955f4b58a4",
+    "subject": "Physics",
+    "qTextSnippet": "A pool of water appears to be 1.0m deep when viewed vertical...",
+    "ca": "13300 m",
+    "opts": [
+      "what is the actual depth of the pool?",
+      "0.75 m",
+      "1.013 m",
+      "1.330 m"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"13300 m\" is not present among the 4 options: [\"what is the actual depth of the pool?\",\"0.75 m\",\"1.013 m\",\"1.330 m\"]."
+  },
+  {
+    "index": 14,
+    "id": "16397e6a-504a-422e-a1ec-820d2f990469",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following statements is TRUE of the photoelectr...",
+    "ca": "the greater the energy of the emitted electron.",
+    "opts": [
+      "It cannot occur in liquids",
+      "The energy of the emitted electron is independent of the work function of the surface",
+      "The energy of the emitted electron depends on the wavelength of the incident light",
+      "The greater the intensity of the incident light"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"the greater the energy of the emitted electron.\" is not present among the 4 options: [\"It cannot occur in liquids\",\"The energy of the emitted electron is independent of the work function of the surface\",\"The energy of the emitted electron depends on the wavelength of the incident light\",\"The greater the intensity of the incident light\"]."
+  },
+  {
+    "index": 15,
+    "id": "fc4a8815-00b0-4e2a-a1fe-04d31d4b0b26",
+    "subject": "Physics",
+    "qTextSnippet": "Two points on a velocity-time graph have coordinates (5s...",
+    "ca": "1.50 m/s2",
+    "opts": [
+      "10 m/s) and (20s",
+      "20 m/s). Calculate the mean acceleration between the two points.",
+      "0.67 m/s2",
+      "0.83 m/s2"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"1.50 m/s2\" is not present among the 4 options: [\"10 m/s) and (20s\",\"20 m/s). Calculate the mean acceleration between the two points.\",\"0.67 m/s2\",\"0.83 m/s2\"]."
+  },
+  {
+    "index": 16,
+    "id": "e57dd7b2-5236-40c1-ae2d-3dca1b3be205",
+    "subject": "Physics",
+    "qTextSnippet": "A far sighted person cannot see objects that are less than 1...",
+    "ca": "Concave, 33cm.",
+    "opts": [
+      "what type and focal length of lens does he need?",
+      "Convex, 20cm",
+      "Concave, 20cm",
+      "Convex, 33cm"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"Concave, 33cm.\" is not present among the 4 options: [\"what type and focal length of lens does he need?\",\"Convex, 20cm\",\"Concave, 20cm\",\"Convex, 33cm\"]."
+  },
+  {
+    "index": 17,
+    "id": "d96e6a97-d1a0-4178-8144-00154eb0ae91",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "Using the same rent information...",
+    "ca": "debit adjustment account and credit prepayment account",
+    "opts": [
+      "what is the adjustment needed as at 31st December 1993?",
+      "debit rent account and credit adjustment account",
+      "debit prepayment account and credit rent account",
+      "debit rent account and credit prepayment account"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"debit adjustment account and credit prepayment account\" is not present among the 4 options: [\"what is the adjustment needed as at 31st December 1993?\",\"debit rent account and credit adjustment account\",\"debit prepayment account and credit rent account\",\"debit rent account and credit prepayment account\"]."
+  },
+  {
+    "index": 18,
+    "id": "98fdb99e-c6dc-41a6-b8bd-41922e22c221",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "Using the same balance sheet information...",
+    "ca": "3:2",
+    "opts": [
+      "the acid test ratio in the company is",
+      "1:1",
+      "1:2",
+      "2:3"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"3:2\" is not present among the 4 options: [\"the acid test ratio in the company is\",\"1:1\",\"1:2\",\"2:3\"]."
+  },
+  {
+    "index": 19,
+    "id": "e3b2f202-4ec1-45a8-b5ab-7a2088f50a46",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "Using the same club information...",
+    "ca": "N7,520",
+    "opts": [
+      "accumulated fund on 1st January 1993 is",
+      "N8,570",
+      "N8,470",
+      "N7,850"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"N7,520\" is not present among the 4 options: [\"accumulated fund on 1st January 1993 is\",\"N8,570\",\"N8,470\",\"N7,850\"]."
+  },
+  {
+    "index": 20,
+    "id": "b5148e43-b0fe-4867-b408-8cc1b31cae2c",
+    "subject": "Principles of Accounts",
+    "qTextSnippet": "Using the same partners' current account information...",
+    "ca": "N540 credit",
+    "opts": [
+      "the correct closing balance of Lawal's current account is",
+      "N21,100 debit",
+      "N14,740 debit",
+      "N14,740 credit"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"N540 credit\" is not present among the 4 options: [\"the correct closing balance of Lawal's current account is\",\"N21,100 debit\",\"N14,740 debit\",\"N14,740 credit\"]."
+  },
+  {
+    "index": 21,
+    "id": "40c2ba67-2947-4f15-ac74-b5584a82b7e2",
+    "subject": "Commerce",
+    "qTextSnippet": "Under normal circumstance, a business enterprise can be idea...",
+    "ca": "on the basis of an order from stockholders",
+    "opts": [
+      "by products",
+      "function or territories",
+      "around the personalities in the enterprise",
+      "on the rulling of the management"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"on the basis of an order from stockholders\" is not present among the 4 options: [\"by products\",\"function or territories\",\"around the personalities in the enterprise\",\"on the rulling of the management\"]."
+  },
+  {
+    "index": 22,
+    "id": "1a0c6e88-3946-491e-b9cc-75bc0cb0099a",
+    "subject": "Commerce",
+    "qTextSnippet": "The main role of advertising is to...",
+    "ca": "capture the attention of people",
+    "opts": [
+      "convince prospective buyers to buy",
+      "show the actual shape",
+      "form and colour of the products",
+      "inform people where to obtain goods and service"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"capture the attention of people\" is not present among the 4 options: [\"convince prospective buyers to buy\",\"show the actual shape\",\"form and colour of the products\",\"inform people where to obtain goods and service\"]."
+  },
+  {
+    "index": 23,
+    "id": "6d53b752-3c8d-4fa0-ac0e-069428cf3e7f",
+    "subject": "Physics",
+    "qTextSnippet": "A ship traveling towards a cliff receives the echo of its wh...",
+    "ca": "000m",
+    "opts": [
+      "10m",
+      "125m",
+      "175m",
+      "350m / 1"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"000m\" is not present among the 4 options: [\"10m\",\"125m\",\"175m\",\"350m / 1\"]."
+  },
+  {
+    "index": 24,
+    "id": "036a5e1b-465c-4fff-8ad9-de48a321ddc8",
+    "subject": "Physics",
+    "qTextSnippet": "It is usual to transmit electric power at high voltage and l...",
+    "ca": "II and III.",
+    "opts": [
+      "I only",
+      "I and II only",
+      "II and III only",
+      "I and III only / I"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"II and III.\" is not present among the 4 options: [\"I only\",\"I and II only\",\"II and III only\",\"I and III only / I\"]."
+  },
+  {
+    "index": 25,
+    "id": "0a2fd1bf-04e0-41e0-bc73-04ccc7fd15dc",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following may be used to determine relative hum...",
+    "ca": "III and IV only",
+    "opts": [
+      "I only",
+      "II and III only",
+      "II only",
+      "III only / II"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"III and IV only\" is not present among the 4 options: [\"I only\",\"II and III only\",\"II only\",\"III only / II\"]."
+  },
+  {
+    "index": 26,
+    "id": "1596d41d-7061-4269-bdeb-464a1d687ae3",
+    "subject": "Physics",
+    "qTextSnippet": "A short bar magnet is placed in the earth's magnetic field a...",
+    "ca": "II and III",
+    "opts": [
+      "I only",
+      "II only",
+      "III only",
+      "I and II / I"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"II and III\" is not present among the 4 options: [\"I only\",\"II only\",\"III only\",\"I and II / I\"]."
+  },
+  {
+    "index": 27,
+    "id": "2f351a40-7606-4711-b68d-e898f3a6683a",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following: I. alpha-particles II. Protons III. ...",
+    "ca": "II and III",
+    "opts": [
+      "I and II",
+      "I and III",
+      "II and IV",
+      "II and III / I"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"II and III\" and options, but no exact match."
+  },
+  {
+    "index": 28,
+    "id": "e02e12d5-aac4-4686-9e23-769cf2d8bd83",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following graphs correctly illustrates the numb...",
+    "ca": "Graph C (increasing",
+    "opts": [
+      "Graph A (increasing",
+      "concave)",
+      "Graph B (decreasing",
+      "one shape)"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"Graph C (increasing\" is not present among the 4 options: [\"Graph A (increasing\",\"concave)\",\"Graph B (decreasing\",\"one shape)\"]."
+  },
+  {
+    "index": 29,
+    "id": "dd109e4d-0786-44b0-9309-1556968e264b",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following properties make the convex mirror use...",
+    "ca": "I and III.",
+    "opts": [
+      "I, II and IV",
+      "I",
+      "II and III",
+      "II and III"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"I and III.\" and options, but no exact match."
+  },
+  {
+    "index": 30,
+    "id": "bf3595d3-7181-4fb4-af0d-ea08151233ac",
+    "subject": "Biology",
+    "qTextSnippet": "The vacuole of a plant cell is (1980)...",
+    "ca": "option_e",
+    "opts": [
+      "a large empty space",
+      "smaller than that of an animal cell",
+      "filled with air",
+      "an ordinary vacuum"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"option_e\" is not present among the 4 options: [\"a large empty space\",\"smaller than that of an animal cell\",\"filled with air\",\"an ordinary vacuum\"]."
+  },
+  {
+    "index": 31,
+    "id": "425b985d-9455-43ac-b127-0dda65c35eff",
+    "subject": "Biology",
+    "qTextSnippet": "Where is energy produced in a cell? (1982)...",
+    "ca": "option_e",
+    "opts": [
+      "Nucleus",
+      "Nucleolus",
+      "Lysosomes",
+      "Chloroplast"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"option_e\" is not present among the 4 options: [\"Nucleus\",\"Nucleolus\",\"Lysosomes\",\"Chloroplast\"]."
+  },
+  {
+    "index": 32,
+    "id": "e00901a4-e197-4154-b413-c1043593b7b4",
+    "subject": "Biology",
+    "qTextSnippet": "If an isolated living cell is left in distilled water for tw...",
+    "ca": "option_e",
+    "opts": [
+      "lose some of its water",
+      "lose all of its water to the surrounding water",
+      "reproduce by binary fission",
+      "become more turgid"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"option_e\" is not present among the 4 options: [\"lose some of its water\",\"lose all of its water to the surrounding water\",\"reproduce by binary fission\",\"become more turgid\"]."
+  },
+  {
+    "index": 33,
+    "id": "2cffa309-6c1d-44af-80af-e844c7deb31c",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following graphs of current against voltage ill...",
+    "ca": "Graph 4 (flat/step line)",
+    "opts": [
+      "Graph 1 (curve)",
+      "Graph 2 (curve",
+      "flat then rising)",
+      "Graph 3 (straight line through origin)"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"Graph 4 (flat/step line)\" is not present among the 4 options: [\"Graph 1 (curve)\",\"Graph 2 (curve\",\"flat then rising)\",\"Graph 3 (straight line through origin)\"]."
+  },
+  {
+    "index": 34,
+    "id": "da0ecf82-c90e-4a8f-b002-f0194a58b911",
+    "subject": "Biology",
+    "qTextSnippet": "One common feature of the fungi, algae, mosses and ferns is ...",
+    "ca": "option_e",
+    "opts": [
+      "are photosynthetic",
+      "show alternation of generation",
+      "reproduce by means of conjugation",
+      "can survive dry conditions"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"option_e\" is not present among the 4 options: [\"are photosynthetic\",\"show alternation of generation\",\"reproduce by means of conjugation\",\"can survive dry conditions\"]."
+  },
+  {
+    "index": 35,
+    "id": "1ad0c0af-8950-4d62-b478-ca0054997e0f",
+    "subject": "Biology",
+    "qTextSnippet": "Which of the following represents the evolutionary sequence ...",
+    "ca": "option_e",
+    "opts": [
+      "2→1→4→3→5",
+      "5→4→3→2→1",
+      "2→4→5→1→3",
+      "3→2→4→5→1"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"option_e\" is not present among the 4 options: [\"2→1→4→3→5\",\"5→4→3→2→1\",\"2→4→5→1→3\",\"3→2→4→5→1\"]."
+  },
+  {
+    "index": 36,
+    "id": "d04abaf6-cdc8-4edf-8f8f-a7810d3f7933",
+    "subject": "Biology",
+    "qTextSnippet": "Spirogyra and Mucor can be grouped together as Thallophyta b...",
+    "ca": "option_e",
+    "opts": [
+      "they are unicellular organism",
+      "their spores could be dispersed by wind",
+      "they are capable of living independent lives",
+      "they reproduce sexually only"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"option_e\" is not present among the 4 options: [\"they are unicellular organism\",\"their spores could be dispersed by wind\",\"they are capable of living independent lives\",\"they reproduce sexually only\"]."
+  },
+  {
+    "index": 37,
+    "id": "90463416-d5e0-49c0-b80d-a577656eece5",
+    "subject": "Biology",
+    "qTextSnippet": "Bryophytes are different from flowering plants because they ...",
+    "ca": "option_e",
+    "opts": [
+      "live in moist habitats",
+      "are small plants",
+      "reproduce sexually and asexually",
+      "have small leaves"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"option_e\" is not present among the 4 options: [\"live in moist habitats\",\"are small plants\",\"reproduce sexually and asexually\",\"have small leaves\"]."
+  },
+  {
+    "index": 38,
+    "id": "bb2234b8-76a7-4c19-96bd-5159cfaa4d22",
+    "subject": "Chemistry",
+    "qTextSnippet": "500cm3 of oxygen was collected over water at 30 degrees C an...",
+    "ca": "None (booklet notes no listed option matches the computed ~431cm3)",
+    "opts": [
+      "475cm3",
+      "415cm3",
+      "586cm3",
+      "500cm3"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"None (booklet notes no listed option matches the computed ~431cm3)\" is not present among the 4 options: [\"475cm3\",\"415cm3\",\"586cm3\",\"500cm3\"]."
+  },
+  {
+    "index": 39,
+    "id": "51250ea1-f4e2-414b-ac18-396b60004b05",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following statements are TRUE about frictional ...",
+    "ca": "I",
+    "opts": [
+      "I and III only",
+      "II",
+      "III and IV",
+      "I and II only"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "MEDIUM",
+    "reason": "Partial overlap found between stored answer \"I\" and options, but no exact match."
+  },
+  {
+    "index": 40,
+    "id": "c97773d0-05d3-4db9-aa43-b2bb0ae3fb01",
+    "subject": "Physics",
+    "qTextSnippet": "Which of the following levers (with different load/effort ar...",
+    "ca": "3cm effort arm)",
+    "opts": [
+      "Lever 1 (3cm load arm",
+      "1cm effort arm)",
+      "Lever 2 (2cm/2cm)",
+      "Lever 3 (1cm load arm"
+    ],
+    "matchedOpt": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "confidence": "LOW",
+    "reason": "Stored answer \"3cm effort arm)\" is not present among the 4 options: [\"Lever 1 (3cm load arm\",\"1cm effort arm)\",\"Lever 2 (2cm/2cm)\",\"Lever 3 (1cm load arm\"]."
+  }
+]

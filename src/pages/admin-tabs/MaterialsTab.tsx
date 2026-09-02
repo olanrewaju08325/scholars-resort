@@ -336,7 +336,7 @@ WITH CHECK (bucket_id IN ('study-materials', 'materials', 'library'));`;
     } catch (_) {}
 
     // Direct client inserts
-    const newMaterialId = `mat_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+    const newMaterialId = crypto.randomUUID();
     try {
       await supabase.from('materials').insert({
         id: newMaterialId,

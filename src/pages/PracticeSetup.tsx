@@ -52,12 +52,24 @@ const PracticeSetup = () => {
           return;
         }
 
+        
         const res = await SafeDataFetcher<any[]>(
           supabase.from('subjects').select('*').eq('is_active', true),
           { contextName: 'PracticeSetup.subjects', fallbackData: [] }
         );
         if (res.data) {
-          setSubjects(res.data);
+          // Filter subjects to only those registered by the student
+          const registeredSubs = profile?.utme_subjects || [];
+          const filteredSubjects = res.data.filter((s: any) => 
+            registeredSubs.some((rs: string) => rs.toLowerCase() === s.name.toLowerCase())
+          );
+          
+          setSubjects(filteredSubjects);
+          
+          if (filteredSubjects.length === 0) {
+            toast.error("Please complete your UTME subject registration.");
+          }
+
           
           // Auto-select subject if passed via name or id in query
           const subjectParam = searchParams.get('subject') || searchParams.get('subjectId');

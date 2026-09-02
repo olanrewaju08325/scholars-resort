@@ -95,17 +95,10 @@ export const StudentsTab = () => {
       }
 
       if (profData) {
-        let localOverrides: Record<string, any> = {};
-        try {
-          localOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
-        } catch {}
-
         const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
 
         const enriched: Profile[] = profData.map((rawP: any) => {
-          const overrides = localOverrides[rawP.id] || {};
-          const p = { ...rawP, ...overrides };
-          const isMasterAdmin = p.email && ADMIN_EMAILS.includes(p.email.toLowerCase().trim());
+          const p = rawP;const isMasterAdmin = p.email && ADMIN_EMAILS.includes(p.email.toLowerCase().trim());
           const effectiveRole = isMasterAdmin ? 'admin' : (p.role === 'admin' ? 'admin' : 'student');
           const effectiveStatus = p.is_banned ? 'banned' : (p.is_suspended || p.status === 'suspended' ? 'suspended' : (p.status || 'active'));
           
@@ -246,32 +239,18 @@ export const StudentsTab = () => {
     if (!banTargetUser) return;
     setStatusLoading(true);
     const targetStatus = banActionType === 'ban' ? 'banned' : 'suspended';
-
     try {
-      // 1. Call server API (non-blocking)
-      try {
-        await authFetch(getApiUrl('/api/admin/users/status'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: banTargetUser.id,
-            status: targetStatus,
-            reason: banReasonInput.trim() || `User ${targetStatus} by administrator`
-          })
-        });
-      } catch (apiErr) {
-        console.warn('API status route notice:', apiErr);
-      }
-
-      // 2. Direct Supabase update
-      const { error: sbErr } = await supabase.from('profiles').update({
-        status: targetStatus,
-        is_banned: targetStatus === 'banned',
-        is_suspended: targetStatus === 'suspended',
-        ban_reason: banReasonInput.trim() || null
-      }).eq('id', banTargetUser.id);
-
-      if (sbErr) throw sbErr;
+      const res = await authFetch(getApiUrl('/api/admin/users/status'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: banTargetUser.id,
+          status: targetStatus,
+          reason: banReasonInput.trim() || `User ${targetStatus} by administrator`
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || `Failed to ${targetStatus} user`);
 
       // 3. Update state
       setProfiles(prev => prev.map(p => p.id === banTargetUser.id ? {
@@ -279,7 +258,7 @@ export const StudentsTab = () => {
         status: targetStatus,
         is_banned: targetStatus === 'banned',
         is_suspended: targetStatus === 'suspended',
-        ban_reason: banReasonInput.trim()
+        ban_reason: banReasonInput.trim() || null
       } : p));
 
       if (selectedUser?.id === banTargetUser.id) {
@@ -288,10 +267,9 @@ export const StudentsTab = () => {
           status: targetStatus,
           is_banned: targetStatus === 'banned',
           is_suspended: targetStatus === 'suspended',
-          ban_reason: banReasonInput.trim()
+          ban_reason: banReasonInput.trim() || null
         } : null);
       }
-
       toast.success(`User ${banTargetUser.full_name || banTargetUser.email} has been ${targetStatus}.`);
       setIsBanModalOpen(false);
     } catch (err: any) {
@@ -303,122 +281,41 @@ export const StudentsTab = () => {
 
   // Reactivate User (Unban / Unsuspend)
   const handleReactivateUser = async (user: Profile) => {
-    try {
-      try {
-        await authFetch(getApiUrl('/api/admin/users/status'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: user.id,
-            status: 'active',
-            reason: 'Reactivated by administrator'
-          })
-        });
-      } catch (apiErr) {
-        console.warn('API status route notice:', apiErr);
-      }
-
-      const { error: sbErr } = await supabase.from('profiles').update({
-        status: 'active',
-        is_banned: false,
-        is_suspended: false,
-        ban_reason: null
-      }).eq('id', user.id);
-
-      if (sbErr) throw sbErr;
-
-      setProfiles(prev => prev.map(p => p.id === user.id ? {
-        ...p,
-        status: 'active',
-        is_banned: false,
-        is_suspended: false,
-        ban_reason: null
-      } : p));
-
-      if (selectedUser?.id === user.id) {
-        setSelectedUser(prev => prev ? {
-          ...prev,
-          status: 'active',
-          is_banned: false,
-          is_suspended: false,
-          ban_reason: null
-        } : null);
-      }
-
-      toast.success(`User ${user.full_name || user.email} account reactivated!`);
-    } catch (err: any) {
-      toast.error(`Failed to reactivate: ${err.message}`);
-    }
-  };
-
-  // Delete User Account Completely
-  const handleDeleteUser = async (user: Profile) => {
-    const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-    if (user.email && ADMIN_EMAILS.includes(user.email.toLowerCase().trim())) {
-      toast.error('Primary system administrator cannot be deleted.');
-      return;
-    }
-
     confirmAction(
-      "Permanently Delete Account",
-      `Are you sure you want to completely delete the account for ${user.full_name || user.email}? This will erase all exam scores, subscriptions, and profile records permanently.`,
+      "Reactivate User",
+      `Are you sure you want to restore access for ${user.full_name || user.email}?`,
       async () => {
         try {
-          try {
-            await authFetch(getApiUrl('/api/admin/users/delete'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ user_id: user.id })
-            });
-          } catch (apiErr) {
-            console.warn('API delete route notice:', apiErr);
-          }
+          const res = await authFetch(getApiUrl('/api/admin/users/status'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id, status: 'active', reason: 'Reactivated by administrator' })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to reactivate user');
 
-          const { error: sbErr } = await supabase.from('profiles').delete().eq('id', user.id);
-          if (sbErr) throw sbErr;
-
-          setProfiles(prev => prev.filter(p => p.id !== user.id));
+          setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, status: 'active', is_banned: false, is_suspended: false, ban_reason: null } : p));
           if (selectedUser?.id === user.id) {
-            setSelectedUser(null);
-            setIsDetailOpen(false);
+            setSelectedUser(prev => prev ? { ...prev, status: 'active', is_banned: false, is_suspended: false, ban_reason: null } : null);
           }
-
-          toast.success(`Account for ${user.full_name || user.email} deleted successfully.`);
+          toast.success(`User ${user.full_name || user.email} has been reactivated.`);
         } catch (err: any) {
-          toast.error(`Failed to delete user: ${err.message}`);
+          toast.error(`Failed to reactivate user: ${err.message}`);
         }
       }
     );
   };
 
-  // Change Role (Admin, Student)
-  const handleRoleChange = async (userId: string, newRole: string) => {
+  // Update Role
+  const handleUpdateRole = async (userId: string, newRole: string) => {
     try {
-      try {
-        await authFetch(getApiUrl('/api/admin/users/role'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ user_id: userId, role: newRole })
-        });
-      } catch (apiErr) {
-        console.warn('API role route notice:', apiErr);
-      }
-
-      const updates: any = { role: newRole, updated_at: new Date().toISOString() };
-      if (newRole === 'admin') {
-        updates.has_paid = true;
-      }
-      const { error: sbErr } = await supabase.from('profiles').update(updates).eq('id', userId);
-      if (sbErr) {
-        console.warn('Supabase profile update warning:', sbErr.message);
-      }
-
-      // Save to localStorage overrides for 100% persistent UX
-      try {
-        const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
-        existingOverrides[userId] = { ...(existingOverrides[userId] || {}), ...updates };
-        localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
-      } catch {}
+      const res = await authFetch(getApiUrl('/api/admin/users/role'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, role: newRole })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Failed to update role');
 
       setProfiles(prev => prev.map(p => p.id === userId ? { ...p, role: newRole, has_paid: newRole === 'admin' ? true : p.has_paid } : p));
       if (selectedUser?.id === userId) {
@@ -437,31 +334,21 @@ export const StudentsTab = () => {
       `Are you sure you want to activate full lifetime premium access for ${user.full_name || user.email}?`,
       async () => {
         try {
-          try {
-            const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
-            existingOverrides[user.id] = { ...(existingOverrides[user.id] || {}), has_paid: true };
-            localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
-          } catch {}
-
-          await supabase
-            .from('profiles')
-            .update({ has_paid: true, updated_at: new Date().toISOString() })
-            .eq('id', user.id);
-
-          await authFetch(getApiUrl('/api/admin/subscriptions/grant'), {
+          const res = await authFetch(getApiUrl('/api/admin/subscriptions/grant'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               user_id: user.id,
               plan_name: 'Lifetime Access (Gifted)'
             })
-          }).catch(() => null);
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to grant access');
 
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, has_paid: true } : p));
           if (selectedUser?.id === user.id) {
             setSelectedUser(prev => prev ? { ...prev, has_paid: true } : null);
           }
-
           toast.success(`Premium access granted to ${user.full_name || user.email}!`);
         } catch (err: any) {
           toast.error(`Failed to grant access: ${err.message || 'Unknown error'}`);
@@ -483,12 +370,13 @@ export const StudentsTab = () => {
       `Are you sure you want to set ${user.full_name || user.email} to the unpaid free tier?`,
       async () => {
         try {
-          await supabase.from('profiles').update({ has_paid: false }).eq('id', user.id);
-          try {
-            const existingOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
-            existingOverrides[user.id] = { ...(existingOverrides[user.id] || {}), has_paid: false };
-            localStorage.setItem('scholars_user_overrides', JSON.stringify(existingOverrides));
-          } catch {}
+          const res = await authFetch(getApiUrl('/api/admin/subscriptions/revoke'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to revoke access');
 
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, has_paid: false } : p));
           if (selectedUser?.id === user.id) {
@@ -497,6 +385,34 @@ export const StudentsTab = () => {
           toast.success(`Access revoked for ${user.full_name || user.email}.`);
         } catch (err: any) {
           toast.error(`Failed to revoke access: ${err.message}`);
+        }
+      }
+    );
+  };
+
+  // Delete User
+  const handleDeleteUser = async (user: Profile) => {
+    confirmAction(
+      "Delete User",
+      `Are you sure you want to permanently delete ${user.full_name || user.email}? This action cannot be undone.`,
+      async () => {
+        try {
+          const res = await authFetch(getApiUrl('/api/admin/users/delete'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: user.id })
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete user');
+
+          setProfiles(prev => prev.filter(p => p.id !== user.id));
+          if (selectedUser?.id === user.id) {
+            setIsDetailOpen(false);
+            setSelectedUser(null);
+          }
+          toast.success(`User ${user.full_name || user.email} has been deleted.`);
+        } catch (err: any) {
+          toast.error(`Failed to delete user: ${err.message}`);
         }
       }
     );
@@ -539,13 +455,13 @@ export const StudentsTab = () => {
       `Reset registered hardware device for ${user.full_name || user.email}? This will permit them to bind a new device on their next sign-in.`,
       async () => {
         try {
-          authFetch(getApiUrl('/api/admin/device/reset'), {
+          const res = await authFetch(getApiUrl('/api/admin/device/reset'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ user_id: user.id })
-          }).catch(() => null);
-
-          await supabase.from('profiles').update({ device_uuid: null }).eq('id', user.id);
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) throw new Error(data.error || 'Failed to reset device');
 
           setProfiles(prev => prev.map(p => p.id === user.id ? { ...p, device_uuid: null } : p));
           if (selectedUser?.id === user.id) {

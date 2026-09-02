@@ -1,0 +1,682 @@
+[
+  {
+    "id": "0100b102-2fa3-4a17-90f3-dc65cf401cd2",
+    "subject": "Principles of Accounts",
+    "qText": "If a bad debt previously written off is subsequently repaid",
+    "opts": [
+      "the amount collected is recorded as an",
+      "income in the profit and loss account",
+      "income in the balance sheet",
+      "addition cash in the profit and loss account"
+    ],
+    "currentAnswer": "expense in the balance sheet",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"expense in the balance sheet\" is not present in options [\"the amount collected is recorded as an\", \"income in the profit and loss account\", \"income in the balance sheet\", \"addition cash in the profit and loss account\"]."
+  },
+  {
+    "id": "4868dbd1-4d77-40b3-90b4-23874c37936a",
+    "subject": "Principles of Accounts",
+    "qText": "Using the same stock data as the previous question and the LIFO inventory procedure (periodic basis)",
+    "opts": [
+      "the ending inventory cost is",
+      "N136",
+      "N176",
+      "N196"
+    ],
+    "currentAnswer": "N264",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"N264\" is not present in options [\"the ending inventory cost is\", \"N136\", \"N176\", \"N196\"]."
+  },
+  {
+    "id": "f38233e9-16b9-43eb-96ef-2bab934167e2",
+    "subject": "Principles of Accounts",
+    "qText": "The major difference between the receipt and payment account and the income and expenditure account is that while the former",
+    "opts": [
+      "is kept by the treasurer",
+      "the latter is not",
+      "deals with all receipts and payments in the year regardless of the time it relates to",
+      "the latter is for just that year"
+    ],
+    "currentAnswer": "is a T-account",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"is a T-account\" is not present in options [\"is kept by the treasurer\", \"the latter is not\", \"deals with all receipts and payments in the year regardless of the time it relates to\", \"the latter is for just that year\"]."
+  },
+  {
+    "id": "764bc19b-05ca-44dd-81b4-8a704b005881",
+    "subject": "Principles of Accounts",
+    "qText": "Using the same information as the previous question",
+    "opts": [
+      "what is the profit sharing ratio if it is based on capital contributed by Ada and Udo?",
+      "2:1",
+      "3:2",
+      "2:3"
+    ],
+    "currentAnswer": "1:2",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"1:2\" is not present in options [\"what is the profit sharing ratio if it is based on capital contributed by Ada and Udo?\", \"2:1\", \"3:2\", \"2:3\"]."
+  },
+  {
+    "id": "6babd0a3-062e-4f6b-879e-729a09922f3b",
+    "subject": "Physics",
+    "qText": "Which of the following statements are true about the spring balance and the chemical balance? I. Both are used to measure the mass of an object II. Either of them may be used to measure the weight of an object III. The spring balance works on the principle of Hooke's law while the chemical balance works on the principle of moments IV. A change in gravity changes the readings of a spring balance but not that of a chemical balance",
+    "opts": [
+      "I and IV",
+      "II and III",
+      "III and IV",
+      "I"
+    ],
+    "currentAnswer": "II",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"II\" is not present in options [\"I and IV\", \"II and III\", \"III and IV\", \"I\"]."
+  },
+  {
+    "id": "527f36a7-7b95-442b-96bb-035c87aad1c8",
+    "subject": "Physics",
+    "qText": "Which of the following types of motion are oscillatory? I. A diving board when used by a diver II. The motion of the balance wheel of a wrist watch III. The motion of the turn-table of a record player IV. The motion of the center of a ten kobo piece as it rolls down an inclined plane V. The motion of the needle of a D.C. ammeter into which a low A.C. current is passed.",
+    "opts": [
+      "I and II only",
+      "I",
+      "II and III",
+      "II"
+    ],
+    "currentAnswer": "III and IV",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"III and IV\" is not present in options [\"I and II only\", \"I\", \"II and III\", \"II\"]."
+  },
+  {
+    "id": "a980c946-f522-4c6e-b5b2-8df23f93bcbb",
+    "subject": "Physics",
+    "qText": "A convex mirror is used as a driving mirror because I. Its image is erect II. It has a large field of view III. It has a long focal length. Identify the CORRECT statement(s).",
+    "opts": [
+      "I and III only",
+      "I and II only",
+      "II and III only",
+      "I"
+    ],
+    "currentAnswer": "II and III only / I only",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"II and III only / I only\" is not present in options [\"I and III only\", \"I and II only\", \"II and III only\", \"I\"]."
+  },
+  {
+    "id": "27254008-7c06-474f-aab1-c7aab38eef64",
+    "subject": "Commerce",
+    "qText": "A bank statement is a document",
+    "opts": [
+      "ordering a bank to pay on demand a stated sum of money",
+      "containing records of receipts",
+      "payments and balance on an account",
+      "used for paying money into a bank account"
+    ],
+    "currentAnswer": "used for regular withdrawal of moeny from a savings account",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"used for regular withdrawal of moeny from a savings account\" is not present in options [\"ordering a bank to pay on demand a stated sum of money\", \"containing records of receipts\", \"payments and balance on an account\", \"used for paying money into a bank account\"]."
+  },
+  {
+    "id": "d590e380-2698-4620-a80d-f58db3ef3591",
+    "subject": "Physics",
+    "qText": "A narrow beam of white light can be split up into different colours by a glass prism. The correct explanation is that",
+    "opts": [
+      "White light is an electromagnetic wave",
+      "The prism has all the colours of the white light",
+      "White light has undergone total internal reflection in the prism",
+      "Different colours of white light travel with different speeds in glass. / White light consists of yellow"
+    ],
+    "currentAnswer": "green and red colours.",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"green and red colours.\" is not present in options [\"White light is an electromagnetic wave\", \"The prism has all the colours of the white light\", \"White light has undergone total internal reflection in the prism\", \"Different colours of white light travel with different speeds in glass. / White light consists of yellow\"]."
+  },
+  {
+    "id": "cabc312c-97f0-44ce-a5ef-73b08d931d08",
+    "subject": "Physics",
+    "qText": "Which of the graphs (Fig 3) represents the current-voltage (I-V) relationship for a cell with internal resistance?",
+    "opts": [
+      "A (straight line through origin",
+      "increasing)",
+      "B (line dropping then rising)",
+      "C (straight line decreasing from I-axis to V-axis)"
+    ],
+    "currentAnswer": "D (rising curve that plateaus) / E (curve that rises then falls)",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"D (rising curve that plateaus) / E (curve that rises then falls)\" is not present in options [\"A (straight line through origin\", \"increasing)\", \"B (line dropping then rising)\", \"C (straight line decreasing from I-axis to V-axis)\"]."
+  },
+  {
+    "id": "1cce8f51-0955-4b34-ace7-6144016d168d",
+    "subject": "Physics",
+    "qText": "On which of the following does the operation of a moving coil ammeter depend? I. Electromagnetic induction II. Force on a current-carrying conductor in a magnetic field III. Magnetic effect of an electric current",
+    "opts": [
+      "I only",
+      "II only",
+      "III only",
+      "II and III / I"
+    ],
+    "currentAnswer": "II and III",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"II and III\" is not present in options [\"I only\", \"II only\", \"III only\", \"II and III / I\"]."
+  },
+  {
+    "id": "fb92c375-7ab2-4c29-89aa-6ebde6ceb2d2",
+    "subject": "Physics",
+    "qText": "A ball attached to one end of a string moves anticlockwise around a circle whose centre is O. If the string suddenly breaks when the ball is at point P (at the 3 o'clock position), along which of the following paths will it move?",
+    "opts": [
+      "Straight line tangent",
+      "curving toward the circle (path A)",
+      "Straight line tangent",
+      "away from circle (path B)"
+    ],
+    "currentAnswer": "Straight line tangent upward",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"Straight line tangent upward\" is not present in options [\"Straight line tangent\", \"curving toward the circle (path A)\", \"Straight line tangent\", \"away from circle (path B)\"]."
+  },
+  {
+    "id": "8b7064e4-af5b-4940-bcaf-7c955f4b58a4",
+    "subject": "Physics",
+    "qText": "A pool of water appears to be 1.0m deep when viewed vertically from above. If the refractive index of water is 1.33",
+    "opts": [
+      "what is the actual depth of the pool?",
+      "0.75 m",
+      "1.013 m",
+      "1.330 m"
+    ],
+    "currentAnswer": "13300 m",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"13300 m\" is not present in options [\"what is the actual depth of the pool?\", \"0.75 m\", \"1.013 m\", \"1.330 m\"]."
+  },
+  {
+    "id": "16397e6a-504a-422e-a1ec-820d2f990469",
+    "subject": "Physics",
+    "qText": "Which of the following statements is TRUE of the photoelectric effect?",
+    "opts": [
+      "It cannot occur in liquids",
+      "The energy of the emitted electron is independent of the work function of the surface",
+      "The energy of the emitted electron depends on the wavelength of the incident light",
+      "The greater the intensity of the incident light"
+    ],
+    "currentAnswer": "the greater the energy of the emitted electron.",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"the greater the energy of the emitted electron.\" is not present in options [\"It cannot occur in liquids\", \"The energy of the emitted electron is independent of the work function of the surface\", \"The energy of the emitted electron depends on the wavelength of the incident light\", \"The greater the intensity of the incident light\"]."
+  },
+  {
+    "id": "fc4a8815-00b0-4e2a-a1fe-04d31d4b0b26",
+    "subject": "Physics",
+    "qText": "Two points on a velocity-time graph have coordinates (5s",
+    "opts": [
+      "10 m/s) and (20s",
+      "20 m/s). Calculate the mean acceleration between the two points.",
+      "0.67 m/s2",
+      "0.83 m/s2"
+    ],
+    "currentAnswer": "1.50 m/s2",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"1.50 m/s2\" is not present in options [\"10 m/s) and (20s\", \"20 m/s). Calculate the mean acceleration between the two points.\", \"0.67 m/s2\", \"0.83 m/s2\"]."
+  },
+  {
+    "id": "e57dd7b2-5236-40c1-ae2d-3dca1b3be205",
+    "subject": "Physics",
+    "qText": "A far sighted person cannot see objects that are less than 100cm away. If this person wants to read a book at 25cm",
+    "opts": [
+      "what type and focal length of lens does he need?",
+      "Convex, 20cm",
+      "Concave, 20cm",
+      "Convex, 33cm"
+    ],
+    "currentAnswer": "Concave, 33cm.",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"Concave, 33cm.\" is not present in options [\"what type and focal length of lens does he need?\", \"Convex, 20cm\", \"Concave, 20cm\", \"Convex, 33cm\"]."
+  },
+  {
+    "id": "d96e6a97-d1a0-4178-8144-00154eb0ae91",
+    "subject": "Principles of Accounts",
+    "qText": "Using the same rent information",
+    "opts": [
+      "what is the adjustment needed as at 31st December 1993?",
+      "debit rent account and credit adjustment account",
+      "debit prepayment account and credit rent account",
+      "debit rent account and credit prepayment account"
+    ],
+    "currentAnswer": "debit adjustment account and credit prepayment account",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"debit adjustment account and credit prepayment account\" is not present in options [\"what is the adjustment needed as at 31st December 1993?\", \"debit rent account and credit adjustment account\", \"debit prepayment account and credit rent account\", \"debit rent account and credit prepayment account\"]."
+  },
+  {
+    "id": "98fdb99e-c6dc-41a6-b8bd-41922e22c221",
+    "subject": "Principles of Accounts",
+    "qText": "Using the same balance sheet information",
+    "opts": [
+      "the acid test ratio in the company is",
+      "1:1",
+      "1:2",
+      "2:3"
+    ],
+    "currentAnswer": "3:2",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"3:2\" is not present in options [\"the acid test ratio in the company is\", \"1:1\", \"1:2\", \"2:3\"]."
+  },
+  {
+    "id": "e3b2f202-4ec1-45a8-b5ab-7a2088f50a46",
+    "subject": "Principles of Accounts",
+    "qText": "Using the same club information",
+    "opts": [
+      "accumulated fund on 1st January 1993 is",
+      "N8,570",
+      "N8,470",
+      "N7,850"
+    ],
+    "currentAnswer": "N7,520",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"N7,520\" is not present in options [\"accumulated fund on 1st January 1993 is\", \"N8,570\", \"N8,470\", \"N7,850\"]."
+  },
+  {
+    "id": "b5148e43-b0fe-4867-b408-8cc1b31cae2c",
+    "subject": "Principles of Accounts",
+    "qText": "Using the same partners' current account information",
+    "opts": [
+      "the correct closing balance of Lawal's current account is",
+      "N21,100 debit",
+      "N14,740 debit",
+      "N14,740 credit"
+    ],
+    "currentAnswer": "N540 credit",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"N540 credit\" is not present in options [\"the correct closing balance of Lawal's current account is\", \"N21,100 debit\", \"N14,740 debit\", \"N14,740 credit\"]."
+  },
+  {
+    "id": "40c2ba67-2947-4f15-ac74-b5584a82b7e2",
+    "subject": "Commerce",
+    "qText": "Under normal circumstance, a business enterprise can be ideally structured",
+    "opts": [
+      "by products",
+      "function or territories",
+      "around the personalities in the enterprise",
+      "on the rulling of the management"
+    ],
+    "currentAnswer": "on the basis of an order from stockholders",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"on the basis of an order from stockholders\" is not present in options [\"by products\", \"function or territories\", \"around the personalities in the enterprise\", \"on the rulling of the management\"]."
+  },
+  {
+    "id": "1a0c6e88-3946-491e-b9cc-75bc0cb0099a",
+    "subject": "Commerce",
+    "qText": "The main role of advertising is to",
+    "opts": [
+      "convince prospective buyers to buy",
+      "show the actual shape",
+      "form and colour of the products",
+      "inform people where to obtain goods and service"
+    ],
+    "currentAnswer": "capture the attention of people",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"capture the attention of people\" is not present in options [\"convince prospective buyers to buy\", \"show the actual shape\", \"form and colour of the products\", \"inform people where to obtain goods and service\"]."
+  },
+  {
+    "id": "6d53b752-3c8d-4fa0-ac0e-069428cf3e7f",
+    "subject": "Physics",
+    "qText": "A ship traveling towards a cliff receives the echo of its whistle after 3.5 seconds. A short while later, it receives the echo after 2.5 seconds. If the speed of sound in air under the prevailing conditions is 250 m/s, how much closer is the ship to the cliff?",
+    "opts": [
+      "10m",
+      "125m",
+      "175m",
+      "350m / 1"
+    ],
+    "currentAnswer": "000m",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"000m\" is not present in options [\"10m\", \"125m\", \"175m\", \"350m / 1\"]."
+  },
+  {
+    "id": "036a5e1b-465c-4fff-8ad9-de48a321ddc8",
+    "subject": "Physics",
+    "qText": "It is usual to transmit electric power at high voltage and low current. Which of the following are possible advantages of the method? I. Heat losses are reduced because the currents are small. II. Thin wires can be used because small currents are flowing. III. The power can flow faster because the voltage is high.",
+    "opts": [
+      "I only",
+      "I and II only",
+      "II and III only",
+      "I and III only / I"
+    ],
+    "currentAnswer": "II and III.",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"II and III.\" is not present in options [\"I only\", \"I and II only\", \"II and III only\", \"I and III only / I\"]."
+  },
+  {
+    "id": "0a2fd1bf-04e0-41e0-bc73-04ccc7fd15dc",
+    "subject": "Physics",
+    "qText": "Which of the following may be used to determine relative humidity in a physics laboratory? I. Manometer II. Wet-and-dry bulb hygrometer III. Hair hygrometer IV. A hydrometer",
+    "opts": [
+      "I only",
+      "II and III only",
+      "II only",
+      "III only / II"
+    ],
+    "currentAnswer": "III and IV only",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"III and IV only\" is not present in options [\"I only\", \"II and III only\", \"II only\", \"III only / II\"]."
+  },
+  {
+    "id": "1596d41d-7061-4269-bdeb-464a1d687ae3",
+    "subject": "Physics",
+    "qText": "A short bar magnet is placed in the earth's magnetic field as shown in Fig. 5, with points I, II and III marked around it. Which of the points is (are) possible position(s) of a neutral point?",
+    "opts": [
+      "I only",
+      "II only",
+      "III only",
+      "I and II / I"
+    ],
+    "currentAnswer": "II and III",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"II and III\" is not present in options [\"I only\", \"II only\", \"III only\", \"I and II / I\"]."
+  },
+  {
+    "id": "2f351a40-7606-4711-b68d-e898f3a6683a",
+    "subject": "Physics",
+    "qText": "Which of the following: I. alpha-particles II. Protons III. Neutrons IV. beta-particles, may be found in light nuclei?",
+    "opts": [
+      "I and II",
+      "I and III",
+      "II and IV",
+      "II and III / I"
+    ],
+    "currentAnswer": "II and III",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"II and III\" is not present in options [\"I and II\", \"I and III\", \"II and IV\", \"II and III / I\"]."
+  },
+  {
+    "id": "e02e12d5-aac4-4686-9e23-769cf2d8bd83",
+    "subject": "Physics",
+    "qText": "Which of the following graphs correctly illustrates the number of remaining atoms during a radioactive decay?",
+    "opts": [
+      "Graph A (increasing",
+      "concave)",
+      "Graph B (decreasing",
+      "one shape)"
+    ],
+    "currentAnswer": "Graph C (increasing",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"Graph C (increasing\" is not present in options [\"Graph A (increasing\", \"concave)\", \"Graph B (decreasing\", \"one shape)\"]."
+  },
+  {
+    "id": "dd109e4d-0786-44b0-9309-1556968e264b",
+    "subject": "Physics",
+    "qText": "Which of the following properties make the convex mirror useful as a driving mirror? I. The image is real II. The image is erect III. It has a wide field of view IV. The image is magnified",
+    "opts": [
+      "I, II and IV",
+      "I",
+      "II and III",
+      "II and III"
+    ],
+    "currentAnswer": "I and III.",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"I and III.\" is not present in options [\"I, II and IV\", \"I\", \"II and III\", \"II and III\"]."
+  },
+  {
+    "id": "bf3595d3-7181-4fb4-af0d-ea08151233ac",
+    "subject": "Biology",
+    "qText": "The vacuole of a plant cell is (1980)",
+    "opts": [
+      "a large empty space",
+      "smaller than that of an animal cell",
+      "filled with air",
+      "an ordinary vacuum"
+    ],
+    "currentAnswer": "option_e",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"option_e\" is not present in options [\"a large empty space\", \"smaller than that of an animal cell\", \"filled with air\", \"an ordinary vacuum\"]."
+  },
+  {
+    "id": "425b985d-9455-43ac-b127-0dda65c35eff",
+    "subject": "Biology",
+    "qText": "Where is energy produced in a cell? (1982)",
+    "opts": [
+      "Nucleus",
+      "Nucleolus",
+      "Lysosomes",
+      "Chloroplast"
+    ],
+    "currentAnswer": "option_e",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"option_e\" is not present in options [\"Nucleus\", \"Nucleolus\", \"Lysosomes\", \"Chloroplast\"]."
+  },
+  {
+    "id": "e00901a4-e197-4154-b413-c1043593b7b4",
+    "subject": "Biology",
+    "qText": "If an isolated living cell is left in distilled water for two hours, it is likely to (1983)",
+    "opts": [
+      "lose some of its water",
+      "lose all of its water to the surrounding water",
+      "reproduce by binary fission",
+      "become more turgid"
+    ],
+    "currentAnswer": "option_e",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"option_e\" is not present in options [\"lose some of its water\", \"lose all of its water to the surrounding water\", \"reproduce by binary fission\", \"become more turgid\"]."
+  },
+  {
+    "id": "2cffa309-6c1d-44af-80af-e844c7deb31c",
+    "subject": "Physics",
+    "qText": "Which of the following graphs of current against voltage illustrates Ohm's law?",
+    "opts": [
+      "Graph 1 (curve)",
+      "Graph 2 (curve",
+      "flat then rising)",
+      "Graph 3 (straight line through origin)"
+    ],
+    "currentAnswer": "Graph 4 (flat/step line)",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"Graph 4 (flat/step line)\" is not present in options [\"Graph 1 (curve)\", \"Graph 2 (curve\", \"flat then rising)\", \"Graph 3 (straight line through origin)\"]."
+  },
+  {
+    "id": "da0ecf82-c90e-4a8f-b002-f0194a58b911",
+    "subject": "Biology",
+    "qText": "One common feature of the fungi, algae, mosses and ferns is that they (1981)",
+    "opts": [
+      "are photosynthetic",
+      "show alternation of generation",
+      "reproduce by means of conjugation",
+      "can survive dry conditions"
+    ],
+    "currentAnswer": "option_e",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"option_e\" is not present in options [\"are photosynthetic\", \"show alternation of generation\", \"reproduce by means of conjugation\", \"can survive dry conditions\"]."
+  },
+  {
+    "id": "1ad0c0af-8950-4d62-b478-ca0054997e0f",
+    "subject": "Biology",
+    "qText": "Which of the following represents the evolutionary sequence in these plants? 1. Flowering plants, 2. Ferns, 3. Mosses, 4. Algae, 5. Conifers. (1983)",
+    "opts": [
+      "2→1→4→3→5",
+      "5→4→3→2→1",
+      "2→4→5→1→3",
+      "3→2→4→5→1"
+    ],
+    "currentAnswer": "option_e",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"option_e\" is not present in options [\"2→1→4→3→5\", \"5→4→3→2→1\", \"2→4→5→1→3\", \"3→2→4→5→1\"]."
+  },
+  {
+    "id": "d04abaf6-cdc8-4edf-8f8f-a7810d3f7933",
+    "subject": "Biology",
+    "qText": "Spirogyra and Mucor can be grouped together as Thallophyta because (1984)",
+    "opts": [
+      "they are unicellular organism",
+      "their spores could be dispersed by wind",
+      "they are capable of living independent lives",
+      "they reproduce sexually only"
+    ],
+    "currentAnswer": "option_e",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"option_e\" is not present in options [\"they are unicellular organism\", \"their spores could be dispersed by wind\", \"they are capable of living independent lives\", \"they reproduce sexually only\"]."
+  },
+  {
+    "id": "90463416-d5e0-49c0-b80d-a577656eece5",
+    "subject": "Biology",
+    "qText": "Bryophytes are different from flowering plants because they (1985)",
+    "opts": [
+      "live in moist habitats",
+      "are small plants",
+      "reproduce sexually and asexually",
+      "have small leaves"
+    ],
+    "currentAnswer": "option_e",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"option_e\" is not present in options [\"live in moist habitats\", \"are small plants\", \"reproduce sexually and asexually\", \"have small leaves\"]."
+  },
+  {
+    "id": "bb2234b8-76a7-4c19-96bd-5159cfaa4d22",
+    "subject": "Chemistry",
+    "qText": "500cm3 of oxygen was collected over water at 30 degrees C and 752mmHg pressure. What is the volume of dry oxygen at s.t.p? (vapour pressure of dry oxygen at 30 degrees C = 32mmHg)",
+    "opts": [
+      "475cm3",
+      "415cm3",
+      "586cm3",
+      "500cm3"
+    ],
+    "currentAnswer": "None (booklet notes no listed option matches the computed ~431cm3)",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"None (booklet notes no listed option matches the computed ~431cm3)\" is not present in options [\"475cm3\", \"415cm3\", \"586cm3\", \"500cm3\"]."
+  },
+  {
+    "id": "51250ea1-f4e2-414b-ac18-396b60004b05",
+    "subject": "Physics",
+    "qText": "Which of the following statements are TRUE about frictional force? I. It is always a disadvantage II. It is sometimes a disadvantage III. It always exists where there is a relative motion of two bodies that are in contact IV. It is sometimes very useful",
+    "opts": [
+      "I and III only",
+      "II",
+      "III and IV",
+      "I and II only"
+    ],
+    "currentAnswer": "I",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"I\" is not present in options [\"I and III only\", \"II\", \"III and IV\", \"I and II only\"]."
+  },
+  {
+    "id": "c97773d0-05d3-4db9-aa43-b2bb0ae3fb01",
+    "subject": "Physics",
+    "qText": "Which of the following levers (with different load/effort arm lengths of 3cm/1cm, 2cm/2cm, 1cm/3cm, 2cm/2cm) has the greatest mechanical advantage?",
+    "opts": [
+      "Lever 1 (3cm load arm",
+      "1cm effort arm)",
+      "Lever 2 (2cm/2cm)",
+      "Lever 3 (1cm load arm"
+    ],
+    "currentAnswer": "3cm effort arm)",
+    "matchingOption": "NONE",
+    "classification": "NEEDS HUMAN REVIEW",
+    "proposedNew": "NONE",
+    "confidence": "LOW",
+    "reason": "Current answer \"3cm effort arm)\" is not present in options [\"Lever 1 (3cm load arm\", \"1cm effort arm)\", \"Lever 2 (2cm/2cm)\", \"Lever 3 (1cm load arm\"]."
+  }
+]

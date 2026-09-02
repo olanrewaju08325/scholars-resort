@@ -81,31 +81,58 @@ const PracticeSession = () => {
   const isAnswered = !!selectedAns;
 
   // Next & Prev Question Navigation
-  const handleNext = useCallback(async () => {
-    if (currentIndex < questions.length - 1) {
+  const handleNext = useCallback(async (forceFinish = false) => {
+    if (currentIndex < questions.length - 1 && !forceFinish) {
       setSwipeDirection('left');
+
       setCurrentIndex(c => c + 1);
       setAiExplanation(null);
       setTimeSpent(0);
       if (state?.isTimeManagementMode) setTimeRemaining(40);
+      // For state?.mode === 'speed', we DO NOT reset the global timer.
+
     } else {
       // End of session
       sessionStorage.removeItem('practice_session_state');
       
+      let finalScore = score;
+      
       if (sessionId) {
-        await supabase.from('exam_sessions').update({
-          score,
-          total_questions: questions.length,
-          status: 'submitted',
-          submitted_at: new Date().toISOString()
-        }).eq('id', sessionId);
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch('/api/cbt/submit-session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+            body: JSON.stringify({
+              sessionId,
+              mode: state?.mode || 'practice',
+              answers: answersMap,
+              timeSpentSeconds: totalTime,
+              isPractice: true
+            })
+          });
+          const result = await res.json();
+          if (result.success) {
+            finalScore = result.score;
+          }
+        } catch (e) {
+          console.warn('Secure server submission failed, using local score.', e);
+          // Fallback to local score update
+          await supabase.from('practice_sessions').update({ // Fallback to exam_sessions if table was wrong earlier
+            score: finalScore,
+            total_questions: questions.length,
+            status: 'submitted',
+            submitted_at: new Date().toISOString()
+          }).eq('id', sessionId);
+        }
         
-        if (questions.length >= 5 || score > 0) { 
-          await recordStudyAction(profile?.id || '', 'practice');
+        if (questions.length >= 5 || finalScore > 0) {
+           await recordStudyAction(profile?.id || '', 'practice');
         }
       }
       
-      const percentageScore = questions.length > 0 ? (score / questions.length) * 100 : 0;
+      const percentageScore = questions.length > 0 ? (finalScore / questions.length) * 100 : 0;
+
       
       saveCompletedOfflineSession({
         id: crypto.randomUUID(),
@@ -250,9 +277,13 @@ const PracticeSession = () => {
       }
       setLoading(false);
 
+
       if (state.isTimeManagementMode) {
         setTimeRemaining(40); // 40 seconds per question
+      } else if (state.mode === 'speed') {
+        setTimeRemaining(600); // 10 minutes global timer
       }
+
     };
 
     initPractice();
@@ -266,15 +297,22 @@ const PracticeSession = () => {
       setTimeSpent(prev => prev + 1);
       setTotalTime(prev => prev + 1);
       
-      if (state?.isTimeManagementMode && timeRemaining !== null) {
+
+      if ((state?.isTimeManagementMode || state?.mode === 'speed') && timeRemaining !== null) {
         setTimeRemaining(prev => {
           if (prev && prev <= 1) {
-            handleTimeUp();
+            if (state?.mode === 'speed') {
+               // Global time up! Force submission
+               handleNext(true); // force finish
+            } else {
+               handleTimeUp();
+            }
             return 0;
           }
           return prev ? prev - 1 : 0;
         });
       }
+
     }, 1000);
 
     return () => {
@@ -306,15 +344,47 @@ const PracticeSession = () => {
 
   const handleSelect = async (option: string) => {
     if (!currentQ || answersMap[currentQ.id]) return;
-
-    const isCorrect = option === currentQ.correct_answer;
     
+    // Optimistic UI update (mark as answered, loading state handled implicitly by quick fetch)
     setAnswersMap(prev => ({ ...prev, [currentQ.id]: option }));
+    
+    let isCorrect = false;
+    let actualCorrectAnswer = currentQ.correct_answer;
+    
+    try {
+      if (actualCorrectAnswer) {
+        // We are offline, or the question object already has it (fallback)
+        isCorrect = option === actualCorrectAnswer;
+      } else {
+        // Secure server-side check
+        const { data: { session } } = await supabase.auth.getSession();
+        const res = await fetch('/api/cbt/check-answer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
+          body: JSON.stringify({ questionId: currentQ.id, selectedAnswer: option })
+        });
+        const result = await res.json();
+        if (result.success) {
+          isCorrect = result.isCorrect;
+          actualCorrectAnswer = result.correctAnswer;
+          currentQ.correct_answer = actualCorrectAnswer; // mutate for immediate UI use
+          if (result.explanation) {
+             currentQ.explanation = result.explanation;
+          }
+        } else {
+          throw new Error(result.error);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to securely check answer', err);
+      // Fallback: If network fails, and we don't have correct_answer, we can't reliably show correctness
+      // But we must fail gracefully.
+    }
+    
     setCorrectAnswersMap(prev => ({ ...prev, [currentQ.id]: isCorrect }));
-
     if (isCorrect) setScore(s => s + 1);
 
-    // Save answer to DB
+    // Save answer to DB (optimistic local save, authoritative final score will be recalculated on submit anyway)
     if (sessionId) {
       try {
         await supabase.from('session_answers').insert({
@@ -323,14 +393,13 @@ const PracticeSession = () => {
           question_id: currentQ.id,
           selected_answer: option,
           is_correct: isCorrect,
-          time_spent_secs: timeSpent
+          time_spent_seconds: timeSpent
         });
-      } catch (ansErr) {
-        console.warn('Notice: PracticeSession session_answers insert notice:', ansErr);
+      } catch (err) {
+        console.warn('Silent insert error:', err);
       }
     }
-
-    // Automatically trigger AI explanation
+    
     triggerAIExplanation(isCorrect, option);
   };
 
@@ -396,7 +465,7 @@ const PracticeSession = () => {
     return (
       <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
         <h2 className="text-2xl font-bold mb-4 font-display">No Questions Found</h2>
-        <p className="text-muted-foreground mb-8 text-center max-w-md">We couldn't find active questions matching this exact criteria. Try adjusting your filters.</p>
+        <p className="text-muted-foreground mb-8 text-center max-w-md">No questions are currently available for this topic or selection.</p>
         <Button onClick={() => navigate('/practice')}>Return to Practice Setup</Button>
       </div>
     );
@@ -468,13 +537,17 @@ const PracticeSession = () => {
         </div>
         
         <div className="flex items-center gap-2 md:gap-3">
-          {state?.isTimeManagementMode && (
+
+          {(state?.isTimeManagementMode || state?.mode === 'speed') && (
              <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono font-bold text-xs md:text-sm ${
-               (timeRemaining || 0) <= 10 ? 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse' : 'bg-muted border-border'
+               (timeRemaining || 0) <= 60 && state?.mode === 'speed' ? 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse' : 
+               (timeRemaining || 0) <= 10 && state?.isTimeManagementMode ? 'bg-red-500/10 text-red-500 border-red-500/30 animate-pulse' : 'bg-muted border-border'
              }`}>
-               <Clock className="w-3.5 h-3.5" /> 00:{timeRemaining?.toString().padStart(2, '0')}
+               <Clock className="w-3.5 h-3.5" /> 
+               {state?.mode === 'speed' ? `${Math.floor((timeRemaining || 0) / 60).toString().padStart(2, '0')}:${((timeRemaining || 0) % 60).toString().padStart(2, '0')}` : `00:${timeRemaining?.toString().padStart(2, '0')}`}
              </div>
           )}
+
 
           <Button
             variant="outline"

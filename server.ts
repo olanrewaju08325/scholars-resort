@@ -783,6 +783,122 @@ app.post('/api/exam-session/start', async (req, res) => {
   }
 });
 
+
+
+// API Route: Secure CBT Check Answer (For Practice Modes)
+app.post('/api/cbt/check-answer', verifyUserToken, async (req, res) => {
+  const { questionId, selectedAnswer } = req.body;
+  if (!questionId) return res.status(400).json({ success: false, error: 'questionId is required' });
+
+  try {
+    const { data: q, error } = await supabase
+      .from('questions')
+      .select('correct_answer, explanation')
+      .eq('id', questionId)
+      .single();
+      
+    if (error || !q) throw new Error('Question not found');
+    
+    const isCorrect = q.correct_answer === selectedAnswer;
+    
+    return res.json({
+      success: true,
+      isCorrect,
+      correctAnswer: q.correct_answer,
+      explanation: q.explanation
+    });
+  } catch (err: any) {
+    console.error('[API /api/cbt/check-answer Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Secure CBT Session Submission
+app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
+  const { sessionId, mode, answers, timeSpentSeconds, subjectId, isPractice } = req.body;
+  const userId = (req as any).user.id;
+
+  if (!answers || typeof answers !== 'object') {
+    return res.status(400).json({ success: false, error: 'Invalid answers payload' });
+  }
+
+  try {
+    const questionIds = Object.keys(answers);
+    let correctAnswersMap: Record<string, string> = {};
+    
+    if (questionIds.length > 0) {
+      // Securely fetch correct answers from the database (bypassing RLS if needed, though server has admin privileges)
+      const { data: questions, error } = await supabase
+        .from('questions')
+        .select('id, correct_answer')
+        .in('id', questionIds);
+        
+      if (error) throw error;
+      
+      questions.forEach(q => {
+        correctAnswersMap[q.id] = q.correct_answer;
+      });
+    }
+
+    let score = 0;
+    const totalQuestions = questionIds.length;
+    const sessionAnswersInsert = [];
+
+    for (const qId of questionIds) {
+      const studentAns = answers[qId];
+      const correctAns = correctAnswersMap[qId];
+      const isCorrect = studentAns === correctAns;
+      
+      if (isCorrect) score++;
+
+      sessionAnswersInsert.push({
+        user_id: userId,
+        [isPractice ? 'practice_session_id' : 'exam_session_id']: sessionId || undefined,
+        question_id: qId,
+        selected_answer: studentAns,
+        is_correct: isCorrect,
+        time_spent_seconds: Math.floor((timeSpentSeconds || 0) / (totalQuestions || 1))
+      });
+    }
+
+    // Persist answers securely on the server
+    if (sessionAnswersInsert.length > 0) {
+      const { error: insertError } = await supabase.from('session_answers').insert(sessionAnswersInsert);
+      if (insertError) {
+        console.warn('[Secure Scoring] Error saving session answers:', insertError);
+      }
+    }
+
+    // Update session status and score
+    if (sessionId) {
+      const table = isPractice ? 'practice_sessions' : 'exam_sessions';
+      const { error: updateError } = await supabase.from(table).update({
+        status: 'completed',
+        score: score,
+        total_questions: totalQuestions,
+        submitted_at: new Date().toISOString(),
+        is_ai_tutor_locked: false
+      }).eq('id', sessionId);
+      
+      if (updateError) console.warn('[Secure Scoring] Error updating session:', updateError);
+    }
+
+    return res.json({
+      success: true,
+      score,
+      totalQuestions,
+      results: Object.keys(answers).map(qId => ({
+        id: qId,
+        is_correct: answers[qId] === correctAnswersMap[qId],
+        correct_answer: correctAnswersMap[qId]
+      }))
+    });
+  } catch (err: any) {
+    console.error('[API /api/cbt/submit-session Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // API Route: Exam Session Handler - End / Submit Exam (Unlock AI Tutor)
 app.post('/api/exam-session/end', async (req, res) => {
   const { sessionId, userId, status, score, totalQuestions } = req.body;

@@ -1,0 +1,3791 @@
+[
+  {
+    "question_id": "58105285-b774-4941-a3a8-b9a919d6945a",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4d2c4288-9d74-4e15-88e4-1868a81e91f0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4e919472-4544-41be-9157-0f6c0593f8e8",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7eb56d8a-f546-4d55-a550-943163f96e1a",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "ac729837-011c-46fb-8670-0715a92d9b35",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7fbd6f03-fe52-4cce-970c-cf0eaf5ae022",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "aa727ebb-04c2-4121-af18-caaadb35a3ec",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "93791f68-ca95-4719-a3bb-615596c25e1e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "e4393d29-bbe2-4f75-a6cf-2b7fcc9f328f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d968ca22-8011-4669-a172-d7c4ddd8518d",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "a7716805-55ab-4915-be3f-41135e26cc1b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "64fac2eb-c40b-4ac8-aa21-dcb4fc53fd5e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "9756bea6-02f0-4f67-98f9-8bc8be578d21",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "0be5d216-5cb2-4143-9b2d-20e0ce70522c",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "fd49bcb4-a78d-4414-97ff-bb4c5af2b057",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "3c9f8efd-b3a7-4034-90a9-d8df757b6c6b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "466032e5-9e60-4be3-865d-1829e7b04e9e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "8b1993da-6080-415e-8f87-23e98f17e0dd",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "ffbc658d-0cf8-478c-a1aa-cbe7152ce2d3",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "f1970e42-eecd-4260-a946-3a2369b74321",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "46428f75-8a40-4107-99b5-49c90e39c65e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "af0634e7-6cb5-40e3-8445-5ac594e50a9e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d811d06c-6f4a-4651-95e6-b318dd64558e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "fc4a8815-00b0-4e2a-a1fe-04d31d4b0b26",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "54687ba8-2ad6-4205-98d4-cd8920f9e9fa",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4bb3ee3b-785b-4f03-8555-98760842a415",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "022ba15c-9f0a-4a67-8277-662a32c0cfc3",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "b5c507c9-55a9-4cf0-8996-e73502e4cb8b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "74f0465e-6023-4ef5-ac17-a8f55f723363",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d17387aa-b61c-4da4-91da-f127331955ba",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "7c3f8b60-aff0-46fd-9942-d4af8d0006de",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "364393f3-a9f8-4d8e-aae5-26ba9e69f7b1",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "959b0f76-22f5-46f9-b398-72895c459ecf",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f3eebc99-9c0b-4ef8-bb6d-6bb9bd380f33",
+    "topic_name": "Calculus",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains calculus operators/keywords (dy/dx, differentiation, integral)."
+  },
+  {
+    "question_id": "41be6234-4b46-400d-a16c-bf205a9209a5",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "b94721fc-8aa7-4428-884a-8101aab9a412",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "e16a25e9-3d88-4fc0-84e2-29d910547967",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "6bec2553-8ce3-4e38-bd3c-8d9a15747b2c",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "0e24d5d0-2414-4e07-8410-e74544d2d9ea",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "c833d5d6-0827-4b1c-90a6-0665e0e4c44c",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "65672d1e-a839-4ca7-a55d-9218863e1c0c",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "2991d8b8-51ad-4994-bb8e-1c0e547301f1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "92187575-1ce0-4c8f-b454-42e33770152c",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "4e82d4fe-3170-492c-a179-17667f2e8eb8",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "bdf00628-49f2-4250-956d-709e664270a1",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "7799533c-4a73-4bb6-8757-25d9499ee53e",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "30f5908e-5781-49b5-8c36-90d6ba454efd",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "75259fc5-554f-46a9-8d72-8e36cb53e40f",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "2d57e2ad-0f0c-4791-8cc4-d8a9caffeb56",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "5b9929c1-b52d-4305-8a16-1adbfc005df3",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "33e6fcf5-de65-471a-8411-f3d8c50dff1f",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "285324a5-d044-4abc-995f-5038a5a27622",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "7e34042e-3834-46af-97c5-fd5626899c98",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "b7b91caf-88e1-4f70-8238-2007c3f74253",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "7f84076c-09d1-4213-a4b1-c7a020ef7b85",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "96c69c58-b559-4f31-a267-44ab16d80418",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "690969fa-0166-4bdc-b8cb-70562e9ecab7",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "9859877c-ba98-40e1-9618-daf98aa3dcc9",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "6eae6eb5-77fd-4a3e-a273-6ae7f2ab0d96",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "f8b7a5e7-738e-4df6-bd6d-6930658f6028",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "24d00a4e-7f76-4e43-9357-c734902b6ad1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "ccface4f-2c75-4589-998a-a05736af7a77",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "d159582f-46ef-4700-a25f-d4a14e744206",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "cd3ba2bd-01ee-4841-9faf-235d2c570d94",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "a3f04a72-9948-4e07-b741-999995c69788",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "dd4f4145-c605-4978-94d6-dcde3b387218",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "f6792d15-98e3-4146-90d6-b54a720c282d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "c4e1f12d-ce2b-430e-84a2-46c7814eb53e",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "a66e7e5c-aca7-48bc-b2ee-e5366c95fa57",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "a1319534-aa95-447e-b6f3-aaaf81428e92",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "e7b2b5f5-4b7f-45ac-b394-57b8304c5482",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "01a9aecc-4162-462d-87e7-bebf1b2a3d1e",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "f30ebe07-512a-45de-87a2-608be0fe60ac",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "198da006-9c02-48f0-b0b0-8816c335fdef",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "3b14ec60-46c6-4a80-be7d-0d566de1bf2d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "be10e649-e567-490a-9d57-51ae8d6f591f",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "9ffad3e6-2f31-4333-8222-3888baf0376b",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "75fef59c-b74d-4d36-9849-4ce2f6307cca",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "cc9d1f76-3c95-477a-a3ef-d16b07619df2",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "ad62f4d0-cdd7-4942-b610-6816915ad900",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "b7e726c0-3823-4651-9b3d-cbbc9a8a143f",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "0cbfa81c-5874-4e00-9531-a5d1b777b7b2",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "c27393c4-d8e7-4788-8feb-56a9c10ea1dd",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "9102a8c2-a777-4127-8c43-dddd271c4b69",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "5f7fe74c-42bb-4370-b11b-07bfc4901eb6",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "a99d4b7f-fef8-4ae1-ae02-529755f71bf1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "fae30116-740b-4faa-a1ce-cdfd750ef84d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "c61b8ee3-a4af-4e2e-a217-58b5b9ae1f93",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "77846427-6713-46d6-bb29-ba4347095d1b",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "0333e8bf-cc58-455c-979a-de6e976208de",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "a5619f7c-5741-4a07-9bb6-af3fd5444c21",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "a6d0925d-d5ce-42a1-bfd1-cd0284a02642",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "29e358f1-355c-4809-b914-f49f44bc272d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "ac199108-b78f-4132-9bf3-2f586e9395d8",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "3eea9908-ce22-4e8b-91ce-2ee2870616c5",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "748c8aa3-4820-4c3b-8542-8b7ccfe894e9",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "61e59299-fe29-440f-99f8-6bdcea9c967f",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "e8459461-bf34-4fa0-b543-151021adb251",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "1c4707b4-64c6-4a1d-a27c-2cd87ea390b8",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "8a0dc7dd-21c8-4e23-9058-ea72de284c61",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "2bf514aa-f258-452e-a884-b94f8fac28d6",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "ada027c7-c1df-489e-9801-54f090f3fece",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "dde8ad2f-38c0-42f8-b2c1-09f9a4b93007",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "2e609a31-d4db-4e89-b2ff-db1806e59d0b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7c521c71-2a08-4fc1-b701-31b6836b6cf8",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "de2c7da9-cb26-43bf-9e67-e64e84fbc5d2",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d483f449-5410-45cc-9da5-fc1f8dc5d71f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "dbee085c-a236-4846-a9b7-6a4ca810eebf",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "11940d20-1dc5-4904-97f6-8eb4c49291ed",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "473d7867-a740-4bda-ab30-b3bc64fdd5f6",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "96b93402-93cc-4cc0-8853-03ee3df1f05f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "1ddf8c65-fb09-471f-9d31-211591c3271c",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4ec0039d-f04f-455b-adec-046a02314de5",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "ca4cfb59-fd92-4c96-a0bb-4e308a640205",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "1cf3883f-fd24-4da6-bf3a-6199bc8eb17b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "a467ea2c-9798-45a5-9b9e-91b951797790",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "12db6ac3-6ad8-4d3b-a1ad-18ecad49164d",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "8067638f-de1a-4b5a-baf8-96e2f60a8c3e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5b870f48-f32d-4dc3-9c61-84bd7cb70679",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "48415520-bf31-435d-a086-ebe99c8af38d",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "322b9165-8df5-4f16-af6e-16e259017097",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "bfe0dee3-83c4-400d-a46e-3ae73751885e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7ed1548e-cc34-49b3-a559-78db9685881d",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "27f959c1-d45d-42f9-b22a-92d04789bf0f",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "a77103da-f516-42dc-9b4b-227349af4b11",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "53d639a3-3dc0-45c5-a09f-04d6cfa4850d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "3410b2d2-066f-4692-8d67-efc6d0e76f2a",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "36e3044a-224a-46f5-ac7f-fb9385978641",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "37cb106a-2b61-433e-8e8d-3d5c5e8e94e9",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "754d4cbf-b1eb-4a65-a6e0-96bfb35954d1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "9d1bc495-a6a4-4667-a82e-26e9ce9fb330",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "ea0a49ad-bd9a-40ad-8e88-7a6dd9bcda6c",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "c3aac984-9f73-4291-8a2d-a23919613f6d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "5698b06e-b291-4009-a1a2-3b7b465ec4e6",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "2fcc032d-56a1-4aa9-8664-127999f670d7",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "0144f276-2f6d-4355-b7d4-38296efb654f",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "a6266174-2872-4f89-81b1-a77c8a4ed94a",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "1f8e8681-fc41-40ce-8b82-e862217a7369",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "4889f9c7-a44a-4319-bd5f-cc83733c6fc5",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "e60df5db-e2f2-4b5a-86c6-e0273c5fef80",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "1fbc2965-636d-4604-9d36-d7cf5fa78102",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "9c9e6cd9-e5af-47dc-8a8d-0e0c36e59915",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "e3b5e85a-25ff-4fb5-b8e5-6f60ecef7fbb",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "bf0322d9-196c-43ba-b9e3-5621d58901ed",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "6f0d37e5-dd88-4aee-8300-a64616866472",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "f9e91e30-f121-46f4-9cbb-7fb5517b716e",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "f8c5f043-e8ee-4a85-9d30-d0ba68e206f7",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "8770d985-d1a8-46bc-bed4-5ac925951533",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "1c866e5d-6ae6-4701-ae1f-7afdddcaebe6",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "66da7877-90bb-4e93-8f7b-e6e188229898",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "927529a3-909f-42d4-9142-eaf9687e082e",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "847a6d5f-1a7a-4005-b1cb-e21473c5e548",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "18afb664-16f8-4839-8d98-2a2760e9347b",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "de7fe7d7-431c-4560-bf3c-d03043bd35a3",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "44013f45-23fd-486f-9a48-9c7fe7ca4970",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "7c80d891-5f60-49f6-b54d-b87166845862",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "b9ecfa83-2dc8-45ab-bf65-1d8e6114bdc4",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "d1fe38e4-b8a4-40a0-b4af-d3c582565a1c",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "ff247b3f-2854-4fe7-9c51-15f189451af9",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "691812e4-a7e7-4b6f-8474-093a35425869",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "d4977edd-ebcf-4e8f-b21a-7c3ebe9ad4e9",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "6a1ff204-d72a-4bd6-8026-4f965665b1f3",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "582560f0-8406-483d-96da-79cb7977f16c",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "2fae6310-6640-4704-803b-77faf8395a1e",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "2a2606f3-0802-45f2-8701-3aa1c66f86be",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "f0f45194-1976-473d-8f1f-2d830128b8e6",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "684e1edf-c914-4d6e-a1ea-bc8c8a8009c9",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "3b89e611-45b3-4e41-bb98-324b2f843d04",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "30838034-5f86-4512-8b30-11a5550a5ad0",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "ef8704cc-137a-4848-bd55-e3bfe76aeb48",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "fbe367d0-e038-48d9-a8ad-1940436aca41",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "ad4b71c1-c266-4253-a53b-6d68e00088c1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "11acd5ea-6e84-45d5-938a-ccbdc459ff4f",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "5a68d984-51d1-48e2-8108-24315d078521",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "478f8ae8-794f-40f2-865c-5da4ba1322fc",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "0c0b60f2-5d8a-44d7-b605-1774d9c57dfb",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "59c59324-b9a2-4ec8-bbba-dd3b14bb2535",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "0b0f1cc6-f2c8-4e16-a724-399139bf3679",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "b32048aa-300f-4d4e-bdc5-642e5537bdc4",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "671db365-61b7-4cdd-9b85-d4491b3abcf5",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "8bc05b55-651f-4288-a67c-2b04bc98cdb3",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "f9d661fe-770a-44d4-a62b-6096c168e983",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "6db91b84-26f5-401a-b4f8-1c3b47e722a5",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "f3bc3aa4-0f41-45ee-b833-ad000453280a",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "d9579202-6b14-4b4f-aa4e-6ee3e41214de",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "3735dda0-803e-481f-9321-3fbdf349399a",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "65ca91d0-ee6f-4ef6-8461-ba64d3d65f51",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "51474b69-fafa-4590-b109-14a522b7cb32",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "9e8e0b2f-0bfd-4087-89ae-251c04bd660f",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "76a965ec-769b-4814-a386-670f5b7099ac",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "075ff0a0-fdf5-4ff1-ba8b-f1247fa9e231",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "c13f7276-9a50-462e-ad55-21681db8a3fb",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "7142ef22-b7c4-4f6f-baa3-2c2d3db11109",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "75419157-e326-4a60-9ffb-cc0dc4c05bd8",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "78d36955-3391-4774-817a-e904a6b6707b",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "d72291a0-c27b-432a-aa92-d01a88cdaa0a",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "b1260ce8-ed33-430f-846a-240429583d14",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "809a9a29-45f6-4176-82e1-7d7284508c40",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "223ad506-d49f-44ea-ad0e-0a19b176bca2",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "b4aff05b-1318-4a8d-abd9-b0297b733a32",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "ae91aed2-7217-46ec-a938-a42570718133",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "1ee4ebda-95e6-4ed9-bdf7-5e1233690e8b",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "8c004418-6f96-4171-9afc-17abb9d858c0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "1c23fba9-1dea-40ac-98fa-6e8a2e6b30e6",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "da6c5d00-1d6d-4bea-83ff-e1279a258800",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "9cc44031-d6e0-428c-a74f-b0fb062d14e4",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "c6a04bff-d608-438d-aa7d-42326b2adbd3",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5458aad3-ecf2-45d4-b498-b037b1511e5e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "3ab37c9f-fb4a-452f-a77f-8588bbd6a045",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2743ccd4-6fc3-4826-a384-96312e20f61f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "46e22a34-1954-44d3-a21f-45cd039f903b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5db2908a-d25e-4bb2-bfbc-87b6b19ac40f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "bf4e1fad-040b-4c42-ae13-befc62f9fed4",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "bd74462d-377e-49b3-ae65-11a24d1a958c",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "847ed889-3a98-47e4-abc0-4519684c9739",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7a627d56-0ea2-4d62-9898-05b0daffc5ae",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "af84b702-ce15-422f-b435-358d37aaca97",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2c0ca280-50ee-46d9-8e85-a6409cac5da0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d9afde77-8699-4ddb-b3aa-fdcef1b37b81",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "52492a03-88e9-4100-9a67-5d536a3f0d82",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "b397b9b3-aab8-4ab7-bb3d-6f28ebaa2863",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2d85d571-51ba-4d75-8de2-84ea2bb4384c",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "38d3dcc1-40b7-48a4-b9e9-cfe89b8192e3",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4b053613-4214-402d-9a5a-084f75ba7fd0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "13861150-a36a-48c6-b11a-56a4a8ddca18",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "bb4eb049-0bf6-4df4-915c-a4a78a299aa3",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "e7ed4c7e-0795-4aa1-8a02-75d74f38fb0a",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "3372e53d-c551-44be-94ad-bef15df354e6",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7b52a9a8-22d4-4e69-90c3-506b7d2204d4",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "3a0edc44-18ea-415d-8765-0c2bb0c35a62",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "77aa6092-b022-45c7-8597-60140dba1822",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "675d588c-3e13-4f10-8c5d-c02a8d29ec40",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "ecfd0807-cf14-4e93-a841-0b76fc34cd41",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5218f111-06a4-4ca1-ba13-73a829c1ffae",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d06bf049-4ebf-46d2-a7c7-1d6933f2363c",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "70719ff1-2fa9-4752-93bf-9e3fd448d22e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "80cbb187-c09b-4887-8417-4edf21d69f06",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d7c34751-cfa9-41f2-969c-f984139b4e98",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7e05cf36-5b51-483b-8620-148379ae7890",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "8cfaa6a0-7610-42f9-b200-d5603cf60eae",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "0f3be923-79ec-4cf2-a666-8611e2d5fcf0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "1b84437f-6e2e-42eb-9714-d689d035f41e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5767fc2b-b672-45c5-8ac1-466d598c3c30",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "09b5b8c1-b110-47fc-b1c1-b43993e21f07",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "54054798-c3ef-49d4-adcb-6d6b34e0d5c0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "75f8b329-9ec8-4072-a3df-755f654f92d5",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "a62618f1-017e-46ad-aee1-d64f72f343d9",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "1a9080a8-db5d-471e-ab56-5b1ed857ca8f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "065b3aea-b8b3-4fd1-87a0-fd093d9ee208",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2b2d970a-213a-4785-930a-5d769581a80b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "58022390-a043-47f7-bf03-5133ff6cd4bb",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "fc268dea-c3c7-41c1-b963-a2e764e118ed",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "3c2a2a23-5f85-47d1-97f7-41b37ea28f57",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "f7731aeb-db4f-4187-9693-86d267e00a8e",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7d27503e-274c-4445-9091-c383197159dc",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "68ffcab0-99c3-4927-b38a-7d53e8eaf82a",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "ec7ae94e-eca7-4a08-9c5e-ae23ab23206f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "77f78586-afdd-4332-8a27-f31a1d20a697",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "a74ec1ed-c81e-45fb-9501-08d1455a2d05",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "11120894-0a17-498a-973a-4133bc6b7db9",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2f1a43cd-0af5-45c5-be2e-6b02b4836d80",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2ab5c2b8-b7e3-4fb5-b699-e613d9813831",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "9279cec2-246a-4a52-9796-301b3c8be8b6",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2809c1a2-0dc5-4182-87a2-4cea667d7056",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "c1c1ef2f-ec4a-49d8-a643-016825a82dcc",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5d0eea0e-edab-4039-9b5e-55a3cdde5315",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "bab0bcaa-3eef-4161-a7e1-d2243b8fc429",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "a7c9f288-7c0a-4daf-b566-83f24079e326",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7559e4ba-25ed-417a-8b47-b072263ef75f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "c7c0fa3e-13ce-4460-8b09-a3a63d5a8ac6",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d46f61f5-a4f9-4ed9-807a-bcdfda6b7fc0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "2283f2fd-20f6-4c61-90c8-e04f8a83bff0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "02266a3e-38de-4ebe-b53a-40467d938224",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "805bc509-e580-400f-b1c3-30ac32e44ad7",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "9c0db1df-2508-4258-aa99-2b5a784e862b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "f3fc0ba2-c72a-4c67-9008-2183c7fc45a0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "a377109d-b8d5-4d3b-916c-341baa9e21ca",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5369345a-3d16-4261-84c1-5f1d7286c236",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "0a77d1ab-1862-4e2f-8377-df0488c23d76",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "a245405f-a41a-4baf-b883-3359465ceff3",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "f1b66227-783e-476e-8e7a-3643513bede6",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "aea4e75f-5796-41c1-928e-5ca47b1ff391",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "cf64445e-638e-466f-accb-9c22762b4d0a",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "3392c357-6a6b-49cf-bc58-4f15135cdc56",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "95fb1cd7-47f4-4b5c-94af-a94a478aa4e6",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "04fc7168-0e82-44be-b364-04e684e70210",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "0f8d05c8-040f-4094-9a2e-63c3c6e4916f",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "33406f18-68fb-47a3-9bd5-60fd64714973",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "60acfadb-0ee6-4cb2-b523-7b37a155f993",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "e23096c8-3faf-4ca3-a023-02c334e3e968",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "3a04c3dc-2ac3-4e59-af76-aa8b44262c84",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "c10deddd-4274-4d1c-ab94-ff5894f0b241",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "a6b410bf-c135-4808-babd-409976a78eff",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "b55c36d6-07a2-452b-9a9a-5e7a1cbfe7c1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "851fc681-ecd3-449d-b22b-72e2a25c1694",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "57f8ef2d-f7ca-48d4-b7a9-5b8ce8b10e2d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "a79873f8-bfe6-4b18-8c55-2f1b370f6985",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "cd593344-d231-43b9-a90a-2873f49ee964",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "2e40df49-c2f2-430f-bfee-ebe9a5284954",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "133b51e7-912f-4dc8-9160-f4d3c7e0ed2b",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "8e89e413-21b7-4099-9683-fa0443b4cadf",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "26ed8d2c-e164-4a29-a7da-a7cb37a9d8b6",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "35d1d243-8749-4d94-88b8-e72b5cfda67b",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "4479ede8-ecd5-45d3-838a-fe13635749a2",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "1a398a76-e3ca-4d03-ba57-66f7c52ea210",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "90263c90-c129-42e1-bf08-88b779a51139",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "db0f2894-8622-4151-93aa-c9946a7de0d1",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "ef44c220-c541-4711-9b4b-22605999c76b",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "400822a0-51e4-47f2-8928-e44388313cbe",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "e014d08a-c2e4-409c-b58d-65b1949ba1c4",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "d17d8708-98fd-4061-9220-6c8401779fe7",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "e68e2cd7-72bf-4042-af10-d3273dcb7250",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "cd4cd971-47d5-49fe-9f52-d803608221cd",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "6c55f46c-9d66-4a39-a0d1-d836be6b6cb2",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "e3a6d71e-adf6-47a1-9323-d6e92e195030",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "ca0f33c8-346e-4064-ae41-d9f2d02793d2",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "5802bff9-997d-4c65-a300-ee4124396ec8",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "f64e21cd-6e0b-4c26-9de8-d6e69371c19b",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "764d04fb-5daa-442b-8caf-a4256c698998",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "c6660058-d704-4c1f-8e93-2ba97ed7afc1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "c555725c-2570-499e-a3fc-8741b8078c91",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "7e794c7c-65f1-4797-a533-ebe82a10a0bd",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "c9000f4d-9244-4113-85cb-78bbd0b69447",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "201e245a-56fb-4a45-a817-c85f4730332c",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "aaafebd6-4c87-472e-9142-413ed4ca1260",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "cde4c41d-efab-40fc-b220-f1b53e56b216",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "8774619f-3970-464f-9154-a07767663785",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "d14088cb-aa0e-42ad-991c-9a787fa233da",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "c91edaef-535f-4f06-93a8-9ca18c42d268",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "e0930746-6a30-44a8-8db1-497c77f01bae",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "fe2e83c2-0dd4-4bb6-9181-4f321362d2a2",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "557b57cc-d433-44ac-9b3a-149f4b0a6b43",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "c05bebe6-56a2-483a-bbb0-d171b1aadfef",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "3c7bb748-87e6-49ca-803e-2bbc1bdfa9e9",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "bac386c0-0e5a-4ac8-80aa-88c954bb5865",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "813dfd8e-6e18-43a0-a981-d0186beb0837",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "bf61c080-58da-48ac-985f-f9075d9da84e",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "73bca2c7-9ee1-427c-bf5e-e7cc17f6b705",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "8533a90c-a6fa-48af-8a79-7ce057bf863f",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "01132cad-ea18-4084-bea7-3b2869c37bf4",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "99875a85-769d-46a3-8555-2f86e5cb2156",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "55a1916c-a5ca-44b0-9bcb-527f8f6af881",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "5dd3f5d7-7dbc-46b2-a938-9f7749fd963a",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4e56a739-2721-4723-9a67-1d84ded2eeb5",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "d4d38fa3-24e9-492d-a7ad-b3bb36a74eb5",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "22bcd3a1-e315-4670-8e74-e711e3b04324",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "8bca95f7-cd70-497c-9164-6c14c9d150e4",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7e1de94f-74b5-4cbe-a0a9-c46828960bdc",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "51250ea1-f4e2-414b-ac18-396b60004b05",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "93edc04b-5a31-4939-ad3c-aba36097eb64",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4d9d7dc9-1d0e-41d0-befe-9adcb1f679a8",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "9b46c890-40b9-4a6c-8f52-6650fcf03d0c",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "66843565-36da-4114-aaff-fb64090355f4",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "7c99df80-d034-4149-ae66-30ec7ed0d0b7",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "894b0be0-a1bf-4d1d-a007-613fe8ecc748",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "8e6f0e45-ebae-4e17-9e97-c3c957c40bd1",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "8765cb33-a94d-406b-9158-6d7df5f1cfe8",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "96c42977-ac0e-4559-801b-78dd8e37c83f",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "11132554-51f9-426d-b796-88de85af41ab",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "e06a942b-f692-457e-8baa-113a5a47d4dc",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "10ab5e9a-e7ff-4fcf-87d2-e801a36ec896",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5154985c-b9bd-4ae2-8c7e-a52009a3f924",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "4ab96c25-7a33-45f0-818b-1fc95fed36bb",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "30d78a3c-fd67-4b47-824a-e5701f231239",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "e31a0cd4-98c9-4bed-b3c1-04f8f77e2a11",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "30c4567e-459c-4791-8284-aecdeabec9f8",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "1f1d6dd8-dbc0-4d8a-afce-2134caae0ba1",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "adad57d1-6c7c-4122-ab91-7fe2f75d8474",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "8ea2a457-ca2a-43ce-8f95-529044286df3",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "2f4121fa-2e17-49f9-98fa-450480bedbd7",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "2408b876-5910-4544-94d3-c86a0f83f4f5",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "5438eb7f-b9dc-4a30-ad3c-441c876810b8",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "3725d64c-b673-4bfe-8dfe-eda079fe370f",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "3406b218-34f0-463b-8c03-27b3a041f9ee",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "505f08f4-2bcd-4d18-985e-946964ee4184",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "4f709fc9-3896-4096-81af-b8ac07fd860d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "c8622cc4-7d85-4889-b884-f5fb6251ba0f",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "f2d3057b-4317-4a0e-9c2f-a9f25ec05af2",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "9c47ddb3-a04f-4d86-b94f-faadf83549e0",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "5a67d63c-596a-4a4e-9507-6dcb07563f1b",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "119f73e4-d251-4a55-9ec0-e203efb678a5",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "d857e8b3-1390-4c47-96bb-e5225db8247e",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "010f8a26-6428-4c23-b9e0-4129c69b4c78",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "7a993415-fbac-44f6-a225-84b83d43775f",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "3ac50eac-8c89-4db2-bf3b-40442810dacb",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "76117cdd-017e-4e28-866d-904e2880f354",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "16090da5-0ab8-47da-b3cc-225a2530f165",
+    "topic_name": "Nature of Matter & Separation of Mixtures",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests separation techniques (distillation, chromatography, filtration)."
+  },
+  {
+    "question_id": "936ac6bc-fb2a-4f5c-8823-5821cf87e7f2",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "e392f817-928a-45df-8bd0-05fa09a29bd0",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "226bfbe7-9c1e-4ad1-b907-714e75c11435",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "e43d8938-f5d7-4def-b288-82b66368e39a",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "f857936e-0b40-49ca-bb5f-20a48ae1d789",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "c2104c3c-d915-4572-9dab-c5e0cbfc7fb1",
+    "topic_name": "Chemical Bonding, Shapes of Molecules",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests chemical bonding types."
+  },
+  {
+    "question_id": "2d16ed5c-c9be-4cdf-a6af-2244299c61b0",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "0c93bdbd-148c-422a-988e-b04224d12ebb",
+    "topic_name": "The Atomic Structure, Electronic Configuration, Periodicity of Elements",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests atomic structure and subatomic particles."
+  },
+  {
+    "question_id": "3ef94fe5-7105-473c-9df3-b4116e0fd87c",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "f8df5072-01d0-4f35-813f-c49b7ff3773d",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "fbc1ec1e-766a-4242-a341-2d9fd39cd73b",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "650f9212-e36e-4379-bdcb-e80cda688ebc",
+    "topic_name": "The Kinetic Theory of Matter, Gas Laws",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests kinetic theory and gas laws."
+  },
+  {
+    "question_id": "3afd7f72-0374-4626-9226-6612dad2a4a8",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "4680d352-7370-49ec-a36b-dafe15653ece",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "7ab58f48-2a12-4548-95af-145b0ee78d65",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "213342c5-0e0f-496f-ae6e-1c6986c1e1fa",
+    "subject_id": "d3eebc99-9c0b-4ef8-bb6d-6bb9bd380d44",
+    "subject_name": "Chemistry",
+    "topic_id": "f5eebc99-9c0b-4ef8-bb6d-6bb9bd380f55",
+    "topic_name": "Organic Chemistry",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests organic chemistry functional groups/compounds."
+  },
+  {
+    "question_id": "2e1202b2-c608-464c-acf7-782bf8cfdce5",
+    "subject_id": "c2eebc99-9c0b-4ef8-bb6d-6bb9bd380c33",
+    "subject_name": "Physics",
+    "topic_id": "f4eebc99-9c0b-4ef8-bb6d-6bb9bd380f44",
+    "topic_name": "Mechanics",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests mechanics concepts (velocity, acceleration, momentum, friction)."
+  },
+  {
+    "question_id": "3a52d306-aa03-48d9-8471-200e60d531c4",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "e22b3534-4522-4dec-93e0-09d921c7fa06",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "c028b4a4-9882-4517-a2aa-5f92fc2eace9",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "8d193278-466c-4ff4-878d-a72fdc8a95c3",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "9c6bde2f-610e-4eb0-8678-c7a3a32c0fc9",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "e317c979-4740-4d82-91c4-eebf659026fb",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "6d650e59-19c8-4995-9777-c6c95d7dc070",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "4af92aaa-e7f5-4b2a-b22c-e84458a62f16",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "85570e75-9fd5-41b8-8be4-1a0e7455aa0a",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f3eebc99-9c0b-4ef8-bb6d-6bb9bd380f33",
+    "topic_name": "Calculus",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains calculus operators/keywords (dy/dx, differentiation, integral)."
+  },
+  {
+    "question_id": "75f8399a-e6c1-4d4b-b2b6-2fcbcea46add",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "57b6f7e0-af50-4d8d-aef9-19529db53ea0",
+    "subject_id": "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11",
+    "subject_name": "Mathematics",
+    "topic_id": "f1eebc99-9c0b-4ef8-bb6d-6bb9bd380f11",
+    "topic_name": "Algebra",
+    "confidence": "HIGH",
+    "reason": "Question explicitly contains algebraic equations/keywords (quadratic, polynomial, factorize)."
+  },
+  {
+    "question_id": "7f545cbd-f936-4f27-a9f3-f71a6209b192",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "e140caf0-b35a-4964-90f3-2342f27178e6",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "94f2bca5-47c9-4d64-9178-ee902a35dea7",
+    "topic_name": "Oral Forms",
+    "confidence": "HIGH",
+    "reason": "Question explicitly tests oral English, stress, or phonetics."
+  },
+  {
+    "question_id": "663cd62d-6f63-449e-bdc9-ba4ea00ca92e",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "f151951b-40a7-4d89-bc96-8372f2bce33d",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "4847a5cb-1b49-47cc-a43b-0217874bd5ea",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "ff8c06bd-63af-4a39-8198-009daa22acc9",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "c1a58301-5d85-4778-a2ad-9640149816d0",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "dd871ca7-300b-40c7-bfc0-a1e2ef87f3b9",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "146e4f44-dac6-4bac-ad92-d2bc9d4dc301",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "2cdcb023-a7b7-4f91-b597-e9165d2e51c5",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  },
+  {
+    "question_id": "903ad732-2ccd-44b1-af7c-3ade7cc0f3f4",
+    "subject_id": "ae78089e-b2de-4cae-ab8d-a58002454fcf",
+    "subject_name": "Use of English",
+    "topic_id": "6f16f0a5-f550-4fd9-afad-b5a3ec5e742e",
+    "topic_name": "Comprehension & Idioms",
+    "confidence": "HIGH",
+    "reason": "Question references reading passage comprehension."
+  }
+]

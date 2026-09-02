@@ -37,8 +37,8 @@ const CBTExam = () => {
   
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [startingSubject, setStartingSubject] = useState<string>('Use of English');
-  const [activeSubjectTab, setActiveSubjectTab] = useState<string>('Use of English');
+  const [startingSubject, setStartingSubject] = useState<string>('');
+  const [activeSubjectTab, setActiveSubjectTab] = useState<string>('');
   const [examSubjectsList, setExamSubjectsList] = useState<string[]>([]);
   
   const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, string[]>>({});
@@ -192,7 +192,21 @@ const CBTExam = () => {
 
   useEffect(() => {
     const initializeExam = async () => {
-      if (!profile) return;
+      
+  if (!examSubjectsList || examSubjectsList.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-6">
+        <div className="max-w-md text-center space-y-4">
+          <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
+          <h2 className="text-2xl font-bold font-display text-foreground">No Subjects Registered</h2>
+          <p className="text-muted-foreground">Please complete your UTME subject registration in your profile to take the exam.</p>
+          <Button onClick={() => navigate('/profile')} className="w-full font-bold">Go to Profile</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!profile) return;
       
       try {
         // Check for interrupted exam from localStorage or IndexedDB
@@ -207,7 +221,7 @@ const CBTExam = () => {
             setSessionStartedAt(activeInterrupted.startedAt);
             setTimeLeft(activeInterrupted.timeLeft);
             setCurrentQuestionIdx(activeInterrupted.currentQuestionIdx || 0);
-            setExamSubjectsList(activeInterrupted.subjects || ['Use of English']);
+            setExamSubjectsList(activeInterrupted.subjects || []);
             setHasStarted(true);
             setLoading(false);
             toast.success("Exam session restored successfully!");
@@ -221,11 +235,11 @@ const CBTExam = () => {
       }
 
       // JAMB 180-Question Master Logic via QuestionFlowService
-      const userSubs = profile.utme_subjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+      const userSubs = profile.utme_subjects?.length > 0 ? profile.utme_subjects : [];
       const validation = validateUtmeSubjectCombination(userSubs);
       const finalSubjects = validation.isValid 
         ? validation.normalizedSubjects 
-        : ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+        : [];
 
       setExamSubjectsList(finalSubjects);
       
@@ -422,117 +436,67 @@ const CBTExam = () => {
     if (questions.length === 0 || submitting) return;
     setSubmitting(true);
     
-    // Calculate score
-    let score = 0;
-    questions.forEach((q) => {
-      if (answers[q.id] === q.correct_answer) score++;
-    });
-    
-    const percentageScore = (score / questions.length) * 100;
     const timeSpentSeconds = 7200 - timeLeft;
-
-    // Save locally to offline completed sessions history
-    saveCompletedOfflineSession({
-      id: crypto.randomUUID(),
-      mode: 'CBT Exam',
-      score,
-      totalQuestions: questions.length,
-      percentageScore,
-      timeSpentSeconds,
-      completedAt: new Date().toISOString(),
-      subjects: examSubjectsList,
-      userId: profile?.id
-    });
-
-    // Save offline session to Dexie or directly to Supabase with syncQueue fallback
-    if (profile) {
-      const sessionId = crypto.randomUUID();
+    let finalScore = 0;
+    
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/cbt/submit-session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({
+          sessionId,
+          mode: 'exam',
+          answers,
+          timeSpentSeconds,
+          isPractice: false
+        })
+      });
+      
+      const result = await res.json();
+      if (result.success) {
+        finalScore = result.score;
+        // Re-inject correct answers for the review UI
+        result.results.forEach((r: any) => {
+          const q = questions.find(q => q.id === r.id);
+          if (q) q.correct_answer = r.correct_answer;
+        });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (err) {
+      console.warn("Secure server submission failed, falling back to local scoring. Note: Offline scoring requires locally cached answer keys.", err);
+      // Fallback local scoring (will only work correctly if offline pack provided correct_answer)
+      questions.forEach((q) => {
+        if (answers[q.id] === q.correct_answer) finalScore++;
+      });
+      
+      // Save offline fallback result
       const sessionPayload = {
         id: sessionId,
-        user_id: profile.id,
-        status: compromised || isCompromised ? 'abandoned' : 'submitted',
-        score,
+        user_id: profile?.id,
+        score: finalScore,
         total_questions: questions.length,
-        started_at: sessionStartedAt,
+        status: compromised ? 'compromised' : 'submitted',
+        is_ai_tutor_locked: false,
         submitted_at: new Date().toISOString()
       };
-
-      try {
-        const { error: sessionError } = await supabase.from('exam_sessions').insert(sessionPayload);
-        if (sessionError) throw sessionError;
-      } catch (err) {
-        console.warn("Saving exam session to offline queue:", err);
-        await enqueueOfflineWrite({
-          type: 'exam_result',
-          table: 'exam_sessions',
-          action: 'insert',
-          payload: sessionPayload,
-          userId: profile.id
-        });
-      }
-      
-      // Save answers
-      const answersToSave = Object.entries(answers).map(([qId, ans]) => ({
-        user_id: profile.id,
-        exam_session_id: sessionId,
-        question_id: qId,
-        selected_answer: ans,
-        is_correct: questions.find(q => q.id === qId)?.correct_answer === ans,
-        time_spent_seconds: 0
-      }));
-
-      if (answersToSave.length > 0) {
-        try {
-          const { error: ansError } = await supabase.from('session_answers').insert(answersToSave);
-          if (ansError) throw ansError;
-        } catch (ansErr) {
-          console.warn('Saving session answers to offline queue:', ansErr);
-          await enqueueOfflineWrite({
-            type: 'session_answer',
-            table: 'session_answers',
-            action: 'insert',
-            payload: answersToSave,
-            userId: profile.id,
-            silent: true
-          });
-        }
-      }
-      
-      // Log study action
-      try {
-        await recordStudyAction(profile.id, 'exam');
-      } catch (streakErr) {
-        console.warn('Streak logging fallback:', streakErr);
-      }
-
-      // Award XP, Level calculation and Badges for completing CBT mock exam
-      try {
-        await awardMockExamCompletionXp(profile.id, {
-          score,
-          totalQuestions: questions.length,
-          timeSpentSeconds,
-          totalTimeSeconds: 7200
-        });
-      } catch (gamifyErr) {
-        console.warn('Gamification badge & XP award offline notice:', gamifyErr);
-      }
+      await saveCompletedOfflineSession(sessionPayload as any);
     }
     
-    // Clear interrupted exam session from localStorage and Dexie
-    if (profile) {
-      await clearInterruptedExamSession(profile.id);
-    } else {
-      await clearInterruptedExamSession();
-    }
+    // Clear backups
     sessionStorage.removeItem('cbt_backup');
+    clearExamSnapshot();
     
     // Save to Smart Mistake Bank
-    const mistakesToSave = questions.filter(q => answers[q.id] !== q.correct_answer);
+    const mistakesToSave = questions.filter(q => answers[q.id] !== q.correct_answer && q.correct_answer);
     if (mistakesToSave.length > 0) {
       try {
         const existing = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
-        const combined = [...existing, ...mistakesToSave];
-        const uniqueMistakes = Array.from(new Map(combined.map(item => [item.id, item])).values());
+        const uniqueMistakes = [...existing, ...mistakesToSave.map(q => q.id)].filter((v, i, a) => a.indexOf(v) === i);
         localStorage.setItem('jamb_mistake_bank', JSON.stringify(uniqueMistakes));
       } catch (e) {
         console.warn('Failed to save to Mistake Bank:', e);
@@ -542,10 +506,9 @@ const CBTExam = () => {
     if (document.fullscreenElement) {
        document.exitFullscreen().catch(console.error);
     }
-    
-    navigate('/results', { state: { score, total: questions.length, mode: 'CBT Exam', questions, answers, timeSpentSeconds } });
+        
+    navigate('/results', { state: { score: finalScore, total: questions.length, mode: 'CBT Exam', questions, answers, timeSpentSeconds } });
   };
-
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);

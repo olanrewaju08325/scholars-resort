@@ -62,7 +62,8 @@ export const QuestionBankTab = () => {
   const [correctOption, setCorrectOption] = useState('A');
   const [explanation, setExplanation] = useState('');
   const [difficulty, setDifficulty] = useState('medium');
-  const [isActive, setIsActive] = useState(true); // true = Published, false = Draft
+  const [isActive, setIsActive] = useState(true);
+  const [year, setYear] = useState(''); // true = Published, false = Draft
 
   // AI Generator state
   const [aiTopic, setAiTopic] = useState('');
@@ -121,11 +122,7 @@ export const QuestionBankTab = () => {
     }
 
     // Merge with local custom questions if any were saved during RLS restrictions
-    let localQuestions: any[] = [];
-    try {
-      localQuestions = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
-    } catch {}
-
+    
     const combinedMap = new Map();
     dbQuestions.forEach(q => combinedMap.set(q.id, q));
     localQuestions.forEach(q => {
@@ -192,6 +189,7 @@ export const QuestionBankTab = () => {
     setExplanation('');
     setDifficulty('medium');
     setIsActive(true);
+    setYear('');
   };
 
   const handleEdit = (q: any) => {
@@ -231,6 +229,7 @@ export const QuestionBankTab = () => {
     setExplanation(q.explanation || '');
     setDifficulty(q.difficulty);
     setIsActive(q.is_active);
+    setYear(q.year || '');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -251,6 +250,7 @@ export const QuestionBankTab = () => {
     const payload = {
       subject_id: subjectId,
       topic_id: topicId || null,
+      year: year ? parseInt(year) : null,
       question_text: qText,
       options: optionsArray,
       correct_answer: correctStr,
@@ -260,66 +260,32 @@ export const QuestionBankTab = () => {
     };
 
     try {
-      const isLocalQuestion = currentId && (String(currentId).startsWith('local_') || !isUUID(currentId));
-
-      if (isEditing && currentId && !isLocalQuestion) {
-        // Try Supabase client first
-        const { error } = await supabase.from('questions').update(payload).eq('id', currentId);
-        if (error) {
-          // Server Proxy Fallback
-          await fetch(`/api/questions/${currentId}`, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-          });
-        }
-        
-        // Update local custom store if present
-        try {
-          const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
-          const updated = local.map((q: any) => q.id === currentId ? { ...q, ...payload } : q);
-          localStorage.setItem('scholar_custom_questions', JSON.stringify(updated));
-        } catch {}
-
+      if (isEditing && currentId) {
+        // Use Server Proxy
+        const proxyRes = await fetch(`/api/questions/${currentId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!proxyRes.ok) throw new Error('Failed to update question via API');
         toast.success('Question updated successfully.');
       } else {
-        // This is a new insert or migrating a local custom question to the DB!
+        // New insert
         const newUuid = crypto.randomUUID();
         const fullPayload = { id: newUuid, ...payload, created_at: new Date().toISOString() };
-
-        let saved = false;
-        const { error } = await supabase.from('questions').insert(fullPayload);
-        if (!error) saved = true;
-        else {
-          const proxyRes = await fetch('/api/questions/insert', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ questions: [fullPayload] })
-          }).catch(() => null);
-          if (proxyRes && proxyRes.ok) saved = true;
-        }
-
-        if (!saved) {
-          const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
-          local.unshift(fullPayload);
-          localStorage.setItem('scholar_custom_questions', JSON.stringify(local));
-          toast.success('Question saved locally.');
-        } else {
-          // If we migrated a local question, remove it from local storage
-          if (isLocalQuestion) {
-            try {
-              const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
-              const filtered = local.filter((q: any) => q.id !== currentId);
-              localStorage.setItem('scholar_custom_questions', JSON.stringify(filtered));
-            } catch {}
-          }
-          toast.success('Question created and published successfully.');
-        }
+        const proxyRes = await fetch('/api/questions/insert', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ questions: [fullPayload] })
+        });
+        if (!proxyRes.ok) throw new Error('Failed to insert question via API');
+        toast.success('Question added successfully.');
       }
       resetForm();
-      fetchData();
+      fetchQuestions();
     } catch (err: any) {
-      toast.error(err.message || 'Error saving question');
+      console.error(err);
+      setStatusMsg({ type: 'error', text: err.message || 'Failed to save question' });
     } finally {
       setLoading(false);
     }
@@ -332,13 +298,6 @@ export const QuestionBankTab = () => {
       async () => {
         // Optimistic UI update
         setQuestions(prev => prev.filter(q => q.id !== id));
-
-        // Delete from local custom store if present
-        try {
-          const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
-          const updated = local.filter((q: any) => q.id !== id);
-          localStorage.setItem('scholar_custom_questions', JSON.stringify(updated));
-        } catch {}
 
         try {
           // Delete from server or DB safely checking UUID format
@@ -365,13 +324,6 @@ export const QuestionBankTab = () => {
     const nextStatus = !currentStatus;
     // Optimistic UI update
     setQuestions(prev => prev.map(q => q.id === id ? { ...q, is_active: nextStatus } : q));
-
-    // Update local custom store if present
-    try {
-      const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
-      const updated = local.map((q: any) => q.id === id ? { ...q, is_active: nextStatus } : q);
-      localStorage.setItem('scholar_custom_questions', JSON.stringify(updated));
-    } catch {}
 
     try {
       if (isUUID(id)) {
@@ -440,13 +392,6 @@ export const QuestionBankTab = () => {
     // Optimistic state update
     setQuestions(prev => prev.filter(q => !idsToDelete.includes(q.id)));
     setSelectedIds([]);
-
-    // Update local custom storage
-    try {
-      const local = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
-      const updated = local.filter((q: any) => !idsToDelete.includes(q.id));
-      localStorage.setItem('scholar_custom_questions', JSON.stringify(updated));
-    } catch {}
 
     try {
       if (navigator.onLine) {
@@ -825,11 +770,16 @@ export const QuestionBankTab = () => {
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-foreground">Topic (Optional)</label>
                   <select value={topicId} onChange={e => setTopicId(e.target.value)} className="w-full bg-muted/30 border border-border rounded-md p-2 text-sm text-foreground">
-                    <option value="" className="bg-popover text-popover-foreground">None</option>
+                    <option value="">No Topic</option>
                     {topics.map(t => <option key={t.id} value={t.id} className="bg-popover text-popover-foreground">{t.name}</option>)}
                   </select>
                 </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-foreground">Exam Year (Optional)</label>
+                  <Input value={year} onChange={e => setYear(e.target.value)} type="number" placeholder="e.g. 2018" className="bg-muted/30 border-border" />
+                </div>
               </div>
+
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">

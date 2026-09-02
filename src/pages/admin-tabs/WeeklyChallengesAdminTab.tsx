@@ -54,11 +54,11 @@ export const WeeklyChallengesAdminTab = () => {
       try {
         const { data: settingData } = await supabase
           .from('admin_settings')
-          .select('value')
-          .eq('key', 'weekly_challenges_db')
+          .select('setting_value')
+          .eq('setting_key', 'weekly_challenges_db')
           .maybeSingle();
-        if (settingData?.value && Array.isArray(settingData.value)) {
-          items = settingData.value;
+        if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+          items = settingData.setting_value;
         }
       } catch {}
     }
@@ -183,7 +183,7 @@ Return STRICT JSON format:
       parsedQuestion.duration_minutes = durationMinutes;
 
       const newChallenge = {
-        id: `wc_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+        id: crypto.randomUUID(),
         title,
         subject: selectedSubject,
         question_data: parsedQuestion,
@@ -211,10 +211,10 @@ Return STRICT JSON format:
       try {
         const existing = [...challenges, newChallenge];
         await supabase.from('admin_settings').upsert({
-          key: 'weekly_challenges_db',
-          value: existing,
+          setting_key: 'weekly_challenges_db',
+          setting_value: existing,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
         localStorage.setItem('scholar_weekly_challenges', JSON.stringify(existing));
       } catch {}
 
@@ -241,10 +241,10 @@ Return STRICT JSON format:
     setChallenges(updated);
     try {
       await supabase.from('admin_settings').upsert({
-        key: 'weekly_challenges_db',
-        value: updated,
+        setting_key: 'weekly_challenges_db',
+        setting_value: updated,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'setting_key' });
       localStorage.setItem('scholar_weekly_challenges', JSON.stringify(updated));
     } catch {}
     toast.success(`Challenge ${!currentState ? 'activated' : 'deactivated'}.`);
@@ -260,10 +260,10 @@ Return STRICT JSON format:
       setChallenges(updated);
       try {
         await supabase.from('admin_settings').upsert({
-          key: 'weekly_challenges_db',
-          value: updated,
+          setting_key: 'weekly_challenges_db',
+          setting_value: updated,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
         localStorage.setItem('scholar_weekly_challenges', JSON.stringify(updated));
       } catch {}
       toast.success('Challenge deleted.');
