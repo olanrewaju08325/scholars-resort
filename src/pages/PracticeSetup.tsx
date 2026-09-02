@@ -58,16 +58,18 @@ const PracticeSetup = () => {
           { contextName: 'PracticeSetup.subjects', fallbackData: [] }
         );
         if (res.data) {
-          // Filter subjects to only those registered by the student
+          // Filter subjects to only those registered by the student, or all active if not yet chosen/admin
           const registeredSubs = profile?.utme_subjects || [];
-          const filteredSubjects = res.data.filter((s: any) => 
-            registeredSubs.some((rs: string) => rs.toLowerCase() === s.name.toLowerCase())
-          );
+          const filteredSubjects = (registeredSubs.length > 0 && profile?.role !== 'admin')
+            ? res.data.filter((s: any) => 
+                registeredSubs.some((rs: string) => rs.toLowerCase() === s.name.toLowerCase())
+              )
+            : res.data;
           
           setSubjects(filteredSubjects);
           
-          if (filteredSubjects.length === 0) {
-            toast.error("Please complete your UTME subject registration.");
+          if (registeredSubs.length === 0 && profile?.role !== 'admin') {
+            toast.info("Tip: Set your 4 official UTME subjects in your Profile for customized learning.");
           }
 
           
@@ -104,7 +106,7 @@ const PracticeSetup = () => {
       }
     };
     fetchSubjects();
-  }, []);
+  }, [profile?.utme_subjects, profile?.role]);
 
   useEffect(() => {
     if (selectedSubject) {

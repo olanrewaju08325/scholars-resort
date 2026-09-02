@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { getCompletedOfflineSessions } from '@/lib/offlineStore';
+import { fetchAcademicLearningRules } from './academicLearningRulesService';
 
 export interface StudyTask {
   id: string;
@@ -199,7 +200,8 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
     };
   }
 
-  // Otherwise, construct a UNIQUE, non-static schedule based on performance data
+  // Otherwise, construct a UNIQUE, non-static schedule based on performance data and academic rules
+  const learningRules = await fetchAcademicLearningRules();
   const tasksToGenerate: StudyTask[] = [];
 
   // Slot 1: MORNING (08:00 AM) - High Priority Weak Topic Drill
@@ -213,10 +215,10 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
       title: `Remedial Drill: ${topWeak.topic}`,
       subject: topWeak.subject,
       topic: topWeak.topic,
-      durationMinutes: 45,
+      durationMinutes: learningRules.dailyStudyTargetMinutes || 30,
       priority: 'high',
       priorityLabel: 'Remedial Focus Area',
-      recommendationReason: `Auto-injected remedial task: Your accuracy on ${topWeak.topic} is currently ${topWeak.accuracy}%, which is below the 65% mastery threshold.`,
+      recommendationReason: `Auto-injected remedial task: Your accuracy on ${topWeak.topic} is currently ${topWeak.accuracy}%, which is below the ${learningRules.masteryThresholdPercent}% mastery threshold.`,
       actionType: 'drill',
       isCompleted: false
     });
@@ -229,7 +231,7 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
       title: 'Vocabulary & Lexis Concord Masterclass',
       subject: 'Use of English',
       topic: 'Concord Rules & Subject-Verb Agreement',
-      durationMinutes: 45,
+      durationMinutes: learningRules.dailyStudyTargetMinutes || 30,
       priority: 'high',
       priorityLabel: 'UTME High Yield',
       recommendationReason: 'English is mandatory for all UTME candidates (40% of total score).',
@@ -252,7 +254,7 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
       durationMinutes: 30,
       priority: 'high',
       priorityLabel: 'Remedial Target',
-      recommendationReason: `Auto-injected remedial review: Your accuracy on ${secondWeak.topic} is currently ${secondWeak.accuracy}%, which is below the 65% mastery threshold.`,
+      recommendationReason: `Auto-injected remedial review: Your accuracy on ${secondWeak.topic} is currently ${secondWeak.accuracy}%, which is below the ${learningRules.masteryThresholdPercent}% mastery threshold.`,
       actionType: 'review',
       isCompleted: false
     });
@@ -274,22 +276,40 @@ export async function generateDailyStudyPlan(userId: string): Promise<DailyPlann
     });
   }
 
-  // Slot 3: AFTERNOON (03:30 PM) - Literature / Flashcard Review
-  tasksToGenerate.push({
-    id: `task_af_${Date.now()}`,
-    timeSlot: 'afternoon',
-    slotLabel: 'Afternoon Speed Drill',
-    slotTime: '03:30 PM – 04:30 PM',
-    title: 'JAMB Novel Hub: "The Life Changer" Characters & Plot',
-    subject: 'Use of English',
-    topic: 'Literature & Novel Comprehension',
-    durationMinutes: 30,
-    priority: 'medium',
-    priorityLabel: 'Guaranteed Questions',
-    recommendationReason: 'JAMB tests 10 direct questions on the prescribed UTME novel.',
-    actionType: 'flashcard',
-    isCompleted: false
-  });
+  // Slot 3: AFTERNOON (03:30 PM) - Literature / Comprehension Review
+  if (learningRules.activePrescribedNovelTitle) {
+    tasksToGenerate.push({
+      id: `task_af_${Date.now()}`,
+      timeSlot: 'afternoon',
+      slotLabel: 'Afternoon Speed Drill',
+      slotTime: '03:30 PM – 04:30 PM',
+      title: `Prescribed Novel Study: "${learningRules.activePrescribedNovelTitle}" Key Themes & Plot`,
+      subject: 'Use of English',
+      topic: 'Literature & Novel Comprehension',
+      durationMinutes: 30,
+      priority: 'medium',
+      priorityLabel: 'Prescribed Novel',
+      recommendationReason: 'JAMB tests direct questions on the active prescribed UTME literature text.',
+      actionType: 'flashcard',
+      isCompleted: false
+    });
+  } else {
+    tasksToGenerate.push({
+      id: `task_af_${Date.now()}`,
+      timeSlot: 'afternoon',
+      slotLabel: 'Afternoon Speed Drill',
+      slotTime: '03:30 PM – 04:30 PM',
+      title: 'Comprehension Passages & Inference Analysis',
+      subject: 'Use of English',
+      topic: 'Comprehension Passages & Inference',
+      durationMinutes: 30,
+      priority: 'medium',
+      priorityLabel: 'Reading Mastery',
+      recommendationReason: 'Mastering reading comprehension techniques guarantees high English score returns.',
+      actionType: 'review',
+      isCompleted: false
+    });
+  }
 
   // Slot 4: EVENING (08:00 PM) - Full Time-Management Mock or Refresher
   if (strongTopics.length > 0) {

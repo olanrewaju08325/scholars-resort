@@ -29,7 +29,7 @@ export const BackupsTab = () => {
       setBackups(data || []);
     } catch (e) {
       console.error(e);
-      toast.error('Failed to load backup history');
+      toast.error('Failed to load export history');
     } finally {
       setLoading(false);
     }
@@ -42,22 +42,37 @@ export const BackupsTab = () => {
   const handleManualBackup = async (type: 'questions' | 'settings' | 'users') => {
     try {
       setIsExporting(true);
-      toast.info(`Preparing ${type} backup... This may take a moment.`);
+      toast.info(`Preparing full ${type} export... This may take a few moments.`);
       
-      let dataToExport = [];
+      let dataToExport: any[] = [];
       
       if (type === 'questions') {
-        const { data } = await supabase.from('questions').select('*');
-        dataToExport = data || [];
+        // Range-paginated fetch to ensure all 6,235+ questions are included
+        let from = 0;
+        const pageSize = 1000;
+        while (true) {
+          const { data: chunk, error } = await supabase
+            .from('questions')
+            .select('*')
+            .range(from, from + pageSize - 1);
+          
+          if (error) throw error;
+          if (!chunk || chunk.length === 0) break;
+          dataToExport = dataToExport.concat(chunk);
+          if (chunk.length < pageSize) break;
+          from += pageSize;
+        }
       } else if (type === 'settings') {
-        const { data } = await supabase.from('admin_settings').select('*');
+        const { data, error } = await supabase.from('admin_settings').select('*');
+        if (error) throw error;
         dataToExport = data || [];
       } else {
-        const { data } = await supabase.from('profiles').select('*');
+        const { data, error } = await supabase.from('profiles').select('*');
+        if (error) throw error;
         dataToExport = data || [];
       }
 
-      // Log backup to database if table exists
+      // Log export to database if table exists
       try {
         await supabase.from('admin_backups').insert({
           backup_type: type,
@@ -67,7 +82,7 @@ export const BackupsTab = () => {
         });
         fetchBackups();
       } catch (err) {
-        console.warn('Backup audit log insert skipped:', err);
+        console.warn('Export audit log insert skipped:', err);
       }
 
       const jsonStr = JSON.stringify(dataToExport, null, 2);
@@ -75,15 +90,15 @@ export const BackupsTab = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.setAttribute("href", url);
-      link.setAttribute("download", `scholars_resort_backup_${type}_${new Date().toISOString().split('T')[0]}.json`);
+      link.setAttribute("download", `scholars_resort_${type}_export_${new Date().toISOString().split('T')[0]}.json`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
 
-      toast.success(`${type} backup completed successfully`);
+      toast.success(`${type} export (${dataToExport.length} records) downloaded successfully.`);
     } catch (err) {
-      console.error('Backup creation error:', err);
-      toast.error(`Failed to create ${type} backup`);
+      console.error('Data export error:', err);
+      toast.error(`Failed to export ${type} data`);
     } finally {
       setIsExporting(false);
     }
@@ -93,8 +108,8 @@ export const BackupsTab = () => {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold font-display text-slate-100">Automated Backups</h2>
-          <p className="text-slate-400 text-sm">Secure and manage your platform's critical data.</p>
+          <h2 className="text-2xl font-bold font-display text-slate-100">Data Exports & Database Recovery</h2>
+          <p className="text-slate-400 text-sm">Download application JSON data exports or manage infrastructure database recovery snapshots.</p>
         </div>
       </div>
 
@@ -103,9 +118,9 @@ export const BackupsTab = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Database className="w-5 h-5 text-blue-400" />
-              Question Bank
+              Question Bank Export
             </CardTitle>
-            <CardDescription className="text-slate-400">All questions, answers, and explanations.</CardDescription>
+            <CardDescription className="text-slate-400">All 6,235+ active and draft questions with options & explanations.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button 
@@ -114,7 +129,7 @@ export const BackupsTab = () => {
               className="w-full bg-blue-600 hover:bg-blue-700"
             >
               <Download className="w-4 h-4 mr-2" />
-              Export JSON
+              {isExporting ? 'Exporting...' : 'Export Complete JSON'}
             </Button>
           </CardContent>
         </Card>
@@ -123,9 +138,9 @@ export const BackupsTab = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <Settings className="w-5 h-5 text-purple-400" />
-              System Settings
+              System Configuration
             </CardTitle>
-            <CardDescription className="text-slate-400">Platform configs and AI prompts.</CardDescription>
+            <CardDescription className="text-slate-400">Academic rules, AI prompts, and platform settings.</CardDescription>
           </CardHeader>
           <CardContent>
             <Button 
@@ -134,7 +149,7 @@ export const BackupsTab = () => {
               className="w-full bg-purple-600 hover:bg-purple-700"
             >
               <Download className="w-4 h-4 mr-2" />
-              Export JSON
+              Export Settings JSON
             </Button>
           </CardContent>
         </Card>
@@ -143,17 +158,17 @@ export const BackupsTab = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <ShieldAlert className="w-5 h-5 text-amber-400" />
-              Full Database Dump
+              PostgreSQL Disaster Recovery
             </CardTitle>
-            <CardDescription className="text-slate-400">Requires Supabase Dashboard access.</CardDescription>
+            <CardDescription className="text-slate-400">Physical database snapshots and Point-in-Time Recovery (PITR).</CardDescription>
           </CardHeader>
           <CardContent>
             <Button 
               variant="outline"
-              className="w-full border-slate-700 text-slate-300"
+              className="w-full border-slate-700 text-slate-300 hover:bg-slate-800"
               onClick={() => window.open('https://supabase.com/dashboard', '_blank')}
             >
-              Open Supabase
+              Open Supabase PITR Console
             </Button>
           </CardContent>
         </Card>
@@ -163,9 +178,9 @@ export const BackupsTab = () => {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <History className="w-5 h-5 text-green-400" />
-            Backup History Log
+            Data Export History Log
           </CardTitle>
-          <CardDescription className="text-slate-400">Recent manual and automated backups.</CardDescription>
+          <CardDescription className="text-slate-400">Audit trail of recent data export jobs and snapshot records.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -174,20 +189,20 @@ export const BackupsTab = () => {
                 <tr>
                   <th className="px-6 py-4 font-medium">Timestamp</th>
                   <th className="px-6 py-4 font-medium">Type</th>
-                  <th className="px-6 py-4 font-medium">Initiated By</th>
+                  <th className="px-6 py-4 font-medium">Records</th>
                   <th className="px-6 py-4 font-medium">Size</th>
                   <th className="px-6 py-4 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {loading ? (
-                  <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">Loading history...</td></tr>
+                  <tr><td colSpan={5} className="px-6 py-8 text-center text-slate-500">Loading export logs...</td></tr>
                 ) : backups.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-8 text-center flex flex-col items-center justify-center text-slate-500">
                       <Clock className="w-8 h-8 mb-2 opacity-50" />
-                      <p>No backup history found.</p>
-                      <p className="text-xs mt-1">Manual exports will appear here after the migration runs.</p>
+                      <p>No export history found yet.</p>
+                      <p className="text-xs mt-1">Manual data exports will appear here upon completion.</p>
                     </td>
                   </tr>
                 ) : (
@@ -199,8 +214,8 @@ export const BackupsTab = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-slate-300 capitalize">
                         {log.backup_type}
                       </td>
-                      <td className="px-6 py-4 text-slate-300">
-                        {log.profiles?.full_name || 'System/Automated'}
+                      <td className="px-6 py-4 text-slate-300 font-mono text-xs">
+                        {log.record_count ? `${log.record_count} items` : '—'}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-slate-400 font-mono text-xs">
                         {log.file_size_kb ? `${(log.file_size_kb / 1024).toFixed(2)} MB` : 'Unknown'}

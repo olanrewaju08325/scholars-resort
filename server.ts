@@ -1774,14 +1774,30 @@ app.get('/api/admin/subject-counts', async (req, res) => {
       years[sub.id] = [];
     });
 
-    // Query questions in single batch to avoid 90 parallel round-trips
-    const { data: questionsData, error: qErr } = await supabase
-      .from('questions')
-      .select('subject_id, exam_year, is_active')
-      .limit(50000);
+    // Query questions with pagination loop to fetch all records without 1000 row truncation
+    let questionsData: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+    let qErr: any = null;
 
-    if (qErr) {
-      console.error('[Server Admin Subject Counts Questions DB Error]', qErr.message);
+    while (true) {
+      const { data: chunk, error: err } = await supabase
+        .from('questions')
+        .select('subject_id, year, is_active')
+        .range(from, from + pageSize - 1);
+      
+      if (err) {
+        qErr = err;
+        console.error('[Server Admin Subject Counts Questions DB Error]', err.message);
+        break;
+      }
+      if (!chunk || chunk.length === 0) break;
+      questionsData = questionsData.concat(chunk);
+      if (chunk.length < pageSize) break;
+      from += pageSize;
+    }
+
+    if (qErr && questionsData.length === 0) {
       return res.status(200).json({ success: true, isFallback: true, counts, totalCounts, canonicalCounts, years, error: qErr.message });
     }
 
@@ -1794,8 +1810,8 @@ app.get('/api/admin/subject-counts', async (req, res) => {
           if (q.is_active !== false) {
             counts[q.subject_id] = (counts[q.subject_id] || 0) + 1;
           }
-          if (q.exam_year) {
-            const yr = String(q.exam_year).trim();
+          if (q.year) {
+            const yr = String(q.year).trim();
             if (yr && yr.length >= 4) {
               if (!subjectYearsMap[q.subject_id]) subjectYearsMap[q.subject_id] = new Set();
               subjectYearsMap[q.subject_id].add(yr);

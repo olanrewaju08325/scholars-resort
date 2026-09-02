@@ -418,12 +418,24 @@ export const getSubjectQuestionCountsAggregation = async (): Promise<{
     console.warn('[Admin Subject Aggregation] Server API error, falling back to direct Supabase aggregation:', err);
   }
 
-  // Fallback direct count aggregation via Supabase
+  // Fallback direct count aggregation via Supabase with pagination loop
   try {
-    const { data: questionsData } = await supabase
-      .from('questions')
-      .select('subject_id, is_active')
-      .limit(50000);
+    let questionsData: any[] = [];
+    let from = 0;
+    const pageSize = 1000;
+
+    while (true) {
+      const { data: chunk, error: err } = await supabase
+        .from('questions')
+        .select('subject_id, is_active')
+        .range(from, from + pageSize - 1);
+      
+      if (err) break;
+      if (!chunk || chunk.length === 0) break;
+      questionsData = questionsData.concat(chunk);
+      if (chunk.length < pageSize) break;
+      from += pageSize;
+    }
 
     const counts: Record<string, number> = {};
     const totalCounts: Record<string, number> = {};
@@ -432,7 +444,7 @@ export const getSubjectQuestionCountsAggregation = async (): Promise<{
       questionsData.forEach((q: any) => {
         if (q.subject_id) {
           totalCounts[q.subject_id] = (totalCounts[q.subject_id] || 0) + 1;
-          if (q.is_active) {
+          if (q.is_active !== false) {
             counts[q.subject_id] = (counts[q.subject_id] || 0) + 1;
           }
         }

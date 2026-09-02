@@ -115,8 +115,24 @@ export const QuestionBankTab = () => {
   const fetchData = async () => {
     let dbQuestions: any[] = [];
     try {
-      const { data: qData } = await supabase.from('questions').select('*, subjects(name), topics(name)').order('created_at', { ascending: false }).limit(50000);
-      if (qData) dbQuestions = qData;
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: chunk, error } = await supabase
+          .from('questions')
+          .select('*, subjects(name), topics(name)')
+          .order('created_at', { ascending: false })
+          .range(from, from + pageSize - 1);
+
+        if (error) {
+          console.warn('DB Question fetch notice:', error);
+          break;
+        }
+        if (!chunk || chunk.length === 0) break;
+        dbQuestions = dbQuestions.concat(chunk);
+        if (chunk.length < pageSize) break;
+        from += pageSize;
+      }
     } catch (err) {
       console.warn('DB Question fetch notice:', err);
     }

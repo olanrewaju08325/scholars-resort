@@ -9,6 +9,7 @@ import { toast } from 'sonner';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { downloadPerformanceSummaryPdf } from '@/lib/performanceSummaryPdf';
 import { getCanonicalSubjectById, normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
+import { fetchAcademicLearningRules } from '@/services/academicLearningRulesService';
 
 const WeaknessDrill = () => {
   const { profile } = useAuth();
@@ -129,17 +130,22 @@ const WeaknessDrill = () => {
           if (a.is_correct) topicScores[key].correct++;
         });
 
+        const learningRules = await fetchAcademicLearningRules();
+        const masteryThreshold = learningRules.masteryThresholdPercent || 75;
+        const weaknessTrigger = learningRules.weaknessTriggerPercent || 50;
+        const minAttempts = learningRules.minAttemptsForMastery || 3;
+
         const classified = Object.entries(topicScores)
           .map(([id, v]) => {
             const accuracy = Math.round((v.correct / v.total) * 100);
             const attempts = v.total;
             let level: 'Weak' | 'Developing' | 'Strong' | 'Mastered' = 'Weak';
             
-            if (accuracy > 85 && attempts >= 15) {
+            if (accuracy >= masteryThreshold && attempts >= minAttempts) {
               level = 'Mastered';
             } else if (accuracy >= 65) {
               level = 'Strong';
-            } else if (accuracy >= 50) {
+            } else if (accuracy >= weaknessTrigger) {
               level = 'Developing';
             } else {
               level = 'Weak';

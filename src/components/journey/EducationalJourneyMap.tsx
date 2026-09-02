@@ -54,20 +54,29 @@ export const EducationalJourneyMap: React.FC = () => {
 
   if (!data) return null;
 
-  const currentSubjectJourney: SubjectJourney | undefined = data.subjectJourneys[selectedSubject];
-
-  const subjectTabs = [
-    { id: 'use_of_english', name: 'Use of English', icon: BookOpen },
-    { id: 'mathematics', name: 'Mathematics', icon: Calculator },
-    { id: 'physics', name: 'Physics', icon: Zap },
-    { id: 'chemistry', name: 'Chemistry', icon: FlaskConical },
-    { id: 'biology', name: 'Biology', icon: Dna }
-  ];
+  const availableJourneys = Object.values(data.subjectJourneys);
+  const activeSubjectId = selectedSubject || (availableJourneys[0]?.subjectId ?? '');
+  const currentSubjectJourney: SubjectJourney | undefined = 
+    data.subjectJourneys[activeSubjectId] || 
+    availableJourneys.find(j => j.subjectId === activeSubjectId || j.subjectName.toLowerCase() === activeSubjectId.toLowerCase()) || 
+    availableJourneys[0];
 
   const handleLaunchPractice = (node: JourneyNode) => {
     setSelectedNodeModal(null);
     navigate(`/practice?subject=${encodeURIComponent(node.subjectName)}&topic=${encodeURIComponent(node.topicName)}`);
   };
+
+  if (availableJourneys.length === 0) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[350px] bg-card border border-border rounded-2xl shadow-sm text-center">
+        <BookOpen className="w-12 h-12 text-primary/40 mb-3" />
+        <h3 className="text-lg font-bold text-foreground mb-1">No Syllabus Topics Configured</h3>
+        <p className="text-sm text-muted-foreground max-w-md mb-4">
+          The educational syllabus hierarchy has not been loaded for your subjects yet.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -122,31 +131,28 @@ export const EducationalJourneyMap: React.FC = () => {
 
       {/* Subject Navigation Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-        {subjectTabs.map((tab) => {
-          const subJourney = data.subjectJourneys[tab.id];
-          const isSel = selectedSubject === tab.id;
+        {availableJourneys.map((subJourney) => {
+          const isSel = currentSubjectJourney?.subjectId === subJourney.subjectId;
           return (
             <button
-              key={tab.id}
-              onClick={() => setSelectedSubject(tab.id)}
+              key={subJourney.subjectId}
+              onClick={() => setSelectedSubject(subJourney.subjectId)}
               className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl font-medium text-sm transition-all whitespace-nowrap shrink-0 border ${
                 isSel
                   ? 'bg-primary text-primary-foreground border-primary shadow-sm scale-105'
                   : 'bg-card text-muted-foreground border-border hover:bg-muted hover:text-foreground'
               }`}
             >
-              <tab.icon className="w-4 h-4 shrink-0" />
-              <span>{tab.name}</span>
-              {subJourney && (
-                <Badge 
-                  variant="secondary" 
-                  className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
-                    isSel ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
-                  }`}
-                >
-                  {subJourney.completionPercentage}%
-                </Badge>
-              )}
+              <BookOpen className="w-4 h-4 shrink-0" />
+              <span>{subJourney.subjectName}</span>
+              <Badge 
+                variant="secondary" 
+                className={`text-[10px] px-1.5 py-0.5 rounded-full font-mono ${
+                  isSel ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-muted text-muted-foreground'
+                }`}
+              >
+                {subJourney.completionPercentage}%
+              </Badge>
             </button>
           );
         })}

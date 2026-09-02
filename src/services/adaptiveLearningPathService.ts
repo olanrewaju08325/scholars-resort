@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/db';
+import { fetchAcademicLearningRules, type AcademicLearningRules } from './academicLearningRulesService';
 
 export interface LearningPathStep {
   id: string;
@@ -15,42 +16,68 @@ export interface LearningPathStep {
   learningReason: string;
   isCompleted: boolean;
   practiceSubjectParam: string;
+  questionsAttempted: number;
 }
 
 export interface AdaptiveLearningPathData {
+  hasSufficientData: boolean;
   generatedAt: string;
   totalSteps: number;
   completedStepsCount: number;
   estimatedTotalMinutes: number;
-  potentialScoreGain: number; // e.g. +45 UTME Score Points
+  potentialScoreGain: number; // e.g. +24 UTME Score Points
   topFocusSubject: string;
   steps: LearningPathStep[];
+  learningRules: AcademicLearningRules;
 }
 
 export async function generateAdaptiveLearningPath(
   userId?: string,
   filterSubject?: string
 ): Promise<AdaptiveLearningPathData> {
-  // 1. Collect user performance across topics
-  const topicAccuracyMap: Record<string, { total: number; correct: number; subject: string }> = {};
+  const learningRules = await fetchAcademicLearningRules();
+  const todayFormatted = new Date().toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  });
+
+  // 1. Fetch real user answers and performance
+  const topicAccuracyMap: Record<
+    string,
+    { total: number; correct: number; subject: string; topicId: string; topicName: string }
+  > = {};
+  let totalUserAnswers = 0;
 
   try {
     if (userId) {
       const { data: answers } = await supabase
         .from('session_answers')
-        .select('is_correct, questions(topic_id, topics(name), subjects(name))')
+        .select('is_correct, question_id, questions(topic_id, topics(id, name), subjects(id, name))')
         .eq('user_id', userId)
-        .limit(1000);
+        .limit(2000);
 
       if (answers && answers.length > 0) {
+        totalUserAnswers += answers.length;
         answers.forEach((a: any) => {
-          const tName = a.questions?.topics?.name || 'Core UTME Topic';
+          const tId = a.questions?.topics?.id || a.questions?.topic_id;
+          const tName = a.questions?.topics?.name;
           const sName = a.questions?.subjects?.name || 'General';
-          if (!topicAccuracyMap[tName]) {
-            topicAccuracyMap[tName] = { total: 0, correct: 0, subject: sName };
+
+          const key = tId || tName || sName;
+          if (key) {
+            if (!topicAccuracyMap[key]) {
+              topicAccuracyMap[key] = {
+                total: 0,
+                correct: 0,
+                subject: sName,
+                topicId: tId || '',
+                topicName: tName || key
+              };
+            }
+            topicAccuracyMap[key].total += 1;
+            if (a.is_correct) topicAccuracyMap[key].correct += 1;
           }
-          topicAccuracyMap[tName].total += 1;
-          if (a.is_correct) topicAccuracyMap[tName].correct += 1;
         });
       }
     }
@@ -60,132 +87,167 @@ export async function generateAdaptiveLearningPath(
     localExams.forEach((e: any) => {
       const sub = e.subject || 'General';
       if (!topicAccuracyMap[sub]) {
-        topicAccuracyMap[sub] = { total: 0, correct: 0, subject: sub };
+        topicAccuracyMap[sub] = {
+          total: 0,
+          correct: 0,
+          subject: sub,
+          topicId: '',
+          topicName: `${sub} Fundamentals`
+        };
       }
       topicAccuracyMap[sub].total += 10;
       topicAccuracyMap[sub].correct += e.score || 0;
+      totalUserAnswers += 10;
     });
   } catch (err) {
-    console.warn('[AdaptiveLearningPath] Warning reading user history:', err);
+    console.warn('[AdaptiveLearningPath] Error reading user history:', err);
   }
 
-  // Master repository of high-yield UTME topics to build the path from
-  const candidateTopics = [
-    { subject: 'Use of English', topic: 'Grammar: Concord & Subject-Verb Agreement', weight: 20, defaultMinutes: 20 },
-    { subject: 'Use of English', topic: 'Lexis: Synonyms, Antonyms & Idioms', weight: 25, defaultMinutes: 25 },
-    { subject: 'Use of English', topic: 'Oral Forms: Vowels & Stress Placement', weight: 15, defaultMinutes: 15 },
-    { subject: 'Use of English', topic: 'Mandatory Novel: The Life Changer', weight: 20, defaultMinutes: 20 },
+  // If user has no attempted practice or exam questions, return truthful starter state (NO fake data)
+  if (totalUserAnswers === 0) {
+    return {
+      hasSufficientData: false,
+      generatedAt: todayFormatted,
+      totalSteps: 0,
+      completedStepsCount: 0,
+      estimatedTotalMinutes: 0,
+      potentialScoreGain: 0,
+      topFocusSubject: 'None',
+      steps: [],
+      learningRules
+    };
+  }
 
-    { subject: 'Mathematics', topic: 'Polynomials & Quadratic Equations', weight: 18, defaultMinutes: 30 },
-    { subject: 'Mathematics', topic: 'Calculus: Differentiation & Integration', weight: 20, defaultMinutes: 35 },
-    { subject: 'Mathematics', topic: 'Trigonometry & Bearings', weight: 15, defaultMinutes: 25 },
-    { subject: 'Mathematics', topic: 'Number Bases & Logarithms', weight: 12, defaultMinutes: 20 },
+  // 2. Load Topics & Subjects from Database
+  let dbTopics: any[] = [];
+  try {
+    const { data: topData } = await supabase
+      .from('topics')
+      .select('*, subjects(id, name)')
+      .order('sequence', { ascending: true });
 
-    { subject: 'Physics', topic: 'Units, Vectors & Motion Kinematics', weight: 15, defaultMinutes: 25 },
-    { subject: 'Physics', topic: 'Waves, Optics & Sound', weight: 20, defaultMinutes: 30 },
-    { subject: 'Physics', topic: 'Current Electricity & Magnetism', weight: 20, defaultMinutes: 30 },
-    { subject: 'Physics', topic: 'Thermal Physics & Gas Laws', weight: 15, defaultMinutes: 20 },
+    if (topData && topData.length > 0) {
+      dbTopics = topData;
+    }
+  } catch (err) {
+    console.warn('[AdaptiveLearningPath] Error fetching topics from DB:', err);
+  }
 
-    { subject: 'Chemistry', topic: 'Electrochemistry & Faraday\'s Laws', weight: 18, defaultMinutes: 30 },
-    { subject: 'Chemistry', topic: 'Organic Chemistry & Hydrocarbons', weight: 22, defaultMinutes: 35 },
-    { subject: 'Chemistry', topic: 'Stoichiometry & Mole Calculations', weight: 18, defaultMinutes: 25 },
-    { subject: 'Chemistry', topic: 'Acids, Bases, Salts & Volumetric Titration', weight: 18, defaultMinutes: 25 },
+  // 3. Match real user performance to topics
+  const candidateSteps: any[] = [];
 
-    { subject: 'Biology', topic: 'Genetics, Heredity & Punnett Squares', weight: 22, defaultMinutes: 30 },
-    { subject: 'Biology', topic: 'Plant & Animal Nutrition', weight: 18, defaultMinutes: 25 },
-    { subject: 'Biology', topic: 'Transport Systems & Respiration', weight: 18, defaultMinutes: 25 },
-    { subject: 'Biology', topic: 'Cell Structure & Organization of Life', weight: 15, defaultMinutes: 20 },
-  ];
+  // Evaluate each topic the user has practiced or DB topics
+  Object.entries(topicAccuracyMap).forEach(([key, stat]) => {
+    if (stat.total === 0) return;
 
-  // Filter if user selected a specific subject
-  const filteredList = filterSubject && filterSubject !== 'all'
-    ? candidateTopics.filter(t => t.subject.toLowerCase() === filterSubject.toLowerCase())
-    : candidateTopics;
-
-  // Evaluate weakness score for each candidate topic
-  const evaluatedList = filteredList.map((cand) => {
-    // Find matching accuracy in topicAccuracyMap
-    let accuracy = 40; // baseline if no data
-    let attempts = 0;
-
-    Object.entries(topicAccuracyMap).forEach(([key, val]) => {
-      if (key.toLowerCase().includes(cand.topic.toLowerCase()) || cand.topic.toLowerCase().includes(key.toLowerCase())) {
-        if (val.total > 0) {
-          accuracy = Math.round((val.correct / val.total) * 100);
-          attempts = val.total;
-        }
+    // Apply subject filter if specified
+    if (filterSubject && filterSubject !== 'all') {
+      if (stat.subject.toLowerCase() !== filterSubject.toLowerCase()) {
+        return;
       }
-    });
+    }
 
-    // Calculate Priority Score: Higher score = Needs more urgent study
-    // Topics with accuracy < 50% get a huge boost, weighted by UTME exam frequency
-    const weaknessFactor = 100 - accuracy;
-    const priorityScore = weaknessFactor * (cand.weight / 10) + (attempts === 0 ? 15 : 0);
+    const accuracy = Math.round((stat.correct / stat.total) * 100);
+    const weight = 15; // standard UTME weight
+    const weaknessFactor = Math.max(0, 100 - accuracy);
+
+    // Higher priority for topics with lower accuracy and more attempts
+    const priorityScore = weaknessFactor * (weight / 10) + Math.min(stat.total * 2, 20);
 
     let priorityLevel: 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'REINFORCE' = 'MEDIUM';
-    if (accuracy < 45) priorityLevel = 'CRITICAL';
-    else if (accuracy < 60) priorityLevel = 'HIGH';
-    else if (accuracy < 75) priorityLevel = 'MEDIUM';
+    if (accuracy < learningRules.weaknessTriggerPercent) priorityLevel = 'CRITICAL';
+    else if (accuracy < learningRules.masteryThresholdPercent) priorityLevel = 'HIGH';
+    else if (accuracy < 85) priorityLevel = 'MEDIUM';
     else priorityLevel = 'REINFORCE';
 
-    return {
-      ...cand,
+    candidateSteps.push({
+      id: stat.topicId || `topic_${key}`,
+      subjectName: stat.subject,
+      topicName: stat.topicName,
       accuracy,
-      attempts,
+      totalAttempts: stat.total,
+      weight,
       priorityScore,
-      priorityLevel
-    };
+      priorityLevel,
+      isCompleted: accuracy >= learningRules.masteryThresholdPercent
+    });
   });
 
-  // Sort by priorityScore descending to show weakest / highest-impact topics first
-  evaluatedList.sort((a, b) => b.priorityScore - a.priorityScore);
+  // Sort by priorityScore descending to place weakest topics first
+  candidateSteps.sort((a, b) => b.priorityScore - a.priorityScore);
 
-  // Take top 6 steps for the sequence
-  const selectedSteps = evaluatedList.slice(0, 6);
+  // Take top 6 steps
+  const selectedCandidates = candidateSteps.slice(0, 6);
 
-  const steps: LearningPathStep[] = selectedSteps.map((item, index) => {
-    let recAction = 'Solve 15 Targeted Drill Questions';
-    let reason = `High-yield UTME concept (${item.weight}% weight). Your current accuracy is ${item.accuracy}%.`;
+  if (selectedCandidates.length === 0) {
+    return {
+      hasSufficientData: false,
+      generatedAt: todayFormatted,
+      totalSteps: 0,
+      completedStepsCount: 0,
+      estimatedTotalMinutes: 0,
+      potentialScoreGain: 0,
+      topFocusSubject: 'None',
+      steps: [],
+      learningRules
+    };
+  }
+
+  let totalMinutes = 0;
+  let totalPotentialGain = 0;
+
+  const steps: LearningPathStep[] = selectedCandidates.map((item, index) => {
+    const estMinutes = item.priorityLevel === 'CRITICAL' ? 30 : item.priorityLevel === 'HIGH' ? 25 : 20;
+    totalMinutes += estMinutes;
+
+    // Calculate genuine potential gain based on gap to mastery threshold (75%)
+    const scoreGap = Math.max(0, Math.round(((learningRules.masteryThresholdPercent - item.accuracy) / 100) * 16));
+    totalPotentialGain += scoreGap;
+
+    let recAction = `Solve 15 Drill Questions on ${item.topicName}`;
+    let reason = `Based on your practice history (${item.totalAttempts} questions attempted, ${item.accuracy}% accuracy).`;
 
     if (item.priorityLevel === 'CRITICAL') {
-      recAction = 'Review Concept Cheat Sheet & Solve 20 Remedial Questions';
-      reason = `Critical Weakness Alert: Accuracy is at ${item.accuracy}%. Mastering this adds +12 UTME points.`;
+      recAction = `Review Concept Summary & Solve 20 Remedial Questions`;
+      reason = `Critical Weakness Alert: Accuracy is at ${item.accuracy}%. Raising this to ${learningRules.masteryThresholdPercent}% adds ~+${scoreGap || 8} UTME points.`;
     } else if (item.priorityLevel === 'HIGH') {
-      recAction = 'Complete 15 Speed Calculations Drill';
-      reason = `High Impact Area: UTME weight is ${item.weight}%. Boost accuracy from ${item.accuracy}% to 80%+.`;
+      recAction = `Complete 15 Speed Calculations Drill`;
+      reason = `Improvement Area: Current accuracy is ${item.accuracy}%. Target mastery threshold is ${learningRules.masteryThresholdPercent}%.`;
     } else if (item.priorityLevel === 'REINFORCE') {
-      recAction = 'Take 10-Question Speed Mastery Check';
-      reason = `Good foundation (${item.accuracy}% accuracy). Take quick refresher to maintain peak readiness.`;
+      recAction = `Take 10-Question Mastery Check`;
+      reason = `Strong foundation (${item.accuracy}% accuracy). Keep your speed sharp with quick refresher drills.`;
     }
 
     return {
-      id: `lpath_step_${index + 1}_${item.subject.toLowerCase().replace(/\s+/g, '_')}`,
+      id: item.id || `step_${index + 1}`,
       stepNumber: index + 1,
-      subjectName: item.subject,
-      topicName: item.topic,
+      subjectName: item.subjectName,
+      topicName: item.topicName,
       priorityLevel: item.priorityLevel,
       currentAccuracy: item.accuracy,
-      targetAccuracy: Math.min(95, item.accuracy + 25),
+      targetAccuracy: learningRules.masteryThresholdPercent,
       jambWeightPercent: item.weight,
-      estimatedMinutes: item.defaultMinutes,
+      estimatedMinutes: estMinutes,
       recommendedAction: recAction,
       learningReason: reason,
-      isCompleted: item.accuracy >= 85,
-      practiceSubjectParam: item.subject
+      isCompleted: item.isCompleted,
+      practiceSubjectParam: item.subjectName,
+      questionsAttempted: item.totalAttempts
     };
   });
 
-  const totalEstMin = steps.reduce((acc, s) => acc + s.estimatedMinutes, 0);
   const completedCount = steps.filter((s) => s.isCompleted).length;
-  const focusSub = steps[0]?.subjectName || 'Mathematics';
+  const topFocus = steps.length > 0 ? steps[0].subjectName : 'General';
 
   return {
-    generatedAt: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
+    hasSufficientData: true,
+    generatedAt: todayFormatted,
     totalSteps: steps.length,
     completedStepsCount: completedCount,
-    estimatedTotalMinutes: totalEstMin,
-    potentialScoreGain: Math.max(25, (steps.length - completedCount) * 8),
-    topFocusSubject: focusSub,
-    steps
+    estimatedTotalMinutes: totalMinutes,
+    potentialScoreGain: Math.max(totalPotentialGain, 8),
+    topFocusSubject: topFocus,
+    steps,
+    learningRules
   };
 }

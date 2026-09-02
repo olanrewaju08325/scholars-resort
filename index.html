@@ -55,14 +55,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <script>
-      window.onerror = function(message, source, lineno, colno, error) {
-        document.body.innerHTML = '<div style="color:red;padding:20px;font-family:monospace"><h2>Runtime Error</h2><p>' + message + '</p><pre>' + (error ? error.stack : '') + '</pre></div>';
-      };
-      window.addEventListener('unhandledrejection', function(event) {
-        document.body.innerHTML = '<div style="color:red;padding:20px;font-family:monospace"><h2>Promise Rejection</h2><p>' + event.reason + '</p></div>';
-      });
-    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

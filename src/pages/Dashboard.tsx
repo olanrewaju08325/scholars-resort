@@ -4,66 +4,42 @@ import { useStudentStats } from '@/hooks/useStudentStats';
 import { WelcomeHero } from '@/components/dashboard/WelcomeHero';
 import { SingleDeviceNotice } from '@/components/dashboard/SingleDeviceNotice';
 import { AnnouncementBanner } from '@/components/AnnouncementBanner';
-import { DailyMission } from '@/components/dashboard/DailyMission';
 import { StatsOverview } from '@/components/dashboard/StatsOverview';
 import { AIRecommendations } from '@/components/AIRecommendations';
-import { ActivityHeatmap } from '@/components/dashboard/ActivityHeatmap';
 import { LeaderboardPreview } from '@/components/dashboard/LeaderboardPreview';
 import { TournamentPreview } from '@/components/dashboard/TournamentPreview';
 import { NotificationsMenu } from '@/components/NotificationsMenu';
-import { Gamification } from '@/pages/dashboard-tabs/Gamification';
 import { WeeklyChallenge } from '@/components/dashboard/WeeklyChallenge';
-import { StudyGoalTracker } from '@/components/dashboard/StudyGoalTracker';
-import { JAMBCountdown } from '@/components/dashboard/JAMBCountdown';
-import { XPProgressPanel } from '@/components/dashboard/XPProgressPanel';
-import { BurnoutDetector } from '@/components/dashboard/BurnoutDetector';
-import { PomodoroTimer } from '@/components/dashboard/PomodoroTimer';
-import { PerformanceTrendChart } from '@/components/dashboard/PerformanceTrendChart';
-import { DashboardWidget } from '@/components/dashboard/DashboardWidget';
-import { DailyGoalTracker } from '@/components/dashboard/DailyGoalTracker';
-import { SubjectMasteryRadarChart } from '@/components/SubjectMasteryRadarChart';
 import { JambScorePredictorCard } from '@/components/dashboard/JambScorePredictorCard';
 import { DailyStudyTip } from '@/components/dashboard/DailyStudyTip';
-import { DailyStudyPlannerWidget } from '@/components/dashboard/DailyStudyPlannerWidget';
-import { StudentAchievementsWidget } from '@/components/dashboard/StudentAchievementsWidget';
-import { PeerStudyRoomWidget } from '@/components/dashboard/PeerStudyRoomWidget';
-import { EducationalJourneyMap } from '@/components/journey/EducationalJourneyMap';
-import { AdaptiveLearningPathWidget } from '@/components/learningpath/AdaptiveLearningPathWidget';
+import { DailyGoalTracker } from '@/components/dashboard/DailyGoalTracker';
 import { StudyStreakCalendar } from '@/components/dashboard/StudyStreakCalendar';
-import { Badges } from '@/components/Badges';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { MotivationEngine } from '@/components/dashboard/MotivationEngine';
 import { DashboardSkeleton } from '@/components/dashboard/skeletons/DashboardSkeleton';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { motion } from 'framer-motion';
-import { Sparkles, BookOpen, BarChart2, Clock, Trophy, Layers } from 'lucide-react';
+import { BookOpen, BarChart2, Trophy, Clock, Zap } from 'lucide-react';
 import { DailyFiveQuestionDrill } from "@/components/dashboard/DailyFiveQuestionDrill";
 import { CbtHubGrid } from '@/components/dashboard/CbtHubGrid';
-import { MasteryLoopTracker } from '@/components/dashboard/MasteryLoopTracker';
 
-type MobileTab = 'all' | 'practice' | 'analytics' | 'tools' | 'social';
+type DashboardView = 'practice' | 'progress' | 'community';
 
 export default function Dashboard() {
   usePerfMonitoring('Dashboard');
   const { profile, loading } = useAuth();
   const { examsTaken, averageScore, streak, history, statsLoading } = useStudentStats();
   const stats = { examsTaken, averageScore, streak, history };
-  const [mobileTab, setMobileTab] = useState<MobileTab>('all');
+  const [activeView, setActiveView] = useState<DashboardView>('practice');
 
   if (statsLoading || loading || !profile) {
     return <DashboardSkeleton />;
   }
 
-  const showPractice = mobileTab === 'all' || mobileTab === 'practice';
-  const showAnalytics = mobileTab === 'all' || mobileTab === 'analytics';
-  const showTools = mobileTab === 'all' || mobileTab === 'tools';
-  const showSocial = mobileTab === 'all' || mobileTab === 'social';
-
   return (
     <div className="min-h-screen bg-background text-foreground pb-20 overflow-x-hidden w-full">
-      {/* Top Navigation / Header Area */}
+      {/* Top Navigation Header */}
       <header className="sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border px-4 py-3 flex items-center justify-between w-full max-w-full">
-        <h1 className="text-xl font-display font-bold text-foreground truncate">My Dashboard</h1>
+        <h1 className="text-xl font-display font-bold text-foreground truncate">Student Dashboard</h1>
         <div className="flex items-center gap-3 shrink-0">
           <ThemeToggle />
           <NotificationsMenu />
@@ -81,231 +57,105 @@ export default function Dashboard() {
         <SingleDeviceNotice />
         
         {/* Hero Section */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }} className="min-w-0 w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="min-w-0 w-full">
           <WelcomeHero profile={profile} stats={stats} />
         </motion.div>
 
         {/* Scholars Resort CBT Practice & Exam Modules */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.05 }} className="min-w-0 w-full">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.05 }} className="min-w-0 w-full">
           <CbtHubGrid />
         </motion.div>
 
-        {/* Adaptive Mastery Loop Tracker */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.06 }} className="min-w-0 w-full">
-          <MasteryLoopTracker userId={profile.id} />
-        </motion.div>
-
-        {/* Daily High-Yield Study Tip Widget */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.08 }} className="min-w-0 w-full">
+        {/* Daily High-Yield Study Tip */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.08 }} className="min-w-0 w-full">
           <DailyStudyTip />
         </motion.div>
 
-        {/* JAMB Score Predictor */}
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="min-w-0 w-full">
-          <JambScorePredictorCard history={stats.history} />
-        </motion.div>
-
-        {/* Mobile View Filter Tabs - Easy tabbed access */}
-        <div className="flex lg:hidden overflow-x-auto no-scrollbar gap-2 p-1 bg-muted/60 rounded-xl border border-border w-full max-w-full">
+        {/* Clean Dashboard View Selector */}
+        <div className="flex items-center gap-2 border-b border-border/70 pb-3 overflow-x-auto no-scrollbar">
           <button
-            onClick={() => setMobileTab('all')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              mobileTab === 'all'
+            onClick={() => setActiveView('practice')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              activeView === 'practice'
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'bg-muted/50 text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Layers className="w-3.5 h-3.5" /> All Modules
+            <BookOpen className="w-4 h-4" /> Practice & Goals
           </button>
           <button
-            onClick={() => setMobileTab('practice')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              mobileTab === 'practice'
+            onClick={() => setActiveView('progress')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              activeView === 'progress'
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'bg-muted/50 text-muted-foreground hover:text-foreground'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" /> Practice & Journey
+            <BarChart2 className="w-4 h-4" /> Score & Analytics
           </button>
           <button
-            onClick={() => setMobileTab('analytics')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              mobileTab === 'analytics'
+            onClick={() => setActiveView('community')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+              activeView === 'community'
                 ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
+                : 'bg-muted/50 text-muted-foreground hover:text-foreground'
             }`}
           >
-            <BarChart2 className="w-3.5 h-3.5" /> Analytics & Mastery
-          </button>
-          <button
-            onClick={() => setMobileTab('tools')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              mobileTab === 'tools'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Clock className="w-3.5 h-3.5" /> Goals & Timers
-          </button>
-          <button
-            onClick={() => setMobileTab('social')}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all ${
-              mobileTab === 'social'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            <Trophy className="w-3.5 h-3.5" /> Quests & Community
+            <Trophy className="w-4 h-4" /> Challenges & Leaderboards
           </button>
         </div>
 
-        {/* Two Column Layout for Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-full min-w-0">
-          
-          {/* Main Column (Left) */}
-          <div className="lg:col-span-8 space-y-6 min-w-0 w-full max-w-full">
-            
-            {showPractice && (
-              <>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="min-w-0 w-full">
-                  <DailyMission />
-                </motion.div>
-
-                {/* Daily Study Planner Component */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.11 }} className="min-w-0 w-full">
-                  <DailyStudyPlannerWidget />
-                </motion.div>
-
-                {/* Daily Practice Goal Tracker Component */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.12 }} className="min-w-0 w-full">
-                  <DailyGoalTracker />
-                </motion.div>
-
-                {/* Visual Study Streak Calendar Component */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.18 }} className="min-w-0 w-full">
-                  <StudyStreakCalendar />
-                </motion.div>
-
-                {/* Educational Journey Map */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.27 }} className="min-w-0 w-full">
-                  <EducationalJourneyMap />
-                </motion.div>
-
-                {/* Peer Study Room Live Widget */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.28 }} className="min-w-0 w-full">
-                  <PeerStudyRoomWidget />
-                </motion.div>
-
-                {/* Adaptive Learning Path Generator */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.29 }} className="min-w-0 w-full">
-                  <AdaptiveLearningPathWidget />
-                </motion.div>
-              </>
-            )}
-            
-            {showAnalytics && (
-              <>
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="min-w-0 w-full">
-                  <StatsOverview stats={stats} />
-                </motion.div>
-
-                {/* Dashboard Performance Trends & Score Improvement Widget */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.23 }} className="min-w-0 w-full">
-                  <DashboardWidget history={stats.history} studentName={profile?.full_name} />
-                </motion.div>
-
-                {/* Performance Trend Recharts Line Chart */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.25 }} className="min-w-0 w-full">
-                  <PerformanceTrendChart history={stats.history} />
-                </motion.div>
-
-                {/* Subject Mastery Radar Chart */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="min-w-0 w-full">
-                  <SubjectMasteryRadarChart data={[]} />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="min-w-0 w-full">
-                  <h2 className="text-xl font-bold font-display mb-4">Study Insights</h2>
-                  <AIRecommendations profileId={profile?.id || ''} examsData={stats.history} />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.5 }} className="min-w-0 w-full">
-                  <ActivityHeatmap />
-                </motion.div>
-              </>
-            )}
-
-            {showSocial && (
-              <>
-                {/* Milestone Badges & Achievements */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.35 }} className="min-w-0 w-full">
-                  <Badges />
-                </motion.div>
-
-                {/* Comprehensive Student Achievements Widget */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.38 }} className="min-w-0 w-full">
-                  <StudentAchievementsWidget />
-                </motion.div>
-
-                {/* Existing Gamification Tab Ported In */}
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.6 }} className="min-w-0 w-full">
-                  <Gamification />
-                </motion.div>
-              </>
-            )}
+        {/* View Content */}
+        {activeView === 'practice' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-full min-w-0">
+            <div className="lg:col-span-8 space-y-6 min-w-0 w-full">
+              <DailyGoalTracker />
+              <StudyStreakCalendar />
+              <div className="space-y-3">
+                <h2 className="text-xl font-bold font-display text-foreground flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-primary" /> Recommended Next Actions
+                </h2>
+                <AIRecommendations profileId={profile.id} examsData={stats.history} />
+              </div>
+            </div>
+            <div className="lg:col-span-4 space-y-6 min-w-0 w-full">
+              <JambScorePredictorCard history={stats.history} />
+              <WeeklyChallenge />
+            </div>
           </div>
+        )}
 
-          {/* Sidebar Column (Right on Desktop, or contextual on Mobile) */}
-          <div className="lg:col-span-4 space-y-6 min-w-0 w-full max-w-full">
-            
-            {showSocial && (
-              <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.1 }} className="min-w-0 w-full">
-                <MotivationEngine />
-              </motion.div>
-            )}
-
-            {showTools && (
-              <>
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.12 }} className="min-w-0 w-full">
-                  <JAMBCountdown />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.15 }} className="min-w-0 w-full">
-                  <PomodoroTimer />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.2 }} className="min-w-0 w-full">
-                  <StudyGoalTracker />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.7 }} className="min-w-0 w-full">
-                  <BurnoutDetector />
-                </motion.div>
-              </>
-            )}
-
-            {showSocial && (
-              <>
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.3 }} className="min-w-0 w-full">
-                  <TournamentPreview />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.4 }} className="min-w-0 w-full">
-                  <WeeklyChallenge />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.5 }} className="min-w-0 w-full">
-                  <XPProgressPanel />
-                </motion.div>
-
-                <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.5, delay: 0.6 }} className="min-w-0 w-full">
-                  <LeaderboardPreview />
-                </motion.div>
-              </>
-            )}
-
+        {activeView === 'progress' && (
+          <div className="space-y-6 w-full">
+            <StatsOverview stats={stats} />
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              <div className="lg:col-span-7 space-y-6">
+                <JambScorePredictorCard history={stats.history} />
+              </div>
+              <div className="lg:col-span-5 space-y-6">
+                <div className="space-y-3">
+                  <h2 className="text-xl font-bold font-display text-foreground flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-primary" /> Study Guidance
+                  </h2>
+                  <AIRecommendations profileId={profile.id} examsData={stats.history} />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
+
+        {activeView === 'community' && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 w-full max-w-full min-w-0">
+            <div className="lg:col-span-7 space-y-6">
+              <TournamentPreview />
+              <WeeklyChallenge />
+            </div>
+            <div className="lg:col-span-5 space-y-6">
+              <LeaderboardPreview />
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

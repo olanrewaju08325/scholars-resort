@@ -120,42 +120,45 @@ export const AppLayout = () => {
   // Structured Navigation Groups
   const studentNavGroups = [
     {
-      groupTitle: 'Core Learning',
+      groupTitle: 'LEARN',
       items: [
         { label: 'Dashboard', icon: Home, path: '/dashboard' },
-        { label: 'Journey Map', icon: MapPin, path: '/journey-map' },
-        { label: 'Adaptive Path', icon: GitMerge, path: '/adaptive-path' },
-        { label: 'Peer Study Rooms', icon: Video, path: '/study-rooms' },
+        { label: 'My Learning', icon: MapPin, path: '/journey-map' },
         { label: 'Study Plan', icon: CalendarDays, path: '/plan' },
-        { label: 'CBT Exam Center', icon: Timer, path: '/cbt' },
+        { label: 'CBT Practice', icon: Timer, path: '/cbt' },
       ]
     },
     {
-      groupTitle: 'Practice & Challenges',
+      groupTitle: 'PRACTICE',
       items: [
-        { label: 'Practice Setup', icon: PlayCircle, path: '/practice' },
-        { label: 'Weakness Drill', icon: Zap, path: '/weakness' },
+        { label: 'Practice', icon: PlayCircle, path: '/practice' },
+        { label: 'Weakness Practice', icon: Zap, path: '/weakness' },
         { label: 'Flashcards', icon: Layers, path: '/flashcards' },
-        { label: 'Weekly Mocks', icon: Sparkles, path: '/mocks' },
-        { label: 'Tournament Arena', icon: Swords, path: '/tournaments' },
+        { label: 'Mock Exams', icon: Sparkles, path: '/mocks' },
       ]
     },
     {
-      groupTitle: 'Guidance & Resources',
+      groupTitle: 'RESOURCES',
       items: [
-        { label: 'JAMB Novel Hub', icon: BookOpen, path: '/novel-hub' },
-        { label: 'Career Guide', icon: Compass, path: '/career-guide' },
-        { label: 'Course Eligibility', icon: GraduationCap, path: '/eligibility-checker' },
-        { label: 'Offline Packs', icon: HardDrive, path: '/offline-packs' },
+        { label: 'JAMB Materials', icon: HardDrive, path: '/offline-packs' },
+        { label: 'Novel Hub', icon: BookOpen, path: '/novel-hub' },
         { label: 'Resource Library', icon: BookOpen, path: '/library' },
+        { label: 'Career & Courses', icon: Compass, path: '/career-guide' },
       ]
     },
     {
-      groupTitle: 'Community & Profile',
+      groupTitle: 'COMMUNITY',
       items: [
+        { label: 'Study Rooms', icon: Video, path: '/study-rooms' },
+        { label: 'Challenges', icon: Swords, path: '/tournaments' },
         { label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
-        { label: 'My Profile', icon: User, path: '/profile' },
-        { label: 'Support & Help', icon: HelpCircle, path: '/support' },
+      ]
+    },
+    {
+      groupTitle: 'ACCOUNT',
+      items: [
+        { label: 'Profile', icon: User, path: '/profile' },
+        { label: 'Support', icon: HelpCircle, path: '/support' },
       ]
     }
   ];

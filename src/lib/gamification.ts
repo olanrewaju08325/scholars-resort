@@ -403,11 +403,25 @@ export const checkAndAwardBadges = async (
 
     // Award badges, grant +100 XP each, and play celebration
     for (const badge of badgesToAward) {
-      // Insert to user_badges
+      if (earnedBadgeIds.has(badge.key)) continue;
+      earnedBadgeIds.add(badge.key);
+
+      // Insert to user_badges with idempotent protection
       try {
-        await supabase.from('user_badges').insert({ student_id: userId, user_id: userId, badge_id: badge.key, badge_key: badge.key, title: badge.name });
+        const { error: insertErr } = await supabase.from('user_badges').insert({ 
+          student_id: userId, 
+          user_id: userId, 
+          badge_id: badge.key, 
+          badge_key: badge.key, 
+          title: badge.name 
+        });
+        
+        // If unique constraint violation or successfully inserted, continue
+        if (insertErr && !insertErr.message?.includes('duplicate') && !insertErr.message?.includes('unique')) {
+          console.warn('[Gamification] Badge insert notice:', insertErr.message);
+        }
       } catch (err) {
-        console.warn('Badge insertion notice:', err);
+        console.warn('[Gamification] Badge insertion notice:', err);
       }
 
       // Bonus XP for unlocking badge (+100 XP)

@@ -75,7 +75,22 @@ export const AdaptiveLearningPathWidget: React.FC = () => {
     );
   }
 
-  if (!data) return null;
+  if (!data || !data.hasSufficientData || data.steps.length === 0) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-[300px] bg-card border border-border rounded-2xl shadow-sm text-center">
+        <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3">
+          <BookOpen className="w-6 h-6" />
+        </div>
+        <h3 className="text-lg font-bold text-foreground mb-1">No Practice History Recorded Yet</h3>
+        <p className="text-sm text-muted-foreground max-w-md mb-6">
+          Complete your first practice sessions or mock exams so the adaptive engine can analyze your performance and build your personalized learning path.
+        </p>
+        <Button onClick={() => navigate('/practice')} className="font-bold gap-2">
+          <Play className="w-4 h-4" /> Start Practice Session
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
