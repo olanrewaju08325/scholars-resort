@@ -99,12 +99,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       // 1. Fetch authoritatively from backend API (which merges database and server-side persistent overrides)
       let loadedProfile: Profile | null = null;
       try {
-        const apiRes = await fetch(getApiUrl(`/api/profile/${userId}`));
-        const apiData = await apiRes.json();
-        if (apiData && apiData.success && apiData.profile) {
-          loadedProfile = apiData.profile as Profile;
+        const { data: sessionData } = await supabase.auth.getSession();
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (sessionData?.session?.access_token) {
+          headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
         }
-      } catch {}
+        const apiRes = await fetch(getApiUrl(`/api/profile/${userId}`), { headers });
+        if (apiRes.ok) {
+          const apiData = await apiRes.json();
+          if (apiData && apiData.success && apiData.profile) {
+            loadedProfile = apiData.profile as Profile;
+          }
+        }
+      } catch (err) {
+        console.warn('API profile fetch notice:', err);
+      }
 
       // 2. Fallback to Supabase direct query if API didn't return
       if (!loadedProfile) {

@@ -25,7 +25,7 @@ export function useStudentStats() {
       const sessRes = await safeSupabaseQuery<any[]>(
         supabase
           .from('exam_sessions')
-          .select('score, total_questions, started_at, created_at, status')
+          .select('score, total_questions, started_at, submitted_at, status')
           .eq('user_id', profile.id),
         { contextName: 'useStudentStats.exam_sessions', fallbackValue: [] }
       );

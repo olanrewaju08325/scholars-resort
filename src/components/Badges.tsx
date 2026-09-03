@@ -77,7 +77,7 @@ export const Badges: React.FC = () => {
 
       // 3. Fetch completed exam sessions for progress
       const sessRes = await safeSupabaseQuery<any[]>(
-        supabase.from('exam_sessions').select('score, total_questions, created_at, status').eq('user_id', user.id).eq('status', 'completed'),
+        supabase.from('exam_sessions').select('score, total_questions, started_at, status').eq('user_id', user.id).eq('status', 'completed'),
         { contextName: 'Badges.fetchBadges.exam_sessions', fallbackValue: [] }
       );
       const allSessions = sessRes.data || [];

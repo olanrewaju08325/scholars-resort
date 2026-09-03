@@ -1054,11 +1054,12 @@ app.post('/api/groq-chat', async (req, res) => {
 
     const candidateModels = [
       model,
+      'openai/gpt-oss-120b',
+      'openai/gpt-oss-20b',
+      'qwen/qwen3.8-27b',
       'groq/compound-mini',
       'groq/compound',
-      'qwen/qwen3.6-27b',
-      'llama-3.3-70b-versatile',
-      'llama-3.1-8b-instant'
+      'qwen/qwen3.6-27b'
     ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
     if (groqKey && groqKey.trim()) {
@@ -1521,7 +1522,7 @@ app.get('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
     const configs: any = {
       groq: {
         apiKey: process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY || '',
-        defaultModel: 'llama-3.3-70b-versatile',
+        defaultModel: 'openai/gpt-oss-120b',
         monthlyTokenLimit: 5000000
       },
       smtp: {
@@ -1703,7 +1704,7 @@ app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
 app.post('/api/admin/test-groq', verifyAdminToken, async (req, res) => {
   const startTime = Date.now();
   try {
-    const { apiKey, model = 'llama-3.3-70b-versatile' } = req.body;
+    const { apiKey, model = 'openai/gpt-oss-120b' } = req.body;
     const keyToTest = (apiKey || process.env.GROQ_API_KEY || '').trim();
 
     if (!keyToTest) {
@@ -2145,7 +2146,7 @@ Output strictly raw JSON without markdown code fences or conversational greeting
           'Authorization': `Bearer ${groqKey}`
         },
         body: JSON.stringify({
-          model: 'llama-3.3-70b-versatile',
+          model: 'openai/gpt-oss-120b',
           messages: [
             { role: 'system', content: 'You are the official Scholars Resort CBT Bank Academic Engine. Output only valid JSON arrays.' },
             { role: 'user', content: prompt }
@@ -2749,7 +2750,7 @@ Return ONLY a STRICT JSON array of objects with NO markdown formatting outside t
             'Authorization': `Bearer ${groqKey || process.env.GROQ_API_KEY}`
           },
           body: JSON.stringify({
-            model: 'llama-3.3-70b-versatile',
+            model: 'openai/gpt-oss-120b',
             messages: groqMessages,
             temperature: 0.1
           })
@@ -2763,7 +2764,7 @@ Return ONLY a STRICT JSON array of objects with NO markdown formatting outside t
             const parsed = JSON.parse(cleanedText);
             if (Array.isArray(parsed) && parsed.length > 0) {
               extractedQuestions = parsed;
-              processingProvider = 'groq-llama-3.3-70b';
+              processingProvider = 'groq-gpt-oss-120b';
             }
           } catch (pErr) {
             console.warn('Groq OCR JSON parse warning:', pErr);

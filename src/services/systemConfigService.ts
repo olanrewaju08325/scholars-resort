@@ -59,7 +59,7 @@ export const testGroqKeyLive = async (apiKey: string, model?: string) => {
 
 const DEFAULT_GROQ_CONFIG: GroqSystemConfig = {
   apiKey: '',
-  defaultModel: 'llama-3.3-70b-versatile',
+  defaultModel: 'openai/gpt-oss-120b',
   monthlyTokenLimit: 5000000,
   systemPrompt: 'You are Scholars Resort AI, a world-class Nigerian UTME and WASSCE academic tutor specialized in JAMB syllabus, step-by-step problem breakdown, and student mentorship.',
   temperature: 0.7
@@ -194,33 +194,12 @@ export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{
       }
     }
 
-    // 2. Direct Supabase Upserts Fallback
-    try {
-      await supabase.from('system_configs').upsert([
-        {
-          config_key: 'groq_settings',
-          config_value: configs.groq,
-          updated_at: new Date().toISOString()
-        },
-        {
-          config_key: 'smtp_settings',
-          config_value: configs.smtp,
-          updated_at: new Date().toISOString()
-        },
-        {
-          config_key: 'platform_controls',
-          config_value: configs.platform,
-          updated_at: new Date().toISOString()
-        }
-      ], { onConflict: 'config_key' });
-    } catch (_) {}
-
-    // 3. Mirror to admin_settings table for backward compatibility
+    // 2. Direct admin_settings table upserts
     try {
       await supabase.from('admin_settings').upsert([
         {
           setting_key: 'ai_api_keys',
-          setting_value: { groq: configs.groq.apiKey, default_model: configs.groq.defaultModel },
+          setting_value: { groq: configs.groq.apiKey, default_model: configs.groq.defaultModel || 'openai/gpt-oss-120b' },
           updated_at: new Date().toISOString()
         },
         {
@@ -251,6 +230,11 @@ export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{
             study_rooms_enabled: configs.platform.studyRoomsEnabled
           },
           updated_at: new Date().toISOString()
+        },
+        {
+          setting_key: 'system_config',
+          setting_value: configs,
+          updated_at: new Date().toISOString()
         }
       ], { onConflict: 'setting_key' });
     } catch (_) {}
@@ -265,7 +249,7 @@ export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{
 /**
  * Test GROQ API key in real-time
  */
-export async function testGroqConnection(apiKey: string, model: string = 'llama-3.3-70b-versatile'): Promise<{ ok: boolean; latencyMs?: number; message?: string }> {
+export async function testGroqConnection(apiKey: string, model: string = 'openai/gpt-oss-120b'): Promise<{ ok: boolean; latencyMs?: number; message?: string }> {
   try {
     const res = await authFetch('/api/admin/test-groq', {
       method: 'POST',

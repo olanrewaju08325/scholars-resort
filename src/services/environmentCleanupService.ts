@@ -80,10 +80,10 @@ export const previewEnvironmentCleanup = async (
   // 2. Target Guest & Anonymous Exam Sessions
   if (options.purgeGuestSessions) {
     try {
-      let query = supabase.from('exam_sessions').select('id, user_id, created_at').is('user_id', null);
+      let query = supabase.from('exam_sessions').select('id, user_id, started_at').is('user_id', null);
 
       if (options.dateFilterEnabled && options.createdBeforeDate) {
-        query = query.lt('created_at', new Date(options.createdBeforeDate).toISOString());
+        query = query.lt('started_at', new Date(options.createdBeforeDate).toISOString());
       }
 
       const { data, error } = await query;
@@ -103,10 +103,10 @@ export const previewEnvironmentCleanup = async (
   // 3. Target Unsubmitted/Abandoned Sessions
   if (options.purgeUnsubmittedSessions) {
     try {
-      let query = supabase.from('exam_sessions').select('id, status, created_at').eq('status', 'in_progress');
+      let query = supabase.from('exam_sessions').select('id, status, started_at').eq('status', 'in_progress');
 
       if (options.dateFilterEnabled && options.createdBeforeDate) {
-        query = query.lt('created_at', new Date(options.createdBeforeDate).toISOString());
+        query = query.lt('started_at', new Date(options.createdBeforeDate).toISOString());
       }
 
       const { data, error } = await query;
@@ -233,7 +233,7 @@ export const executeEnvironmentCleanup = async (
     try {
       let query = supabase.from('exam_sessions').delete().is('user_id', null);
       if (options.dateFilterEnabled && options.createdBeforeDate) {
-        query = query.lt('created_at', new Date(options.createdBeforeDate).toISOString());
+        query = query.lt('started_at', new Date(options.createdBeforeDate).toISOString());
       }
 
       const { count, error } = await query;
@@ -253,7 +253,7 @@ export const executeEnvironmentCleanup = async (
     try {
       let query = supabase.from('exam_sessions').delete().eq('status', 'in_progress');
       if (options.dateFilterEnabled && options.createdBeforeDate) {
-        query = query.lt('created_at', new Date(options.createdBeforeDate).toISOString());
+        query = query.lt('started_at', new Date(options.createdBeforeDate).toISOString());
       }
 
       const { count, error } = await query;

@@ -145,7 +145,7 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
 
     // 3. Fetch completed exam sessions count & metrics safely
     const examSessRes = await safeSupabaseQuery<any[]>(
-      supabase.from('exam_sessions').select('id, score, total_questions, created_at, status').eq('user_id', userId).eq('status', 'completed'),
+      supabase.from('exam_sessions').select('id, score, total_questions, started_at, status').eq('user_id', userId).eq('status', 'completed'),
       { contextName: 'StudentAchievementsService.exam_sessions', fallbackValue: [] }
     );
     const examSessions = examSessRes.data || [];
@@ -159,12 +159,12 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
 
     // Check time-of-day sessions
     const hasEarlyBird = (examSessions || []).some(s => {
-      const h = new Date(s.created_at).getHours();
+      const h = new Date(s.started_at || s.submitted_at || Date.now()).getHours();
       return h >= 4 && h < 8;
     });
 
     const hasNightOwl = (examSessions || []).some(s => {
-      const h = new Date(s.created_at).getHours();
+      const h = new Date(s.started_at || s.submitted_at || Date.now()).getHours();
       return h >= 21 || h < 4;
     });
 

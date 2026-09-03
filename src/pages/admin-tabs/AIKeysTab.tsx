@@ -36,34 +36,19 @@ export const AIKeysTab = () => {
   const fetchKeysAndUsage = useCallback(async () => {
     setLoading(true);
     try {
-      // 1. Fetch Keys from system_configs table
+      // 1. Fetch Keys from authoritative admin_settings table
       let foundKey = '';
-      try {
-        const { data: sysData } = await supabase
-          .from('system_configs')
-          .select('config_value')
-          .eq('config_key', 'groq_settings')
-          .maybeSingle();
+      const { data: keyData } = await supabase
+        .from('admin_settings')
+        .select('setting_key, setting_value')
+        .in('setting_key', ['ai_api_keys', 'api_keys', 'system_config']);
 
-        if (sysData?.config_value?.apiKey || sysData?.config_value?.groq) {
-          foundKey = sysData.config_value.apiKey || sysData.config_value.groq;
-        }
-      } catch (_) {}
-
-      // Fallback to admin_settings
-      if (!foundKey) {
-        const { data: keyData } = await supabase
-          .from('admin_settings')
-          .select('setting_key, setting_value')
-          .in('setting_key', ['ai_api_keys', 'api_keys']);
-
-        if (keyData) {
-          for (const row of keyData) {
-            const k = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key;
-            if (k) {
-              foundKey = k;
-              break;
-            }
+      if (keyData) {
+        for (const row of keyData) {
+          const k = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key || row.setting_value?.apiKey;
+          if (k) {
+            foundKey = k;
+            break;
           }
         }
       }
@@ -142,23 +127,10 @@ export const AIKeysTab = () => {
   const handleSaveKeys = async () => {
     setSaving(true);
     try {
-      // 1. Save to system_configs table
-      try {
-        await supabase.from('system_configs').upsert({
-          config_key: 'groq_settings',
-          config_value: {
-            apiKey: groqKey.trim(),
-            defaultModel: 'llama-3.3-70b-versatile',
-            monthlyTokenLimit: limits.monthly_token_limit
-          },
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'config_key' });
-      } catch (_) {}
-
-      // 2. Save to admin_settings table for backward compatibility
+      // 1. Save to admin_settings table
       const { error: keyErr } = await supabase.from('admin_settings').upsert({
         setting_key: 'ai_api_keys',
-        setting_value: { groq: groqKey.trim() },
+        setting_value: { groq: groqKey.trim(), default_model: 'openai/gpt-oss-120b' },
         updated_at: new Date().toISOString()
       }, { onConflict: 'setting_key' });
 
@@ -172,20 +144,20 @@ export const AIKeysTab = () => {
 
       if (limitErr) throw limitErr;
 
-      // 3. Post to API route for immediate runtime server cache update
+      // 2. Post to API route for immediate runtime server cache update
       authFetch('/api/admin/system-configs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           groq: {
             apiKey: groqKey.trim(),
-            defaultModel: 'llama-3.3-70b-versatile',
+            defaultModel: 'openai/gpt-oss-120b',
             monthlyTokenLimit: limits.monthly_token_limit
           }
         })
       }).catch(() => {});
 
-      toast.success("Groq API Key and Token Limits saved successfully to system_configs table!");
+      toast.success("Groq API Key and Token Limits saved successfully to database!");
       loadTelemetryData();
     } catch (err: any) {
       toast.error("Failed to save settings: " + err.message);

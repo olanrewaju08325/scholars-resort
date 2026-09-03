@@ -33,7 +33,7 @@ export const SettingsTab = () => {
 
   // GROQ AI Configuration
   const [groqKey, setGroqKey] = useState('');
-  const [groqModel, setGroqModel] = useState('llama-3.3-70b-versatile');
+  const [groqModel, setGroqModel] = useState('openai/gpt-oss-120b');
   const [groqMonthlyLimit, setGroqMonthlyLimit] = useState(5000000);
   const [showGroqKey, setShowGroqKey] = useState(false);
   const [testingGroq, setTestingGroq] = useState(false);
@@ -353,10 +353,11 @@ export const SettingsTab = () => {
                     onChange={e => setGroqModel(e.target.value)}
                     className="w-full h-10 px-3 rounded-md bg-background border border-input text-sm text-foreground focus:ring-2 focus:ring-primary outline-none"
                   >
-                    <option value="llama-3.3-70b-versatile">Llama 3.3 70B Versatile (Recommended)</option>
-                    <option value="llama-3.1-8b-instant">Llama 3.1 8B Instant (Ultra-fast)</option>
-                    <option value="mixtral-8x7b-32768">Mixtral 8x7B (Long Context)</option>
-                    <option value="gemma2-9b-it">Gemma 2 9B IT (Google DeepMind)</option>
+                    <option value="openai/gpt-oss-120b">GPT-OSS 120B (State of the Art & Recommended)</option>
+                    <option value="openai/gpt-oss-20b">GPT-OSS 20B (High Speed & Low Latency)</option>
+                    <option value="qwen/qwen3.8-27b">Qwen 3.8 27B (Math & Reasoning)</option>
+                    <option value="groq/compound">Groq Compound (Compound Reasoning)</option>
+                    <option value="groq/compound-mini">Groq Compound Mini (Ultra-Fast)</option>
                   </select>
                 </div>
 

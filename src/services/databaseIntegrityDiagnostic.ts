@@ -621,7 +621,7 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
   try {
     const { data: dbSessions, error: sessErr } = await supabase
       .from('exam_sessions')
-      .select('id, user_id, status, created_at');
+      .select('id, user_id, status, started_at');
 
     if (!sessErr && dbSessions) {
       userMetrics.totalExamSessions = dbSessions.length;

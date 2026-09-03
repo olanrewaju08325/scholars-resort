@@ -356,7 +356,7 @@ export function stripThinkTags(text: string): string {
   return cleaned;
 }
 
-export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'llama-3.3-70b-versatile', temperature = 0.7): Promise<string> => {
+export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'openai/gpt-oss-120b', temperature = 0.7): Promise<string> => {
   const rawKey = await getGroqApiKey();
   const apiKey = (rawKey || '').trim().replace(/^["']|["']$/g, '').trim();
 
@@ -370,11 +370,12 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
 
   const candidateModels = [
     model,
+    'openai/gpt-oss-120b',
+    'openai/gpt-oss-20b',
+    'qwen/qwen3.8-27b',
     'groq/compound-mini',
     'groq/compound',
-    'qwen/qwen3.6-27b',
-    'llama-3.3-70b-versatile',
-    'llama-3.1-8b-instant'
+    'qwen/qwen3.6-27b'
   ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
   // 1. Primary: Server Proxy (/api/groq-chat) which uses Server env or Supabase DB keys securely

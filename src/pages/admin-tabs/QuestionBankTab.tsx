@@ -137,21 +137,7 @@ export const QuestionBankTab = () => {
       console.warn('DB Question fetch notice:', err);
     }
 
-    // Merge with local custom questions if any were saved during RLS restrictions
-    
-    const combinedMap = new Map();
-    dbQuestions.forEach(q => combinedMap.set(q.id, q));
-    localQuestions.forEach(q => {
-      if (!combinedMap.has(q.id)) {
-        combinedMap.set(q.id, {
-          ...q,
-          id: q.id || `local_q_${Math.random().toString(36).substring(2, 9)}`,
-          created_at: q.created_at || new Date().toISOString()
-        });
-      }
-    });
-
-    setQuestions(Array.from(combinedMap.values()));
+    setQuestions(dbQuestions);
 
     const { data: sData } = await supabase.from('subjects').select('*').eq('is_active', true);
     if (sData) {
