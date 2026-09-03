@@ -23,12 +23,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'Authorization', 'X-Groq-Key', 'X-Groq-Api-Key', 'x-groq-key', 'x-groq-api-key', '*']
-}));
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
@@ -131,7 +125,7 @@ async function verifyAdminToken(req: express.Request, res: express.Response, nex
 
 let cachedWorkingSmtpConfig: any = null;
 
-// Helper to resolve SMTP settings from DB (system_configs, admin_settings) or env or request
+// Helper to resolve SMTP settings from DB (admin_settings) or env or request
 async function getSmtpConfig(customConfig?: any) {
   if (customConfig && customConfig.host) {
     return {
@@ -147,44 +141,35 @@ async function getSmtpConfig(customConfig?: any) {
     return cachedWorkingSmtpConfig;
   }
 
-  // 1. Try DB system_configs table (primary modern config store)
+  // 1. Try DB admin_settings (where Admin -> Settings saves api_keys & system_config)
   try {
-    const { data: sysData } = await supabase
-      .from('system_configs')
-      .select('config_value')
-      .eq('config_key', 'smtp_settings')
-      .maybeSingle();
-
-    if (sysData?.config_value?.host) {
-      const s = sysData.config_value;
-      return {
-        host: s.host,
-        port: Number(s.port) || 587,
-        user: s.user || '',
-        pass: s.pass || '',
-        from: s.from || s.user || 'admitwise2@gmail.com'
-      };
-    }
-  } catch (err) {
-    console.warn('Failed to load SMTP config from system_configs:', err);
-  }
-
-  // 2. Try DB admin_settings (where Admin -> Settings saves api_keys)
-  try {
-    const { data: adminData } = await supabase
+    const { data: adminRows } = await supabase
       .from('admin_settings')
-      .select('setting_value')
-      .eq('setting_key', 'api_keys')
-      .maybeSingle();
+      .select('setting_key, setting_value')
+      .in('setting_key', ['api_keys', 'system_config']);
 
-    if (adminData?.setting_value?.smtp_host) {
-      return {
-        host: adminData.setting_value.smtp_host,
-        port: Number(adminData.setting_value.smtp_port) || 587,
-        user: adminData.setting_value.smtp_user || '',
-        pass: adminData.setting_value.smtp_pass || '',
-        from: adminData.setting_value.smtp_from || adminData.setting_value.smtp_user || 'admitwise2@gmail.com'
-      };
+    if (adminRows && adminRows.length > 0) {
+      for (const row of adminRows) {
+        if (row.setting_key === 'system_config' && row.setting_value?.smtp?.host) {
+          const s = row.setting_value.smtp;
+          return {
+            host: s.host,
+            port: Number(s.port) || 587,
+            user: s.user || '',
+            pass: s.pass || '',
+            from: s.from || s.user || 'admitwise2@gmail.com'
+          };
+        }
+        if (row.setting_key === 'api_keys' && row.setting_value?.smtp_host) {
+          return {
+            host: row.setting_value.smtp_host,
+            port: Number(row.setting_value.smtp_port) || 587,
+            user: row.setting_value.smtp_user || '',
+            pass: row.setting_value.smtp_pass || '',
+            from: row.setting_value.smtp_from || row.setting_value.smtp_user || 'admitwise2@gmail.com'
+          };
+        }
+      }
     }
   } catch (err) {
     console.warn('Failed to load SMTP config from admin_settings:', err);
@@ -1020,36 +1005,26 @@ app.post('/api/groq-chat', async (req, res) => {
     let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
 
     if (!groqKey) {
-      // 1. Try DB system_configs table
+      // 1. Try DB admin_settings table (authoritative configuration source)
       try {
-        const { data: sysKey } = await supabase
-          .from('system_configs')
-          .select('config_value')
-          .eq('config_key', 'groq_settings')
-          .maybeSingle();
-        if (sysKey?.config_value?.apiKey || sysKey?.config_value?.groq) {
-          groqKey = sysKey.config_value.apiKey || sysKey.config_value.groq;
-        }
-      } catch (_) {}
-
-      // 2. Try DB admin_settings table
-      if (!groqKey) {
-        try {
-          const { data: dbKeys } = await supabase
-            .from('admin_settings')
-            .select('setting_value')
-            .in('setting_key', ['ai_api_keys', 'ai_api_settings', 'api_keys']);
-          if (dbKeys) {
-            for (const row of dbKeys) {
-              const val = row.setting_value?.apiKey || row.setting_value?.groq || row.setting_value?.groq_key;
-              if (val && typeof val === 'string' && val.trim().length > 10) {
-                groqKey = val.trim();
-                break;
-              }
+        const { data: dbKeys } = await supabase
+          .from('admin_settings')
+          .select('setting_key, setting_value')
+          .in('setting_key', ['ai_api_keys', 'ai_api_settings', 'api_keys', 'system_config']);
+        if (dbKeys) {
+          for (const row of dbKeys) {
+            if (row.setting_key === 'system_config' && row.setting_value?.groq?.apiKey) {
+              groqKey = row.setting_value.groq.apiKey;
+              break;
+            }
+            const val = row.setting_value?.apiKey || row.setting_value?.groq || row.setting_value?.groq_key;
+            if (val && typeof val === 'string' && val.trim().length > 10) {
+              groqKey = val.trim();
+              break;
             }
           }
-        } catch (_) {}
-      }
+        }
+      } catch (_) {}
     }
 
     const candidateModels = [
@@ -1516,7 +1491,7 @@ app.post('/api/auth/verify-otp', async (req, res) => {
 // --- SYSTEM CONFIGS & GROQ / SMTP ADMIN API ENDPOINTS ---
 // =======================================================
 
-// API Route: Get all system configs (system_configs & admin_settings)
+// API Route: Get all system configs from authoritative admin_settings table
 app.get('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
   try {
     const configs: any = {
@@ -1546,27 +1521,16 @@ app.get('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
       }
     };
 
-    // 1. Read from system_configs table
-    try {
-      const { data: sysConfigs } = await supabase.from('system_configs').select('*');
-      if (sysConfigs && sysConfigs.length > 0) {
-        sysConfigs.forEach((row: any) => {
-          if (row.config_key === 'groq_settings' && row.config_value) {
-            configs.groq = { ...configs.groq, ...row.config_value };
-          } else if (row.config_key === 'smtp_settings' && row.config_value) {
-            configs.smtp = { ...configs.smtp, ...row.config_value };
-          } else if (row.config_key === 'platform_controls' && row.config_value) {
-            configs.platform = { ...configs.platform, ...row.config_value };
-          }
-        });
-      }
-    } catch (_) {}
-
-    // 2. Read from admin_settings for backward compatibility
+    // 1. Read from authoritative admin_settings table
     try {
       const { data: adminSettings } = await supabase.from('admin_settings').select('*');
       if (adminSettings && adminSettings.length > 0) {
         adminSettings.forEach((row: any) => {
+          if (row.setting_key === 'system_config' && row.setting_value) {
+            if (row.setting_value.groq) configs.groq = { ...configs.groq, ...row.setting_value.groq };
+            if (row.setting_value.smtp) configs.smtp = { ...configs.smtp, ...row.setting_value.smtp };
+            if (row.setting_value.platform) configs.platform = { ...configs.platform, ...row.setting_value.platform };
+          }
           if (row.setting_key === 'ai_api_keys' && row.setting_value) {
             if (row.setting_value.groq && !configs.groq.apiKey) configs.groq.apiKey = row.setting_value.groq;
           }
@@ -1597,7 +1561,7 @@ app.get('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
   }
 });
 
-// API Route: Save system configs to system_configs & admin_settings
+// API Route: Save system configs to authoritative admin_settings table
 app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
   try {
     const { groq, smtp, platform } = req.body;
@@ -1613,38 +1577,7 @@ app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
       };
     }
 
-    // 2. Persist to system_configs table
-    try {
-      const inserts = [];
-      if (groq) {
-        inserts.push({
-          config_key: 'groq_settings',
-          config_value: groq,
-          updated_at: new Date().toISOString()
-        });
-      }
-      if (smtp) {
-        inserts.push({
-          config_key: 'smtp_settings',
-          config_value: smtp,
-          updated_at: new Date().toISOString()
-        });
-      }
-      if (platform) {
-        inserts.push({
-          config_key: 'platform_controls',
-          config_value: platform,
-          updated_at: new Date().toISOString()
-        });
-      }
-      if (inserts.length > 0) {
-        await supabase.from('system_configs').upsert(inserts, { onConflict: 'config_key' });
-      }
-    } catch (sysErr) {
-      console.warn('[system_configs Save Notice]', sysErr);
-    }
-
-    // 3. Mirror to admin_settings table
+    // 2. Persist to authoritative admin_settings table
     try {
       const adminInserts = [];
       if (groq) {
@@ -1663,7 +1596,7 @@ app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
             smtp_user: smtp.user,
             smtp_pass: smtp.pass,
             smtp_from: smtp.from,
-            groq: groq?.apiKey || ''
+            smtp_secure: smtp.secure
           },
           updated_at: new Date().toISOString()
         });
@@ -1687,6 +1620,13 @@ app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
           updated_at: new Date().toISOString()
         });
       }
+
+      adminInserts.push({
+        setting_key: 'system_config',
+        setting_value: { groq, smtp, platform },
+        updated_at: new Date().toISOString()
+      });
+
       if (adminInserts.length > 0) {
         await supabase.from('admin_settings').upsert(adminInserts, { onConflict: 'setting_key' });
       }

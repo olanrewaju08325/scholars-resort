@@ -87,7 +87,7 @@ const DEFAULT_PLATFORM_CONFIG: PlatformSystemConfig = {
 };
 
 /**
- * Fetch all system configurations from system_configs / admin_settings with runtime fallback
+ * Fetch all system configurations from authoritative admin_settings table with runtime fallback
  */
 export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
   const result: FullSystemConfig = {
@@ -110,29 +110,10 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
     }
   } catch (_) {}
 
-  // 2. Direct Supabase Query fallback
+  // 2. Direct Supabase Query fallback from authoritative admin_settings table
   try {
     const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
-    // Check system_configs table safely
-    const sysRes = await safeSupabaseQuery<any[]>(
-      supabase.from('system_configs').select('*'),
-      { contextName: 'SystemConfigService.system_configs', fallbackValue: [] }
-    );
-    const sysConfigs = sysRes.data || [];
-
-    if (sysConfigs.length > 0) {
-      sysConfigs.forEach((row: any) => {
-        if (row.config_key === 'groq_settings' && row.config_value) {
-          result.groq = { ...result.groq, ...row.config_value };
-        } else if (row.config_key === 'smtp_settings' && row.config_value) {
-          result.smtp = { ...result.smtp, ...row.config_value };
-        } else if (row.config_key === 'platform_controls' && row.config_value) {
-          result.platform = { ...result.platform, ...row.config_value };
-        }
-      });
-    }
-
-    // Check admin_settings table safely
+    // Check authoritative admin_settings table safely
     const adminRes = await safeSupabaseQuery<any[]>(
       supabase.from('admin_settings').select('*'),
       { contextName: 'SystemConfigService.admin_settings', fallbackValue: [] }
@@ -176,7 +157,7 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
 }
 
 /**
- * Save full system configurations to system_configs & admin_settings tables
+ * Save full system configurations to authoritative admin_settings table
  */
 export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{ success: boolean; error?: string }> {
   try {

@@ -77,7 +77,7 @@ export const SettingsTab = () => {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      // 1. Fetch from unified systemConfigService (checks system_configs and admin_settings)
+      // 1. Fetch from unified systemConfigService (checks authoritative admin_settings)
       const unified = await fetchAllSystemConfigs();
       
       // Populate GROQ settings
@@ -311,7 +311,7 @@ export const SettingsTab = () => {
                   <Sparkles className="w-5 h-5" /> GROQ AI Engine Configuration
                 </CardTitle>
                 <span className="text-xs bg-purple-500/20 text-purple-700 dark:text-purple-300 font-mono px-2.5 py-1 rounded-full font-semibold">
-                  system_configs
+                  admin_settings
                 </span>
               </div>
               <CardDescription>
@@ -562,7 +562,7 @@ export const SettingsTab = () => {
                   <Mail className="w-5 h-5" /> SMTP Mail Server Credentials
                 </CardTitle>
                 <span className="text-xs bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono px-2.5 py-1 rounded-full font-semibold">
-                  system_configs
+                  admin_settings
                 </span>
               </div>
               <CardDescription>
