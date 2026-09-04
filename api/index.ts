@@ -22,7 +22,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse): 
         targetUrl = search ? `${cleanPath}?${search}` : cleanPath;
       } else {
         // If no query param, inspect headers or strip /api/index
-        const forwardedUri = (req.headers['x-forwarded-uri'] || req.headers['x-original-url']) as string;
+        const forwardedUri = (
+          req.headers['x-forwarded-uri'] || 
+          req.headers['x-original-url'] || 
+          req.headers['x-matched-path'] || 
+          req.headers['x-vercel-original-url']
+        ) as string;
         if (forwardedUri && forwardedUri.startsWith('/api') && !forwardedUri.startsWith('/api/index')) {
           targetUrl = forwardedUri;
         } else if (targetUrl.startsWith('/api/index')) {
