@@ -227,7 +227,7 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
   };
 
   return (
-    <div className="fixed bottom-6 right-4 md:bottom-6 md:right-6 z-[90] pb-[72px] md:pb-0">
+    <div className="fixed bottom-24 right-4 md:bottom-8 md:right-6 z-[90]">
       {!isOpen && (
         <Button 
           onClick={() => {

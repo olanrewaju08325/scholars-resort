@@ -11,6 +11,25 @@ import { callGroqAPI, safeParseAIJSON } from '@/services/aiService';
 
 import { SafeDataFetcher } from '@/utils/safeDataFetcher';
 
+const generateFallbackFlashcards = (topic: string, count: number) => {
+  const fallbacks = [
+    { front: `What is a fundamental concept in ${topic}?`, back: `${topic} involves core principles and systematic problem-solving strategies.` },
+    { front: `Key formula or rule related to ${topic}?`, back: `Application of standard laws and analytical derivations in ${topic}.` },
+    { front: `Why is studying ${topic} important for UTME?`, back: `It frequently appears in high-weight CBT questions testing conceptual mastery.` },
+    { front: `Common mistake to avoid in ${topic}?`, back: `Miscalculating units or misinterpreting standard definitions.` },
+    { front: `Define key terminology in ${topic}.`, back: `Precise scientific or mathematical definition applied in exam questions.` }
+  ];
+  const list = [];
+  for (let i = 0; i < count; i++) {
+    const item = fallbacks[i % fallbacks.length];
+    list.push({
+      front: `${item.front} (${i + 1})`,
+      back: item.back
+    });
+  }
+  return list;
+};
+
 interface Flashcard {
   id: string;
   front_text: string;

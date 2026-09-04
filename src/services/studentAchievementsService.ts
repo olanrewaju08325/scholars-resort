@@ -128,6 +128,7 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
       { contextName: 'StudentAchievementsService.user_badges', fallbackValue: [] }
     );
     const userAchievements = userAchRes.data || [];
+    const isFirstInitialization = userAchievements.length === 0 && !localStorage.getItem(`scholars_achievements_init_${userId}`);
 
     const unlockedMap = new Map<string, string>();
     (userAchievements || []).forEach((ach: any) => {
@@ -270,6 +271,10 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
 
     // Persist newly unlocked achievements to Supabase & award XP
     if (newlyUnlockedKeys.length > 0) {
+      if (isFirstInitialization) {
+        localStorage.setItem(`scholars_achievements_init_${userId}`, 'true');
+      }
+
       for (const key of newlyUnlockedKeys) {
         const badgeDef = ACHIEVEMENTS_CATALOG.find(b => b.key === key);
         if (badgeDef) {
@@ -285,17 +290,21 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
             console.warn('Achievement insert error:', e);
           }
 
-          // Award XP bonus
-          await awardXp(userId, badgeDef.xpReward, `Unlocked Badge: ${badgeDef.title}`);
-          triggerConfetti();
-          playSuccessChime();
+          if (!isFirstInitialization) {
+            // Award XP bonus only for newly earned achievements after initialization
+            await awardXp(userId, badgeDef.xpReward, `Unlocked Badge: ${badgeDef.title}`);
+            triggerConfetti();
+            playSuccessChime();
 
-          toast.success(`🏆 Achievement Unlocked: ${badgeDef.title}!`, {
-            description: `${badgeDef.description} (+${badgeDef.xpReward} XP)`,
-            duration: 6000
-          });
+            toast.success(`🏆 Achievement Unlocked: ${badgeDef.title}!`, {
+              description: `${badgeDef.description} (+${badgeDef.xpReward} XP)`,
+              duration: 6000
+            });
+          }
         }
       }
+    } else if (isFirstInitialization) {
+      localStorage.setItem(`scholars_achievements_init_${userId}`, 'true');
     }
 
     return resultList;
