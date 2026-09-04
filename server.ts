@@ -35,6 +35,31 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
+// Helper to obtain a Supabase client properly scoped with the user's JWT or server-level credentials
+function getScopedSupabaseClient(reqOrToken?: any) {
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY;
+  if (serviceKey) {
+    return createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+  }
+
+  const token = typeof reqOrToken === 'string'
+    ? reqOrToken
+    : (reqOrToken?.headers?.authorization?.replace(/^Bearer\s+/i, '').trim() || (reqOrToken as any)?.token);
+
+  if (token) {
+    return createClient(supabaseUrl, supabaseKey, {
+      auth: { persistSession: false },
+      global: {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      }
+    });
+  }
+
+  return supabase;
+}
+
 // API Route: Health Monitoring Service
 app.get('/api/health', async (req, res) => {
   try {
@@ -79,6 +104,7 @@ async function verifyUserToken(req: express.Request, res: express.Response, next
     }
 
     (req as any).user = user;
+    (req as any).token = token;
     next();
   } catch (err: any) {
     return res.status(401).json({ success: false, error: 'Unauthorized: Token verification failed.' });
@@ -105,7 +131,8 @@ async function verifyAdminToken(req: express.Request, res: express.Response, nex
     const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
     const userEmail = (user.email || '').toLowerCase().trim();
 
-    const { data: prof } = await supabase.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
+    const scopedClient = getScopedSupabaseClient(token);
+    const { data: prof } = await scopedClient.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
     const profRole = prof?.role;
     const profEmail = (prof?.email || '').toLowerCase().trim();
 
@@ -116,6 +143,7 @@ async function verifyAdminToken(req: express.Request, res: express.Response, nex
     }
 
     (req as any).user = user;
+    (req as any).token = token;
     (req as any).adminUser = user;
     next();
   } catch (err: any) {
@@ -2315,7 +2343,7 @@ function mergeProfileWithOverrides(dbProfile: any, userId?: string) {
   };
 }
 
-// API Route: Authoritative Profile Fetch (Merged with Server Grants & Overrides)
+// API Route: Authoritative Profile Fetch from Supabase
 app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ success: false, error: 'User ID is required' });
@@ -2326,8 +2354,10 @@ app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
 
   // Ensure user is fetching their own profile or they are an admin
   let isAuthorized = authenticatedUser.id === id;
+  const dbClient = getScopedSupabaseClient(req);
+
   if (!isAuthorized) {
-    const { data: prof } = await supabase.from('profiles').select('role, email').eq('id', authenticatedUser.id).maybeSingle();
+    const { data: prof } = await dbClient.from('profiles').select('role, email').eq('id', authenticatedUser.id).maybeSingle();
     const profRole = prof?.role;
     const profEmail = (prof?.email || '').toLowerCase().trim();
     const isAdmin = profRole === 'admin' || profRole === 'superadmin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || AUTHORIZED_ADMIN_EMAILS.includes(profEmail);
@@ -2341,7 +2371,7 @@ app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
   }
 
   try {
-    const { data: dbProf, error } = await supabase
+    const { data: dbProf, error } = await dbClient
       .from('profiles')
       .select('*')
       .eq('id', id)
@@ -2349,23 +2379,26 @@ app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
 
     if (error) {
       console.error(`[API /api/profile/${id} DB Error]`, error.message);
-      // Gracious fallback: return a synthetic profile rather than a 500 error, so the client doesn't freeze or lock the user out!
-      const fallbackProf = mergeProfileWithOverrides({ id, role: 'student', email: '' }, id);
-      return res.status(200).json({ success: true, isFallback: true, profile: fallbackProf, error: error.message });
+      return res.status(500).json({ success: false, error: 'Database error retrieving profile', details: error.message });
     }
 
-    if (!dbProf && !persistentUserOverrides.has(id)) {
-      // Return a graceful initial synthetic profile so initial sessions can boot smoothly
-      const fallbackProf = mergeProfileWithOverrides({ id, role: 'student', email: '' }, id);
-      return res.status(200).json({ success: true, isFallback: true, profile: fallbackProf, message: 'Profile not found, initialized gracefully.' });
+    if (!dbProf) {
+      return res.status(404).json({ success: false, error: 'Profile not found in database.' });
     }
 
-    const merged = mergeProfileWithOverrides(dbProf || {}, id);
-    return res.json({ success: true, profile: merged });
+    const emailVal = (dbProf.email || userEmail).toLowerCase().trim();
+    const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(emailVal);
+    const profile = {
+      ...dbProf,
+      role: isMasterAdmin ? 'admin' : (dbProf.role || 'student'),
+      has_paid: isMasterAdmin ? true : !!dbProf.has_paid,
+      onboarding_completed: isMasterAdmin ? true : !!dbProf.onboarding_completed,
+    };
+
+    return res.json({ success: true, profile });
   } catch (err: any) {
     console.error(`[API /api/profile/${id} Exception]`, err);
-    const fallbackProf = mergeProfileWithOverrides({ id, role: 'student', email: '' }, id);
-    return res.status(200).json({ success: true, isFallback: true, profile: fallbackProf, error: err.message || 'Internal server error' });
+    return res.status(500).json({ success: false, error: err.message || 'Internal server error retrieving profile' });
   }
 });
 

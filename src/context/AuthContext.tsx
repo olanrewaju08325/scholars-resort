@@ -136,13 +136,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!isMounted.current) return;
 
       if (loadedProfile) {
-        try {
-          const localOverrides = JSON.parse(localStorage.getItem('scholars_user_overrides') || '{}');
-          if (localOverrides[userId]) {
-            loadedProfile = { ...loadedProfile, ...localOverrides[userId] };
-          }
-        } catch {}
-
         // Master admin auto-elevation check using both profile and authenticated user email sources
         const currentEmail = (user?.email || loadedProfile.email || '').toLowerCase().trim();
         const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === currentEmail);
