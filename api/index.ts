@@ -244,6 +244,41 @@ async function verifyAdminToken(req: express.Request, res: express.Response, nex
 
 let cachedWorkingSmtpConfig: any = null;
 
+// Helper to create a fully configured Nodemailer transporter supporting Gmail service & standard SMTP
+function createSmtpTransporter(config: { host: string; port: number; user: string; pass: string }) {
+  const cleanPass = (config.pass || '').trim().replace(/\s+/g, '');
+  const cleanUser = (config.user || '').trim();
+  const cleanHost = (config.host || 'smtp.gmail.com').trim();
+  const isGmail = cleanHost.toLowerCase().includes('gmail') || cleanUser.toLowerCase().includes('@gmail.com');
+  const isSecure = Number(config.port) === 465;
+
+  if (isGmail) {
+    return nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: cleanUser,
+        pass: cleanPass
+      },
+      tls: {
+        rejectUnauthorized: false
+      }
+    });
+  }
+
+  return nodemailer.createTransport({
+    host: cleanHost,
+    port: Number(config.port) || 587,
+    secure: isSecure,
+    auth: cleanUser && cleanPass ? {
+      user: cleanUser,
+      pass: cleanPass
+    } : undefined,
+    tls: {
+      rejectUnauthorized: false
+    }
+  });
+}
+
 // Helper to resolve SMTP settings from DB (admin_settings) or env or request
 async function getSmtpConfig(customConfig?: any) {
   if (customConfig && customConfig.host) {
@@ -251,7 +286,7 @@ async function getSmtpConfig(customConfig?: any) {
       host: customConfig.host,
       port: Number(customConfig.port) || 587,
       user: customConfig.user || '',
-      pass: customConfig.pass || '',
+      pass: customConfig.pass ? String(customConfig.pass).trim().replace(/\s+/g, '') : '',
       from: customConfig.fromEmail || customConfig.from || customConfig.smtp_from || 'admitwise2@gmail.com'
     };
   }
@@ -275,16 +310,16 @@ async function getSmtpConfig(customConfig?: any) {
             host: s.host,
             port: Number(s.port) || 587,
             user: s.user || '',
-            pass: s.pass || '',
+            pass: s.pass ? String(s.pass).trim().replace(/\s+/g, '') : '',
             from: s.from || s.user || 'admitwise2@gmail.com'
           };
         }
-        if (row.setting_key === 'api_keys' && row.setting_value?.smtp_host) {
+        if (row.setting_key === 'api_keys' && (row.setting_value?.smtp_host || row.setting_value?.smtp_pass)) {
           return {
-            host: row.setting_value.smtp_host,
+            host: row.setting_value.smtp_host || 'smtp.gmail.com',
             port: Number(row.setting_value.smtp_port) || 587,
             user: row.setting_value.smtp_user || '',
-            pass: row.setting_value.smtp_pass || '',
+            pass: row.setting_value.smtp_pass ? String(row.setting_value.smtp_pass).trim().replace(/\s+/g, '') : '',
             from: row.setting_value.smtp_from || row.setting_value.smtp_user || 'admitwise2@gmail.com'
           };
         }
@@ -307,7 +342,7 @@ async function getSmtpConfig(customConfig?: any) {
         host: data.value.host,
         port: Number(data.value.port) || 587,
         user: data.value.user || '',
-        pass: data.value.pass || '',
+        pass: data.value.pass ? String(data.value.pass).trim().replace(/\s+/g, '') : '',
         from: data.value.from || 'admitwise2@gmail.com'
       };
     }
@@ -320,7 +355,7 @@ async function getSmtpConfig(customConfig?: any) {
     host: process.env.SMTP_HOST || 'smtp.gmail.com',
     port: Number(process.env.SMTP_PORT || 587),
     user: process.env.SMTP_USER || process.env.GMAIL_USER || 'admitwise2@gmail.com',
-    pass: process.env.SMTP_PASS || process.env.GMAIL_PASS || '',
+    pass: (process.env.SMTP_PASS || process.env.GMAIL_PASS || '').trim().replace(/\s+/g, ''),
     from: process.env.SMTP_FROM || process.env.GMAIL_USER || 'admitwise2@gmail.com'
   };
 }
@@ -329,21 +364,9 @@ async function getSmtpConfig(customConfig?: any) {
 async function sendServerSmtpEmail(to: string, subject: string, html: string): Promise<boolean> {
   try {
     const config = await getSmtpConfig();
-    if (!config.host) return false;
+    if (!config.host || !config.pass) return false;
 
-    const isSecure = config.port === 465;
-    const transporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: isSecure,
-      auth: config.user && config.pass ? {
-        user: config.user,
-        pass: config.pass
-      } : undefined,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+    const transporter = createSmtpTransporter(config);
 
     await transporter.sendMail({
       from: config.from || `Scholars Resort <${config.user || 'noreply@scholarsresort.com'}>`,
@@ -417,27 +440,15 @@ app.post('/api/send-email', async (req, res) => {
       });
     } catch (_) {}
 
-    return res.status(200).json({
-      success: true,
+    return res.status(400).json({
+      success: false,
       delivered: false,
-      message: 'SMTP Host is not configured. Email logged to system communication records.'
+      error: 'SMTP is not configured or password is missing. Please configure SMTP credentials in Admin Settings.'
     });
   }
 
   try {
-    const isSecure = config.port === 465;
-    const transporter = nodemailer.createTransport({
-      host: config.host,
-      port: config.port,
-      secure: isSecure,
-      auth: config.user && config.pass ? {
-        user: config.user,
-        pass: config.pass
-      } : undefined,
-      tls: {
-        rejectUnauthorized: false
-      }
-    });
+    const transporter = createSmtpTransporter(config);
 
     const mailOptions = {
       from: config.from || `Scholars Resort <${config.user || 'noreply@scholarsresort.com'}>`,
@@ -542,14 +553,7 @@ app.post('/api/send-bulk-email', verifyAdminToken, async (req, res) => {
 
     if (config.host && config.user && config.pass) {
       try {
-        const isSecure = config.port === 465;
-        const transporter = nodemailer.createTransport({
-          host: config.host,
-          port: config.port,
-          secure: isSecure,
-          auth: { user: config.user, pass: config.pass },
-          tls: { rejectUnauthorized: false }
-        });
+        const transporter = createSmtpTransporter(config);
 
         // Send in parallel batches of 5
         const batchSize = 5;
@@ -704,45 +708,49 @@ app.post('/api/payment-notification', async (req, res) => {
   }
 });
 
-// API Route: Test SMTP
-app.post('/api/test-smtp', async (req, res) => {
+// API Route: Test SMTP (Supports /api/test-smtp and /api/admin/test-smtp)
+app.post(['/api/test-smtp', '/api/admin/test-smtp'], async (req, res) => {
   const startTime = Date.now();
-  const { host, port, user, pass, fromEmail, testRecipient } = req.body;
+  const { host, port, user, pass, fromEmail, testRecipient, to } = req.body || {};
 
-  const targetHost = host || process.env.SMTP_HOST;
-  const targetPort = Number(port || process.env.SMTP_PORT || 587);
-  const targetUser = user || process.env.SMTP_USER;
-  const targetPass = pass || process.env.SMTP_PASS;
-  const targetFrom = fromEmail || process.env.SMTP_FROM || 'noreply@scholarsresort.com';
-  const recipient = testRecipient || targetUser || 'test-admin@scholarsresort.com';
+  // If credentials are incomplete in request body, resolve from saved database config
+  const savedConfig = await getSmtpConfig();
+  const targetHost = (host || savedConfig.host || process.env.SMTP_HOST || 'smtp.gmail.com').trim();
+  const targetPort = Number(port || savedConfig.port || process.env.SMTP_PORT || 587);
+  const targetUser = (user || savedConfig.user || process.env.SMTP_USER || '').trim();
+  const targetPass = (pass || savedConfig.pass || process.env.SMTP_PASS || '').trim().replace(/\s+/g, '');
+  const targetFrom = (fromEmail || savedConfig.from || process.env.SMTP_FROM || targetUser || 'Scholars Resort <admitwise2@gmail.com>').trim();
+  const recipient = (testRecipient || to || targetUser || 'olanrewajuhamilot@gmail.com').trim();
 
   if (!targetHost) {
     return res.status(400).json({
       success: false,
+      delivered: false,
       message: 'SMTP Host is required for testing.'
     });
   }
 
+  if (!targetPass) {
+    return res.status(200).json({
+      success: false,
+      delivered: false,
+      message: 'SMTP Password / 16-character App Password is missing. Please enter and save your Gmail App Password in Admin Settings.'
+    });
+  }
+
   try {
-    const isSecure = targetPort === 465;
-    const transporter = nodemailer.createTransport({
+    const transporter = createSmtpTransporter({
       host: targetHost,
       port: targetPort,
-      secure: isSecure,
-      auth: targetUser && targetPass ? {
-        user: targetUser,
-        pass: targetPass
-      } : undefined,
-      tls: {
-        rejectUnauthorized: false
-      }
+      user: targetUser,
+      pass: targetPass
     });
 
     // Verify connection & credentials
     await transporter.verify();
 
     // Send real test email
-    let info;
+    let info: any = null;
     if (recipient) {
       info = await transporter.sendMail({
         from: targetFrom,
@@ -751,10 +759,12 @@ app.post('/api/test-smtp', async (req, res) => {
         text: `This is an official verification email sent from Scholars Resort to confirm real SMTP delivery to ${recipient} via ${targetHost}:${targetPort} at ${new Date().toISOString()}.`,
         html: `<div style="font-family: Arial, sans-serif; max-width: 550px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
           <h2 style="color: #4f46e5; margin-top: 0;">SMTP Verification Successful!</h2>
-          <p style="color: #334155; line-height: 1.5;">Your SMTP server configuration for <strong>${targetHost}:${targetPort}</strong> was verified and sent a live test message to <strong>${recipient}</strong>.</p>
+          <p style="color: #334155; line-height: 1.5;">Your SMTP server configuration for <strong>${targetHost}:${targetPort}</strong> was verified and successfully delivered a live test message to <strong>${recipient}</strong>.</p>
           <div style="background: #f1f5f9; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 13px; color: #475569;">
             Timestamp: ${new Date().toLocaleString()}<br/>
-            Sender: ${targetFrom}
+            Sender: ${targetFrom}<br/>
+            Recipient: ${recipient}<br/>
+            Message ID: ${info?.messageId || 'dispatched'}
           </div>
         </div>`
       });
@@ -770,6 +780,7 @@ app.post('/api/test-smtp', async (req, res) => {
     };
     return res.json({
       success: true,
+      delivered: true,
       latency,
       message: `SMTP Connection Verified! Live test email dispatched to ${recipient} (${latency}ms).`,
       messageId: info?.messageId
@@ -1316,10 +1327,28 @@ app.post('/api/groq-telemetry/log', (req, res) => {
 });
 
 // Endpoint to fetch real-time Groq API usage telemetry & server logs
-app.get('/api/groq-telemetry', verifyAdminToken, async (req, res) => {
+app.get('/api/groq-telemetry', async (req, res) => {
   try {
     const customGroqKey = req.headers['x-groq-key'] as string;
-    const groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+    let groqKey = customGroqKey || process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+
+    if (!groqKey) {
+      try {
+        const { data: dbKeys } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .in('setting_key', ['ai_api_keys', 'api_keys', 'system_config']);
+        if (dbKeys) {
+          for (const row of dbKeys) {
+            const k = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq?.apiKey;
+            if (typeof k === 'string' && k.trim().length > 10) {
+              groqKey = k.trim();
+              break;
+            }
+          }
+        }
+      } catch (_) {}
+    }
 
     if ((!latestGroqQuotaHeader.remainingTokens || !latestGroqQuotaHeader.limitTokens) && groqKey && groqKey.trim().length > 10) {
       try {

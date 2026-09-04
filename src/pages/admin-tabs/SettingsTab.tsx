@@ -147,6 +147,8 @@ export const SettingsTab = () => {
   const saveSettings = async () => {
     setSaving(true);
     try {
+      const cleanSmtpPass = smtpPass.trim().replace(/\s+/g, '');
+
       const groqPayload: GroqConfig = {
         apiKey: groqKey.trim(),
         defaultModel: groqModel,
@@ -157,7 +159,7 @@ export const SettingsTab = () => {
         host: smtpHost.trim(),
         port: Number(smtpPort) || 587,
         user: smtpUser.trim(),
-        pass: smtpPass.trim(),
+        pass: cleanSmtpPass,
         from: smtpFrom.trim() || `Scholars Resort <${smtpUser.trim()}>`,
         secure: smtpSecure
       };
@@ -181,7 +183,7 @@ export const SettingsTab = () => {
         platform: platformPayload
       });
 
-      // 2. Save landing page configuration
+      // 2. Save landing page configuration and payment keys WITHOUT overwriting smtp and groq in api_keys
       await supabase.from('admin_settings').upsert([
         {
           setting_key: 'landing_config',
@@ -202,8 +204,22 @@ export const SettingsTab = () => {
           }
         },
         {
+          setting_key: 'payment_keys',
+          setting_value: {
+            paystack: paystackKey,
+            stripe: stripeKey
+          }
+        },
+        {
           setting_key: 'api_keys',
           setting_value: {
+            smtp_host: smtpPayload.host,
+            smtp_port: smtpPayload.port,
+            smtp_user: smtpPayload.user,
+            smtp_pass: cleanSmtpPass,
+            smtp_from: smtpPayload.from,
+            smtp_secure: smtpPayload.secure,
+            groq: groqPayload.apiKey,
             paystack: paystackKey,
             stripe: stripeKey
           }

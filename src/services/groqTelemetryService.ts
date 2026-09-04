@@ -80,6 +80,13 @@ export const fetchGroqTelemetry = async (groqApiKey?: string): Promise<GroqTelem
       headers['X-Groq-Key'] = groqApiKey;
     }
 
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      if (sessionData?.session?.access_token) {
+        headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+      }
+    } catch (_) {}
+
     const targetUrl = getApiUrl('/api/groq-telemetry');
     const res = await fetch(targetUrl, { headers }).catch(() => null);
     if (res && res.ok) {

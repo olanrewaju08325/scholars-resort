@@ -53,8 +53,8 @@ export const testSMTPEmail = async (
       </div>`
     };
 
-    // Try endpoints: /api/test-smtp, /api/send-email, /.netlify/functions/send-email
-    const endpoints = ['/api/send-email', '/api/test-smtp'];
+    // Call dedicated SMTP test endpoint first, then send-email fallback
+    const endpoints = ['/api/test-smtp', '/api/admin/test-smtp', '/api/send-email'];
     let lastError = '';
 
     for (const url of endpoints) {
@@ -68,14 +68,14 @@ export const testSMTPEmail = async (
         if (response.ok) {
           const data = await response.json();
           const latency = Date.now() - startTime;
-          if (data.success) {
+          if (data.success && data.delivered !== false) {
             return {
               success: true,
               latency: data.latency || latency,
-              message: data.message || `SMTP Connection Verified! Test email delivered to ${recipientEmail} (${latency}ms).`
+              message: data.message || `SMTP Connection Verified! Real test email sent to ${recipientEmail} (${latency}ms).`
             };
           } else {
-            lastError = data.message || data.error || 'SMTP delivery rejected by host';
+            lastError = data.message || data.error || 'SMTP delivery was not completed by host';
           }
         } else {
           const errData = await response.json().catch(() => null);

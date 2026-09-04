@@ -11,8 +11,82 @@ export interface AIQuotaStatus {
   lastUpdated: string;
 }
 
+export interface StudentDailyLimits {
+  monthly_token_limit: number;
+  student_daily_free_limit: number;
+  student_daily_pro_limit: number;
+  student_daily_token_limit: number;
+}
+
 class AIRateLimiter {
   private requestTimestamps: number[] = [];
+
+  /**
+   * Fetch student daily limit settings from admin_settings or platform_config
+   */
+  public async getStudentDailyLimits(): Promise<StudentDailyLimits> {
+    try {
+      const { data } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'ai_limits')
+        .maybeSingle();
+
+      if (data?.setting_value) {
+        return {
+          monthly_token_limit: Number(data.setting_value.monthly_token_limit) || 5000000,
+          student_daily_free_limit: Number(data.setting_value.student_daily_free_limit) || 10,
+          student_daily_pro_limit: Number(data.setting_value.student_daily_pro_limit) || 100,
+          student_daily_token_limit: Number(data.setting_value.student_daily_token_limit) || 25000
+        };
+      }
+    } catch (_) {}
+
+    return {
+      monthly_token_limit: 5000000,
+      student_daily_free_limit: 10,
+      student_daily_pro_limit: 100,
+      student_daily_token_limit: 25000
+    };
+  }
+
+  /**
+   * Check if a student has exceeded their daily AI query quota
+   */
+  public async checkStudentDailyQuota(userId: string, isPro: boolean = false): Promise<{ allowed: boolean; remaining: number; maxLimit: number; warning?: string }> {
+    try {
+      const limits = await this.getStudentDailyLimits();
+      const maxLimit = isPro ? limits.student_daily_pro_limit : limits.student_daily_free_limit;
+
+      // Count queries made today (UTC day)
+      const startOfDay = new Date();
+      startOfDay.setUTCHours(0, 0, 0, 0);
+
+      const { count, error } = await supabase
+        .from('ai_usage')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', startOfDay.toISOString());
+
+      const usedToday = (!error && typeof count === 'number') ? count : 0;
+      const remaining = Math.max(0, maxLimit - usedToday);
+
+      if (usedToday >= maxLimit) {
+        return {
+          allowed: false,
+          remaining: 0,
+          maxLimit,
+          warning: isPro 
+            ? `You have reached your daily Pro limit of ${maxLimit} AI requests. Please try again tomorrow!`
+            : `You have reached your Free daily limit of ${maxLimit} AI questions. Upgrade to Pro for ${limits.student_daily_pro_limit} questions/day!`
+        };
+      }
+
+      return { allowed: true, remaining, maxLimit };
+    } catch (_) {
+      return { allowed: true, remaining: 10, maxLimit: 10 };
+    }
+  }
 
   /**
    * Check if request limit has been exceeded (30 requests/min)

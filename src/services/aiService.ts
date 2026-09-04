@@ -209,8 +209,8 @@ export const callGeminiAPI = async (messages: Array<{ role: string; content: str
   return null;
 };
 
-// Check Token Limit
-export const checkAITokenLimit = async (): Promise<{ allowed: boolean; remaining: number; warning?: string }> => {
+// Check Token Limit & Student Daily Usage Quota
+export const checkAITokenLimit = async (userId?: string, isPro?: boolean): Promise<{ allowed: boolean; remaining: number; warning?: string }> => {
   try {
     const { data: limitData } = await supabase
       .from('admin_settings')
@@ -218,7 +218,51 @@ export const checkAITokenLimit = async (): Promise<{ allowed: boolean; remaining
       .eq('setting_key', 'ai_limits')
       .maybeSingle();
 
-    const maxTokens = limitData?.setting_value?.monthly_token_limit || 5000000;
+    const maxTokens = Number(limitData?.setting_value?.monthly_token_limit) || 5000000;
+    const dailyFreeLimit = Number(limitData?.setting_value?.student_daily_free_limit) || 10;
+    const dailyProLimit = Number(limitData?.setting_value?.student_daily_pro_limit) || 100;
+
+    // Check student daily query count if user is authenticated
+    try {
+      let targetUserId = userId;
+      let targetIsPro = isPro;
+
+      if (!targetUserId) {
+        const { data: authData } = await supabase.auth.getUser();
+        targetUserId = authData?.user?.id;
+      }
+
+      if (targetUserId) {
+        if (targetIsPro === undefined) {
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('subscription_tier, is_pro')
+            .eq('id', targetUserId)
+            .maybeSingle();
+          targetIsPro = prof?.subscription_tier === 'pro' || prof?.is_pro === true;
+        }
+
+        const maxDailyQueries = targetIsPro ? dailyProLimit : dailyFreeLimit;
+        const startOfDay = new Date();
+        startOfDay.setUTCHours(0, 0, 0, 0);
+
+        const { count } = await supabase
+          .from('ai_usage')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', targetUserId)
+          .gte('created_at', startOfDay.toISOString());
+
+        if (typeof count === 'number' && count >= maxDailyQueries) {
+          return {
+            allowed: false,
+            remaining: 0,
+            warning: targetIsPro
+              ? `You have reached your daily Pro limit of ${maxDailyQueries} AI questions. Please try again tomorrow!`
+              : `You have reached your Free daily limit of ${maxDailyQueries} AI questions. Upgrade to Pro for ${dailyProLimit} questions per day!`
+          };
+        }
+      }
+    } catch (_) {}
 
     // Sum token usage from ai_usage
     const { data: usageData } = await supabase
@@ -227,11 +271,11 @@ export const checkAITokenLimit = async (): Promise<{ allowed: boolean; remaining
 
     const totalUsed = usageData?.reduce((acc, curr) => acc + (curr.prompt_tokens || 0) + (curr.completion_tokens || 0), 0) || 0;
 
-    const remaining = maxTokens - totalUsed;
+    const remaining = Math.max(0, maxTokens - totalUsed);
     const usagePercent = (totalUsed / maxTokens) * 100;
 
     if (usagePercent >= 100) {
-      return { allowed: false, remaining: 0, warning: 'AI Monthly Token Quota Reached! Please upgrade or increase quota in Admin Panel.' };
+      return { allowed: false, remaining: 0, warning: 'AI Monthly Token Quota Reached! Please increase quota in Admin Panel.' };
     } else if (usagePercent >= 80) {
       return { allowed: true, remaining, warning: `AI Token Usage at ${usagePercent.toFixed(1)}% of monthly limit.` };
     }

@@ -31,9 +31,17 @@ interface LogEntry {
 }
 
 export const SMTPHealthCheck = ({ currentConfig, onApplyGmailPreset }: SMTPHealthCheckProps) => {
-  const [recipient, setRecipient] = useState(currentConfig.user || 'admitwise2@gmail.com');
+  const [recipient, setRecipient] = useState(currentConfig.user || 'olanrewajuhamilot@gmail.com');
   const [testSubject, setTestSubject] = useState('Scholars Resort - Live SMTP Health Check Verification');
   const [testing, setTesting] = useState(false);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user?.email) {
+        setRecipient(data.user.email);
+      }
+    }).catch(() => {});
+  }, []);
   const [logs, setLogs] = useState<LogEntry[]>([
     {
       id: 'init-0',
@@ -121,7 +129,7 @@ export const SMTPHealthCheck = ({ currentConfig, onApplyGmailPreset }: SMTPHealt
         host: currentConfig.host,
         port: currentConfig.port,
         user: currentConfig.user,
-        pass: currentConfig.pass,
+        pass: (currentConfig.pass || '').trim().replace(/\s+/g, ''),
         fromEmail: currentConfig.fromEmail || currentConfig.user
       };
 
