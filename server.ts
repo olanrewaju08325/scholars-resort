@@ -3,7 +3,6 @@ import http from 'http';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from '@google/genai';
 import { setupStudyRoomWebSocket, getActiveStudyRoomsList, createStudyRoom } from './src/services/studyRoomSocketServer';
 
 const app = express();
@@ -18,6 +17,23 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
+  }
+  next();
+});
+
+// Vercel Serverless Function path normalization middleware
+app.use((req, res, next) => {
+  const forwarded = (
+    req.headers['x-forwarded-uri'] || 
+    req.headers['x-original-url'] || 
+    req.headers['x-matched-path'] || 
+    req.headers['x-vercel-original-url']
+  ) as string | undefined;
+
+  if (forwarded && forwarded.startsWith('/api') && req.url !== forwarded) {
+    req.url = forwarded;
+  } else if (req.url && !req.url.startsWith('/api')) {
+    req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
   }
   next();
 });
