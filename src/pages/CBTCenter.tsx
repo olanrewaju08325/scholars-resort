@@ -45,9 +45,9 @@ export default function CBTCenter() {
   ];
 
   const mockModes = [
-    { title: 'Full JAMB Mock', desc: 'Standard 4-subject, 400 score, 2-hour exam.', icon: Timer, color: 'text-red-500', bg: 'bg-red-500/10', badge: 'Standard', path: '/exam?mode=full' },
-    { title: 'Past Questions', desc: 'Practice with real exams from previous years.', icon: History, color: 'text-orange-500', bg: 'bg-orange-500/10', path: '/exam?mode=past' },
-    { title: 'AI Generated Mock', desc: 'Dynamically generated based on your weak points.', icon: BrainCircuit, color: 'text-indigo-500', bg: 'bg-indigo-500/10', badge: 'AI Powered', path: '/exam?mode=ai' },
+    { title: 'Full JAMB Mock', desc: 'Standard 4-subject, 400 score, 2-hour exam.', icon: Timer, color: 'text-red-500', bg: 'bg-red-500/10', badge: 'Standard', path: '/cbt/full-mock' },
+    { title: 'Past Questions', desc: 'Practice with real exams from previous years.', icon: History, color: 'text-orange-500', bg: 'bg-orange-500/10', path: '/cbt/past-questions' },
+    { title: 'AI Generated Mock', desc: 'Dynamically generated based on your weak points.', icon: BrainCircuit, color: 'text-indigo-500', bg: 'bg-indigo-500/10', badge: 'AI Powered', path: '/cbt/ai-mock' },
   ];
 
   const [tournaments, setTournaments] = useState<any[]>([]);

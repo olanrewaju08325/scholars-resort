@@ -28,12 +28,34 @@ import { toast } from 'sonner';
 import { MathText } from '@/components/MathText';
 import { playFiveMinuteWarningSound } from '@/lib/celebration';
 
-const CBTExam = () => {
+interface CBTExamProps {
+  defaultMode?: 'full_mock' | 'past_questions' | 'ai_generated_mock';
+}
+
+export default function CBTExam({ defaultMode }: CBTExamProps) {
   usePerfMonitoring('CBTExam');
   const navigate = useNavigate();
   const location = useLocation();
   const { profile } = useAuth();
   const { confirmAction, ConfirmElement } = useConfirm();
+
+  const searchParams = new URLSearchParams(location.search);
+  const queryMode = searchParams.get('mode');
+  let examMode: 'full_mock' | 'past_questions' | 'ai_generated_mock' = defaultMode || 'full_mock';
+
+  if (location.pathname.includes('past-questions') || queryMode === 'past') {
+    examMode = 'past_questions';
+  } else if (location.pathname.includes('ai-mock') || queryMode === 'ai') {
+    examMode = 'ai_generated_mock';
+  } else if (location.pathname.includes('full-mock') || queryMode === 'full') {
+    examMode = 'full_mock';
+  }
+
+  const modeTitle = examMode === 'past_questions' 
+    ? 'JAMB Past Questions Exam' 
+    : examMode === 'ai_generated_mock' 
+    ? 'AI-Generated Adaptive Mock' 
+    : 'Full JAMB Mock Exam';
   
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -244,9 +266,9 @@ const CBTExam = () => {
       setExamSubjectsList(finalSubjects);
       
       const flowResult = await QuestionFlowService.fetchQuestionsForMode({
-        mode: 'full_mock',
+        mode: examMode,
         subjectIds: finalSubjects,
-        count: 180
+        count: examMode === 'past_questions' ? 40 : 180
       });
 
       console.log(`[CBT Exam Question Flow] Full Mock Retrieved: ${flowResult.totalRetrieved} questions across ${Object.keys(flowResult.validation.subjectsCovered).length} subjects in ${flowResult.queryLatencyMs}ms (Zero Mock Enforced)`);
@@ -863,7 +885,7 @@ const CBTExam = () => {
           </div>
           <div className="min-w-0">
             <h1 className={`font-bold text-xs sm:text-sm md:text-lg leading-tight uppercase truncate ${focusMode ? 'text-white' : 'text-slate-800 dark:text-slate-100'}`}>
-              {focusMode ? 'Focus Mode Active' : 'UTME CBT Exam'}
+              {focusMode ? 'Focus Mode Active' : modeTitle}
             </h1>
             {!focusMode && (
               <p className="text-[10px] sm:text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium truncate">
@@ -1461,6 +1483,4 @@ const CBTExam = () => {
       )}
     </div>
   );
-};
-
-export default CBTExam;
+}

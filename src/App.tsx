@@ -123,6 +123,9 @@ function AppContent() {
 
             {/* Fullscreen / Immersive Pages (No Navigation) */}
             <Route path="/exam" element={<CBTExam />} />
+            <Route path="/cbt/full-mock" element={<CBTExam defaultMode="full_mock" />} />
+            <Route path="/cbt/past-questions" element={<CBTExam defaultMode="past_questions" />} />
+            <Route path="/cbt/ai-mock" element={<CBTExam defaultMode="ai_generated_mock" />} />
             <Route path="/practice/session" element={<PracticeSession />} />
             <Route path="/tournaments/:id" element={<TournamentArena />} />
             <Route path="/results" element={<Results />} />
