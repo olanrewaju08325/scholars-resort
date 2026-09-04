@@ -27,9 +27,8 @@ export const StudyStreakCalendar = () => {
       try {
         const { data } = await supabase
           .from('study_logs')
-          .select('created_at, subject_context, is_utme_curriculum')
-          .eq('user_id', profile.id)
-          .eq('is_utme_curriculum', true);
+          .select('created_at')
+          .eq('user_id', profile.id);
 
         if (data && data.length > 0) {
           const dates = data.map((d: any) => new Date(d.created_at).toISOString().split('T')[0]);

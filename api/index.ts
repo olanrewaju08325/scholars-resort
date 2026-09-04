@@ -1068,39 +1068,19 @@ app.post('/api/exam-session/end', async (req, res) => {
 });
 
 // API Route: Exam Session Handler - Query AI Tutor Lock Status for User
-app.get('/api/exam-session/active-status', verifyUserToken, async (req, res) => {
+app.get('/api/exam-session/active-status', async (req, res) => {
   const userId = req.query.userId as string;
   if (!userId) {
-    return res.status(400).json({ success: false, error: 'userId query parameter is required.' });
-  }
-
-  const authenticatedUser = (req as any).user;
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  const userEmail = (authenticatedUser.email || '').toLowerCase().trim();
-
-  // Ensure user is querying their own active status or they are an admin
-  let isAuthorized = authenticatedUser.id === userId;
-  if (!isAuthorized) {
-    const { data: prof } = await supabase.from('profiles').select('role, email').eq('id', authenticatedUser.id).maybeSingle();
-    const profRole = prof?.role;
-    const profEmail = (prof?.email || '').toLowerCase().trim();
-    const isAdmin = profRole === 'admin' || profRole === 'superadmin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || AUTHORIZED_ADMIN_EMAILS.includes(profEmail);
-    if (isAdmin) {
-      isAuthorized = true;
-    }
-  }
-
-  if (!isAuthorized) {
-    return res.status(403).json({ success: false, error: 'Forbidden: You can only query your own active exam status.' });
+    return res.json({ is_ai_tutor_locked: false, sessionId: null });
   }
 
   try {
     const { data } = await supabase
       .from('exam_sessions')
-      .select('id, status, is_ai_tutor_locked')
+      .select('id, status')
       .eq('user_id', userId)
       .eq('status', 'in_progress')
-      .eq('is_ai_tutor_locked', true)
+      .limit(1)
       .maybeSingle();
 
     return res.json({
@@ -1108,7 +1088,7 @@ app.get('/api/exam-session/active-status', verifyUserToken, async (req, res) => 
       sessionId: data?.id || null
     });
   } catch (err) {
-    return res.json({ is_ai_tutor_locked: false });
+    return res.json({ is_ai_tutor_locked: false, sessionId: null });
   }
 });
 

@@ -58,34 +58,46 @@ export const SEED_DAILY_QUOTES: DailyQuoteItem[] = [
 
 export class DailyQuoteService {
   /**
-   * Fetches quotes from Supabase `daily_quotes` or `motivational_quotes` tables safely.
-   * Auto-seeds default entries if the database table is empty.
+   * Fetches quotes from Supabase `admin_settings.daily_quotes_bank` or `daily_quotes` table safely.
+   * Rotates hourly so tokens are not consumed on normal page visits.
    */
   static async getHourlyQuote(): Promise<DailyQuoteItem> {
     const currentHour = new Date().getHours();
 
     try {
-      // 1. Try daily_quotes table
+      // 1. Check admin_settings.daily_quotes_bank
+      const { data: settingData } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'daily_quotes_bank')
+        .maybeSingle();
+
+      if (settingData?.setting_value && Array.isArray(settingData.setting_value) && settingData.setting_value.length > 0) {
+        const quotes: DailyQuoteItem[] = settingData.setting_value;
+        return quotes[currentHour % quotes.length];
+      }
+
+      // 2. Try daily_quotes table if present
       const res1 = await SafeDataFetcher<DailyQuoteItem[]>(
-        supabase.from('daily_quotes').select('*').order('created_at', { ascending: false }),
-        { contextName: 'DailyQuoteService.daily_quotes' }
+        supabase.from('daily_quotes').select('*').order('created_at', { ascending: false }).limit(20),
+        { contextName: 'DailyQuoteService.daily_quotes', fallbackValue: [] }
       );
 
       if (res1.data && res1.data.length > 0) {
         return res1.data[currentHour % res1.data.length];
       }
 
-      // If empty, seed daily_quotes table
+      // If empty in DB, seed into admin_settings
       await this.seedDailyQuotes();
     } catch (e) {
-      console.warn('DailyQuoteService fetch warning:', e);
+      // Fallback cleanly
     }
 
     return SEED_DAILY_QUOTES[currentHour % SEED_DAILY_QUOTES.length];
   }
 
   /**
-   * Seed quotes into `daily_quotes` table in Supabase
+   * Seed quotes into `admin_settings.daily_quotes_bank`
    */
   static async seedDailyQuotes(): Promise<void> {
     if (!supabase) return;
@@ -99,21 +111,21 @@ export class DailyQuoteService {
         created_at: new Date().toISOString()
       }));
 
-      try {
-        await supabase.from('daily_quotes').insert(payload);
-      } catch {}
-    } catch (e) {
-      console.warn('DailyQuoteService seed warning:', e);
-    }
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'daily_quotes_bank',
+        setting_value: payload,
+        updated_at: new Date().toISOString()
+      });
+    } catch {}
   }
 
   /**
-   * Add new quote to daily_quotes table
+   * Add new quote to database quote bank (admin_settings & daily_quotes table)
    */
   static async saveQuote(item: DailyQuoteItem): Promise<boolean> {
     if (!supabase) return false;
     try {
-      const payload = {
+      const newEntry: DailyQuoteItem = {
         quote: item.quote,
         author: item.author || 'Scholars AI Performance Coach',
         focus: item.focus || 'UTME Strategy',
@@ -122,9 +134,27 @@ export class DailyQuoteService {
         created_at: new Date().toISOString()
       };
 
+      // 1. Fetch current bank and prepend
+      const { data: settingData } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'daily_quotes_bank')
+        .maybeSingle();
+
+      let currentList: DailyQuoteItem[] = Array.isArray(settingData?.setting_value) ? settingData.setting_value : [...SEED_DAILY_QUOTES];
+      currentList = [newEntry, ...currentList.filter(q => q.quote !== newEntry.quote)].slice(0, 100);
+
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'daily_quotes_bank',
+        setting_value: currentList,
+        updated_at: new Date().toISOString()
+      });
+
+      // 2. Also try daily_quotes table if it exists
       try {
-        await supabase.from('daily_quotes').insert(payload);
+        await supabase.from('daily_quotes').insert(newEntry);
       } catch {}
+
       return true;
     } catch {
       return false;

@@ -22,50 +22,46 @@ export const WeeklyChallenge = () => {
     try {
       const now = new Date().toISOString().split('T')[0];
 
-      // 1. Try weekly_challenges table
+      // 1. Check admin_settings.weekly_challenges_db (Primary storage in this project)
       let activeChallenge: any = null;
       try {
-        const challengesRes = await safeSupabaseQuery(
-          supabase
-            .from('weekly_challenges')
-            .select('*')
-            .eq('is_active', true)
-            .lte('week_start', now)
-            .gte('week_end', now)
-            .limit(1),
-          {
-            contextName: 'WeeklyChallenge.fetchChallenges',
-            sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeWeeklyChallenge),
-            fallbackValue: []
-          }
-        );
+        const { data: settingData } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'weekly_challenges_db')
+          .maybeSingle();
 
-        if (challengesRes.data && challengesRes.data.length > 0) {
-          activeChallenge = challengesRes.data[0];
+        if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+          const list = settingData.setting_value;
+          // Match active within window or most recent active
+          activeChallenge = list.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now) 
+            || list.find((c: any) => c.is_active) 
+            || list[0];
         }
       } catch {}
 
-      // 2. If no table row found, check admin_settings.weekly_challenges_db
+      // 2. Fallback to weekly_challenges table if needed
       if (!activeChallenge) {
         try {
-          const { data: settingData } = await supabase
-            .from('admin_settings')
-            .select('setting_value')
-            .eq('setting_key', 'weekly_challenges_db')
-            .maybeSingle();
-
-          if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
-            const list = settingData.setting_value;
-            // Match active within window or most recent active
-            const matched = list.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now) 
-              || list.find((c: any) => c.is_active);
-            if (matched) {
-              activeChallenge = matched;
+          const challengesRes = await safeSupabaseQuery(
+            supabase
+              .from('weekly_challenges')
+              .select('*')
+              .eq('is_active', true)
+              .lte('week_start', now)
+              .gte('week_end', now)
+              .limit(1),
+            {
+              contextName: 'WeeklyChallenge.fetchChallenges',
+              sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeWeeklyChallenge),
+              fallbackValue: []
             }
+          );
+
+          if (challengesRes.data && challengesRes.data.length > 0) {
+            activeChallenge = challengesRes.data[0];
           }
-        } catch (err) {
-          console.warn('Could not fetch weekly challenges from admin_settings:', err);
-        }
+        } catch {}
       }
 
       // 3. If local fallback exists

@@ -77,42 +77,70 @@ export function useDailyMotivation() {
     };
   }, []);
 
-  // Fetch all quotes from database and auto-rotate hourly
+  // Fetch all quotes from database and auto-rotate hourly without burning AI tokens
   const fetchQuotesFromDb = useCallback(async () => {
     try {
+      // 1. Try local cache first
+      const cachedStr = localStorage.getItem('scholars_saved_quotes');
+      let cachedQuotes: MotivationQuote[] = [];
+      if (cachedStr) {
+        try {
+          cachedQuotes = JSON.parse(cachedStr);
+        } catch {}
+      }
+
       if (supabase && navigator.onLine) {
-        const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
-        const qRes = await safeSupabaseQuery<any[]>(
-          supabase.from('daily_quotes').select('*').order('created_at', { ascending: false }),
-          { contextName: 'useDailyMotivation', fallbackValue: [] }
-        );
-        const data = qRes.data || [];
-        if (data.length > 0) {
-          const formatted: MotivationQuote[] = data.map(q => ({
-            id: q.id,
+        // 2. Fetch from admin_settings.daily_quotes_bank
+        const { data: settingData } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'daily_quotes_bank')
+          .maybeSingle();
+
+        let dbBank: MotivationQuote[] = [];
+        if (settingData?.setting_value && Array.isArray(settingData.setting_value) && settingData.setting_value.length > 0) {
+          dbBank = settingData.setting_value.map((q: any) => ({
+            id: q.id || q.quote.slice(0, 16),
             quote: q.quote,
             author: q.author || 'Scholars AI Coach',
-            focus: q.focus || 'UTME Drill',
+            focus: q.focus || 'UTME Strategy',
             category: q.category || 'Strategy',
             created_at: q.created_at,
-            bg_image: q.bg_image || INITIAL_SEED_QUOTES[Math.floor(Math.random() * INITIAL_SEED_QUOTES.length)].bg_image
+            bg_image: q.bg_image || INITIAL_SEED_QUOTES[0].bg_image
           }));
-          setDbQuotes(formatted);
-
-          // Rotate quote based on current hour so quotes change automatically every hour
-          const currentHour = new Date().getHours();
-          const selectedIdx = currentHour % formatted.length;
-          setMotivation(formatted[selectedIdx]);
-          return formatted;
         } else {
-          // If database is empty or error, seed initial quotes to Supabase DB
+          // Initialize bank in database
           await seedInitialQuotes();
+          dbBank = INITIAL_SEED_QUOTES;
         }
+
+        // Merge DB bank with local cache deduplicating by quote text
+        const mergedMap = new Map<string, MotivationQuote>();
+        [...dbBank, ...cachedQuotes, ...INITIAL_SEED_QUOTES].forEach(item => {
+          if (item?.quote && !mergedMap.has(item.quote.trim())) {
+            mergedMap.set(item.quote.trim(), item);
+          }
+        });
+
+        const merged = Array.from(mergedMap.values());
+        setDbQuotes(merged);
+        localStorage.setItem('scholars_saved_quotes', JSON.stringify(merged.slice(0, 50)));
+
+        const currentHour = new Date().getHours();
+        const selected = merged[currentHour % merged.length];
+        setMotivation(selected);
+        return merged;
+      } else if (cachedQuotes.length > 0) {
+        setDbQuotes(cachedQuotes);
+        const currentHour = new Date().getHours();
+        setMotivation(cachedQuotes[currentHour % cachedQuotes.length]);
+        return cachedQuotes;
       }
     } catch (err) {
-      console.warn('DB quote fetch info:', err);
+      // Clean fallback
     }
-    // Fallback if offline or DB unavailable
+
+    // Default fallback
     const currentHour = new Date().getHours();
     const fallback = INITIAL_SEED_QUOTES[currentHour % INITIAL_SEED_QUOTES.length];
     setMotivation(fallback);
@@ -132,39 +160,51 @@ export function useDailyMotivation() {
         user_id: user?.id || null,
         created_at: new Date().toISOString()
       }));
-      await supabase.from('daily_quotes').insert(payload);
-    } catch (e) {
-      console.warn('Initial quote seed handled:', e);
-    }
+
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'daily_quotes_bank',
+        setting_value: payload,
+        updated_at: new Date().toISOString()
+      });
+    } catch {}
   };
 
-  // Save new quote to database
+  // Save newly generated AI quote to database
   const saveQuoteToDatabase = async (newQuote: MotivationQuote) => {
     try {
-      // 1. Save to local storage for instant offline retrieval
+      // 1. Save to local storage
       const cachedStr = localStorage.getItem('scholars_saved_quotes') || '[]';
-      const cachedList: MotivationQuote[] = JSON.parse(cachedStr);
-      cachedList.unshift(newQuote);
-      localStorage.setItem('scholars_saved_quotes', JSON.stringify(cachedList.slice(0, 50)));
+      let cachedList: MotivationQuote[] = [];
+      try {
+        cachedList = JSON.parse(cachedStr);
+      } catch {}
+      cachedList = [newQuote, ...cachedList.filter(q => q.quote !== newQuote.quote)].slice(0, 50);
+      localStorage.setItem('scholars_saved_quotes', JSON.stringify(cachedList));
 
-      // 2. Insert into Supabase DB
+      // 2. Persist to Supabase admin_settings.daily_quotes_bank
       if (navigator.onLine && supabase) {
-        const { data } = await supabase.from('daily_quotes').insert({
-          quote: newQuote.quote,
-          author: newQuote.author,
-          focus: newQuote.focus,
-          category: newQuote.category || 'Daily AI Tip',
-          bg_image: newQuote.bg_image || INITIAL_SEED_QUOTES[Math.floor(Math.random() * INITIAL_SEED_QUOTES.length)].bg_image,
-          user_id: user?.id || null,
-          created_at: new Date().toISOString()
-        }).select();
+        const { data: settingData } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'daily_quotes_bank')
+          .maybeSingle();
 
-        if (data && data[0]) {
-          setDbQuotes(prev => [data[0], ...prev]);
-        }
+        let currentBank: MotivationQuote[] = Array.isArray(settingData?.setting_value) 
+          ? settingData.setting_value 
+          : [...INITIAL_SEED_QUOTES];
+
+        currentBank = [newQuote, ...currentBank.filter(q => q.quote !== newQuote.quote)].slice(0, 100);
+
+        await supabase.from('admin_settings').upsert({
+          setting_key: 'daily_quotes_bank',
+          setting_value: currentBank,
+          updated_at: new Date().toISOString()
+        });
+
+        setDbQuotes(currentBank);
       }
     } catch (e) {
-      console.warn('Quote storage warning (saved locally):', e);
+      // Saved locally
     }
   };
 

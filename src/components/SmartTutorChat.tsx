@@ -35,42 +35,36 @@ export const SmartTutorChat = () => {
     window.addEventListener('scholars:exam-active', handleExamState);
     window.addEventListener('scholars:focus-mode', handleExamState);
 
-    // Also check server API & Supabase database for active session lock flag
+    // Check localStorage and database once on mount
     const checkDbExamLock = async () => {
       if (!profile?.id) return;
+      if (localStorage.getItem('scholars_live_exam_active') === 'true') {
+        setIsExamLocked(true);
+        return;
+      }
       try {
-        const res = await fetch(`/api/exam-session/active-status?userId=${profile.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data?.is_ai_tutor_locked) {
-            setIsExamLocked(true);
-            return;
-          }
-        }
-        // Fallback Supabase direct check
         const { data: dbSession } = await supabase
           .from('exam_sessions')
-          .select('is_ai_tutor_locked, status')
+          .select('id, status')
           .eq('user_id', profile.id)
           .eq('status', 'in_progress')
-          .eq('is_ai_tutor_locked', true)
           .maybeSingle();
 
-        if (dbSession?.is_ai_tutor_locked) {
+        if (dbSession && dbSession.status === 'in_progress') {
           setIsExamLocked(true);
-        } else if (localStorage.getItem('scholars_live_exam_active') !== 'true') {
+        } else {
           setIsExamLocked(false);
         }
-      } catch {}
+      } catch {
+        setIsExamLocked(false);
+      }
     };
 
     checkDbExamLock();
-    const interval = setInterval(checkDbExamLock, 5000);
 
     return () => {
       window.removeEventListener('scholars:exam-active', handleExamState);
       window.removeEventListener('scholars:focus-mode', handleExamState);
-      clearInterval(interval);
     };
   }, [profile?.id]);
 

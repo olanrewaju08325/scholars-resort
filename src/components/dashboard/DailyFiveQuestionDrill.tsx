@@ -1,15 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, CheckCircle, XCircle, ChevronRight, Target, ShieldCheck, Flame, BookOpen } from 'lucide-react';
+import { Trophy, CheckCircle, XCircle, ChevronRight, Target, ShieldCheck, Flame, BookOpen, SkipForward } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { MathText } from '@/components/MathText';
 import { supabase } from '@/lib/supabase';
 import { recordStudyAction } from '@/lib/streakService';
+import { ContentNormalizer, type NormalizedQuestion } from '@/utils/ContentNormalizer';
 import { toast } from 'sonner';
 
 export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [questions, setQuestions] = useState<any[]>([]);
+  const [questions, setQuestions] = useState<NormalizedQuestion[]>([]);
   const [userUTMESubjects, setUserUTMESubjects] = useState<string[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -25,7 +26,7 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
         
         if (lastCompleted === today) {
           setLoading(false);
-          return; // Already done today
+          return; // Already completed today
         }
 
         // 1. Fetch user's registered UTME subjects
@@ -55,31 +56,58 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
           }
         } catch {}
 
+        // Helper to validate questions have at least 2 non-empty options
+        const filterValidOptions = (rawList: any[]): NormalizedQuestion[] => {
+          return ContentNormalizer.normalizeStream(rawList).filter(q => {
+            if (!q.question_text || q.question_text.trim().length < 5) return false;
+            if (!Array.isArray(q.options) || q.options.length < 2) return false;
+            // Check that options have non-empty text
+            const validOptions = q.options.filter(o => o.text && o.text.trim().length > 0);
+            return validOptions.length >= 2;
+          });
+        };
+
         // 3. Query questions filtered strictly by selected subjects if IDs exist
-        let qQuery = supabase.from('questions').select('*, subjects(name)').eq('is_active', true);
+        let candidateQuestions: any[] = [];
         if (targetSubjectIds.length > 0) {
-          qQuery = qQuery.in('subject_id', targetSubjectIds);
+          const { data: subjectQs } = await supabase
+            .from('questions')
+            .select('*, subjects(name)')
+            .eq('is_active', true)
+            .in('subject_id', targetSubjectIds)
+            .limit(50);
+
+          if (subjectQs) candidateQuestions.push(...subjectQs);
         }
 
-        const { data, error } = await qQuery.limit(30);
+        let validNormalized = filterValidOptions(candidateQuestions);
 
-        if (error || !data || data.length === 0) {
-          // Fallback: fetch active questions generally
-          const { data: fallbackData } = await supabase.from('questions').select('*').eq('is_active', true).limit(15);
-          if (fallbackData && fallbackData.length > 0) {
-            const shuffled = fallbackData.sort(() => 0.5 - Math.random()).slice(0, 5);
-            setQuestions(shuffled);
-            setTimeout(() => setIsOpen(true), 2000);
+        // Fallback: fetch active questions generally if needed
+        if (validNormalized.length < 5) {
+          const { data: fallbackData } = await supabase
+            .from('questions')
+            .select('*, subjects(name)')
+            .eq('is_active', true)
+            .limit(40);
+
+          if (fallbackData) {
+            const extraValid = filterValidOptions(fallbackData);
+            // Merge deduplicating by ID
+            const existingIds = new Set(validNormalized.map(q => q.id));
+            extraValid.forEach(eq => {
+              if (!existingIds.has(eq.id)) {
+                validNormalized.push(eq);
+                existingIds.add(eq.id);
+              }
+            });
           }
-          return;
         }
-        
-        // Shuffle and take 5 questions strictly from selected subjects
-        const shuffled = data.sort(() => 0.5 - Math.random()).slice(0, 5);
-        setQuestions(shuffled);
-        
-        // Popup drill modal
-        setTimeout(() => setIsOpen(true), 2000);
+
+        if (validNormalized.length >= 2) {
+          const shuffled = validNormalized.sort(() => 0.5 - Math.random()).slice(0, 5);
+          setQuestions(shuffled);
+          setTimeout(() => setIsOpen(true), 1500);
+        }
       } catch (err) {
         console.warn('Daily drill fetch error:', err);
       } finally {
@@ -89,17 +117,25 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
     if (userId) checkDailyStatus();
   }, [userId]);
 
-  const handleSelectAnswer = (qId: string, opt: string) => {
-    setAnswers(prev => ({ ...prev, [qId]: opt }));
+  const handleSelectAnswer = (qId: string, optId: string) => {
+    setAnswers(prev => ({ ...prev, [qId]: optId }));
     
     // Auto-advance
     setTimeout(() => {
       if (currentIdx < questions.length - 1) {
         setCurrentIdx(c => c + 1);
       } else {
-        finishDrill(opt, qId);
+        finishDrill(optId, qId);
       }
-    }, 400);
+    }, 350);
+  };
+
+  const handleSkipQuestion = () => {
+    if (currentIdx < questions.length - 1) {
+      setCurrentIdx(c => c + 1);
+    } else {
+      finishDrill('', questions[currentIdx]?.id || '');
+    }
   };
 
   const finishDrill = async (lastAns: string, lastQid: string) => {
@@ -107,33 +143,43 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
     const finalAnswers = { ...answers, [lastQid]: lastAns };
     
     questions.forEach(q => {
-      const correctVal = q.correct_option || q.correct_answer || q.answer;
-      if (finalAnswers[q.id] === correctVal || finalAnswers[q.id] === q[`option_${String(correctVal).toLowerCase()}`]) {
+      const userSelected = finalAnswers[q.id];
+      const correctOptionLetter = (q.correct_option || 'A').toUpperCase();
+      
+      // Match either option ID ('A') or text
+      if (userSelected === correctOptionLetter) {
         currentScore += 1;
+      } else {
+        const correctOptObj = q.options.find(o => o.id === correctOptionLetter);
+        if (correctOptObj && userSelected === correctOptObj.text) {
+          currentScore += 1;
+        }
       }
     });
     
     setScore(currentScore);
     setIsCompleted(true);
     
-    // Mark as done for today
+    // Mark as completed for today
     const today = new Date().toISOString().split('T')[0];
     localStorage.setItem(`last_daily_drill_date_${userId}`, today);
     
     // Record context-aware study action & streak progression in Supabase
-    const firstQSubject = questions[0]?.subjects?.name || userUTMESubjects[0] || 'UTME Core';
-    await recordStudyAction(userId, 'practice', firstQSubject);
+    const firstQSubject = questions[0]?.subject_name || userUTMESubjects[0] || 'UTME Core';
+    try {
+      await recordStudyAction(userId, 'practice', firstQSubject);
+    } catch {}
 
     setTimeout(() => {
-      toast.success(`Streak Protected! Earned +50 XP (${currentScore}/5 correct in ${firstQSubject})`);
+      toast.success(`Streak Protected! Earned +50 XP (${currentScore}/${questions.length} correct in ${firstQSubject})`);
       setIsOpen(false);
     }, 2800);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || questions.length === 0) return null;
 
   const currentQ = questions[currentIdx];
-  const subjectLabel = currentQ?.subjects?.name || currentQ?.subject_name || userUTMESubjects[0] || 'UTME';
+  const subjectLabel = currentQ?.subject_name || userUTMESubjects[0] || 'UTME';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
@@ -148,50 +194,84 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
             <Flame className="w-5 h-5 fill-white text-orange-200" />
             UTME Daily Streak Lock
           </div>
-          <button onClick={() => setIsOpen(false)} className="opacity-70 hover:opacity-100 transition-opacity">
+          <button 
+            onClick={() => setIsOpen(false)} 
+            className="p-1 hover:bg-white/20 rounded-full transition-colors"
+            title="Close for now"
+          >
             <XCircle className="w-5 h-5" />
           </button>
         </div>
 
         <div className="p-6">
           {!isCompleted ? (
-            <div className="space-y-6">
-              <div className="flex justify-between items-center text-sm font-bold text-muted-foreground mb-4">
+            <div className="space-y-5">
+              <div className="flex justify-between items-center text-sm font-bold text-muted-foreground">
                 <span className="flex items-center gap-1.5">
                   <BookOpen className="w-4 h-4 text-orange-500" />
-                  Question {currentIdx + 1} of 5
+                  Question {currentIdx + 1} of {questions.length}
                 </span>
                 <span className="bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20 px-2.5 py-1 rounded-full text-xs font-semibold">
                   {subjectLabel}
                 </span>
               </div>
               
-              <div className="text-base sm:text-lg font-medium text-foreground">
-                 <MathText text={currentQ?.question_text || currentQ?.question || ''} />
+              <div className="text-base sm:text-lg font-medium text-foreground leading-relaxed">
+                 <MathText text={currentQ?.question_text || ''} />
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                {['a', 'b', 'c', 'd'].map((key) => {
-                  const optText = currentQ[`option_${key}`] || currentQ?.options?.[key];
-                  if (!optText) return null;
-                  
-                  const isSelected = answers[currentQ.id] === optText;
-                  
-                  return (
-                    <button
-                      key={key}
-                      onClick={() => handleSelectAnswer(currentQ.id, optText)}
-                      className={`text-left p-3 rounded-xl border-2 transition-all ${
-                        isSelected 
-                          ? 'border-orange-500 bg-orange-500/10 text-orange-600' 
-                          : 'border-border hover:border-orange-500/50 hover:bg-muted'
-                      }`}
-                    >
-                      <span className="font-bold uppercase mr-3 text-sm">{key}.</span>
-                      <MathText text={optText} />
-                    </button>
-                  );
-                })}
+              {currentQ.image_url && (
+                <div className="rounded-lg overflow-hidden border border-border bg-muted/40 p-2 max-h-48 flex items-center justify-center">
+                  <img 
+                    src={currentQ.image_url} 
+                    alt="Question Diagram" 
+                    className="max-h-44 object-contain rounded" 
+                    referrerPolicy="no-referrer"
+                  />
+                </div>
+              )}
+
+              {/* Verified UTME Multiple Choice Options */}
+              <div className="grid grid-cols-1 gap-2.5">
+                {currentQ.options && currentQ.options.length > 0 ? (
+                  currentQ.options.map((opt) => {
+                    const isSelected = answers[currentQ.id] === opt.id;
+                    return (
+                      <button
+                        key={opt.id}
+                        onClick={() => handleSelectAnswer(currentQ.id, opt.id)}
+                        className={`text-left p-3.5 rounded-xl border-2 transition-all flex items-start gap-3 ${
+                          isSelected 
+                            ? 'border-orange-500 bg-orange-500/10 text-orange-600 font-semibold shadow-sm' 
+                            : 'border-border hover:border-orange-500/50 hover:bg-muted/70 text-foreground'
+                        }`}
+                      >
+                        <span className={`w-7 h-7 rounded-lg font-bold flex items-center justify-center shrink-0 text-sm ${
+                          isSelected ? 'bg-orange-500 text-white' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {opt.id}
+                        </span>
+                        <div className="flex-1 pt-0.5 text-sm sm:text-base">
+                          <MathText text={opt.text} />
+                        </div>
+                      </button>
+                    );
+                  })
+                ) : (
+                  <div className="p-4 text-center text-sm text-muted-foreground bg-muted/50 rounded-xl">
+                    Options not available for this question.
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-border/50 text-xs text-muted-foreground">
+                <span>Lock your streak by completing all 5 questions</span>
+                <button 
+                  onClick={handleSkipQuestion}
+                  className="flex items-center gap-1 hover:text-foreground font-semibold transition-colors"
+                >
+                  <SkipForward className="w-3.5 h-3.5" /> Skip
+                </button>
               </div>
             </div>
           ) : (
@@ -201,7 +281,7 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
               </div>
               <h2 className="text-2xl font-display font-bold text-foreground">Streak Protected!</h2>
               <p className="text-muted-foreground text-sm">
-                You scored <span className="font-bold text-foreground">{score}/5</span>. Your UTME subject study streak is locked in.
+                You scored <span className="font-bold text-foreground">{score}/{questions.length}</span>. Your UTME study streak is securely locked in for today.
               </p>
               
               <div className="pt-4">

@@ -16,20 +16,20 @@ const ProtectedRoute = () => {
 
     const checkMaintenance = async () => {
       try {
-        // Set a 3-second timeout for the maintenance check. If it fails or hangs, we fail OPEN (allow access)
-        const fetchPromise = supabase.from('admin_settings').select('*').eq('setting_key', 'maintenance_mode').single();
+        // Check maintenance mode with safe maybeSingle and 6s timeout
+        const fetchPromise = supabase.from('admin_settings').select('setting_value').eq('setting_key', 'maintenance_mode').maybeSingle();
         const timeoutPromise = new Promise((_, reject) => {
-          timeoutId = setTimeout(() => reject(new Error('Maintenance check timeout')), 3000);
+          timeoutId = setTimeout(() => reject(new Error('Maintenance check timeout')), 6000);
         });
 
-        const { data } = await Promise.race([fetchPromise, timeoutPromise]) as any;
+        const res = await Promise.race([fetchPromise, timeoutPromise]) as any;
+        const data = res?.data;
         
         if (isMounted && data && data.setting_value) {
           setMaintenance(data.setting_value);
         }
       } catch (e) {
-        console.warn('Maintenance check failed or timed out. Defaulting to open.', e);
-        // On error or timeout, we assume maintenance is FALSE to prevent accidental platform lockout
+        // Fail open silently to prevent accidental student lockout
         if (isMounted) {
           setMaintenance({ enabled: false, message: '' });
         }

@@ -166,15 +166,37 @@ export const OfflinePackManager = () => {
 
       {activeTab === 'packs' ? (
         <>
-          {/* Guide Card */}
-          <Card className="border-border bg-card shadow-sm">
-            <CardContent className="p-4 flex items-start gap-3">
-              <Info className="w-5 h-5 text-primary shrink-0 mt-0.5" />
-              <div className="text-xs text-muted-foreground space-y-1">
-                <p className="font-bold text-foreground">How Offline Practice Works:</p>
-                <p>1. Download your required subject packs while connected to Wi-Fi or data.</p>
-                <p>2. Once saved, you can take full timed CBT exam sessions anytime — even with Airplane Mode ON.</p>
-                <p>3. Whenever you reconnect online, your exam scores auto-sync to your account leaderboard.</p>
+          {/* Student Step-by-Step Offline Guide */}
+          <Card className="border-primary/30 bg-primary/5 shadow-sm">
+            <CardContent className="p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold">
+                  <WifiOff className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-base text-foreground">Scholar's Non-Technical Offline Guide</h3>
+                  <p className="text-xs text-muted-foreground">How to practice and take CBT exams without consuming mobile data or internet.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
+                <div className="bg-card/80 border border-border p-3.5 rounded-xl space-y-1.5">
+                  <div className="w-6 h-6 rounded-full bg-orange-500/20 text-orange-600 font-extrabold text-xs flex items-center justify-center">1</div>
+                  <h4 className="font-bold text-xs text-foreground uppercase tracking-wider">Step 1: Download Packs</h4>
+                  <p className="text-xs text-muted-foreground">While connected to Wi-Fi or data, tap <strong>Download Pack</strong> on your UTME subjects below.</p>
+                </div>
+
+                <div className="bg-card/80 border border-border p-3.5 rounded-xl space-y-1.5">
+                  <div className="w-6 h-6 rounded-full bg-blue-500/20 text-blue-600 font-extrabold text-xs flex items-center justify-center">2</div>
+                  <h4 className="font-bold text-xs text-foreground uppercase tracking-wider">Step 2: Practice Offline</h4>
+                  <p className="text-xs text-muted-foreground">Turn off your data or use Airplane Mode! You can now take full timed CBT mocks anytime.</p>
+                </div>
+
+                <div className="bg-card/80 border border-border p-3.5 rounded-xl space-y-1.5">
+                  <div className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-600 font-extrabold text-xs flex items-center justify-center">3</div>
+                  <h4 className="font-bold text-xs text-foreground uppercase tracking-wider">Step 3: Auto-Sync</h4>
+                  <p className="text-xs text-muted-foreground">When you reconnect online later, your scores and progress automatically sync to your leaderboard!</p>
+                </div>
               </div>
             </CardContent>
           </Card>
