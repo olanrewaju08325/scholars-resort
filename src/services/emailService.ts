@@ -117,79 +117,35 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
     const { data: { user } } = await supabase.auth.getUser();
 
     // 1. Primary: Call backend /api/send-bulk-email
-    try {
-      const response = await authFetch(getApiUrl('/api/send-bulk-email'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          target: payload.target || 'all',
-          subject: payload.subject,
-          body: payload.body,
-          recipients: Array.isArray(payload.to) ? payload.to : undefined,
-          adminId: user?.id
-        })
-      });
-
-      if (response.ok) {
-        const resData = await response.json();
-        if (resData.success) {
-          return {
-            success: true,
-            count: resData.count || 1,
-            message: resData.message || `Dispatched to ${resData.count || 1} recipients!`
-          };
-        }
-      }
-    } catch (apiErr) {
-      console.warn('Backend send-bulk-email call notice:', apiErr);
-    }
-
-    // 2. Direct fallback: Fetch recipients & publish to announcements
-    let profilesQuery = supabase.from('profiles').select('id, email, full_name');
-    if (payload.target === 'paid') {
-      profilesQuery = profilesQuery.eq('has_paid', true);
-    } else if (payload.target === 'unpaid') {
-      profilesQuery = profilesQuery.eq('has_paid', false);
-    }
-
-    const { data: recipients } = await profilesQuery;
-    const count = recipients?.length || (Array.isArray(payload.to) ? payload.to.length : 1);
-
-    // Store in announcements / notifications table for in-app delivery
-    try {
-      await supabase.from('announcements').insert({
-        title: payload.subject,
-        body: payload.body,
-        content: payload.body,
+    const response = await authFetch(getApiUrl('/api/send-bulk-email'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
         target: payload.target || 'all',
-        created_by: user?.id,
-        is_pinned: true
-      });
-    } catch (annErr) {
-      console.warn('Announcement fallback error:', annErr);
+        subject: payload.subject,
+        body: payload.body,
+        recipients: Array.isArray(payload.to) ? payload.to : undefined,
+        adminId: user?.id
+      })
+    });
+
+    const resData = await response.json().catch(() => null);
+
+    if (response.ok && resData?.success) {
+      console.log('[Bulk Email Dispatch Success]:', resData);
+      return {
+        success: true,
+        count: resData.deliveredCount || resData.count || 1,
+        message: resData.message || `Dispatched to ${resData.deliveredCount || resData.count || 1} recipients!`
+      };
     }
 
-    // Log in activity_logs
-    if (user) {
-      try {
-        await supabase.from('activity_logs').insert({
-          user_id: user.id,
-          activity_type: 'email_broadcast',
-          action: `Sent Broadcast: ${payload.subject}`,
-          metadata: { details: `Email broadcast dispatched to targeted scholars` },
-          created_at: new Date().toISOString()
-        });
-      } catch (auditErr) {
-        console.warn('Activity log insert notice:', auditErr);
-      }
-    }
-
-    return {
-      success: true,
-      count,
-      message: `Email broadcast published to in-app announcement center for ${count} students!`
-    };
+    // Backend returned an error
+    const errorMessage = resData?.error || resData?.message || `Server error (${response.status}: ${response.statusText})`;
+    console.error('[Bulk Email API Error]:', errorMessage, { status: response.status, details: resData });
+    throw new Error(errorMessage);
   } catch (err: any) {
+    console.error('[Bulk Email Console Error]:', err.message);
     errorTracker.logError({
       type: 'runtime_error',
       message: `Send email failed: ${err.message}`,

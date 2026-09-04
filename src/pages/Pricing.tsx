@@ -3,7 +3,7 @@ import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import {
   Check, ShieldCheck, CloudUpload, Loader2, Banknote,
-  LogIn, UserPlus, CheckCircle2
+  LogIn, UserPlus, CheckCircle2, Tag, Gift, Sparkles, X
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
@@ -43,6 +43,146 @@ const Pricing = () => {
 
   const plans = {
     lifetime: { name: 'One-Time Full Access', price: 3000, desc: 'Lifetime Full Exam Access', badge: 'Single ₦3,000 Payment' },
+  };
+
+  const [promoInput, setPromoInput] = useState('');
+  const [validatingPromo, setValidatingPromo] = useState(false);
+  const [appliedPromo, setAppliedPromo] = useState<{
+    code: string;
+    discountType: 'percentage' | 'fixed';
+    discountValue: number;
+    discountAmount: number;
+    finalPrice: number;
+    isFullScholarship: boolean;
+  } | null>(null);
+  const [claimingScholarship, setClaimingScholarship] = useState(false);
+
+  const basePrice = plans[selectedPlan].price;
+  const currentPrice = appliedPromo ? appliedPromo.finalPrice : basePrice;
+
+  const handleApplyPromo = async () => {
+    const cleanCode = promoInput.trim().toUpperCase();
+    if (!cleanCode) {
+      toast.error('Please enter a discount or scholarship code.');
+      return;
+    }
+
+    setValidatingPromo(true);
+    try {
+      // 1. Check discount_codes table
+      const { data: codeRow } = await supabase
+        .from('discount_codes')
+        .select('*')
+        .eq('code', cleanCode)
+        .maybeSingle();
+
+      if (codeRow) {
+        if (codeRow.max_uses && (codeRow.current_uses || 0) >= codeRow.max_uses) {
+          toast.error('This scholarship or discount code has reached its maximum usage limit.');
+          return;
+        }
+
+        const isPercentage = codeRow.discount_type === 'percentage';
+        const discountAmount = isPercentage 
+          ? Math.round((basePrice * (codeRow.discount_value || 0)) / 100)
+          : Math.min(basePrice, (codeRow.discount_value || 0));
+        const finalPrice = Math.max(0, basePrice - discountAmount);
+        const isFullScholarship = finalPrice === 0;
+
+        setAppliedPromo({
+          code: cleanCode,
+          discountType: codeRow.discount_type || 'percentage',
+          discountValue: codeRow.discount_value,
+          discountAmount,
+          finalPrice,
+          isFullScholarship
+        });
+
+        toast.success(isFullScholarship ? '🎉 100% Scholarship Code Verified!' : `Discount Applied! You saved ₦${discountAmount.toLocaleString()}.`);
+        return;
+      }
+
+      // 2. Check if it is an active referral code
+      const { data: refProfile } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('referral_code', cleanCode)
+        .maybeSingle();
+
+      if (refProfile) {
+        const discountAmount = Math.round((basePrice * 15) / 100);
+        const finalPrice = basePrice - discountAmount;
+        setAppliedPromo({
+          code: cleanCode,
+          discountType: 'percentage',
+          discountValue: 15,
+          discountAmount,
+          finalPrice,
+          isFullScholarship: false
+        });
+        toast.success(`Referral code from ${refProfile.full_name || 'Advocate'} applied! 15% discount granted.`);
+        return;
+      }
+
+      toast.error('Invalid discount or scholarship code. Please verify the code and try again.');
+    } catch (err: any) {
+      toast.error('Failed to validate code: ' + err.message);
+    } finally {
+      setValidatingPromo(false);
+    }
+  };
+
+  const handleClaimScholarship = async () => {
+    if (!user) {
+      toast.error('Please sign in or create an account first to activate your scholarship.');
+      navigate(`/login?from=${encodeURIComponent('/pricing')}`);
+      return;
+    }
+
+    setClaimingScholarship(true);
+    try {
+      // 1. Activate lifetime subscription
+      await supabase.from('subscriptions').upsert({
+        user_id: user.id,
+        plan_id: 'lifetime',
+        status: 'active',
+        start_date: new Date().toISOString(),
+      });
+
+      // 2. Activate profile has_paid
+      const { error: profErr } = await supabase
+        .from('profiles')
+        .update({ has_paid: true })
+        .eq('id', user.id);
+
+      if (profErr) throw profErr;
+
+      // 3. Increment code usage
+      if (appliedPromo?.code) {
+        try {
+          const { data: cData } = await supabase
+            .from('discount_codes')
+            .select('current_uses')
+            .eq('code', appliedPromo.code)
+            .maybeSingle();
+          if (cData) {
+            await supabase
+              .from('discount_codes')
+              .update({ current_uses: (cData.current_uses || 0) + 1 })
+              .eq('code', appliedPromo.code);
+          }
+        } catch (cErr) {
+          console.warn('Increment code count error:', cErr);
+        }
+      }
+
+      toast.success('Congratulations! Your 100% Scholarship access is activated.');
+      navigate('/dashboard');
+    } catch (err: any) {
+      toast.error('Could not activate scholarship: ' + err.message);
+    } finally {
+      setClaimingScholarship(false);
+    }
   };
 
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -133,10 +273,11 @@ const Pricing = () => {
       // ── 6. Insert payment record ──────────────────────────────────────────
       const { error: dbError } = await supabase.from('manual_payments').insert({
         user_id: targetUserId,
-        amount: plans[selectedPlan].price,
+        amount: currentPrice,
         proof_image_url: receiptUrl,
         status: 'pending',
         plan_id: selectedPlan,
+        admin_notes: appliedPromo ? `Applied Promo/Discount Code: ${appliedPromo.code} (Original: ₦${basePrice}, Paid: ₦${currentPrice})` : null
       });
 
       if (dbError) throw new Error(`Failed to save payment record: ${dbError.message}`);
@@ -254,14 +395,71 @@ const Pricing = () => {
               <CardTitle className="text-3xl font-display">One-Time Activation</CardTitle>
               <CardDescription className="text-base mt-2">Pay once for lifetime access to all UTME/JAMB subjects & CBT mocks</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <div className="p-6 border-2 border-primary bg-primary/5 rounded-2xl text-center space-y-2">
                 <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-primary text-primary-foreground mb-2">
-                  ₦3,000 One-Time Lifetime Fee
+                  {appliedPromo?.isFullScholarship ? '100% Scholarship Granted' : appliedPromo ? `Discounted: ₦${currentPrice.toLocaleString()}` : '₦3,000 One-Time Lifetime Fee'}
                 </div>
-                <div className="text-4xl font-extrabold font-display text-primary">₦3,000</div>
+                <div className="flex items-center justify-center gap-3">
+                  {appliedPromo && appliedPromo.discountAmount > 0 && (
+                    <span className="text-2xl line-through text-muted-foreground font-bold">₦3,000</span>
+                  )}
+                  <div className="text-4xl font-extrabold font-display text-primary">
+                    {appliedPromo?.isFullScholarship ? 'FREE (₦0)' : `₦${currentPrice.toLocaleString()}`}
+                  </div>
+                </div>
                 <p className="text-sm font-semibold text-foreground">Full Unlimited UTME/JAMB Access</p>
-                <p className="text-xs text-muted-foreground">No recurring fees, no hidden charges. Pay ₦3,000 once and practice indefinitely.</p>
+                <p className="text-xs text-muted-foreground">No recurring fees, no hidden charges. Practice indefinitely with AI tools & live CBT.</p>
+              </div>
+
+              {/* Promo / Scholarship Code Box */}
+              <div className="bg-muted/40 border border-border p-4 rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5 text-primary" /> Have a Promo or Scholarship Code?
+                  </span>
+                  {appliedPromo && (
+                    <button 
+                      type="button" 
+                      onClick={() => { setAppliedPromo(null); setPromoInput(''); }}
+                      className="text-xs text-red-400 hover:underline flex items-center gap-1"
+                    >
+                      <X className="w-3 h-3" /> Remove
+                    </button>
+                  )}
+                </div>
+
+                {!appliedPromo ? (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promoInput}
+                      onChange={(e) => setPromoInput(e.target.value)}
+                      placeholder="e.g. SCHOLAR100 or DISCOUNT50"
+                      className="flex-1 bg-background border border-border px-3 py-1.5 text-xs rounded-lg uppercase font-mono tracking-wider focus:ring-1 focus:ring-primary outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleApplyPromo}
+                      disabled={validatingPromo || !promoInput.trim()}
+                      className="px-3 py-1.5 bg-primary text-primary-foreground text-xs font-bold rounded-lg hover:bg-primary/90 disabled:opacity-50 transition-colors flex items-center gap-1 shrink-0"
+                    >
+                      {validatingPromo ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Apply'}
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between p-2.5 bg-green-500/10 border border-green-500/30 rounded-lg text-xs">
+                    <div className="flex items-center gap-2">
+                      <Gift className="w-4 h-4 text-green-500 shrink-0" />
+                      <span className="font-bold text-green-500">
+                        Code "{appliedPromo.code}" Applied: {appliedPromo.isFullScholarship ? '100% Free Scholarship' : `Saved ₦${appliedPromo.discountAmount.toLocaleString()}`}
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-green-400">
+                      {appliedPromo.isFullScholarship ? 'FREE' : `-₦${appliedPromo.discountAmount.toLocaleString()}`}
+                    </span>
+                  </div>
+                )}
               </div>
             </CardContent>
             <CardFooter className="border-t border-border pt-4">
@@ -282,54 +480,86 @@ const Pricing = () => {
             </CardHeader>
 
             <CardContent className="p-6 space-y-6">
-              {/* Bank details */}
-              <div className="bg-primary/5 border border-primary/20 p-5 rounded-2xl flex items-start gap-4">
-                <div className="bg-primary/10 p-3 rounded-xl shrink-0">
-                  <Banknote className="w-6 h-6 text-primary" />
-                </div>
-                <div className="flex-1 space-y-2">
-                  <h4 className="font-bold text-foreground text-base">Bank Transfer Details</h4>
-                  <p className="text-sm text-muted-foreground">
-                    Transfer <strong className="text-primary font-bold">₦{plans[selectedPlan].price.toLocaleString()}</strong> to the official Moniepoint account below.
-                  </p>
-                  <div className="mt-3 space-y-2 bg-background p-4 rounded-xl border border-border shadow-inner">
-                    {[
-                      { label: 'Bank Name', value: 'Moniepoint MCB' },
-                      { label: 'Account Number', value: '9032517376' },
-                      { label: 'Account Name', value: 'Olamide Olanrewaju Abdulmuiz' },
-                    ].map(({ label, value }) => (
-                      <div key={label} className="flex justify-between items-center text-sm">
-                        <span className="text-muted-foreground font-medium">{label}:</span>
-                        <span className="font-mono font-bold text-foreground text-base">{value}</span>
-                      </div>
-                    ))}
+              {appliedPromo?.isFullScholarship ? (
+                /* 100% Free Scholarship Direct Activation Block */
+                <div className="bg-gradient-to-br from-green-500/10 via-emerald-500/10 to-teal-500/10 border-2 border-green-500/40 p-6 rounded-2xl text-center space-y-4 shadow-xl">
+                  <div className="w-14 h-14 bg-green-500/20 text-green-500 rounded-full flex items-center justify-center mx-auto ring-8 ring-green-500/10">
+                    <Sparkles className="w-7 h-7 animate-pulse" />
                   </div>
+                  <div className="space-y-1.5">
+                    <h4 className="text-xl font-bold text-foreground">100% Scholarship Verified!</h4>
+                    <p className="text-sm text-green-400 font-semibold">
+                      Scholarship Code "{appliedPromo.code}" Confirmed
+                    </p>
+                    <p className="text-xs text-muted-foreground max-w-md mx-auto leading-relaxed">
+                      Your tuition is 100% sponsored. You do not need to make any bank transfer or submit a receipt. Activate your account instantly below.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleClaimScholarship}
+                    disabled={claimingScholarship}
+                    className="w-full py-3.5 px-6 bg-green-600 hover:bg-green-500 active:scale-[0.99] text-white font-extrabold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 text-base cursor-pointer disabled:opacity-50"
+                  >
+                    {claimingScholarship ? <Loader2 className="w-5 h-5 animate-spin" /> : <Gift className="w-5 h-5" />}
+                    {claimingScholarship ? 'Activating Your Scholarship...' : 'Activate Free Lifetime Access Now'}
+                  </button>
+                  <p className="text-[11px] text-muted-foreground">
+                    Instant access to all JAMB subjects, past questions, mock exams, and AI study tutor.
+                  </p>
                 </div>
-              </div>
+              ) : (
+                <>
+                  {/* Bank details */}
+                  <div className="bg-primary/5 border border-primary/20 p-5 rounded-2xl flex items-start gap-4">
+                    <div className="bg-primary/10 p-3 rounded-xl shrink-0">
+                      <Banknote className="w-6 h-6 text-primary" />
+                    </div>
+                    <div className="flex-1 space-y-2">
+                      <h4 className="font-bold text-foreground text-base">Bank Transfer Details</h4>
+                      <p className="text-sm text-muted-foreground">
+                        Transfer <strong className="text-primary font-bold">₦{currentPrice.toLocaleString()}</strong> to the official Moniepoint account below {appliedPromo ? `(Discount code ${appliedPromo.code} applied)` : ''}.
+                      </p>
+                      <div className="mt-3 space-y-2 bg-background p-4 rounded-xl border border-border shadow-inner">
+                        {[
+                          { label: 'Bank Name', value: 'Moniepoint MCB' },
+                          { label: 'Account Number', value: '9032517376' },
+                          { label: 'Account Name', value: 'Olamide Olanrewaju Abdulmuiz' },
+                        ].map(({ label, value }) => (
+                          <div key={label} className="flex justify-between items-center text-sm">
+                            <span className="text-muted-foreground font-medium">{label}:</span>
+                            <span className="font-mono font-bold text-foreground text-base">{value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
 
-              {/* Mandatory Payment Terms Agreement */}
-              <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-3">
-                <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4" /> Mandatory Payment Guidelines & Terms
-                </p>
-                <ul className="text-xs text-foreground/90 space-y-1.5 list-disc pl-4 leading-relaxed">
-                  <li>Transfer exact amount (<strong>₦3,000</strong>) to Moniepoint MCB <strong>9032517376</strong>.</li>
-                  <li>Use your registered account <strong>Name or Email</strong> in the transfer narration/memo.</li>
-                  <li>Upload a clear receipt screenshot after payment. Activation takes 5-15 minutes after review.</li>
-                  <li>Payments are non-refundable once account access is granted. Ensure your email is correct.</li>
-                </ul>
-                <label className="flex items-start gap-2.5 pt-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={acceptedTerms}
-                    onChange={(e) => setAcceptedTerms(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary"
-                  />
-                  <span className="text-xs font-bold text-foreground">
-                    I have read and agree to the payment instructions & non-refundable activation terms.
-                  </span>
-                </label>
-              </div>
+                  {/* Mandatory Payment Terms Agreement */}
+                  <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/10 space-y-3">
+                    <p className="text-xs font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <ShieldCheck className="w-4 h-4" /> Mandatory Payment Guidelines & Terms
+                    </p>
+                    <ul className="text-xs text-foreground/90 space-y-1.5 list-disc pl-4 leading-relaxed">
+                      <li>Transfer exact amount (<strong>₦{currentPrice.toLocaleString()}</strong>) to Moniepoint MCB <strong>9032517376</strong>.</li>
+                      <li>Use your registered account <strong>Name or Email</strong> in the transfer narration/memo.</li>
+                      <li>Upload a clear receipt screenshot after payment. Activation takes 5-15 minutes after review.</li>
+                      <li>Payments are non-refundable once account access is granted. Ensure your email is correct.</li>
+                    </ul>
+                    <label className="flex items-start gap-2.5 pt-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={acceptedTerms}
+                        onChange={(e) => setAcceptedTerms(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded border-border text-primary focus:ring-primary"
+                      />
+                      <span className="text-xs font-bold text-foreground">
+                        I have read and agree to the payment instructions & non-refundable activation terms.
+                      </span>
+                    </label>
+                  </div>
+                </>
+              )}
 
               {/* Upload Section */}
               <div className="space-y-3">

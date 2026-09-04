@@ -16,6 +16,39 @@ export const BulkEmailTab = () => {
   const { confirmAction, ConfirmElement } = useConfirm();
   const [logs, setLogs] = useState<any[]>([]);
   const [activeTab, setActiveTab] = useState<'compose' | 'history'>('compose');
+  const [estimatedRecipients, setEstimatedRecipients] = useState<number | null>(null);
+  const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
+  const [loadingRecipients, setLoadingRecipients] = useState(false);
+
+  // Live calculation of target recipients
+  const resolveRecipients = async (audience: string) => {
+    setLoadingRecipients(true);
+    try {
+      let query = supabase.from('profiles').select('email');
+      if (audience === 'paid') {
+        query = query.eq('has_paid', true);
+      } else if (audience === 'unpaid') {
+        query = query.eq('has_paid', false);
+      }
+      const { data, error } = await query;
+      if (!error && data) {
+        const emails = data.map(p => p.email).filter(Boolean);
+        setRecipientEmails(emails);
+        setEstimatedRecipients(emails.length);
+      } else {
+        setEstimatedRecipients(0);
+        setRecipientEmails([]);
+      }
+    } catch (e) {
+      console.warn('Error resolving recipients:', e);
+    } finally {
+      setLoadingRecipients(false);
+    }
+  };
+
+  useEffect(() => {
+    resolveRecipients(target);
+  }, [target]);
 
   const fetchLogs = async () => {
     try {
@@ -57,28 +90,33 @@ export const BulkEmailTab = () => {
       return;
     }
 
+    const countDesc = estimatedRecipients !== null ? `${estimatedRecipients} student(s)` : target;
+
     confirmAction(
       "Send Bulk Email",
-      `Are you sure you want to send this email broadcast to target group: ${target}? This will reach registered students.`,
+      `Are you sure you want to send this email broadcast to ${countDesc}? This will dispatch real emails via SMTP and publish to student in-app dashboards.`,
       async () => {
         setSending(true);
         try {
+          console.log(`[BulkEmailTab] Dispatching broadcast to ${countDesc}...`);
           const result = await sendEmailMessage({
-            to: target,
+            to: recipientEmails.length > 0 ? recipientEmails : target,
             subject,
             body,
             target
           });
           
-          toast.success(result.message);
+          toast.success(result.message || 'Bulk broadcast sent successfully!');
           setSubject('');
           setBody('');
           setTarget('all');
           fetchLogs();
         } catch (err: any) {
-          toast.error(`Broadcast failed: ${err.message}`);
+          console.error('[BulkEmailTab] Broadcast failed:', err);
+          toast.error(`Broadcast Failed: ${err.message}`, { duration: 10000 });
+        } finally {
+          setSending(false);
         }
-        setSending(false);
       }
     );
   };
@@ -120,7 +158,18 @@ export const BulkEmailTab = () => {
           <CardContent>
             <form onSubmit={handleSend} className="space-y-4 min-w-0 w-full">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Target Audience</label>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Target Audience</label>
+                  {loadingRecipients ? (
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Counting recipients...
+                    </span>
+                  ) : estimatedRecipients !== null ? (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${estimatedRecipients > 0 ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'}`}>
+                      {estimatedRecipients} recipient{estimatedRecipients === 1 ? '' : 's'} registered
+                    </span>
+                  ) : null}
+                </div>
                 <div className="flex items-center gap-2 text-muted-foreground bg-muted/50 border border-border rounded-md p-1 w-fit max-w-full">
                    <Users className="w-4 h-4 ml-2 shrink-0" />
                    <select 

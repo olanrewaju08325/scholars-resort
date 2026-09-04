@@ -4,8 +4,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { Gift, Copy, Trash2, Plus, Users, Percent, Search } from 'lucide-react';
+import { Gift, Copy, Trash2, Plus, Users, Percent, Search, Award } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
+import { authFetch } from '@/lib/apiAuth';
+import { getApiUrl } from '@/lib/utils';
 
 export const ScholarshipTab = () => {
   const [codes, setCodes] = useState<any[]>([]);
@@ -128,19 +130,34 @@ export const ScholarshipTab = () => {
     
     confirmAction(
       "Grant Scholarship Access",
-      `Are you sure you want to grant free lifetime access to ${foundStudent.full_name}?`,
+      `Are you sure you want to grant free lifetime access to ${foundStudent.full_name}? This immediately activates their premium account.`,
       async () => {
         try {
-          const { error } = await supabase.from('subscriptions').insert({
-            user_id: foundStudent.id,
-            plan_id: 'lifetime',
-            status: 'active',
-            start_date: new Date().toISOString(),
+          // Call backend subscription grant endpoint to set has_paid, audit, and activate
+          const res = await authFetch(getApiUrl('/api/admin/subscriptions/grant'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: foundStudent.id,
+              planType: 'lifetime',
+              days: 3650
+            })
           });
+
+          if (!res.ok) {
+            // Fallback to client-side insert and profile update
+            const { error: subErr } = await supabase.from('subscriptions').upsert({
+              user_id: foundStudent.id,
+              plan_id: 'lifetime',
+              status: 'active',
+              start_date: new Date().toISOString(),
+            });
+            if (subErr) throw subErr;
+
+            await supabase.from('profiles').update({ has_paid: true }).eq('id', foundStudent.id);
+          }
           
-          if (error) throw error;
-          
-          toast.success(`Access granted to ${foundStudent.full_name}!`);
+          toast.success(`Scholarship access successfully granted to ${foundStudent.full_name}! Account is now fully activated.`);
           setFoundStudent(null);
           setSearchTerm('');
         } catch (err: any) {

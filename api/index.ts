@@ -514,22 +514,43 @@ app.post('/api/send-bulk-email', verifyAdminToken, async (req, res) => {
     // 1. Resolve recipients
     let recipientList: string[] = [];
     if (explicitRecipients && Array.isArray(explicitRecipients) && explicitRecipients.length > 0) {
-      recipientList = explicitRecipients;
+      recipientList = explicitRecipients.filter(Boolean);
     } else {
-      let query = supabase.from('profiles').select('email');
+      const client = getScopedSupabaseClient(req);
+      let query = client.from('profiles').select('email');
       if (target === 'paid') {
         query = query.eq('has_paid', true);
       } else if (target === 'unpaid') {
         query = query.eq('has_paid', false);
       }
-      const { data: profileRows } = await query;
+      const { data: profileRows, error: profErr } = await query;
+      if (profErr) {
+        console.error('[Bulk Email DB fetch error]', profErr);
+      }
       if (profileRows && profileRows.length > 0) {
         recipientList = profileRows.map(p => p.email).filter(Boolean);
       }
-      
+
+      // If scoped client returned empty due to RLS, try fallback to unscoped supabase
       if (recipientList.length === 0) {
-        recipientList = ['student@scholarsresort.com'];
+        let fallbackQuery = supabase.from('profiles').select('email');
+        if (target === 'paid') {
+          fallbackQuery = fallbackQuery.eq('has_paid', true);
+        } else if (target === 'unpaid') {
+          fallbackQuery = fallbackQuery.eq('has_paid', false);
+        }
+        const { data: fallbackRows } = await fallbackQuery;
+        if (fallbackRows && fallbackRows.length > 0) {
+          recipientList = fallbackRows.map(p => p.email).filter(Boolean);
+        }
       }
+    }
+
+    if (recipientList.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: `No registered student emails found for target group: "${target}". Please check user registrations in the Students tab.`
+      });
     }
 
     // 2. Publish to in-app Announcements
@@ -549,77 +570,73 @@ app.post('/api/send-bulk-email', verifyAdminToken, async (req, res) => {
     // 3. Dispatch emails via SMTP
     const config = await getSmtpConfig();
     let sentCount = 0;
+    let failedCount = 0;
     let smtpError = '';
 
-    if (config.host && config.user && config.pass) {
-      try {
-        const transporter = createSmtpTransporter(config);
-
-        // Send in parallel batches of 5
-        const batchSize = 5;
-        for (let i = 0; i < recipientList.length; i += batchSize) {
-          const batch = recipientList.slice(i, i + batchSize);
-          await Promise.all(batch.map(async (email) => {
-            try {
-              await transporter.sendMail({
-                from: config.from || `Scholars Resort <${config.user}>`,
-                to: email,
-                subject,
-                html: html || body,
-                text: body || html?.replace(/<[^>]*>?/gm, '')
-              });
-              sentCount++;
-
-              // Log to communication_logs
-              await supabase.from('communication_logs').insert({
-                recipient_email: email,
-                message_type: 'bulk_email',
-                subject,
-                content: body || html,
-                status: 'delivered',
-                sent_at: new Date().toISOString()
-              }).catch(() => {});
-            } catch (singleErr: any) {
-              console.warn(`[Bulk Email single error for ${email}]`, singleErr.message);
-              smtpError = singleErr.message;
-            }
-          }));
-        }
-      } catch (transporterErr: any) {
-        console.error('[Bulk Email SMTP Transporter Error]', transporterErr);
-        smtpError = transporterErr.message;
-      }
-    } else {
-      smtpError = 'SMTP credentials not fully configured in Settings.';
-    }
-
-    // 4. Log to audit_logs
-    try {
-      await supabase.from('audit_logs').insert({
-        user_id: adminId || '00000000-0000-0000-0000-000000000000',
-        action: `Bulk Broadcast: ${subject} (${sentCount}/${recipientList.length} delivered)`,
-        entity_type: 'communication',
-        entity_id: 'bulk_email',
-        status: sentCount > 0 ? 'success' : 'failed',
-        created_at: new Date().toISOString()
+    if (!config.host || !config.user || !config.pass) {
+      return res.status(400).json({
+        success: false,
+        error: 'SMTP credentials not configured. Please enter your SMTP Host, Username/Email, and App Password in Admin -> Settings.'
       });
-    } catch (auditErr: any) {
-      console.warn('[Audit Log Notice]', auditErr.message);
     }
 
-    const message = sentCount > 0 
-      ? `Successfully dispatched bulk email via SMTP to ${sentCount} recipient(s) and published live in-app announcements!`
-      : `Broadcast published to in-app student dashboards! Note: Direct email delivery requires saving valid SMTP host and password in Admin -> Settings.`;
+    try {
+      const transporter = createSmtpTransporter(config);
+
+      // Send in parallel batches of 5
+      const batchSize = 5;
+      for (let i = 0; i < recipientList.length; i += batchSize) {
+        const batch = recipientList.slice(i, i + batchSize);
+        await Promise.all(batch.map(async (email) => {
+          try {
+            await transporter.sendMail({
+              from: config.from || `Scholars Resort <${config.user}>`,
+              to: email,
+              subject,
+              html: html || body,
+              text: body || html?.replace(/<[^>]*>?/gm, '')
+            });
+            sentCount++;
+
+            // Log to communication_logs
+            await supabase.from('communication_logs').insert({
+              recipient_email: email,
+              message_type: 'bulk_email',
+              subject,
+              content: body || html,
+              status: 'delivered',
+              sent_at: new Date().toISOString()
+            }).catch(() => {});
+          } catch (singleErr: any) {
+            failedCount++;
+            console.error(`[Bulk Email single error for ${email}]:`, singleErr.message);
+            smtpError = singleErr.message;
+          }
+        }));
+      }
+    } catch (transporterErr: any) {
+      console.error('[Bulk Email SMTP Transporter Error]:', transporterErr);
+      smtpError = transporterErr.message;
+    }
+
+    if (sentCount === 0) {
+      return res.status(502).json({
+        success: false,
+        error: `Failed to dispatch emails via SMTP server to ${recipientList.length} recipients. Reason: ${smtpError || 'Connection refused or invalid authentication.'}`,
+        details: smtpError
+      });
+    }
 
     return res.json({
       success: true,
       count: recipientList.length,
       deliveredCount: sentCount,
-      message,
+      failedCount,
+      message: `Successfully dispatched bulk email via SMTP to ${sentCount} recipient(s)!`,
       smtpNote: smtpError || null
     });
   } catch (err: any) {
-    console.error('[Bulk Email Route Error]', err);
+    console.error('[Bulk Email Route Error]:', err);
     return res.status(500).json({ success: false, error: err.message || 'Failed to dispatch bulk email.' });
   }
 });

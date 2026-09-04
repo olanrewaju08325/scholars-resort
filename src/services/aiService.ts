@@ -639,14 +639,31 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
 - Every focused drill brings you closer to your target university admission.`;
 };
 
-export const generateAIQuestion = async (topic: string, difficulty: string): Promise<string> => {
-  const prompt = `Generate a JAMB-style multiple-choice question for Nigerian secondary school students on the topic: "${topic}". Difficulty: ${difficulty}. 
-Return STRICT JSON format: 
+export const generateAIQuestion = async (topic: string, difficulty: string, subject?: string): Promise<string> => {
+  const subjectContext = subject ? `for ${subject}` : '';
+  const prompt = `You are a Nigerian JAMB/UTME exam specialist setting questions for the Unified Tertiary Matriculation Examination.
+Topic: "${topic}" ${subjectContext}
+Target Level: Standard Nigerian Senior Secondary School (SS3) / UTME syllabus (standard secondary school level, NOT university calculus or theoretical proofs).
+Difficulty: ${difficulty}.
+
+REQUIREMENTS:
+1. Write a normal, authentic standard JAMB UTME multiple choice question.
+2. If Mathematics, Physics, or Chemistry, keep calculations algebraic, practical, and solvable within 60 seconds without university-level calculus or multivariable analysis.
+3. Absolutely NO conversational preambles (do NOT write "*Problem Recap**", "Here is your question", or chat headers).
+4. Strictly 4 distinct options (A, B, C, D) relevant to the Nigerian syllabus.
+5. Provide a clear, direct, student-friendly explanation (concise, maximum 2-3 sentences).
+
+Return ONLY valid JSON matching this schema:
 {
-  "question": "Question text here",
-  "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+  "question": "Clear, direct question statement without any meta intro",
+  "options": {
+    "A": "Option A text",
+    "B": "Option B text",
+    "C": "Option C text",
+    "D": "Option D text"
+  },
   "correct_answer": "A",
-  "explanation": "Detailed step-by-step explanation"
+  "explanation": "Clear, concise step-by-step explanation without fluff"
 }`;
 
   return callGroqAPI([{ role: 'user', content: prompt }]);

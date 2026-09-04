@@ -33,13 +33,45 @@ export default function TournamentArena() {
       }
       setTournament(tData);
 
-      // 2. Fetch random questions (mocking tournament fixed questions for now)
-      const { data: qData } = await supabase.from('questions').select('*').eq('is_active', true).limit(20);
-      if (qData) {
+      // 2. Fetch questions based on tournament configuration (subject_filter & count)
+      const count = Number(tData.question_count) || 20;
+      let qData: any[] | null = null;
+
+      // Filter by tournament subject if specified
+      if (tData.subject_filter && tData.subject_filter.trim() !== '' && tData.subject_filter.toLowerCase() !== 'all') {
+        const rawSub = tData.subject_filter.trim();
+        const subjects = rawSub.split(',').map((s: string) => s.trim()).filter(Boolean);
+        
+        let query = supabase.from('questions').select('*').eq('is_active', true);
+        if (subjects.length === 1) {
+          query = query.ilike('subject', `%${subjects[0]}%`);
+        } else if (subjects.length > 1) {
+          const filterStr = subjects.map((s: string) => `subject.ilike.%${s}%`).join(',');
+          query = query.or(filterStr);
+        }
+        const res = await query.limit(count);
+        if (res.data && res.data.length > 0) {
+          qData = res.data;
+        }
+      }
+
+      // Fallback if no subject filter or no questions returned for that subject
+      if (!qData || qData.length === 0) {
+        const fallbackRes = await supabase
+          .from('questions')
+          .select('*')
+          .eq('is_active', true)
+          .limit(count);
+        qData = fallbackRes.data;
+      }
+
+      if (qData && qData.length > 0) {
         setQuestions(qData.map(q => ({
           ...q,
           options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
         })));
+      } else {
+        toast.error("No questions currently assigned to this tournament.");
       }
       setLoading(false);
     };

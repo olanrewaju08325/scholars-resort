@@ -407,10 +407,21 @@ const PracticeSession = () => {
     setIsGeneratingAi(true);
     try {
       const q = currentQ;
-      const prompt = `The student just answered a JAMB question. Question: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Student's Answer: "${optChosen}". Provide a brief, encouraging, and clear explanation of why the correct answer is right. Keep it under 3 sentences.`;
+      const prompt = `You are an expert Nigerian JAMB UTME tutor. A student just answered a JAMB question:
+Question: "${q.question_text || q.question}"
+Correct Answer: "${q.correct_answer}"
+Student Selected: "${optChosen}"
+
+Provide a concise, direct, and encouraging explanation (maximum 2-3 short sentences) explaining why option ${q.correct_answer} is correct.
+STRICT RULES:
+- Standard Nigerian SS3/UTME secondary school syllabus level only (NO university calculus, NO advanced mechanics).
+- NO conversational preambles (do NOT output "*Problem Recap**", "Here is the explanation", or chat headers).
+- Jump straight into the direct explanation.`;
       
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
-      setAiExplanation(content || `The correct answer is ${q.correct_answer}.`);
+      // Clean up any lingering markdown headers if LLM added them
+      const cleanContent = content ? content.replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
+      setAiExplanation(cleanContent || `The correct answer is ${q.correct_answer}.`);
     } catch (err) {
       const q = currentQ;
       setAiExplanation(`AI Tutor (Fallback): The correct answer is **${q.correct_answer}**. ${q.explanation || ''}`);
@@ -425,16 +436,28 @@ const PracticeSession = () => {
       const q = currentQ;
       let prompt = "";
       if (action === 'simpler') {
-        prompt = `Explain the following JAMB question conceptually as if to a 10 year old: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Use an analogy.`;
+        prompt = `Explain this Nigerian JAMB UTME question simply and intuitively using a relatable everyday analogy (under 3 sentences, no heavy math or calculus): "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Do not write "*Problem Recap**" or intro filler.`;
       } else if (action === 'another') {
-        prompt = `Provide a different perspective or rule of thumb to solve this JAMB question: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}".`;
+        prompt = `Provide a fast 60-second shortcut, exam tip, or alternative method to solve this Nigerian JAMB question without complex calculus: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Keep it concise and direct.`;
       } else if (action === 'similar') {
         toast.success("Generating a practice problem...");
-        prompt = `Generate a similar practice JAMB question based on: "${q.question_text || q.question}" with its answer and explanation.`;
+        prompt = `Generate ONE similar, authentic JAMB UTME multiple-choice practice question based on the topic of: "${q.question_text || q.question}".
+REQUIREMENTS:
+- Standard Nigerian Senior Secondary School (SS3) UTME level (NO advanced university calculus or derivatives).
+- Strictly NO conversational preambles (no "*Problem Recap**" or greeting).
+- Format:
+**Question:** ...
+A) ...
+B) ...
+C) ...
+D) ...
+**Correct Answer:** [Letter]
+**Quick Explanation:** [1-2 sentences]`;
       }
       
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
-      setAiExplanation(content || 'Could not generate explanation.');
+      const cleanContent = content ? content.replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
+      setAiExplanation(cleanContent || 'Could not generate explanation.');
     } catch (err) {
       toast.error('AI request failed.');
     } finally {

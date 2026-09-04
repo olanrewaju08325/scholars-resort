@@ -531,7 +531,9 @@ export const QuestionBankTab = () => {
     }
     setAiLoading(true);
     try {
-      const generatedRaw = await generateAIQuestion(aiTopic, aiDifficulty);
+      const selectedSubjectObj = subjects.find(s => s.id === subjectId);
+      const subjectName = selectedSubjectObj?.name || '';
+      const generatedRaw = await generateAIQuestion(aiTopic, aiDifficulty, subjectName);
       // Attempt to parse JSON from AI response
       const jsonStart = generatedRaw.indexOf('{');
       const jsonEnd = generatedRaw.lastIndexOf('}');
