@@ -3,7 +3,46 @@ import http from 'http';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
-import { setupStudyRoomWebSocket, getActiveStudyRoomsList, createStudyRoom } from '../src/services/studyRoomSocketServer';
+
+// In-memory study rooms cache for serverless environment
+const serverlessActiveRooms = new Map<string, any>();
+
+function getActiveStudyRoomsList() {
+  if (serverlessActiveRooms.size === 0) {
+    const defaults = [
+      { roomId: 'room_physics_01', title: 'UTME Physics Mechanics & Optics Sprint', subject: 'Physics', hostName: 'Dr. Adebayo' },
+      { roomId: 'room_english_01', title: 'Use of English Concord & Lexis Circle', subject: 'Use of English', hostName: 'Scholar Chinedu' },
+      { roomId: 'room_math_01', title: 'Calculus & Quadratics Problem Solving', subject: 'Mathematics', hostName: 'Engineer Fatima' },
+      { roomId: 'room_chem_01', title: 'Organic Chemistry & Stoichiometry Group', subject: 'Chemistry', hostName: 'Tutor Kingsley' },
+    ];
+    defaults.forEach(d => {
+      serverlessActiveRooms.set(d.roomId, {
+        roomId: d.roomId,
+        title: d.title,
+        subject: d.subject,
+        hostName: d.hostName,
+        participantCount: 0,
+        isTimerRunning: false,
+        participants: []
+      });
+    });
+  }
+  return Array.from(serverlessActiveRooms.values());
+}
+
+function createStudyRoom(params: { roomId: string; title: string; subject: string; hostName: string }) {
+  const room = {
+    roomId: params.roomId,
+    title: params.title,
+    subject: params.subject,
+    hostName: params.hostName,
+    participantCount: 1,
+    isTimerRunning: false,
+    participants: [{ id: 'host', name: params.hostName }]
+  };
+  serverlessActiveRooms.set(params.roomId, room);
+  return room;
+}
 
 const app = express();
 const PORT = 3000;
