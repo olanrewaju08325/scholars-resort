@@ -342,6 +342,18 @@ export const EducationalJourneyMap: React.FC = () => {
                 </div>
               </div>
 
+              {/* Prescribed Reading / Where to Read */}
+              {selectedNodeModal.recommendedReading && (
+                <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl space-y-1">
+                  <div className="text-xs font-bold text-primary flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5" /> Prescribed Reading / Where to Study:
+                  </div>
+                  <p className="text-xs text-foreground font-medium">
+                    {selectedNodeModal.recommendedReading}
+                  </p>
+                </div>
+              )}
+
               {/* Key Concept Formula & Outline */}
               <div className="space-y-2">
                 <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">

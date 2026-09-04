@@ -53,6 +53,7 @@ export const SyllabusAdminTab = () => {
   const [recommendedAction, setRecommendedAction] = useState<string>('Solve 15 Targeted Drill Questions');
   const [learningObjectives, setLearningObjectives] = useState('');
   const [studyTasks, setStudyTasks] = useState('');
+  const [recommendedReading, setRecommendedReading] = useState('');
 
   const { confirmAction, ConfirmElement } = useConfirm();
   const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; id: string | null; title: string }>({
@@ -169,6 +170,7 @@ export const SyllabusAdminTab = () => {
         jamb_weight: Number(topicWeight) || 15,
         prerequisites: selectedPrereqs,
         recommended_action: recommendedAction.trim(),
+        recommended_reading: recommendedReading.trim(),
         learning_objectives: learningObjectives.split('\n').filter(Boolean),
         recommended_tasks: studyTasks.split('\n').filter(Boolean),
         updated_at: new Date().toISOString()
@@ -214,6 +216,7 @@ export const SyllabusAdminTab = () => {
     setTopicWeight(15);
     setSelectedPrereqs([]);
     setRecommendedAction('Solve 15 Targeted Drill Questions');
+    setRecommendedReading('');
     setLearningObjectives('');
     setStudyTasks('');
   };
@@ -228,6 +231,7 @@ export const SyllabusAdminTab = () => {
     setTopicWeight(topic.jamb_weight || topic.weight || 15);
     setSelectedPrereqs(Array.isArray(topic.prerequisites) ? topic.prerequisites : []);
     setRecommendedAction(topic.recommended_action || 'Solve 15 Targeted Drill Questions');
+    setRecommendedReading(topic.recommended_reading || topic.prescribed_book || topic.reading_material || '');
     setLearningObjectives(Array.isArray(topic.learning_objectives) ? topic.learning_objectives.join('\n') : (topic.learning_objectives || ''));
     setStudyTasks(Array.isArray(topic.recommended_tasks) ? topic.recommended_tasks.join('\n') : (topic.recommended_tasks || ''));
   };
@@ -554,6 +558,15 @@ export const SyllabusAdminTab = () => {
                 </div>
               </div>
 
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Prescribed Reading / Where to Study (Book, Textbook Chapter, or Official Reading Text)</label>
+                <Input 
+                  value={recommendedReading} 
+                  onChange={e => setRecommendedReading(e.target.value)} 
+                  placeholder="e.g. Lambert Comprehensive Physics Chapter 4, Official JAMB Syllabus, or Prescribed Literature Text" 
+                />
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Learning Objectives (One per line)</label>
@@ -617,6 +630,13 @@ export const SyllabusAdminTab = () => {
                     <h3 className="text-lg font-semibold text-foreground">{topic.name || topic.title}</h3>
                   </div>
                   {topic.description && <p className="text-sm text-muted-foreground">{topic.description}</p>}
+                  
+                  {topic.recommended_reading && (
+                    <div className="flex items-center gap-1.5 text-xs text-primary font-medium bg-primary/10 px-2.5 py-1 rounded-md border border-primary/20 w-fit">
+                      <BookOpen className="w-3.5 h-3.5" />
+                      <span>Prescribed Reading: {topic.recommended_reading}</span>
+                    </div>
+                  )}
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2">
                     {topic.learning_objectives && topic.learning_objectives.length > 0 && (

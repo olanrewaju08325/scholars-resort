@@ -140,13 +140,20 @@ export function DashboardOverview() {
           }
         });
       } else {
-        // Fallback default distribution if no sessions recorded yet
-        subjectCounts['Use of English'] = 145;
-        subjectCounts['Mathematics'] = 112;
-        subjectCounts['Biology'] = 88;
-        subjectCounts['Physics'] = 76;
-        subjectCounts['Chemistry'] = 64;
-        subjectCounts['Government'] = 45;
+        // Query real question counts by subject from database instead of fake placeholder counts
+        try {
+          const { data: qData } = await supabase.from('questions').select('subject_id');
+          if (qData && qData.length > 0) {
+            qData.forEach((q: any) => {
+              if (q.subject_id && subjectNameById[q.subject_id]) {
+                const name = subjectNameById[q.subject_id];
+                subjectCounts[name] = (subjectCounts[name] || 0) + 1;
+              }
+            });
+          }
+        } catch {
+          // If no questions or error, leave counts as 0 - do not inject fake numbers
+        }
       }
 
       const totalSubjectSelections = Object.values(subjectCounts).reduce((a, b) => a + b, 0) || 1;

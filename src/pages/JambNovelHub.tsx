@@ -235,22 +235,30 @@ export const JambNovelHub = () => {
   if (isLocked) {
     return (
       <div className="min-h-[75vh] flex items-center justify-center p-4">
-        <Card className="max-w-md w-full bg-card border-amber-500/30 text-card-foreground shadow-2xl text-center p-8 space-y-6">
-          <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/30">
-            <Lock className="w-8 h-8" />
+        <Card className="max-w-lg w-full bg-card border-amber-500/40 text-card-foreground shadow-2xl text-center p-8 sm:p-10 space-y-6">
+          <div className="relative w-20 h-20 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto border border-amber-500/30">
+            <Lock className="w-10 h-10" />
+            <span className="absolute -bottom-2 -right-2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-slate-950 uppercase tracking-wider shadow">
+              Locked
+            </span>
           </div>
-          <div className="space-y-2">
-            <h2 className="text-2xl font-bold font-display">Literature Hub Currently Locked</h2>
-            <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed">
-              {lockReason || "The academic team is currently updating the official JAMB UTME literature prescribed texts for this session. Please check back shortly!"}
+          <div className="space-y-3">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30 uppercase tracking-wider">
+              <Lock className="w-3 h-3" /> Coming Soon • Academic Lockdown
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-bold font-display text-foreground">
+              Official Literature Prescribed Texts
+            </h2>
+            <p className="text-muted-foreground text-xs sm:text-sm leading-relaxed max-w-md mx-auto">
+              {lockReason || "The official JAMB UTME literature syllabus and prescribed reading texts are currently being verified by the academic team. New books, chapter summaries, and PDF study materials will be released soon."}
             </p>
           </div>
           <div className="pt-2 flex flex-col sm:flex-row gap-3 justify-center">
             <Button asChild className="font-bold text-xs">
-              <Link to="/practice?mode=subject">Go to CBT Practice Mode</Link>
+              <Link to="/practice?mode=subject">Practice Available Subjects</Link>
             </Button>
-            <Button variant="outline" onClick={() => window.location.reload()} className="text-xs font-semibold">
-              <RefreshCw className="w-3.5 h-3.5 mr-1.5" /> Check Again
+            <Button variant="outline" asChild className="text-xs font-semibold">
+              <Link to="/journey-map">Explore Journey Map</Link>
             </Button>
           </div>
         </Card>
@@ -293,7 +301,7 @@ export const JambNovelHub = () => {
             Official JAMB UTME Literature & Novel Masterclass
           </h1>
           <p className="text-muted-foreground text-xs sm:text-sm max-w-3xl leading-relaxed">
-            Master every chapter of <strong className="text-foreground">The Life Changer</strong> and official JAMB Literature texts with chapter summaries, character analyses, key themes, vocabulary drills, and real UTME practice questions.
+            Master every chapter of official JAMB UTME literature texts, prose, drama, and prescribed reading books with chapter summaries, character analyses, key themes, and UTME practice questions.
           </p>
           <div className="pt-2 flex gap-3">
             <Button 

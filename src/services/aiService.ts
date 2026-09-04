@@ -236,10 +236,10 @@ export const checkAITokenLimit = async (userId?: string, isPro?: boolean): Promi
         if (targetIsPro === undefined) {
           const { data: prof } = await supabase
             .from('profiles')
-            .select('subscription_tier, is_pro')
+            .select('has_paid, role, email')
             .eq('id', targetUserId)
             .maybeSingle();
-          targetIsPro = prof?.subscription_tier === 'pro' || prof?.is_pro === true;
+          targetIsPro = prof?.has_paid === true || prof?.role === 'admin';
         }
 
         const maxDailyQueries = targetIsPro ? dailyProLimit : dailyFreeLimit;

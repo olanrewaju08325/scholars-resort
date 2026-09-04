@@ -413,11 +413,11 @@ export const CANONICAL_SYLLABUS_DETAILS: Record<string, SyllabusTopicDetail[]> =
       ]
     },
     {
-      name: 'Prescribed Literature Novel (The Life Changer)',
-      description: 'Analysis of characterization, plot, themes, setting, and literary devices in the mandatory novel.',
+      name: 'Prescribed Literature Texts (Official JAMB Selection)',
+      description: 'Analysis of characterization, plot, themes, setting, and literary devices in prescribed UTME texts.',
       subtopics: [
-        { name: 'Character Analysis & Plot', learningObjectives: ['Analyze main and supporting characters', 'Trace chronological events and plot climax'] },
-        { name: 'Themes & Literary Devices', learningObjectives: ['Identify core themes (education, integrity, ethics)', 'Recognize metaphors, irony and symbolism'] }
+        { name: 'Character Analysis & Plot Structure', learningObjectives: ['Analyze main and supporting characters', 'Trace chronological events and plot climax'] },
+        { name: 'Themes & Literary Devices', learningObjectives: ['Identify core themes, ethical lessons, and societal relevance', 'Recognize metaphors, irony and symbolism'] }
       ]
     },
     {

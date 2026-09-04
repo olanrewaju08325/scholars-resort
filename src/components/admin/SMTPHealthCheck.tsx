@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import {
   Copy, ShieldCheck, Zap, Info, HelpCircle, Server, Clock, Trash2
 } from 'lucide-react';
 import { testSMTPEmail, type SMTPConfig } from '@/services/emailService';
+import { supabase } from '@/lib/supabase';
 
 interface SMTPHealthCheckProps {
   currentConfig: {

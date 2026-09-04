@@ -19,6 +19,7 @@ export interface JourneyNode {
   questionsAttempted: number;
   correctAnswers: number;
   recommendedAction: string;
+  recommendedReading?: string;
 }
 
 export interface SubjectJourney {
@@ -165,7 +166,8 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
       accuracyPercentage: accuracy,
       questionsAttempted: totalAttempted,
       correctAnswers: correctCount,
-      recommendedAction: t.recommended_action || (Array.isArray(t.recommended_tasks) && t.recommended_tasks[0]) || `Solve 15 Drill Questions on ${tName}`
+      recommendedAction: t.recommended_action || (Array.isArray(t.recommended_tasks) && t.recommended_tasks[0]) || `Solve 15 Drill Questions on ${tName}`,
+      recommendedReading: t.recommended_reading || t.prescribed_book || t.reading_material || ''
     };
   });
 

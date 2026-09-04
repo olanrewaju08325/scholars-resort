@@ -284,9 +284,10 @@ export const AISimulationTester: React.FC = () => {
                   </p>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-8">
-                    {q.options.map((opt, oIdx) => {
-                      const letter = ['A', 'B', 'C', 'D'][oIdx] || `${oIdx + 1}`;
+                    {q.options.map((opt: any, oIdx: number) => {
+                      const letter = typeof opt === 'object' && opt !== null && opt.id ? opt.id : (['A', 'B', 'C', 'D'][oIdx] || `${oIdx + 1}`);
                       const isCorrect = q.correct_option === letter;
+                      const optText = typeof opt === 'object' && opt !== null ? (opt.text ?? opt.value ?? opt.label ?? '') : String(opt ?? '');
                       return (
                         <div 
                           key={oIdx} 
@@ -301,7 +302,7 @@ export const AISimulationTester: React.FC = () => {
                           }`}>
                             {letter}
                           </span>
-                          <span>{opt}</span>
+                          <span>{optText}</span>
                         </div>
                       );
                     })}

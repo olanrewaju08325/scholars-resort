@@ -83,10 +83,10 @@ const HUB_MODULES: HubCardItem[] = [
   },
   {
     id: 'novel_hub',
-    title: 'JAMB Novel Hub',
-    subtitle: 'The Life Changer • Chapter summaries & Qs',
+    title: 'Literature & Books Hub',
+    subtitle: 'Prescribed reading texts & chapter breakdowns',
     icon: BookMarked,
-    badge: 'Compulsory',
+    badge: 'Prescribed Texts',
     badgeColor: 'bg-indigo-500/10 text-indigo-500 border-indigo-500/20',
     color: 'text-indigo-500',
     bg: 'bg-indigo-500/10 dark:bg-indigo-500/15',
