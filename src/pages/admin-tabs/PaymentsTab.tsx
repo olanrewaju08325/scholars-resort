@@ -126,6 +126,7 @@ export const PaymentsTab = () => {
         try {
           await supabase.from('activity_logs').insert({
             user_id: userId,
+            activity_type: 'payment_approved',
             action: 'payment_approved',
             metadata: { amount, plan_type: planType, payment_id: paymentId }
           });
@@ -183,6 +184,7 @@ export const PaymentsTab = () => {
           try {
             await supabase.from('activity_logs').insert({
               user_id: userId,
+              activity_type: 'payment_rejected',
               action: 'payment_rejected',
               metadata: { payment_id: paymentId }
             });

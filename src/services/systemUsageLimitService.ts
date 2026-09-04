@@ -382,8 +382,9 @@ export class SystemUsageLimitService {
       // Log notification to Admin Tray
       try {
         await supabase.from('activity_logs').insert({
+          activity_type: 'SYSTEM_CAPACITY_ALERT',
           action: 'SYSTEM_CAPACITY_ALERT',
-          details: `Resource Warning: ${stats.alertMessages.join(' | ')}`,
+          metadata: { details: `Resource Warning: ${stats.alertMessages.join(' | ')}` },
           created_at: new Date().toISOString()
         });
       } catch {}

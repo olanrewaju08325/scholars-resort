@@ -174,8 +174,9 @@ export const sendEmailMessage = async (payload: EmailPayload): Promise<{ success
       try {
         await supabase.from('activity_logs').insert({
           user_id: user.id,
+          activity_type: 'email_broadcast',
           action: `Sent Broadcast: ${payload.subject}`,
-          details: `Email broadcast dispatched to targeted scholars`,
+          metadata: { details: `Email broadcast dispatched to targeted scholars` },
           created_at: new Date().toISOString()
         });
       } catch (auditErr) {

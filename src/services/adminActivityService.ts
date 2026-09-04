@@ -61,6 +61,7 @@ export const logAdminActivity = async (
   // Attempt async sync to Supabase activity_logs
   try {
     await supabase.from('activity_logs').insert([{
+      activity_type: 'admin_activity',
       action: `${action}: ${details}`,
       metadata: metadata || {},
       created_at: newItem.timestamp

@@ -685,8 +685,11 @@ export class FlowValidator {
           // Log to activity_logs table if Supabase is connected
           try {
             await supabase.from('activity_logs').insert({
+              activity_type: 'cron_flow_validation',
               action: 'cron_flow_validation',
-              details: `Automated 24h Flow Validation completed: ${report.overallHealth.toUpperCase()} (${report.totalRecordsFetched} live questions, ${report.entitiesTouched?.totalEntitiesTouched} entities touched, Coverage: ${report.coveragePercentage}%, ${report.totalLatencyMs}ms).`,
+              metadata: {
+                details: `Automated 24h Flow Validation completed: ${report.overallHealth.toUpperCase()} (${report.totalRecordsFetched} live questions, ${report.entitiesTouched?.totalEntitiesTouched} entities touched, Coverage: ${report.coveragePercentage}%, ${report.totalLatencyMs}ms).`
+              },
               created_at: new Date().toISOString()
             });
           } catch {}

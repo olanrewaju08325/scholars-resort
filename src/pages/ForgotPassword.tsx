@@ -252,8 +252,9 @@ export default function ForgotPassword() {
       // 5. Log successful password reset in activity_logs
       try {
         await supabase.from('activity_logs').insert({
+          activity_type: 'password_reset',
           action: `Password reset via 6-digit OTP for ${cleanEmail}`,
-          details: `Successful PIN verification and password update for ${cleanEmail}`,
+          metadata: { details: `Successful PIN verification and password update for ${cleanEmail}` },
           created_at: new Date().toISOString()
         });
       } catch (_) {}

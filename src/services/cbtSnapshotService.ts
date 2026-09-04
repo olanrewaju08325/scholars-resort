@@ -157,6 +157,7 @@ export class CbtSnapshotService {
       try {
         await supabase.from('activity_logs').insert({
           user_id: params.userProfile?.id || null,
+          activity_type: 'cbt_snapshot',
           action: `CBT Session Snapshot Captured: ${snapshot.id}`,
           metadata: {
             examMode: params.examMode,

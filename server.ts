@@ -1498,8 +1498,9 @@ app.post('/api/auth/verify-otp', async (req, res) => {
     // 3. Log successful OTP reset
     try {
       await supabase.from('activity_logs').insert({
+        activity_type: 'password_reset_otp',
         action: `Password reset verified for ${cleanEmail}`,
-        details: `Account password was successfully updated via email OTP verification`,
+        metadata: { details: `Account password was successfully updated via email OTP verification` },
         created_at: new Date().toISOString()
       });
     } catch (_) {}
@@ -3427,7 +3428,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    app.get('*all', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

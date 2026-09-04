@@ -131,8 +131,10 @@ export default function ResetPassword() {
         // Log password change in activity logs
         try {
           await supabase.from('activity_logs').insert({
+            user_id: data.user.id,
+            activity_type: 'password_reset',
             action: `Password reset updated for ${data.user.email || 'user'}`,
-            details: 'Account password updated via authenticated recovery session',
+            metadata: { details: 'Account password updated via authenticated recovery session' },
             created_at: new Date().toISOString()
           });
         } catch (_) {}
