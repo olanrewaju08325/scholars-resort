@@ -1,6 +1,5 @@
 import express from 'express';
 import http from 'http';
-import cors from 'cors';
 import path from 'path';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
@@ -2352,6 +2351,8 @@ app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
   const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
   const userEmail = (authenticatedUser.email || '').toLowerCase().trim();
 
+  console.log(`[API /api/profile/:id] Route entered. Requested profile ID: ${id}, Authenticated user ID: ${authenticatedUser.id}, Has Auth Header: ${Boolean(req.headers.authorization)}`);
+
   // Ensure user is fetching their own profile or they are an admin
   let isAuthorized = authenticatedUser.id === id;
   const dbClient = getScopedSupabaseClient(req);
@@ -2367,6 +2368,7 @@ app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
   }
 
   if (!isAuthorized) {
+    console.warn(`[API /api/profile/:id] Forbidden access attempt by ${authenticatedUser.id} for profile ${id}`);
     return res.status(403).json({ success: false, error: 'Forbidden: You can only retrieve your own private profile.' });
   }
 
@@ -2376,6 +2378,8 @@ app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
       .select('*')
       .eq('id', id)
       .maybeSingle();
+
+    console.log(`[API /api/profile/:id] Supabase query completed for profile ID: ${id}. Row found: ${Boolean(dbProf)}, Error code: ${error?.code || 'none'}, Error message: ${error?.message || 'none'}, Details: ${error?.details || 'none'}, Hint: ${error?.hint || 'none'}`);
 
     if (error) {
       console.error(`[API /api/profile/${id} DB Error]`, error.message);

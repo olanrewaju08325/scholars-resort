@@ -1,5 +1,6 @@
 // CBT Engine Session Snapshot Service for Admin Diagnostics & Issue Reproduction
 import { supabase } from '@/lib/supabase';
+import { getApiUrl } from '@/lib/utils';
 import { cbtPerformanceMonitor } from './cbtPerformanceMonitorService';
 
 export interface CbtSessionSnapshot {
@@ -145,7 +146,7 @@ export class CbtSnapshotService {
     // 2. Persist to server / Supabase audit & snapshots
     try {
       try {
-        await fetch('/api/cbt-snapshots', {
+        await fetch(getApiUrl('/api/cbt-snapshots'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(snapshot)
@@ -193,7 +194,7 @@ export class CbtSnapshotService {
   public static async fetchAllSnapshots(): Promise<CbtSessionSnapshot[]> {
     const local = this.getAllFromLocalStorage();
     try {
-      const res = await fetch('/api/cbt-snapshots');
+      const res = await fetch(getApiUrl('/api/cbt-snapshots'));
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.snapshots)) {
