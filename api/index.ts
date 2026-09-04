@@ -23,33 +23,55 @@ app.use((req, res, next) => {
 
 // Vercel Serverless Function path normalization middleware
 app.use((req, res, next) => {
-  // Check for Vercel route matches (e.g. 1=health or 1=admin%2Fsubject-counts from /api/(.*) rewrites)
+  // 1. Try to extract original path from headers that Vercel or reverse proxies attach
+  const xMatchedPath = (
+    req.headers['x-matched-path'] || 
+    req.headers['x-original-url'] || 
+    req.headers['x-forwarded-uri'] || 
+    req.headers['x-vercel-original-url']
+  ) as string | undefined;
   const routeMatches = req.headers['x-now-route-matches'] as string | undefined;
-  if (routeMatches) {
+
+  let candidate = '';
+
+  if (xMatchedPath && xMatchedPath.startsWith('/api')) {
+    candidate = xMatchedPath;
+  } else if (routeMatches) {
     try {
       const parsed = new URLSearchParams(routeMatches);
-      const matchedParam = parsed.get('1') || parsed.get('match') || parsed.get('path');
-      if (matchedParam) {
-        const decoded = decodeURIComponent(matchedParam).replace(/^\/+/, '');
-        req.url = `/api/${decoded}`;
+      const match = parsed.get('1') || parsed.get('0') || parsed.get('match') || parsed.get('path');
+      if (match) {
+        candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
       }
-    } catch {
-      // Ignore parse errors
+    } catch (_) {}
+  }
+
+  // Check query parameters for Vercel wildcard regex matches (e.g. ?0=health or ?1=health)
+  if (!candidate && req.url && req.url.includes('?')) {
+    try {
+      const queryString = req.url.split('?')[1];
+      const parsed = new URLSearchParams(queryString);
+      const match = parsed.get('1') || parsed.get('0') || parsed.get('path') || parsed.get('match');
+      if (match) {
+        candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
+      }
+    } catch (_) {}
+  }
+
+  if (candidate) {
+    const origQuery = req.url.includes('?') ? req.url.split('?')[1] : '';
+    req.url = origQuery ? `${candidate}?${origQuery}` : candidate;
+  } else {
+    // Standardize URL: If request is "/", "/api", or "/api/", rewrite to "/api/health"
+    const [pathPart, queryPart] = req.url.split('?');
+    if (pathPart === '/' || pathPart === '' || pathPart === '/api' || pathPart === '/api/') {
+      req.url = queryPart ? `/api/health?${queryPart}` : '/api/health';
+    } else if (!pathPart.startsWith('/api')) {
+      const normalized = `/api${pathPart.startsWith('/') ? pathPart : `/${pathPart}`}`;
+      req.url = queryPart ? `${normalized}?${queryPart}` : normalized;
     }
   }
 
-  const forwarded = (
-    req.headers['x-forwarded-uri'] || 
-    req.headers['x-original-url'] || 
-    req.headers['x-matched-path'] || 
-    req.headers['x-vercel-original-url']
-  ) as string | undefined;
-
-  if (forwarded && forwarded.startsWith('/api') && req.url !== forwarded) {
-    req.url = forwarded;
-  } else if (req.url && !req.url.startsWith('/api')) {
-    req.url = `/api${req.url.startsWith('/') ? req.url : `/${req.url}`}`;
-  }
   next();
 });
 
