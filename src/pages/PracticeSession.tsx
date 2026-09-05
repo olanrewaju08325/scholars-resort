@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers, Camera } from 'lucide-react';
+import { CheckCircle, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers, Camera, AlertCircle, Save, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -11,6 +11,7 @@ import { awardXp, checkAndAwardBadges } from '@/lib/gamification';
 import { withRetry } from '@/lib/apiWithRetry';
 import { toast } from 'sonner';
 import { callGroqAPI, stripThinkTags } from '@/services/aiService';
+import { ExplanationCacheService } from '@/services/explanationCacheService';
 import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { cleanQuestionText, cleanOptionText, ContentNormalizer } from '@/utils/questionUtils';
@@ -47,6 +48,7 @@ const PracticeSession = () => {
   const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [showNavDrawer, setShowNavDrawer] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   
   // Advanced Practice State
@@ -287,12 +289,19 @@ const PracticeSession = () => {
 
   // Load state from session storage if resuming
   useEffect(() => {
-    if (!state?.subjectId && !state?.topicId && !state?.learningStyle && state?.mode !== 'mistakes') {
+    if (!state?.subjectId && !state?.topicId && !state?.learningStyle && state?.mode !== 'mistakes' && !state?.retakeQuestions) {
       navigate('/practice');
       return;
     }
 
     const initPractice = async () => {
+      // Check for retake questions passed directly from Results review
+      if (state?.retakeQuestions && Array.isArray(state.retakeQuestions) && state.retakeQuestions.length > 0) {
+        setQuestions(state.retakeQuestions);
+        setLoading(false);
+        toast.info(`Loaded ${state.retakeQuestions.length} questions for practice retake!`);
+        return;
+      }
       // Check for saved session in sessionStorage
       const savedSession = sessionStorage.getItem('practice_session_state');
       if (savedSession && state?.resume) {
@@ -521,44 +530,26 @@ const PracticeSession = () => {
     const q = currentQ;
     if (!q) return;
 
-    // 1. Token Saver: If explanation is already attached to question, load immediately with ZERO token consumption!
-    if (q.explanation && q.explanation.trim().length > 3) {
+    // 1. Token Saver: Check existing explanation or database/local cache first!
+    if (q.explanation && q.explanation.trim().length > 5) {
       setAiExplanation(q.explanation);
       return;
     }
 
     setIsGeneratingAi(true);
     try {
-      const prompt = `You are an expert Nigerian JAMB UTME tutor. A student just answered a JAMB question:
-Question: "${q.question_text || q.question}"
-Correct Answer: "${q.correct_answer}"
-Student Selected: "${optChosen}"
-
-Provide a concise, direct, and encouraging explanation (maximum 2-3 short sentences) explaining why option ${q.correct_answer} is correct.
-STRICT RULES:
-- Standard Nigerian SS3/UTME secondary school syllabus level only (NO university calculus, NO advanced mechanics).
-- If comparing features or items, format it as a clean standard Markdown table (| Col 1 | Col 2 |).
-- NO conversational preambles (do NOT output "*Problem Recap**", "Here is the explanation", or chat headers).
-- Jump straight into the direct explanation.`;
-      
-      const content = await callGroqAPI([{ role: 'user', content: prompt }]);
-      // Clean up any lingering markdown headers if LLM added them
-      const cleanContent = content ? stripThinkTags(content).replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
-      const finalExplanation = cleanContent || `The correct answer is option ${q.correct_answer}.`;
-      setAiExplanation(finalExplanation);
-      q.explanation = finalExplanation;
-
-      // Persist explanation directly to database so future encounters consume ZERO tokens!
-      if (q.id) {
-        supabase
-          .from('questions')
-          .update({ explanation: finalExplanation })
-          .eq('id', q.id)
-          .then(() => {})
-          .catch((err) => console.warn('Could not auto-cache explanation to database:', err));
-      }
+      const explanation = await ExplanationCacheService.getExplanation({
+        questionId: q.id,
+        questionText: cleanQuestionText(q.question_text || q.question),
+        correctAnswer: q.correct_answer,
+        selectedAnswer: optChosen,
+        existingExplanation: q.explanation,
+        options: q.options
+      });
+      setAiExplanation(explanation);
+      q.explanation = explanation;
     } catch (err) {
-      const fallback = `The correct answer is **${q.correct_answer}**.`;
+      const fallback = `Option **${q.correct_answer}** is the correct answer according to the UTME syllabus.`;
       setAiExplanation(fallback);
     } finally {
       setIsGeneratingAi(false);
@@ -740,11 +731,66 @@ D) ...
             <span className="hidden sm:inline">{isPaused ? 'Resume' : 'Pause'}</span>
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={() => navigate('/dashboard')} title="Exit Session" className="text-muted-foreground hover:text-red-500 h-9 w-9">
+          <Button variant="ghost" size="icon" onClick={() => setShowExitConfirm(true)} title="Exit Session" className="text-muted-foreground hover:text-red-500 h-9 w-9">
             <X className="w-5 h-5" />
           </Button>
         </div>
       </header>
+
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-md w-full shadow-2xl animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3 mb-4 text-amber-500">
+              <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl">
+                <AlertCircle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold font-display text-foreground">Cancel Practice Session?</h3>
+                <p className="text-xs text-muted-foreground">Are you sure you want to exit?</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              You have answered <span className="font-bold text-foreground">{answeredCount}</span> of <span className="font-bold text-foreground">{questions.length}</span> questions. You can save your progress and see current corrections, or resume where you left off.
+            </p>
+
+            <div className="flex flex-col gap-2.5">
+              <Button 
+                onClick={() => setShowExitConfirm(false)}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 rounded-xl"
+              >
+                <PlayCircle className="w-4 h-4 mr-2" /> Resume Practice
+              </Button>
+
+              {answeredCount > 0 && (
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setShowExitConfirm(false);
+                    handleNext(true); // force finish & save
+                  }}
+                  className="w-full border-border hover:bg-muted font-medium h-10 rounded-xl"
+                >
+                  <Save className="w-4 h-4 mr-2 text-emerald-500" /> Save Progress & View Results
+                </Button>
+              )}
+
+              <Button 
+                variant="ghost"
+                onClick={() => {
+                  setShowExitConfirm(false);
+                  sessionStorage.removeItem('practice_session_state');
+                  navigate('/practice');
+                }}
+                className="w-full text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 font-medium h-10 rounded-xl"
+              >
+                <LogOut className="w-4 h-4 mr-2" /> Discard & Exit to Practice Hub
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {isPaused && (
         <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex flex-col items-center justify-center">

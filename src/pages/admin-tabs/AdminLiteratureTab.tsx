@@ -34,6 +34,14 @@ export const AdminLiteratureTab = () => {
   const [newBookPdfUrl, setNewBookPdfUrl] = useState('');
   const [uploadingPdf, setUploadingPdf] = useState(false);
 
+  // Edit Textbook Modal State
+  const [editBookModalOpen, setEditBookModalOpen] = useState(false);
+  const [editBookTitle, setEditBookTitle] = useState('');
+  const [editBookAuthor, setEditBookAuthor] = useState('');
+  const [editBookGenre, setEditBookGenre] = useState('Compulsory UTME Novel');
+  const [editBookDesc, setEditBookDesc] = useState('');
+  const [editBookPdfUrl, setEditBookPdfUrl] = useState('');
+
   // Form State for active chapter
   const [editingChapter, setEditingChapter] = useState<NovelChapter | null>(null);
   const [newTheme, setNewTheme] = useState('');
@@ -67,8 +75,9 @@ export const AdminLiteratureTab = () => {
     title: string;
     description: string;
     itemName?: string;
-    type: 'chapter' | 'question' | null;
+    type: 'book' | 'chapter' | 'question' | null;
     targetId?: number;
+    targetBookId?: string;
     isDeleting: boolean;
   }>({
     isOpen: false,
@@ -232,6 +241,61 @@ export const AdminLiteratureTab = () => {
     toast.success(`Created Chapter ${newId}`);
   };
 
+  const openDeleteBookModal = (bk: LiteratureBook) => {
+    setDeleteConfig({
+      isOpen: true,
+      title: 'Delete Entire Textbook',
+      description: `Are you sure you want to permanently delete the textbook "${bk.title}" (${bk.genre || 'Novel'}) and all of its ${bk.chapters.length} chapter(s) and questions? This will be removed from student study access immediately.`,
+      itemName: bk.title,
+      type: 'book',
+      targetBookId: bk.id,
+      isDeleting: false
+    });
+  };
+
+  const handleOpenEditBook = (bk: LiteratureBook) => {
+    setEditBookTitle(bk.title);
+    setEditBookAuthor(bk.author || '');
+    setEditBookGenre(bk.genre || 'Compulsory UTME Novel');
+    setEditBookDesc(bk.description || '');
+    setEditBookPdfUrl(bk.pdfUrl || '');
+    setEditBookModalOpen(true);
+  };
+
+  const handleSaveEditBook = async () => {
+    if (!currentBook) return;
+    if (!editBookTitle.trim()) {
+      toast.error('Textbook title is required.');
+      return;
+    }
+
+    const updatedBooks = books.map(b => {
+      if (b.id === selectedBookId) {
+        return {
+          ...b,
+          title: editBookTitle.trim(),
+          author: editBookAuthor.trim(),
+          genre: editBookGenre,
+          description: editBookDesc.trim(),
+          pdfUrl: editBookPdfUrl.trim() || undefined
+        };
+      }
+      return b;
+    });
+
+    setSaving(true);
+    const res = await saveJambBooks(updatedBooks);
+    setSaving(false);
+    if (res.success) {
+      setBooks(updatedBooks);
+      setEditBookModalOpen(false);
+      logAdminActivity('UPDATE_LITERATURE_BOOK', `Updated textbook details for ${editBookTitle}`, 'literature_bank');
+      toast.success('Textbook details updated and saved to live database!');
+    } else {
+      toast.error(`Failed to update textbook: ${res.error}`);
+    }
+  };
+
   const openDeleteChapterModal = (ch: NovelChapter) => {
     setDeleteConfig({
       isOpen: true,
@@ -257,14 +321,42 @@ export const AdminLiteratureTab = () => {
   };
 
   const handleConfirmDelete = async () => {
-    if (!deleteConfig.type || deleteConfig.targetId === undefined || !currentBook) return;
+    if (!deleteConfig.type) return;
 
     setDeleteConfig(prev => ({ ...prev, isDeleting: true }));
 
     try {
       let updatedBooks = [...books];
 
-      if (deleteConfig.type === 'chapter') {
+      if (deleteConfig.type === 'book') {
+        const bookIdToDelete = deleteConfig.targetBookId || selectedBookId;
+        const targetBook = books.find(b => b.id === bookIdToDelete);
+        updatedBooks = books.filter(b => b.id !== bookIdToDelete);
+
+        if (updatedBooks.length === 0) {
+          toast.error('Cannot delete all textbooks. At least one literature text must remain.');
+          setDeleteConfig(prev => ({ ...prev, isOpen: false, isDeleting: false }));
+          return;
+        }
+
+        const res = await saveJambBooks(updatedBooks);
+        if (res.success) {
+          setBooks(updatedBooks);
+          const nextBook = updatedBooks[0];
+          setSelectedBookId(nextBook.id);
+          if (nextBook.chapters.length > 0) {
+            setSelectedChapterId(nextBook.chapters[0].id);
+            setEditingChapter({ ...nextBook.chapters[0] });
+          } else {
+            setEditingChapter(null);
+          }
+          logAdminActivity('DELETE_LITERATURE_BOOK', `Deleted textbook: ${targetBook?.title || bookIdToDelete}`, 'literature_bank');
+          toast.success(`Textbook "${targetBook?.title || 'Book'}" deleted successfully from live database!`);
+        } else {
+          toast.error(`Deletion failed: ${res.error}`);
+        }
+      } else if (deleteConfig.type === 'chapter') {
+        if (!currentBook || deleteConfig.targetId === undefined) return;
         const chId = deleteConfig.targetId;
         const updatedChapters = currentBook.chapters.filter(c => c.id !== chId);
         updatedBooks = books.map(b => {
@@ -289,7 +381,7 @@ export const AdminLiteratureTab = () => {
           toast.error(`Deletion failed: ${res.error}`);
         }
       } else if (deleteConfig.type === 'question') {
-        if (!editingChapter) return;
+        if (!editingChapter || deleteConfig.targetId === undefined) return;
         const qIdx = deleteConfig.targetId;
         const updatedQs = editingChapter.sampleQuestions.filter((_, i) => i !== qIdx);
         
@@ -603,24 +695,46 @@ export const AdminLiteratureTab = () => {
 
       {/* Book Tabs & Upload Button */}
       <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2 no-scrollbar">
-        <div className="flex gap-2 items-center">
-          {books.map(bk => (
-            <button
-              key={bk.id}
-              onClick={() => handleSelectBook(bk.id)}
-              className={`px-4 py-2.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
-                selectedBookId === bk.id
-                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
-                  : 'bg-card text-muted-foreground hover:text-foreground border-border'
-              }`}
-            >
-              <Bookmark className="w-3.5 h-3.5" />
-              <span>{bk.title}</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono">
-                {bk.chapters.length} Chs
-              </span>
-            </button>
-          ))}
+        <div className="flex gap-2 items-center flex-wrap">
+          {books.map(bk => {
+            const isSelected = selectedBookId === bk.id;
+            return (
+              <div key={bk.id} className="relative group flex items-center">
+                <button
+                  onClick={() => handleSelectBook(bk.id)}
+                  className={`px-3.5 py-2 rounded-lg text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
+                    isSelected
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm pr-7'
+                      : 'bg-card text-muted-foreground hover:text-foreground border-border pr-2'
+                  }`}
+                >
+                  <Bookmark className="w-3.5 h-3.5" />
+                  <span>{bk.title}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                    isSelected ? 'bg-black/20 text-white' : 'bg-muted text-muted-foreground'
+                  }`}>
+                    {bk.chapters.length} Chs
+                  </span>
+                </button>
+
+                {/* Quick Delete icon directly on book tab */}
+                {books.length > 1 && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      openDeleteBookModal(bk);
+                    }}
+                    title={`Delete "${bk.title}"`}
+                    className={`absolute right-1.5 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-red-500/20 text-red-400 hover:text-red-500 transition-colors ${
+                      isSelected ? 'opacity-90' : 'opacity-0 group-hover:opacity-100'
+                    }`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            );
+          })}
         </div>
 
         <Button 
@@ -630,6 +744,55 @@ export const AdminLiteratureTab = () => {
           <Upload className="w-4 h-4" /> Add / Upload Textbook
         </Button>
       </div>
+
+      {/* Active Textbook Details & Quick Action Bar */}
+      {currentBook && (
+        <div className="p-4 rounded-xl border border-border bg-card/80 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-start md:items-center gap-3">
+            <div className="p-2.5 rounded-lg bg-primary/10 text-primary shrink-0">
+              <BookOpen className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-foreground">
+                  {currentBook.title}
+                </h3>
+                <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-primary/15 text-primary">
+                  {currentBook.genre || 'Compulsory UTME Novel'}
+                </span>
+                {currentBook.author && (
+                  <span className="text-xs text-muted-foreground">
+                    by <strong className="text-foreground">{currentBook.author}</strong>
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                {currentBook.description || 'No description recorded. Click Edit to add plot summary.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => handleOpenEditBook(currentBook)}
+              className="text-xs font-semibold gap-1.5 h-8 border-border hover:border-primary/40"
+            >
+              <Edit3 className="w-3.5 h-3.5 text-primary" /> Edit Textbook Details
+            </Button>
+
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => openDeleteBookModal(currentBook)}
+              className="text-xs font-bold gap-1.5 h-8 bg-red-600/90 hover:bg-red-600 text-white shadow-sm"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Delete Textbook
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Main Work Area */}
       {currentBook && (
@@ -1162,6 +1325,105 @@ export const AdminLiteratureTab = () => {
               <Button size="sm" onClick={handleCreateBook} className="bg-emerald-600 hover:bg-emerald-500 font-bold text-white">
                 <Save className="w-4 h-4 mr-1.5" /> Publish to Library
               </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Textbook / Novel Details Modal */}
+      {editBookModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-xl max-w-lg w-full p-6 space-y-4 shadow-2xl animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <h3 className="text-base font-bold flex items-center gap-2">
+                <Edit3 className="w-5 h-5 text-primary" /> Edit Textbook Details
+              </h3>
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setEditBookModalOpen(false)}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="text-xs font-bold text-muted-foreground block mb-1">Book / Textbook Title *</label>
+                <Input 
+                  placeholder="e.g. UTME Senior Secondary Physics or The Life Changer" 
+                  value={editBookTitle} 
+                  onChange={(e) => setEditBookTitle(e.target.value)}
+                  className="text-sm"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground block mb-1">Author Name</label>
+                  <Input 
+                    placeholder="e.g. Khadija Abubakar Jalli" 
+                    value={editBookAuthor} 
+                    onChange={(e) => setEditBookAuthor(e.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-muted-foreground block mb-1">Category / Genre</label>
+                  <select 
+                    value={editBookGenre}
+                    onChange={(e) => setEditBookGenre(e.target.value)}
+                    className="w-full text-sm h-10 rounded-md border border-input bg-background px-3 font-medium"
+                  >
+                    <option value="Compulsory UTME Novel">Compulsory UTME Novel</option>
+                    <option value="Physics Textbook">Physics Textbook</option>
+                    <option value="Chemistry Textbook">Chemistry Textbook</option>
+                    <option value="Biology Textbook">Biology Textbook</option>
+                    <option value="Mathematics Textbook">Mathematics Textbook</option>
+                    <option value="Prose (African)">Prose (African)</option>
+                    <option value="Prose (Non-African)">Prose (Non-African)</option>
+                    <option value="Drama (African)">Drama (African)</option>
+                    <option value="Poetry">Poetry</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-muted-foreground block mb-1">Book Description / Plot Overview</label>
+                <textarea 
+                  rows={3} 
+                  placeholder="Brief summary or description of the textbook/novel for students..."
+                  value={editBookDesc}
+                  onChange={(e) => setEditBookDesc(e.target.value)}
+                  className="w-full text-xs rounded-md border border-input bg-background p-2.5 font-medium resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-muted-foreground block mb-1">Direct PDF / Textbook Document URL (Optional)</label>
+                <Input 
+                  placeholder="https://..." 
+                  value={editBookPdfUrl} 
+                  onChange={(e) => setEditBookPdfUrl(e.target.value)}
+                  className="text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-between items-center gap-2 pt-2 border-t border-border">
+              <Button 
+                variant="destructive" 
+                size="sm" 
+                onClick={() => {
+                  setEditBookModalOpen(false);
+                  if (currentBook) openDeleteBookModal(currentBook);
+                }}
+                className="text-xs font-bold"
+              >
+                <Trash2 className="w-3.5 h-3.5 mr-1" /> Delete Book
+              </Button>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditBookModalOpen(false)}>Cancel</Button>
+                <Button size="sm" onClick={handleSaveEditBook} disabled={saving} className="bg-primary hover:bg-primary/90 font-bold">
+                  <Save className="w-4 h-4 mr-1.5" /> Save Changes
+                </Button>
+              </div>
             </div>
           </div>
         </div>

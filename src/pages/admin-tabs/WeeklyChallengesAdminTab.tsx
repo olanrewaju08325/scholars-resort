@@ -39,29 +39,18 @@ export const WeeklyChallengesAdminTab = () => {
   const fetchChallenges = useCallback(async () => {
     setLoading(true);
     let items: any[] = [];
-    try {
-      const { data, error } = await supabase
-        .from('weekly_challenges')
-        .select('*')
-        .order('week_start', { ascending: false });
 
-      if (!error && data && data.length > 0) {
-        items = data;
+    // Prioritize admin_settings to prevent 404 REST queries
+    try {
+      const { data: settingData } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'weekly_challenges_db')
+        .maybeSingle();
+      if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+        items = settingData.setting_value;
       }
     } catch {}
-
-    if (items.length === 0) {
-      try {
-        const { data: settingData } = await supabase
-          .from('admin_settings')
-          .select('setting_value')
-          .eq('setting_key', 'weekly_challenges_db')
-          .maybeSingle();
-        if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
-          items = settingData.setting_value;
-        }
-      } catch {}
-    }
 
     if (items.length === 0) {
       try {

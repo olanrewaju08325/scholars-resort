@@ -99,6 +99,8 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   const [submitting, setSubmitting] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showNavDrawer, setShowNavDrawer] = useState(false);
+  const [showSubmitConfirmModal, setShowSubmitConfirmModal] = useState(false);
+  const [showExitConfirmModal, setShowExitConfirmModal] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const hasWarnedFiveMinutes = useRef(false);
 
@@ -261,6 +263,17 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         }
       } catch (e) {
         console.warn("Interrupted session restore error:", e);
+      }
+
+      // Check for retake questions passed directly from Results review screen
+      if (location.state?.retakeQuestions && Array.isArray(location.state.retakeQuestions) && location.state.retakeQuestions.length > 0) {
+        const retakeList = location.state.retakeQuestions;
+        const distinctSubjects = Array.from(new Set(retakeList.map((q: any) => q.subject_name).filter(Boolean))) as string[];
+        setExamSubjectsList(distinctSubjects.length > 0 ? distinctSubjects : ['General']);
+        setQuestions(retakeList);
+        setLoading(false);
+        toast.info(`Loaded ${retakeList.length} questions for exam retake!`);
+        return;
       }
 
       // JAMB 180-Question Master Logic via QuestionFlowService
@@ -1028,6 +1041,18 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
             <span className="hidden md:inline">{isCapturingSnapshot ? 'Saving...' : 'Snapshot'}</span>
           </Button>
 
+          {/* Cancel / Exit Exam Button */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowExitConfirmModal(true)}
+            className="h-8 sm:h-9 px-2 sm:px-2.5 text-xs text-muted-foreground hover:text-rose-500 hover:bg-rose-500/10"
+            title="Exit or Cancel Exam"
+          >
+            <X className="w-4 h-4" />
+            <span className="hidden md:inline ml-1">Exit</span>
+          </Button>
+
           <div className="flex flex-col items-end pl-1 sm:pl-2 gap-1">
             {getPaceStatus() && (
               <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border leading-none ${getPaceStatus()?.colorClass}`}>
@@ -1365,7 +1390,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-muted border border-border rounded" /> Unanswered</div>
               <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 bg-primary rounded" /> Current</div>
             </div>
-            <Button onClick={() => submitExam()} variant="destructive" className="w-full font-bold h-10 shadow-xs text-sm active:scale-95">
+            <Button onClick={() => setShowSubmitConfirmModal(true)} variant="destructive" className="w-full font-bold h-10 shadow-xs text-sm active:scale-95">
               SUBMIT EXAM
             </Button>
           </div>
@@ -1515,6 +1540,130 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
             <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold" onClick={() => setShowShortcutsModal(false)}>
               Got it, continue exam
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* CBT Submit Confirmation Modal */}
+      {showSubmitConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card text-card-foreground rounded-2xl shadow-2xl max-w-md w-full p-6 border border-border animate-in zoom-in-95">
+            <div className="flex items-center gap-3 mb-4 text-primary">
+              <div className="p-3 bg-primary/10 border border-primary/20 rounded-xl">
+                <CheckCircle className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold font-display text-foreground">Submit Exam Final Review</h3>
+                <p className="text-xs text-muted-foreground">Confirm your final exam submission</p>
+              </div>
+            </div>
+
+            <div className="space-y-3 bg-muted/40 p-4 rounded-xl border border-border mb-6">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Total Questions:</span>
+                <span className="font-bold font-mono">{questions.length}</span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Questions Answered:</span>
+                <span className="font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                  {Object.keys(answers).length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-muted-foreground">Unanswered:</span>
+                <span className="font-bold font-mono text-amber-600 dark:text-amber-400">
+                  {questions.length - Object.keys(answers).length}
+                </span>
+              </div>
+              <div className="flex justify-between items-center text-sm border-t border-border/50 pt-2">
+                <span className="text-muted-foreground">Time Remaining:</span>
+                <span className="font-bold font-mono text-primary">{formatTime(timeLeft)}</span>
+              </div>
+            </div>
+
+            {questions.length - Object.keys(answers).length > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg mb-5">
+                Note: You still have {questions.length - Object.keys(answers).length} unanswered questions. Unanswered questions will receive 0 marks.
+              </p>
+            )}
+
+            <div className="flex flex-col gap-2.5">
+              <Button 
+                onClick={() => {
+                  setShowSubmitConfirmModal(false);
+                  submitExam();
+                }}
+                disabled={submitting}
+                className="w-full bg-red-600 hover:bg-red-700 text-white font-bold h-11 rounded-xl shadow-md"
+              >
+                {submitting ? 'Submitting & Scoring...' : 'Yes, Submit & View Results'}
+              </Button>
+
+              <Button 
+                variant="outline"
+                onClick={() => setShowSubmitConfirmModal(false)}
+                className="w-full border-border hover:bg-muted font-semibold h-10 rounded-xl"
+              >
+                Return to Exam (Keep Writing)
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CBT Exit / Cancel Confirmation Modal */}
+      {showExitConfirmModal && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card text-card-foreground rounded-2xl shadow-2xl max-w-md w-full p-6 border border-border animate-in zoom-in-95">
+            <div className="flex items-center gap-3 mb-4 text-rose-500">
+              <div className="p-3 bg-rose-500/10 border border-rose-500/20 rounded-xl">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold font-display text-foreground">Cancel CBT Exam?</h3>
+                <p className="text-xs text-muted-foreground">You are currently taking a live timed exam</p>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
+              You have answered <span className="font-bold text-foreground">{Object.keys(answers).length}</span> of <span className="font-bold text-foreground">{questions.length}</span> questions.
+              If you leave now, you can submit your current answers to see your score, or abandon the session entirely.
+            </p>
+
+            <div className="flex flex-col gap-2.5">
+              <Button 
+                onClick={() => setShowExitConfirmModal(false)}
+                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 rounded-xl"
+              >
+                Continue CBT Exam
+              </Button>
+
+              {Object.keys(answers).length > 0 && (
+                <Button 
+                  variant="outline"
+                  onClick={() => {
+                    setShowExitConfirmModal(false);
+                    submitExam();
+                  }}
+                  className="w-full border-border hover:bg-muted font-medium h-10 rounded-xl"
+                >
+                  Submit Current Work & Review
+                </Button>
+              )}
+
+              <Button 
+                variant="ghost"
+                onClick={() => {
+                  setShowExitConfirmModal(false);
+                  sessionStorage.removeItem('cbt_backup');
+                  localStorage.removeItem('scholars_live_exam_active');
+                  navigate('/dashboard');
+                }}
+                className="w-full text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 font-medium h-10 rounded-xl"
+              >
+                Abandon Exam & Return to Dashboard
+              </Button>
+            </div>
           </div>
         </div>
       )}

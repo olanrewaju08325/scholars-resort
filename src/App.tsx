@@ -45,6 +45,8 @@ const OfflinePackManager = lazy(() => import('./pages/OfflinePackManager').then(
 const EducationalJourneyMapPage = lazy(() => import('./pages/EducationalJourneyMapPage'));
 const AdaptiveLearningPathPage = lazy(() => import('./pages/AdaptiveLearningPathPage'));
 const PeerStudyRoomPage = lazy(() => import('./pages/PeerStudyRoomPage'));
+const Referrals = lazy(() => import('./pages/Referrals'));
+const Scholarship = lazy(() => import('./pages/Scholarship'));
 import { AnimatePresence } from 'framer-motion';
 import { Toaster } from 'sonner';
 import { WhatsAppWidget } from './components/WhatsAppWidget';
@@ -119,6 +121,8 @@ function AppContent() {
               <Route path="/bookmarks" element={<Library />} />
               <Route path="/history" element={<CBTCenter />} />
               <Route path="/ai-tutor" element={<WeaknessDrill />} />
+              <Route path="/referrals" element={<Referrals />} />
+              <Route path="/scholarship" element={<Scholarship />} />
             </Route>
 
             {/* Fullscreen / Immersive Pages (No Navigation) */}

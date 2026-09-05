@@ -1,8 +1,8 @@
 import React from 'react';
-import katex from 'katex';
 import Markdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { MermaidDiagram } from './MermaidDiagram';
+import { processAcademicContent } from '@/utils/academicFormatter';
 
 interface MathTextProps {
   text: string;
@@ -10,8 +10,9 @@ interface MathTextProps {
 }
 
 /**
- * Component to render text with embedded LaTeX formulas ($...$, $$...$$, \(...\), \[...\]),
- * structured Markdown tables (| Col 1 | Col 2 |), and scientific Mermaid flowcharts/diagrams.
+ * Universal Academic Text Component
+ * Formats LaTeX formulas ($...$, $$...$$), raw algebraic expressions (e.g. 4a^2-9b^2, a^3+27b^3),
+ * chemistry formulas (H2SO4, CaCO3), physics variables, Markdown tables, and Mermaid flowcharts.
  */
 export const MathText: React.FC<MathTextProps> = ({ text, className = '' }) => {
   if (!text) return null;
@@ -19,57 +20,6 @@ export const MathText: React.FC<MathTextProps> = ({ text, className = '' }) => {
   // Check if text contains a Markdown table structure or Mermaid diagram
   const hasMarkdownTable = /\|.+?\|.+?\|\s*\n\s*\|[-:\s|]+\|/m.test(text);
   const hasMermaid = /```(?:mermaid)?\s*[\s\S]+?```/i.test(text);
-
-  // Function to render single math token or return fallback
-  const renderMathString = (rawStr: string): string => {
-    try {
-      const parts = rawStr.split(/(\$\$[\s\S]+?\$\$|\$[^\$]+?\$|\\\[[\s\S]+?\\\]|\\\([^\)]+?\\\))/g);
-
-      return parts
-        .map((part) => {
-          if (!part) return '';
-          let mathStr = '';
-          let displayMode = false;
-
-          if (part.startsWith('$$') && part.endsWith('$$')) {
-            mathStr = part.slice(2, -2);
-            displayMode = true;
-          } else if (part.startsWith('$') && part.endsWith('$')) {
-            mathStr = part.slice(1, -1);
-          } else if (part.startsWith('\\[') && part.endsWith('\\]')) {
-            mathStr = part.slice(2, -2);
-            displayMode = true;
-          } else if (part.startsWith('\\(') && part.endsWith('\\)')) {
-            mathStr = part.slice(2, -2);
-          } else if (/\\(frac|sqrt|sum|int|lim|alpha|beta|gamma|pi|theta|infty|times|div|pm)/.test(part)) {
-            mathStr = part;
-          } else {
-            return escapeHtml(part);
-          }
-
-          try {
-            return katex.renderToString(mathStr.trim(), {
-              displayMode,
-              throwOnError: false,
-            });
-          } catch {
-            return escapeHtml(part);
-          }
-        })
-        .join('');
-    } catch {
-      return escapeHtml(rawStr);
-    }
-  };
-
-  const escapeHtml = (str: string) => {
-    return str
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  };
 
   if (hasMarkdownTable || hasMermaid) {
     return (
@@ -113,7 +63,7 @@ export const MathText: React.FC<MathTextProps> = ({ text, className = '' }) => {
             p: ({ children }) => {
               if (typeof children === 'string') {
                 return (
-                  <p className="my-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: renderMathString(children) }} />
+                  <p className="my-1 leading-relaxed" dangerouslySetInnerHTML={{ __html: processAcademicContent(children) }} />
                 );
               }
               return <p className="my-1 leading-relaxed">{children}</p>;
@@ -126,7 +76,7 @@ export const MathText: React.FC<MathTextProps> = ({ text, className = '' }) => {
     );
   }
 
-  const htmlContent = renderMathString(text);
+  const htmlContent = processAcademicContent(text);
 
   return (
     <span
