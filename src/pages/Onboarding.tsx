@@ -53,6 +53,13 @@ const Onboarding = () => {
   const [dailyGoal, setDailyGoal] = useState('60');
   const [selectedSubjects, setSelectedSubjects] = useState<string[]>(['Use of English']);
   const [intendedCourse, setIntendedCourse] = useState('');
+  const [phone, setPhone] = useState(profile?.phone || '');
+
+  useEffect(() => {
+    if (profile?.phone && !phone) {
+      setPhone(profile.phone);
+    }
+  }, [profile?.phone]);
 
   const toggleSubject = (subject: string) => {
     if (subject === 'Use of English') return;
@@ -88,6 +95,7 @@ const Onboarding = () => {
           daily_study_goal_minutes: parseInt(dailyGoal) || 60,
           utme_subjects: finalSubjects,
           intended_course: intendedCourse || null,
+          phone: phone.trim() || undefined,
         })
       });
 
@@ -103,6 +111,7 @@ const Onboarding = () => {
         onboarding_completed: true,
         utme_subjects: finalSubjects,
         intended_course: intendedCourse || null,
+        phone: phone.trim() || profile.phone || null,
       }).eq('id', profile.id);
 
       toast.success('Onboarding completed successfully!');
@@ -357,6 +366,29 @@ const Onboarding = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Prize Disbursement Phone Number Input */}
+              <div className="p-4 bg-emerald-950/20 border border-emerald-800/40 rounded-xl space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="onboarding-phone" className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
+                    <Smartphone className="w-3.5 h-3.5" /> Cash Prize & Airtime Phone Number
+                  </label>
+                  <span className="text-[10px] text-emerald-400/80 bg-emerald-500/10 px-2 py-0.5 rounded-full font-medium">
+                    Top 3 Monthly Prizes
+                  </span>
+                </div>
+                <Input
+                  id="onboarding-phone"
+                  type="tel"
+                  placeholder="e.g. 08012345678"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  className="bg-slate-900 border-slate-700 text-white text-sm h-10"
+                />
+                <p className="text-[11px] text-slate-400">
+                  This phone number will be used to send your ₦5,000, ₦3,000, or ₦1,000 cash prizes if you place on the monthly leaderboard.
+                </p>
               </div>
 
               <div className="p-3 bg-blue-950/30 border border-blue-800/30 rounded-xl text-left text-xs space-y-1">

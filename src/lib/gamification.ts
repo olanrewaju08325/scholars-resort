@@ -368,19 +368,52 @@ export const checkAndAwardBadges = async (
     }
 
     // Standard badge definitions
-    const BADGES_CATALOG = [
+    const BADGES_CATALOG: Array<{ key: string; name: string; description: string; icon: string; xp_threshold?: number; score_threshold?: number; streak_threshold?: number; exams_threshold?: number }> = [
       { key: 'first_exam', name: 'First Steps', description: 'Completed your first CBT Mock Exam', icon: 'Trophy' },
-      { key: 'score_80', name: 'High Achiever', description: 'Scored 80% or higher on a CBT simulation', icon: 'Star' },
-      { key: 'high_scorer', name: 'Score Elite (90%+)', description: 'Scored 90% or above on a CBT exam', icon: 'Star' },
-      { key: 'flawless', name: 'Flawless 100%', description: 'Achieved a perfect 100% score on an exam', icon: 'Star' },
+      { key: 'score_80', name: 'High Achiever', description: 'Scored 80% or higher on a CBT simulation', icon: 'Star', score_threshold: 80 },
+      { key: 'high_scorer', name: 'Score Elite (90%+)', description: 'Scored 90% or above on a CBT exam', icon: 'Star', score_threshold: 90 },
+      { key: 'flawless', name: 'Flawless 100%', description: 'Achieved a perfect 100% score on an exam', icon: 'Star', score_threshold: 100 },
       { key: 'speed_demon', name: 'Speed Demon', description: 'Finished with >= 70% in under half the allotted time', icon: 'Zap' },
-      { key: 'exam_10', name: 'Tenacious Ten', description: 'Completed 10 full CBT Mock Exams', icon: 'Trophy' },
-      { key: 'exam_50', name: 'Centurion Prep', description: 'Completed 50 CBT Mock Exams', icon: 'Trophy' },
-      { key: 'streak_3', name: 'Ignited Spark', description: 'Maintained a 3-day active study streak', icon: 'Flame' },
-      { key: 'streak_7', name: '7-Day Scholar', description: 'Maintained a 7-day active study streak', icon: 'Flame' },
-      { key: 'streak_14', name: 'Unstoppable Habit', description: 'Maintained a 14-day study marathon', icon: 'Flame' },
-      { key: 'streak_30', name: 'Monthly Legend', description: 'Maintained an unbroken 30-day streak', icon: 'Flame' },
+      { key: 'exam_10', name: 'Tenacious Ten', description: 'Completed 10 full CBT Mock Exams', icon: 'Trophy', exams_threshold: 10 },
+      { key: 'exam_50', name: 'Centurion Prep', description: 'Completed 50 CBT Mock Exams', icon: 'Trophy', exams_threshold: 50 },
+      { key: 'streak_3', name: 'Ignited Spark', description: 'Maintained a 3-day active study streak', icon: 'Flame', streak_threshold: 3 },
+      { key: 'streak_7', name: '7-Day Scholar', description: 'Maintained a 7-day active study streak', icon: 'Flame', streak_threshold: 7 },
+      { key: 'streak_14', name: 'Unstoppable Habit', description: 'Maintained a 14-day study marathon', icon: 'Flame', streak_threshold: 14 },
+      { key: 'streak_30', name: 'Monthly Legend', description: 'Maintained an unbroken 30-day streak', icon: 'Flame', streak_threshold: 30 },
     ];
+
+    // Load custom admin-configured badges dynamically from admin_settings
+    try {
+      const { data: adminBadgesData } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'gamification_badges_config')
+        .maybeSingle();
+
+      const customBadges = (adminBadgesData?.setting_value && Array.isArray(adminBadgesData.setting_value))
+        ? adminBadgesData.setting_value
+        : JSON.parse(localStorage.getItem('scholar_custom_badges') || '[]');
+
+      if (Array.isArray(customBadges)) {
+        customBadges.forEach((cb: any) => {
+          const key = cb.badge_key || cb.key || cb.id;
+          if (key && !BADGES_CATALOG.some(b => b.key === key)) {
+            BADGES_CATALOG.push({
+              key,
+              name: cb.name || 'Custom Achievement',
+              description: cb.description || 'Special milestone badge earned',
+              icon: cb.icon || 'Award',
+              xp_threshold: Number(cb.xp_threshold) || 0,
+              score_threshold: Number(cb.score_threshold || cb.required_score) || 0,
+              streak_threshold: Number(cb.streak_threshold) || 0,
+              exams_threshold: Number(cb.exams_threshold) || 0
+            });
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Custom admin badges fetch notice:', e);
+    }
 
     const badgesToAward: typeof BADGES_CATALOG = [];
 
@@ -421,6 +454,18 @@ export const checkAndAwardBadges = async (
           break;
         case 'streak_30':
           if ((streakDays || 0) >= 30) qualify = true;
+          break;
+        default:
+          // Dynamic evaluation for Admin-created custom badges
+          if (badge.score_threshold && badge.score_threshold > 0 && stats.score >= badge.score_threshold) {
+            qualify = true;
+          } else if (badge.streak_threshold && badge.streak_threshold > 0 && (streakDays || 0) >= badge.streak_threshold) {
+            qualify = true;
+          } else if (badge.exams_threshold && badge.exams_threshold > 0 && (totalExams || 0) >= badge.exams_threshold) {
+            qualify = true;
+          } else if (badge.xp_threshold && badge.xp_threshold > 0 && stats.score >= 70) {
+            qualify = true;
+          }
           break;
       }
 

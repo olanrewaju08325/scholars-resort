@@ -136,6 +136,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       if (!isMounted.current) return;
 
       if (loadedProfile) {
+        // Ensure phone from auth metadata is synced if missing in profile
+        const userMetaPhone = user?.user_metadata?.phone_number || user?.user_metadata?.phone;
+        if (!loadedProfile.phone && userMetaPhone) {
+          loadedProfile.phone = userMetaPhone;
+          supabase.from('profiles').update({ phone: userMetaPhone }).eq('id', userId).then();
+        }
+
         // Master admin auto-elevation check using both profile and authenticated user email sources
         const currentEmail = (user?.email || loadedProfile.email || '').toLowerCase().trim();
         const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === currentEmail);
@@ -161,12 +168,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         const userEmail = (user?.email || '').toLowerCase().trim();
         const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
         const assignedRole: Profile['role'] = isAdminEmail ? 'admin' : 'student';
+        const userMetaPhone = user?.user_metadata?.phone_number || user?.user_metadata?.phone || '';
 
         const newProfile: Partial<Profile> = {
           id: userId,
           role: assignedRole,
           full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Scholar Student',
           email: user?.email || '',
+          phone: userMetaPhone,
           has_paid: isAdminEmail ? true : false,
           onboarding_completed: isAdminEmail ? true : false,
           streak_days: 0,

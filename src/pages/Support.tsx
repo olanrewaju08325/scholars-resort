@@ -58,11 +58,15 @@ export default function Support() {
   }, [selectedTicket, profile]);
 
   const fetchTickets = async () => {
+    if (!profile?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     const { data } = await supabase
       .from('support_tickets')
       .select('*')
-      .eq('user_id', profile?.id)
+      .eq('user_id', profile.id)
       .order('created_at', { ascending: false });
     
     if (data) setTickets(data);
@@ -70,6 +74,7 @@ export default function Support() {
   };
 
   const fetchReplies = async (ticketId: string) => {
+    if (!ticketId) return;
     const { data } = await supabase
       .from('ticket_replies')
       .select('*, profiles(full_name, role)')
@@ -81,10 +86,10 @@ export default function Support() {
 
   const createTicket = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!subject || !message) return;
+    if (!subject || !message || !profile?.id) return;
     
     const { data: ticket, error } = await supabase.from('support_tickets').insert({
-      user_id: profile?.id,
+      user_id: profile.id,
       subject
     }).select().single();
 
@@ -95,7 +100,7 @@ export default function Support() {
 
     await supabase.from('ticket_replies').insert({
       ticket_id: ticket.id,
-      sender_id: profile?.id,
+      sender_id: profile.id,
       message
     });
 

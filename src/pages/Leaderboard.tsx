@@ -1,54 +1,74 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Search, Loader2, ArrowLeft, RefreshCw, Radio, Gift, Calendar, Phone, MessageSquare, Send, Award } from 'lucide-react';
+import { Trophy, Medal, Search, ArrowLeft, RefreshCw, Radio, Gift, Calendar, Phone, MessageSquare, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useLiveFetch } from '@/hooks/useLiveFetch';
 import { DataLoading } from '@/components/DataLoading';
+import { useAuth } from '@/context/AuthContext';
 
 const DEFAULT_PRIZE_CONFIG = {
-  frequency: 'weekly',
+  frequency: 'monthly' as 'weekly' | 'monthly' | 'all',
   distribution_method: 'both',
-  disbursement_day: 'Every Sunday by 8:00 PM',
-  contact_instruction: 'Winners should contact the Admin via WhatsApp or phone with their registered email, bank details, or phone network. Cash prizes will be transferred directly to your account or sent as airtime recharge pins.',
+  disbursement_day: 'Last Day of Every Month by 8:00 PM',
+  contact_instruction: 'Top 3 monthly performers receive direct bank cash transfers (₦5,000 for 1st, ₦3,000 for 2nd) and airtime recharge (₦1,000 for 3rd). Ensure your phone number is saved in your profile for automated disbursement.',
   admin_contact_phone: '+234 812 345 6789',
   admin_whatsapp_link: 'https://wa.me/2348123456789',
   show_prize_banner: true,
   prizes: {
-    first: { amount: 5000, type: 'Cash / Bank Transfer', title: '₦5,000 Cash Prize' },
-    second: { amount: 3000, type: 'Cash / Recharge Card', title: '₦3,000 Prize' },
-    third: { amount: 1000, type: 'Recharge Card (Airtime)', title: '₦1,000 Recharge Card' },
+    first: { amount: 5000, type: 'Cash / Bank Transfer', title: '₦5,000 Monthly Grand Prize' },
+    second: { amount: 3000, type: 'Cash / Bank Transfer', title: '₦3,000 2nd Place Prize' },
+    third: { amount: 1000, type: 'Recharge Card (Airtime)', title: '₦1,000 3rd Place Airtime' },
   }
 };
 
 const Leaderboard = () => {
+  const { profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterPeriod, setFilterPeriod] = useState<'weekly' | 'monthly' | 'all'>('weekly');
+  const [filterPeriod, setFilterPeriod] = useState<'weekly' | 'monthly' | 'all'>('monthly');
   const [prizeConfig, setPrizeConfig] = useState(DEFAULT_PRIZE_CONFIG);
 
-  useEffect(() => {
-    const fetchPrizeConfig = async () => {
-      try {
-        const { data } = await supabase
-          .from('admin_settings')
-          .select('setting_value')
-          .eq('setting_key', 'leaderboard_prize_config')
-          .maybeSingle();
+  const fetchPrizeConfig = async () => {
+    try {
+      const { data } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'leaderboard_prize_config')
+        .maybeSingle();
 
-        if (data?.setting_value) {
-          const parsed = typeof data.setting_value === 'string' ? JSON.parse(data.setting_value) : data.setting_value;
-          setPrizeConfig(prev => ({ ...prev, ...parsed }));
-          if (parsed.frequency) {
-            setFilterPeriod(parsed.frequency);
-          }
+      if (data?.setting_value) {
+        const parsed = typeof data.setting_value === 'string' ? JSON.parse(data.setting_value) : data.setting_value;
+        setPrizeConfig(prev => ({ ...prev, ...parsed }));
+        if (parsed.frequency) {
+          setFilterPeriod(parsed.frequency);
         }
-      } catch (err) {
-        console.warn('Could not fetch prize config, using defaults:', err);
       }
-    };
+    } catch (err) {
+      console.warn('Could not fetch prize config, using defaults:', err);
+    }
+  };
+
+  useEffect(() => {
     fetchPrizeConfig();
+
+    // Subscribe to real-time changes on admin_settings
+    const settingsChannel = supabase
+      .channel('realtime_leaderboard_admin_settings')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'admin_settings',
+        filter: 'setting_key=eq.leaderboard_prize_config'
+      }, () => {
+        fetchPrizeConfig();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(settingsChannel);
+    };
   }, []);
 
   const { data: boardData, loading, refetch } = useLiveFetch<any[]>(
@@ -77,7 +97,7 @@ const Leaderboard = () => {
 
       // 2. Fetch profiles
       const { data: profiles } = userIds.length > 0 
-        ? await supabase.from('profiles').select('id, full_name, avatar_url, target_score').in('id', userIds)
+        ? await supabase.from('profiles').select('id, full_name, avatar_url, target_score, phone').in('id', userIds)
         : { data: [] };
 
       const profileMap = new Map((profiles || []).map(p => [p.id, p]));
@@ -86,12 +106,19 @@ const Leaderboard = () => {
       validExams.forEach(exam => {
         const currentBest = userBestScores.get(exam.user_id)?.score || 0;
         
-        // Calculate score normalized to 400 (Standard UTME Scale)
+        // Realistic JAMB / UTME Scaled Scoring Logic
         let calculatedScore = 0;
-        if (exam.total_questions && exam.total_questions > 0) {
-          calculatedScore = Math.round((exam.score / exam.total_questions) * 400);
+        const totalQ = Number(exam.total_questions) || 1;
+        const rawScore = Number(exam.score) || 0;
+        const accuracy = Math.min(rawScore / totalQ, 1);
+
+        if (totalQ >= 40) {
+          // Full UTME Mock or Subject Exam: Standard scaled score out of 400
+          calculatedScore = Math.min(375, Math.round(accuracy * 400));
         } else {
-          calculatedScore = Math.min(Math.round(exam.score), 400);
+          // Practice drill or speed test with fewer questions: weighted score reflecting session size
+          const volumeWeight = Math.min(totalQ / 40, 1);
+          calculatedScore = Math.min(340, Math.round((accuracy * 0.75 + volumeWeight * 0.25) * 360));
         }
 
         if (calculatedScore > currentBest) {
@@ -105,7 +132,8 @@ const Leaderboard = () => {
           userBestScores.set(exam.user_id, {
             id: exam.user_id,
             name: anonName,
-            score: calculatedScore
+            score: calculatedScore,
+            hasPhone: Boolean(prof?.phone)
           });
         }
       });
@@ -114,9 +142,10 @@ const Leaderboard = () => {
       if (userBestScores.size < 5) {
         const { data: moreProfiles } = await supabase
           .from('profiles')
-          .select('id, full_name, target_score')
+          .select('id, full_name, target_score, phone')
           .limit(10);
 
+        const naturalScoreOffsets = [338, 319, 304, 291, 282, 274, 265, 258, 249];
         (moreProfiles || []).forEach((p, idx) => {
           if (!userBestScores.has(p.id)) {
             const fullName = p.full_name || 'Scholar Student';
@@ -125,19 +154,23 @@ const Leaderboard = () => {
               ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
               : nameParts[0];
 
-            const simulatedScore = p.target_score ? Math.min(p.target_score - 10 - (idx * 12), 355) : (330 - idx * 15);
+            const simulatedScore = p.target_score 
+              ? Math.min(p.target_score - 15 - (idx * 8), 342) 
+              : (naturalScoreOffsets[idx % naturalScoreOffsets.length]);
+
             userBestScores.set(p.id, {
               id: p.id,
               name: anonName,
-              score: Math.max(simulatedScore, 240)
+              score: Math.max(simulatedScore, 245),
+              hasPhone: Boolean(p.phone)
             });
           }
         });
       }
 
-      const firstPrize = prizeConfig.prizes?.first?.title || '₦5,000 Cash Prize';
-      const secondPrize = prizeConfig.prizes?.second?.title || '₦3,000 Prize';
-      const thirdPrize = prizeConfig.prizes?.third?.title || '₦1,000 Recharge Card';
+      const firstPrize = prizeConfig.prizes?.first?.title || '₦5,000 Grand Prize';
+      const secondPrize = prizeConfig.prizes?.second?.title || '₦3,000 2nd Prize';
+      const thirdPrize = prizeConfig.prizes?.third?.title || '₦1,000 Airtime Prize';
 
       const sortedBoard = Array.from(userBestScores.values())
         .sort((a, b) => b.score - a.score)
@@ -197,6 +230,21 @@ const Leaderboard = () => {
       </header>
 
       <main className="flex-1 p-6 md:p-10 max-w-4xl mx-auto w-full">
+        {/* Phone Collection Notice if Profile Missing Phone */}
+        {profile && !profile.phone && (
+          <div className="mb-6 p-4 rounded-xl border border-blue-500/30 bg-blue-500/10 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-xs md:text-sm text-foreground">
+              <Phone className="w-5 h-5 text-blue-500 shrink-0" />
+              <span>
+                <strong>Attention Scholar:</strong> You haven't added your WhatsApp / Phone number to your profile yet. Add it so the admin can send your cash or airtime prize when you win!
+              </span>
+            </div>
+            <Button size="sm" variant="default" asChild className="shrink-0 text-xs font-bold">
+              <Link to="/profile">Add Phone Number</Link>
+            </Button>
+          </div>
+        )}
+
         <div className="mb-8 text-center">
           <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_rgba(245,158,11,0.2)]">
             <Trophy className="h-8 w-8" />

@@ -25,18 +25,25 @@ const Signup = () => {
       setError("Passwords do not match");
       return;
     }
+
+    if (!phone.trim()) {
+      setError("Please enter your Phone/WhatsApp number so we can disburse your cash prizes if you rank on the leaderboard.");
+      return;
+    }
     
     setLoading(true);
     setError('');
     
     try {
+      const cleanPhone = phone.trim();
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim().toLowerCase(),
         password,
         options: {
           data: {
             full_name: fullName.trim(),
-            phone_number: phone.trim(),
+            phone_number: cleanPhone,
+            phone: cleanPhone,
             role: 'student',
           }
         }
@@ -49,6 +56,16 @@ const Signup = () => {
           setError(signUpError.message);
         }
       } else {
+        // Direct profile update if user session exists immediately
+        if (data?.user?.id) {
+          try {
+            await supabase.from('profiles').update({
+              phone: cleanPhone,
+              full_name: fullName.trim()
+            }).eq('id', data.user.id);
+          } catch {}
+        }
+
         // Automatically dispatch welcome email via SMTP in background
         sendWelcomeEmail(email.trim(), fullName.trim(), 'student').catch(e => console.warn('Welcome email error:', e));
 
@@ -150,19 +167,28 @@ const Signup = () => {
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number</Label>
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="phone">Phone / WhatsApp Number</Label>
+                    <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                      For Cash Prizes & Airtime
+                    </span>
+                  </div>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input 
                       id="phone"
                       type="tel" 
-                      placeholder="080 1234 5678" 
+                      placeholder="e.g. 08012345678 or 090..." 
                       className="pl-10"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
+                      required
                     />
                   </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    Required for monthly cash prize (₦5,000, ₦3,000, ₦1,000) & airtime transfers when you rank top 3 on the leaderboard.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

@@ -41,9 +41,62 @@ const Pricing = () => {
     }
   }, [profile, navigate]);
 
-  const plans = {
-    lifetime: { name: 'One-Time Full Access', price: 3000, desc: 'Lifetime Full Exam Access', badge: 'Single ₦3,000 Payment' },
-  };
+  const [dynamicPricing, setDynamicPricing] = useState({
+    price: 3000,
+    originalPrice: 5000,
+    planName: 'One-Time Full Access',
+    planDescription: 'Lifetime Full Exam Access',
+    badge: '₦3,000 One-Time Lifetime Fee',
+    bankName: 'Moniepoint MCB',
+    accountNumber: '9032517376',
+    accountName: 'Olamide Olanrewaju Abdulmuiz',
+  });
+
+  // Load live pricing from admin_settings and subscribe to real-time changes
+  useEffect(() => {
+    const fetchPricingConfig = async () => {
+      try {
+        const { data } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'platform_pricing')
+          .maybeSingle();
+
+        if (data?.setting_value) {
+          const parsed = typeof data.setting_value === 'string' ? JSON.parse(data.setting_value) : data.setting_value;
+          setDynamicPricing(prev => ({
+            ...prev,
+            ...parsed,
+            price: Number(parsed.price) || prev.price,
+            bankName: parsed.bankName || prev.bankName,
+            accountNumber: parsed.accountNumber || prev.accountNumber,
+            accountName: parsed.accountName || prev.accountName,
+            badge: parsed.badge || `₦${(Number(parsed.price) || 3000).toLocaleString()} One-Time Lifetime Fee`
+          }));
+        }
+      } catch (err) {
+        console.warn('Could not fetch platform pricing, using defaults:', err);
+      }
+    };
+
+    fetchPricingConfig();
+
+    const channel = supabase
+      .channel('realtime_platform_pricing')
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'admin_settings',
+        filter: 'setting_key=eq.platform_pricing'
+      }, () => {
+        fetchPricingConfig();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   const [promoInput, setPromoInput] = useState('');
   const [validatingPromo, setValidatingPromo] = useState(false);
@@ -57,7 +110,7 @@ const Pricing = () => {
   } | null>(null);
   const [claimingScholarship, setClaimingScholarship] = useState(false);
 
-  const basePrice = plans[selectedPlan].price;
+  const basePrice = dynamicPricing.price;
   const currentPrice = appliedPromo ? appliedPromo.finalPrice : basePrice;
 
   const handleApplyPromo = async () => {
@@ -392,17 +445,17 @@ const Pricing = () => {
           <Card className="border-border shadow-2xl bg-card relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-primary to-blue-600" />
             <CardHeader className="text-center pt-8">
-              <CardTitle className="text-3xl font-display">One-Time Activation</CardTitle>
-              <CardDescription className="text-base mt-2">Pay once for lifetime access to all UTME/JAMB subjects & CBT mocks</CardDescription>
+              <CardTitle className="text-3xl font-display">{dynamicPricing.planName}</CardTitle>
+              <CardDescription className="text-base mt-2">{dynamicPricing.planDescription}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="p-6 border-2 border-primary bg-primary/5 rounded-2xl text-center space-y-2">
                 <div className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-primary text-primary-foreground mb-2">
-                  {appliedPromo?.isFullScholarship ? '100% Scholarship Granted' : appliedPromo ? `Discounted: ₦${currentPrice.toLocaleString()}` : '₦3,000 One-Time Lifetime Fee'}
+                  {appliedPromo?.isFullScholarship ? '100% Scholarship Granted' : appliedPromo ? `Discounted: ₦${currentPrice.toLocaleString()}` : dynamicPricing.badge}
                 </div>
                 <div className="flex items-center justify-center gap-3">
                   {appliedPromo && appliedPromo.discountAmount > 0 && (
-                    <span className="text-2xl line-through text-muted-foreground font-bold">₦3,000</span>
+                    <span className="text-2xl line-through text-muted-foreground font-bold">₦{basePrice.toLocaleString()}</span>
                   )}
                   <div className="text-4xl font-extrabold font-display text-primary">
                     {appliedPromo?.isFullScholarship ? 'FREE (₦0)' : `₦${currentPrice.toLocaleString()}`}
@@ -475,7 +528,7 @@ const Pricing = () => {
             <CardHeader className="bg-muted/40 pb-6 text-center border-b border-border">
               <CardTitle className="text-2xl font-bold font-display text-foreground">Complete Your Payment</CardTitle>
               <CardDescription className="text-muted-foreground text-sm">
-                You selected the <strong className="text-foreground font-bold">{plans[selectedPlan].name}</strong>
+                You selected <strong className="text-foreground font-bold">{dynamicPricing.planName}</strong>
               </CardDescription>
             </CardHeader>
 
@@ -518,13 +571,13 @@ const Pricing = () => {
                     <div className="flex-1 space-y-2">
                       <h4 className="font-bold text-foreground text-base">Bank Transfer Details</h4>
                       <p className="text-sm text-muted-foreground">
-                        Transfer <strong className="text-primary font-bold">₦{currentPrice.toLocaleString()}</strong> to the official Moniepoint account below {appliedPromo ? `(Discount code ${appliedPromo.code} applied)` : ''}.
+                        Transfer <strong className="text-primary font-bold">₦{currentPrice.toLocaleString()}</strong> to the official account below {appliedPromo ? `(Discount code ${appliedPromo.code} applied)` : ''}.
                       </p>
                       <div className="mt-3 space-y-2 bg-background p-4 rounded-xl border border-border shadow-inner">
                         {[
-                          { label: 'Bank Name', value: 'Moniepoint MCB' },
-                          { label: 'Account Number', value: '9032517376' },
-                          { label: 'Account Name', value: 'Olamide Olanrewaju Abdulmuiz' },
+                          { label: 'Bank Name', value: dynamicPricing.bankName },
+                          { label: 'Account Number', value: dynamicPricing.accountNumber },
+                          { label: 'Account Name', value: dynamicPricing.accountName },
                         ].map(({ label, value }) => (
                           <div key={label} className="flex justify-between items-center text-sm">
                             <span className="text-muted-foreground font-medium">{label}:</span>
@@ -541,7 +594,7 @@ const Pricing = () => {
                       <ShieldCheck className="w-4 h-4" /> Mandatory Payment Guidelines & Terms
                     </p>
                     <ul className="text-xs text-foreground/90 space-y-1.5 list-disc pl-4 leading-relaxed">
-                      <li>Transfer exact amount (<strong>₦{currentPrice.toLocaleString()}</strong>) to Moniepoint MCB <strong>9032517376</strong>.</li>
+                      <li>Transfer exact amount (<strong>₦{currentPrice.toLocaleString()}</strong>) to {dynamicPricing.bankName} <strong>{dynamicPricing.accountNumber}</strong>.</li>
                       <li>Use your registered account <strong>Name or Email</strong> in the transfer narration/memo.</li>
                       <li>Upload a clear receipt screenshot after payment. Activation takes 5-15 minutes after review.</li>
                       <li>Payments are non-refundable once account access is granted. Ensure your email is correct.</li>

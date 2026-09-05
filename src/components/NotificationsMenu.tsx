@@ -75,7 +75,8 @@ export function NotificationsMenu() {
   };
 
   const markAllAsRead = async () => {
-    await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile?.id).eq('is_read', false);
+    if (!profile?.id) return;
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', profile.id).eq('is_read', false);
     setNotifications(notifications.map(n => ({ ...n, is_read: true })));
     setUnreadCount(0);
   };

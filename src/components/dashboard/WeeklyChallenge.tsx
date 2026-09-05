@@ -22,7 +22,7 @@ export const WeeklyChallenge = () => {
     try {
       const now = new Date().toISOString().split('T')[0];
 
-      // 1. Check admin_settings.weekly_challenges_db (Primary storage in this project)
+      // 1. Check admin_settings.weekly_challenges_db (Authoritative project storage)
       let activeChallenge: any = null;
       try {
         const { data: settingData } = await supabase
@@ -40,45 +40,37 @@ export const WeeklyChallenge = () => {
         }
       } catch {}
 
-      // 2. Fallback to weekly_challenges table if needed
-      if (!activeChallenge) {
-        try {
-          const challengesRes = await safeSupabaseQuery(
-            supabase
-              .from('weekly_challenges')
-              .select('*')
-              .eq('is_active', true)
-              .lte('week_start', now)
-              .gte('week_end', now)
-              .limit(1),
-            {
-              contextName: 'WeeklyChallenge.fetchChallenges',
-              sanitizer: (data) => DataSanitizer.sanitizeArray(data, DataSanitizer.sanitizeWeeklyChallenge),
-              fallbackValue: []
-            }
-          );
-
-          if (challengesRes.data && challengesRes.data.length > 0) {
-            activeChallenge = challengesRes.data[0];
-          }
-        } catch {}
-      }
-
-      // 3. If local fallback exists
+      // 2. Fallback to localStorage challenges
       if (!activeChallenge) {
         try {
           const localRaw = localStorage.getItem('scholar_weekly_challenges');
           if (localRaw) {
             const parsed = JSON.parse(localRaw);
-            if (Array.isArray(parsed)) {
-              const matched = parsed.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now)
-                || parsed.find((c: any) => c.is_active);
-              if (matched) {
-                activeChallenge = matched;
-              }
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              activeChallenge = parsed.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now)
+                || parsed.find((c: any) => c.is_active)
+                || parsed[0];
             }
           }
         } catch {}
+      }
+
+      // 3. Default curated weekly challenge if none yet created by admin
+      if (!activeChallenge) {
+        activeChallenge = {
+          id: 'wc-curated-1',
+          title: 'JAMB Speed Master Challenge',
+          description: 'Test your quick reasoning under standard UTME timing conditions.',
+          subject: 'General UTME',
+          xp_reward: 150,
+          is_active: true,
+          week_start: now,
+          week_end: '2026-12-31',
+          question: 'A car travels at 60 km/h for 2 hours and then at 90 km/h for 1 hour. What is its average speed for the entire journey?',
+          options: ['70 km/h', '75 km/h', '80 km/h', '65 km/h'],
+          correct_answer: '70 km/h',
+          explanation: 'Total distance = (60 * 2) + (90 * 1) = 120 + 90 = 210 km. Total time = 2 + 1 = 3 hours. Average speed = 210 / 3 = 70 km/h.'
+        };
       }
 
       if (activeChallenge) {

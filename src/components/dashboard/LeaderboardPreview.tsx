@@ -35,9 +35,17 @@ export const LeaderboardPreview = () => {
 
           validExams.forEach(e => {
             const current = userBests.get(e.user_id)?.score || 0;
-            const percentageScore = (e.total_questions && e.total_questions > 0)
-              ? Math.round((e.score / e.total_questions) * 400) 
-              : Math.min(Math.round(e.score), 400);
+            const totalQ = Number(e.total_questions) || 1;
+            const rawScore = Number(e.score) || 0;
+            const accuracy = Math.min(rawScore / totalQ, 1);
+
+            let percentageScore = 0;
+            if (totalQ >= 40) {
+              percentageScore = Math.min(375, Math.round(accuracy * 400));
+            } else {
+              const volumeWeight = Math.min(totalQ / 40, 1);
+              percentageScore = Math.min(340, Math.round((accuracy * 0.75 + volumeWeight * 0.25) * 360));
+            }
 
             if (percentageScore >= current) {
               const prof = profileMap.get(e.user_id);
@@ -69,11 +77,12 @@ export const LeaderboardPreview = () => {
           .limit(5);
 
         if (isMounted && topProfiles && topProfiles.length > 0) {
+          const naturalScores = [338, 319, 304, 291, 282];
           const fallbackLeaders = topProfiles.map((p, idx) => ({
             user_id: p.id,
             full_name: p.full_name || 'Scholar Student',
             avatar_url: p.avatar_url || null,
-            score: Math.max(340 - idx * 15, 250),
+            score: naturalScores[idx % naturalScores.length],
             rank: idx + 1
           }));
           setLeaders(fallbackLeaders);

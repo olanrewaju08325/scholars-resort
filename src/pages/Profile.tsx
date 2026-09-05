@@ -18,10 +18,11 @@ import {
 const CANONICAL_SUBJECTS = getAllCanonicalSubjects();
 
 export default function Profile() {
-  const { profile, user } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const { isBatterySaver, toggleBatterySaver } = useBatterySaver();
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
+  const [phone, setPhone] = useState(profile?.phone || '');
   const [utmeSubjects, setUtmeSubjects] = useState<string[]>(() => {
     const raw = profile?.utme_subjects || ['Use of English'];
     return raw.map((s: string) => normalizeToCanonicalSubjectName(s));
@@ -48,10 +49,12 @@ export default function Profile() {
     setLoading(true);
     
     try {
+      const cleanPhone = phone.trim();
       const { error } = await supabase
         .from('profiles')
         .update({ 
           full_name: fullName.trim(),
+          phone: cleanPhone || null,
           utme_subjects: validation.normalizedSubjects
         })
         .eq('id', user.id);
@@ -61,6 +64,7 @@ export default function Profile() {
       toast.success('Profile updated successfully!');
       setUtmeSubjects(validation.normalizedSubjects);
       setIsEditing(false);
+      if (refreshProfile) refreshProfile();
     } catch (e: any) {
       toast.error(e.message || 'Failed to update profile');
     } finally {
@@ -75,7 +79,7 @@ export default function Profile() {
       
       <header className="mb-8">
         <h1 className="text-3xl font-display font-bold mb-2">My Profile</h1>
-        <p className="text-muted-foreground">Manage your account details and subscription status.</p>
+        <p className="text-muted-foreground">Manage your account details, phone number for cash prizes, and subscription status.</p>
       </header>
 
       <div className="grid md:grid-cols-3 gap-8">
@@ -85,7 +89,7 @@ export default function Profile() {
           <Card className="bg-card shadow-sm border-border">
             <CardHeader>
               <CardTitle className="text-xl">Personal Information</CardTitle>
-              <CardDescription>Update your basic account details.</CardDescription>
+              <CardDescription>Update your basic account details and prize collection phone number.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               
@@ -103,6 +107,45 @@ export default function Profile() {
                 ) : (
                   <div className="p-3 bg-muted/50 rounded-lg border border-border text-foreground font-medium">
                     {profile.full_name || 'Not provided'}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <Phone className="w-4 h-4 text-emerald-500" /> Phone / WhatsApp Number
+                  </label>
+                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full">
+                    For Cash Prize Disbursement
+                  </span>
+                </div>
+                {isEditing ? (
+                  <div className="space-y-1">
+                    <Input 
+                      value={phone} 
+                      onChange={(e) => setPhone(e.target.value)} 
+                      placeholder="e.g. 08012345678" 
+                      className="bg-muted border-border font-mono"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Our admin will contact and transfer monthly cash prizes (₦5,000, ₦3,000, ₦1,000) or airtime to this number if you rank top 3 on the leaderboard.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-3 bg-muted/50 rounded-lg border border-border flex items-center justify-between">
+                    <span className="font-mono font-bold text-foreground">
+                      {profile.phone || 'No phone recorded'}
+                    </span>
+                    {profile.phone ? (
+                      <span className="text-xs text-emerald-500 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" /> Verified
+                      </span>
+                    ) : (
+                      <span className="text-xs text-amber-500 font-semibold">
+                        Add phone for prize transfers
+                      </span>
+                    )}
                   </div>
                 )}
               </div>
