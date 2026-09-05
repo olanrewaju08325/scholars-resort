@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { BookOpen, CheckCircle, XCircle, RefreshCw, MessageSquare, Clock, Zap, Trophy, Home, RotateCcw, CheckCircle2, Target, Download } from 'lucide-react';
+import { 
+  BookOpen, CheckCircle, XCircle, RefreshCw, MessageSquare, 
+  Clock, Zap, Trophy, Home, RotateCcw, CheckCircle2, Target, 
+  Download, Star, Sparkles, Flame, Award, ShieldCheck 
+} from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import { Badge } from '../components/ui/badge';
 import { useAuth } from '@/context/AuthContext';
 import { callGroqAPI } from '@/services/aiService';
 import { MathText } from '@/components/MathText';
@@ -20,6 +25,8 @@ interface ResultsState {
   questions?: any[];
   answers?: Record<string, string>;
   timeSpentSeconds?: number;
+  achievements?: Array<{ title: string; description: string; icon: string; xp?: number }>;
+  xpEarned?: number;
 }
 
 const Results = () => {
@@ -27,7 +34,16 @@ const Results = () => {
   const navigate = useNavigate();
   const state = (location.state as ResultsState) || {};
 
-  const { score = 0, total = 0, mode = 'Practice', questions = [], answers = {}, timeSpentSeconds = 0 } = state;
+  const { 
+    score = 0, 
+    total = 0, 
+    mode = 'Practice', 
+    questions = [], 
+    answers = {}, 
+    timeSpentSeconds = 0,
+    achievements: stateAchievements,
+    xpEarned = 0
+  } = state;
 
   const [aiLoading, setAiLoading] = useState<Record<string, boolean>>({});
   const [aiResponses, setAiResponses] = useState<Record<string, string>>({});
@@ -66,6 +82,79 @@ const Results = () => {
       } catch {}
     }
   }, [questions, answers]);
+
+  // Render icon helper for positive achievements
+  const renderAchievementIcon = (iconName: string) => {
+    const cls = "w-4 h-4 text-amber-500";
+    switch (iconName) {
+      case 'Star': return <Star className={cls} />;
+      case 'Target': return <Target className="w-4 h-4 text-emerald-500" />;
+      case 'Zap': return <Zap className="w-4 h-4 text-amber-500" />;
+      case 'Flame': return <Flame className="w-4 h-4 text-orange-500" />;
+      case 'RotateCcw': return <RotateCcw className="w-4 h-4 text-rose-500" />;
+      case 'BookOpen': return <BookOpen className="w-4 h-4 text-blue-500" />;
+      case 'Trophy': return <Trophy className={cls} />;
+      default: return <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
+    }
+  };
+
+  // Derive accomplishments the user ACTUALLY achieved in this session
+  const effectiveAchievements = stateAchievements && stateAchievements.length > 0
+    ? stateAchievements
+    : (() => {
+        const list: Array<{ title: string; description: string; icon: string; xp?: number }> = [];
+        const baseCalculatedXp = 30 + Math.round((percentage / 100) * 40);
+
+        list.push({
+          title: `${mode} Completed`,
+          description: `Successfully finished all ${total || questions.length || 0} questions in this session`,
+          icon: 'CheckCircle2',
+          xp: xpEarned || baseCalculatedXp
+        });
+
+        if (percentage >= 90) {
+          list.push({
+            title: 'Mastery Accuracy (90%+)',
+            description: `Outstanding accuracy of ${percentage}% reached!`,
+            icon: 'Star',
+            xp: 50
+          });
+        } else if (percentage >= 70) {
+          list.push({
+            title: 'High Achiever (70%+)',
+            description: `Strong performance reaching ${percentage}% target score!`,
+            icon: 'Target',
+            xp: 30
+          });
+        } else if (score > 0) {
+          list.push({
+            title: 'Topic Progress',
+            description: `Answered ${score} question${score > 1 ? 's' : ''} correctly`,
+            icon: 'BookOpen',
+            xp: 20
+          });
+        }
+
+        if (timeSpentSeconds > 0 && total > 0 && (timeSpentSeconds / total) <= 50) {
+          list.push({
+            title: 'Speed Precision',
+            description: `Averaged under ${Math.round(timeSpentSeconds / total)}s per question`,
+            icon: 'Zap',
+            xp: 25
+          });
+        }
+
+        if (profile?.streak_days && profile.streak_days > 0) {
+          list.push({
+            title: `${profile.streak_days}-Day Active Streak`,
+            description: 'Maintained continuous daily study momentum',
+            icon: 'Flame',
+            xp: 15
+          });
+        }
+
+        return list;
+      })();
 
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
@@ -255,6 +344,65 @@ Give a short, clear explanation of WHY the correct answer is right, using a simp
             </div>
           )}
         </motion.div>
+
+        {/* Session Achievements & Milestones Earned (Showing ONLY what student achieved) */}
+        {effectiveAchievements.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 15 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.1 }}
+            className="mb-10"
+          >
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-500">
+                  <Trophy className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold font-display text-foreground flex items-center gap-2">
+                    Session Achievements & Milestones
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    Accomplishments unlocked based on your performance in this session
+                  </p>
+                </div>
+              </div>
+              <Badge className="bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 text-xs font-bold px-2.5 py-1">
+                {effectiveAchievements.length} Earned
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {effectiveAchievements.map((ach, i) => (
+                <div 
+                  key={i} 
+                  className="p-3.5 rounded-xl border border-amber-500/20 bg-amber-500/5 dark:bg-amber-950/10 shadow-xs flex items-start gap-3 transition-all hover:border-amber-500/40"
+                >
+                  <div className="p-2 rounded-lg bg-amber-500/15 border border-amber-500/30 shrink-0">
+                    {renderAchievementIcon(ach.icon)}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-1">
+                      <h4 className="font-bold text-xs text-foreground truncate">{ach.title}</h4>
+                      {ach.xp ? (
+                        <span className="bg-amber-500 text-slate-950 text-[10px] px-1.5 py-0.5 rounded-full font-extrabold uppercase shrink-0">
+                          +{ach.xp} XP
+                        </span>
+                      ) : (
+                        <span className="bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold uppercase shrink-0">
+                          Earned
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                      {ach.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
 
         {/* Review Section */}
         {questions.length > 0 ? (

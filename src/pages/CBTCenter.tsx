@@ -38,13 +38,17 @@ export default function CBTCenter() {
   useEffect(() => {
     const fetchActiveSession = async () => {
       if (!profile) return;
-      const { data } = await supabase
-        .from('exam_sessions')
-        .select('id, mode')
-        .eq('user_id', profile.id)
-        .eq('status', 'in_progress')
-        .maybeSingle();
-      if (data) setActiveSession(data);
+      try {
+        const { data } = await supabase
+          .from('exam_sessions')
+          .select('id, status, started_at')
+          .eq('user_id', profile.id)
+          .eq('status', 'in_progress')
+          .maybeSingle();
+        if (data) setActiveSession(data);
+      } catch (err) {
+        console.warn('Active session check notice:', err);
+      }
     };
     fetchActiveSession();
   }, [profile]);
@@ -67,7 +71,7 @@ export default function CBTCenter() {
           .from('exam_sessions')
           .select('*')
           .eq('user_id', profile.id)
-          .order('created_at', { ascending: false })
+          .order('started_at', { ascending: false })
           .limit(50);
 
         // Also merge with local completed sessions

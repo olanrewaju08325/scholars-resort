@@ -67,13 +67,16 @@ export const Badges: React.FC = () => {
         }
       }
 
-      // 2. Fetch user's unlocked achievements from Supabase user_badges
+      // 2. Fetch user's unlocked achievements from Supabase user_badges (using valid student_id column)
       const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
       const achRes = await safeSupabaseQuery<any[]>(
-        supabase.from('user_badges').select('*').or(`student_id.eq.${user.id},user_id.eq.${user.id}`),
+        supabase.from('user_badges').select('badge_id, earned_at').eq('student_id', user.id),
         { contextName: 'Badges.fetchBadges.user_badges', fallbackValue: [] }
       );
       const unlockedData = achRes.data || [];
+
+      // Also merge with local earned badges
+      const localEarned = JSON.parse(localStorage.getItem(`scholars_earned_badges_${user.id}`) || '[]');
 
       // 3. Fetch completed exam sessions for progress
       const sessRes = await safeSupabaseQuery<any[]>(
@@ -84,10 +87,11 @@ export const Badges: React.FC = () => {
       const completedCount = allSessions.length;
 
       const unlockedKeysMap = new Map<string, string>();
+      localEarned.forEach((k: string) => unlockedKeysMap.set(k, new Date().toISOString()));
+
       if (unlockedData) {
         unlockedData.forEach((item: any) => {
-          if (item.badge_key) unlockedKeysMap.set(item.badge_key, item.unlocked_at || item.created_at);
-          if (item.badge_id) unlockedKeysMap.set(item.badge_id, item.unlocked_at || item.created_at);
+          if (item.badge_id) unlockedKeysMap.set(item.badge_id, item.earned_at || new Date().toISOString());
         });
       }
 

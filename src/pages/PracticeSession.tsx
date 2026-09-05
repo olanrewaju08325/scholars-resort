@@ -165,21 +165,104 @@ const PracticeSession = () => {
         console.warn('Failed to update Mistake Bank:', e);
       }
 
-      if (profile) {
-        const practiceXp = 30 + Math.round((percentageScore / 100) * 40);
-        await awardXp(profile.id, practiceXp, `Completed ${state?.learningStyle || 'Practice'} Session (${score}/${questions.length})`);
+      let newlyAwardedBadges: any[] = [];
+      let practiceXp = 30 + Math.round((percentageScore / 100) * 40);
 
-        await checkAndAwardBadges(profile.id, {
-          score: percentageScore,
-          timeSpentSecs: totalTime,
-          totalTimeSecs: totalTime,
-          isFirstExam: false 
+      if (profile) {
+        try {
+          await awardXp(profile.id, practiceXp, `Completed ${state?.learningStyle || 'Practice'} Session (${score}/${questions.length})`);
+        } catch (e) {
+          console.warn('XP award notice:', e);
+        }
+
+        try {
+          const awarded = await checkAndAwardBadges(profile.id, {
+            score: percentageScore,
+            timeSpentSecs: totalTime,
+            totalTimeSecs: totalTime,
+            isFirstExam: false 
+          });
+          if (Array.isArray(awarded)) newlyAwardedBadges = awarded;
+        } catch (e) {
+          console.warn('Badge check notice:', e);
+        }
+      }
+
+      // Compute concrete achievements the student ACTUALLY achieved in this session
+      const earnedAchievements: Array<{ title: string; description: string; icon: string; xp?: number }> = [];
+      
+      earnedAchievements.push({
+        title: `${state?.learningStyle ? state.learningStyle.charAt(0).toUpperCase() + state.learningStyle.slice(1) : 'Practice'} Session Completed`,
+        description: `Successfully completed all ${questions.length} questions in this practice session`,
+        icon: 'CheckCircle2',
+        xp: practiceXp
+      });
+
+      if (percentageScore >= 90) {
+        earnedAchievements.push({
+          title: 'Mastery Accuracy (90%+)',
+          description: `Outstanding performance with ${Math.round(percentageScore)}% score!`,
+          icon: 'Star',
+          xp: 50
+        });
+      } else if (percentageScore >= 70) {
+        earnedAchievements.push({
+          title: 'High Achiever (70%+)',
+          description: `Strong performance reaching ${Math.round(percentageScore)}% accuracy!`,
+          icon: 'Target',
+          xp: 30
+        });
+      } else if (score > 0) {
+        earnedAchievements.push({
+          title: 'Topic Progress',
+          description: `Mastered ${score} correct questions towards your UTME target`,
+          icon: 'BookOpen',
+          xp: 20
         });
       }
 
-      navigate('/results', { state: { score, total: questions.length, mode: state?.learningStyle || 'Practice' } });
+      if (totalTime > 0 && totalTime <= (questions.length * 50)) {
+        earnedAchievements.push({
+          title: 'Rapid Speed Pacing',
+          description: `Averaged under ${Math.max(1, Math.round(totalTime / (questions.length || 1)))} seconds per question`,
+          icon: 'Zap',
+          xp: 25
+        });
+      }
+
+      if (state?.mode === 'mistakes') {
+        earnedAchievements.push({
+          title: 'Mistake Bank Drill',
+          description: 'Re-attempted and reinforced previously missed questions',
+          icon: 'RotateCcw',
+          xp: 35
+        });
+      }
+
+      // Add any milestone badges unlocked during this session
+      newlyAwardedBadges.forEach(b => {
+        earnedAchievements.push({
+          title: `Milestone Unlocked: ${b.name}`,
+          description: b.description,
+          icon: b.icon || 'Trophy',
+          xp: 100
+        });
+      });
+
+      navigate('/results', { 
+        state: { 
+          score: finalScore, 
+          total: questions.length, 
+          mode: state?.mode === 'mistakes' ? 'Smart Mistake Drill' : (state?.learningStyle || 'Practice Session'),
+          questions,
+          answers: answersMap,
+          timeSpentSeconds: totalTime,
+          achievements: earnedAchievements,
+          xpEarned: practiceXp
+        } 
+      });
     }
-  }, [currentIndex, questions, sessionId, score, profile, totalTime, state, navigate]);
+  }, [currentIndex, questions, sessionId, score, profile, totalTime, state, answersMap, navigate]);
 
   const handlePrev = useCallback(() => {
     if (currentIndex > 0) {

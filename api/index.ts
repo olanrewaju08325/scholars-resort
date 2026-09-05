@@ -1003,16 +1003,15 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
 
     // Update session status and score
     if (sessionId) {
-      const table = isPractice ? 'practice_sessions' : 'exam_sessions';
-      const { error: updateError } = await supabase.from(table).update({
+      // Both practice and CBT exams track sessions in exam_sessions
+      const { error: updateError } = await supabase.from('exam_sessions').update({
         status: 'completed',
         score: score,
         total_questions: totalQuestions,
-        submitted_at: new Date().toISOString(),
-        is_ai_tutor_locked: false
+        submitted_at: new Date().toISOString()
       }).eq('id', sessionId);
       
-      if (updateError) console.warn('[Secure Scoring] Error updating session:', updateError);
+      if (updateError) console.warn('[Secure Scoring] Error updating session:', updateError.message);
     }
 
     return res.json({
@@ -1037,7 +1036,6 @@ app.post('/api/exam-session/end', async (req, res) => {
   
   try {
     const updatePayload: any = {
-      is_ai_tutor_locked: false,
       status: status || 'submitted',
       submitted_at: new Date().toISOString()
     };

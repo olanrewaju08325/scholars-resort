@@ -14,7 +14,8 @@ export const SmartTutorChat = () => {
   const { profile } = useAuth();
   const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
-  const [isExamLocked, setIsExamLocked] = useState(() => localStorage.getItem('scholars_live_exam_active') === 'true');
+  const isExamRoute = location.pathname.startsWith('/cbt/exam') || (location.pathname.startsWith('/exam') && !location.pathname.includes('/center'));
+  const [isExamLocked, setIsExamLocked] = useState(() => isExamRoute && localStorage.getItem('scholars_live_exam_active') === 'true');
   const [studentStats, setStudentStats] = useState<any>(null);
   const [uploadedMaterials, setUploadedMaterials] = useState<any[]>([]);
   const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
@@ -24,8 +25,17 @@ export const SmartTutorChat = () => {
   const [customNote, setCustomNote] = useState('');
   const chatEndRef = useRef<HTMLDivElement>(null);
 
-  // Listen to exam proctor lock events & query database for active exam session with is_ai_tutor_locked flag
+  // Sync exam lock state with current active route
   useEffect(() => {
+    if (!isExamRoute) {
+      // Leaving or outside exam: clear stale locks
+      setIsExamLocked(false);
+      try {
+        localStorage.removeItem('scholars_live_exam_active');
+      } catch {}
+      return;
+    }
+
     const handleExamState = (e: any) => {
       const active = !!(e.detail?.active || localStorage.getItem('scholars_live_exam_active') === 'true');
       setIsExamLocked(active);
@@ -37,38 +47,11 @@ export const SmartTutorChat = () => {
     window.addEventListener('scholars:exam-active', handleExamState);
     window.addEventListener('scholars:focus-mode', handleExamState);
 
-    // Check localStorage and database once on mount
-    const checkDbExamLock = async () => {
-      if (!profile?.id) return;
-      if (localStorage.getItem('scholars_live_exam_active') === 'true') {
-        setIsExamLocked(true);
-        return;
-      }
-      try {
-        const { data: dbSession } = await supabase
-          .from('exam_sessions')
-          .select('id, status')
-          .eq('user_id', profile.id)
-          .eq('status', 'in_progress')
-          .maybeSingle();
-
-        if (dbSession && dbSession.status === 'in_progress') {
-          setIsExamLocked(true);
-        } else {
-          setIsExamLocked(false);
-        }
-      } catch {
-        setIsExamLocked(false);
-      }
-    };
-
-    checkDbExamLock();
-
     return () => {
       window.removeEventListener('scholars:exam-active', handleExamState);
       window.removeEventListener('scholars:focus-mode', handleExamState);
     };
-  }, [profile?.id]);
+  }, [isExamRoute]);
 
   // Fetch performance data when chat is initialized
   useEffect(() => {

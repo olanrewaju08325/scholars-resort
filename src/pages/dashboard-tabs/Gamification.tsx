@@ -40,11 +40,28 @@ export const Gamification = () => {
         setUserXP(userData.xp);
       }
 
-      // 2. Fetch badges earned by user from user_badges
-      const userBadgesRes = await supabase.from('user_badges').select('*').or(`student_id.eq.${profile.id},user_id.eq.${profile.id}`);
+      // 2. Fetch badges earned by user from user_badges (using valid student_id column)
+      const userBadgesRes = await supabase.from('user_badges').select('badge_id, earned_at').eq('student_id', profile.id);
       const earnedSet = new Set<string>();
-      if (userBadgesRes.data) {
-        userBadgesRes.data.forEach((ub: any) => earnedSet.add(ub.badge_id || ub.badge_key));
+
+      // Check local storage for resilience
+      const localBadges = JSON.parse(localStorage.getItem(`scholars_earned_badges_${profile.id}`) || '[]');
+      localBadges.forEach((k: string) => earnedSet.add(k));
+
+      // Fetch badge definitions to map badge UUID to requirement key
+      try {
+        const { data: dbBadges } = await supabase.from('badges').select('id, requirement_type');
+        if (userBadgesRes.data) {
+          userBadgesRes.data.forEach((ub: any) => {
+            if (ub.badge_id) earnedSet.add(ub.badge_id);
+            const matching = dbBadges?.find(b => b.id === ub.badge_id);
+            if (matching?.requirement_type) earnedSet.add(matching.requirement_type);
+          });
+        }
+      } catch (e) {
+        if (userBadgesRes.data) {
+          userBadgesRes.data.forEach((ub: any) => earnedSet.add(ub.badge_id));
+        }
       }
 
       setEarnedBadgeKeys(earnedSet);

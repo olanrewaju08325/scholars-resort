@@ -121,18 +121,32 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
   }
 
   try {
-    // 1. Fetch user unlocked achievements from Supabase user_badges
+    // 1. Fetch user unlocked achievements from Supabase user_badges (using valid student_id column)
     const { safeSupabaseQuery } = await import('@/lib/safeSupabase');
     const userAchRes = await safeSupabaseQuery<any[]>(
-      supabase.from('user_badges').select('badge_key, created_at').eq('user_id', userId),
+      supabase.from('user_badges').select('badge_id, earned_at').eq('student_id', userId),
       { contextName: 'StudentAchievementsService.user_badges', fallbackValue: [] }
     );
     const userAchievements = userAchRes.data || [];
-    const isFirstInitialization = userAchievements.length === 0 && !localStorage.getItem(`scholars_achievements_init_${userId}`);
+    const localEarned = JSON.parse(localStorage.getItem(`scholars_earned_badges_${userId}`) || '[]');
+    const isFirstInitialization = userAchievements.length === 0 && localEarned.length === 0 && !localStorage.getItem(`scholars_achievements_init_${userId}`);
+
+    // Map DB badge requirement_types to keys
+    let dbBadges: any[] = [];
+    try {
+      const { data } = await supabase.from('badges').select('id, requirement_type');
+      if (data) dbBadges = data;
+    } catch {
+      // safe fallback
+    }
 
     const unlockedMap = new Map<string, string>();
+    localEarned.forEach((k: string) => unlockedMap.set(k, new Date().toISOString()));
+
     (userAchievements || []).forEach((ach: any) => {
-      unlockedMap.set(ach.badge_key, ach.created_at);
+      if (ach.badge_id) unlockedMap.set(ach.badge_id, ach.earned_at || new Date().toISOString());
+      const matched = dbBadges.find(b => b.id === ach.badge_id);
+      if (matched?.requirement_type) unlockedMap.set(matched.requirement_type, ach.earned_at || new Date().toISOString());
     });
 
     // 2. Fetch profile data (streak days)
@@ -278,16 +292,29 @@ export async function evaluateStudentAchievements(userId: string): Promise<Achie
       for (const key of newlyUnlockedKeys) {
         const badgeDef = ACHIEVEMENTS_CATALOG.find(b => b.key === key);
         if (badgeDef) {
+          // Save locally
           try {
-            await supabase.from('user_badges').insert({
-              user_id: userId,
-              badge_key: badgeDef.key,
-              title: badgeDef.title,
-              description: badgeDef.description,
-              icon: badgeDef.icon
-            });
+            const currentSaved = JSON.parse(localStorage.getItem(`scholars_earned_badges_${userId}`) || '[]');
+            if (!currentSaved.includes(badgeDef.key)) {
+              currentSaved.push(badgeDef.key);
+              localStorage.setItem(`scholars_earned_badges_${userId}`, JSON.stringify(currentSaved));
+            }
+          } catch {
+            // safe local fallback
+          }
+
+          // Save to Supabase user_badges if matching DB badge exists
+          try {
+            const dbMatch = dbBadges.find(b => b.requirement_type === badgeDef.key);
+            if (dbMatch?.id) {
+              await supabase.from('user_badges').insert({
+                student_id: userId,
+                badge_id: dbMatch.id,
+                earned_at: new Date().toISOString()
+              });
+            }
           } catch (e) {
-            console.warn('Achievement insert error:', e);
+            console.warn('Achievement insert notice:', e);
           }
 
           if (!isFirstInitialization) {
