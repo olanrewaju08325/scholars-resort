@@ -9,7 +9,7 @@ import { toast } from 'sonner';
 import { checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { getDownloadedPacks } from '@/lib/offlineStore';
 import { SafeDataFetcher } from '@/utils/safeDataFetcher';
-import { getCanonicalSubjectId, normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
+import { getCanonicalSubjectId, normalizeToCanonicalSubjectName, getCanonicalSyllabusForSubject } from '@/utils/subjectTaxonomy';
 
 const PracticeSetup = () => {
   const { profile } = useAuth();
@@ -23,8 +23,8 @@ const PracticeSetup = () => {
   const [selectedSubject, setSelectedSubject] = useState(searchParams.get('subjectId') || '');
   const [selectedTopic, setSelectedTopic] = useState('');
   const [difficulty, setDifficulty] = useState('mixed');
-  const [questionCount, setQuestionCount] = useState('20');
-  const [learningStyle, setLearningStyle] = useState('normal');
+  const [questionCount, setQuestionCount] = useState(mode === 'speed' ? '20' : '20');
+  const [learningStyle, setLearningStyle] = useState(mode === 'speed' ? 'rapid' : 'normal');
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
   const [mistakeCount, setMistakeCount] = useState(0);
@@ -110,16 +110,36 @@ const PracticeSetup = () => {
 
   useEffect(() => {
     if (selectedSubject) {
+      // Find subject name for syllabus lookup
+      const subjectObj = subjects.find(s => s.id === selectedSubject);
+      const subjectLookupKey = subjectObj ? subjectObj.name : selectedSubject;
+      const syllabusDetails = getCanonicalSyllabusForSubject(subjectLookupKey);
+      const syllabusTopics = syllabusDetails.map((s) => ({
+        id: s.name,
+        name: s.name,
+        subject_id: selectedSubject,
+        is_syllabus: true
+      }));
+
       if (!navigator.onLine) {
-        setTopics([]);
+        setTopics(syllabusTopics);
       } else {
         supabase.from('topics').select('*').eq('subject_id', selectedSubject)
           .then(({ data }) => {
-            const list = data || [];
-            setTopics(list);
+            const dbTopics = data || [];
+            const seen = new Set(dbTopics.map(t => t.name.toLowerCase().trim()));
+            const merged = [...dbTopics];
+            for (const st of syllabusTopics) {
+              if (!seen.has(st.name.toLowerCase().trim())) {
+                merged.push(st);
+                seen.add(st.name.toLowerCase().trim());
+              }
+            }
+
+            setTopics(merged);
             const topicParam = searchParams.get('topic') || searchParams.get('topicId');
             if (topicParam) {
-              const matched = list.find((t: any) =>
+              const matched = merged.find((t: any) =>
                 t.id === topicParam ||
                 t.name.toLowerCase() === topicParam.toLowerCase() ||
                 t.name.toLowerCase().includes(topicParam.toLowerCase())
@@ -128,6 +148,9 @@ const PracticeSetup = () => {
                 setSelectedTopic(matched.id);
               }
             }
+          })
+          .catch(() => {
+            setTopics(syllabusTopics);
           });
       }
     } else {
@@ -207,15 +230,18 @@ const PracticeSetup = () => {
 
               {topics.length > 0 && (
                 <div className="space-y-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-primary" /> Topic (Optional)
+                  <label className="text-sm font-medium flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-primary" /> Topic Drill Focus
+                    </span>
+                    <span className="text-xs text-primary font-medium">{topics.length} syllabus topics</span>
                   </label>
                   <select 
                     className="w-full bg-muted border border-border rounded-md p-3"
                     value={selectedTopic}
                     onChange={e => setSelectedTopic(e.target.value)}
                   >
-                    <option value="">All Topics</option>
+                    <option value="">All Topics in Subject</option>
                     {topics.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
@@ -229,25 +255,32 @@ const PracticeSetup = () => {
                     value={difficulty}
                     onChange={e => setDifficulty(e.target.value)}
                   >
+                    <option value="mixed">Mixed (Balanced)</option>
                     <option value="easy">Easy</option>
                     <option value="medium">Medium</option>
                     <option value="hard">Hard</option>
-                    <option value="mixed">Mixed</option>
                     <option value="adaptive">Adaptive</option>
                   </select>
                 </div>
                 <div className="space-y-2">
                   <label className="text-sm font-medium">Questions</label>
-                  <select 
-                    className="w-full bg-muted border border-border rounded-md p-3"
-                    value={questionCount}
-                    onChange={e => setQuestionCount(e.target.value)}
-                  >
-                    <option value="10">10 Questions</option>
-                    <option value="20">20 Questions</option>
-                    <option value="30">30 Questions</option>
-                    <option value="50">50 Questions</option>
-                  </select>
+                  {mode === 'speed' ? (
+                    <div className="w-full bg-muted/70 border border-border rounded-md p-3 text-sm flex items-center justify-between">
+                      <span className="font-semibold text-foreground">20 Questions</span>
+                      <span className="text-xs bg-amber-500/10 text-amber-500 px-2 py-0.5 rounded font-medium">10 min Sprint</span>
+                    </div>
+                  ) : (
+                    <select 
+                      className="w-full bg-muted border border-border rounded-md p-3"
+                      value={questionCount}
+                      onChange={e => setQuestionCount(e.target.value)}
+                    >
+                      <option value="10">10 Questions</option>
+                      <option value="20">20 Questions</option>
+                      <option value="30">30 Questions</option>
+                      <option value="50">50 Questions</option>
+                    </select>
+                  )}
                 </div>
               </div>
 

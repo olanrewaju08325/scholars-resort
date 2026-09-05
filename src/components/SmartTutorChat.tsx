@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame, Lock } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
@@ -11,6 +12,7 @@ import { toast } from 'sonner';
 
 export const SmartTutorChat = () => {
   const { profile } = useAuth();
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [isExamLocked, setIsExamLocked] = useState(() => localStorage.getItem('scholars_live_exam_active') === 'true');
   const [studentStats, setStudentStats] = useState<any>(null);
@@ -225,6 +227,16 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
     toast.success('Study notes attached to AI Tutor session!');
     handleSend(`[Student Study Material Attached]: "${noteText.substring(0, 500)}...". Please summarize this material and test me on 2 key questions from it!`);
   };
+
+  // Hide floating Smart Tutor entirely in active practice sessions and CBT exams so it never overlaps navigation buttons
+  const isPracticeOrExam = 
+    location.pathname.startsWith('/practice/session') ||
+    location.pathname.startsWith('/exam') ||
+    location.pathname.startsWith('/cbt/');
+
+  if (isPracticeOrExam) {
+    return null;
+  }
 
   return (
     <div className="fixed bottom-24 right-4 md:bottom-8 md:right-6 z-[90]">

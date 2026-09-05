@@ -258,6 +258,21 @@ export class QuestionFlowService {
               warnings.push(`Supabase error fetching Subject Practice questions: ${error.message}`);
             } else if (data && data.length > 0) {
               rawQuestions = data;
+            } else if (config.difficulty && config.difficulty !== 'mixed' && config.difficulty !== 'adaptive') {
+              // If selected difficulty has insufficient questions, fall back to general subject questions
+              let generalQuery = supabase
+                .from('questions')
+                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .eq('is_active', true);
+
+              if (validUuids.length > 0) {
+                generalQuery = generalQuery.in('subject_id', validUuids);
+              }
+              const { data: generalData } = await generalQuery.limit(Math.max(targetCount * 3, 100));
+              if (generalData && generalData.length > 0) {
+                rawQuestions = generalData;
+                warnings.push(`Specific ${config.difficulty} difficulty questions being expanded for ${canonical}; presenting standard difficulty set.`);
+              }
             }
             break;
           }
@@ -267,30 +282,85 @@ export class QuestionFlowService {
             const canonical = normalizeSubjectName(subId);
             subjectsQueried.push(canonical);
 
-            let query = supabase
-              .from('questions')
-              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
-              .eq('is_active', true);
+            const matchedSubIds = await resolveSubjectIdsByNameOrAlias(subId);
+            const validSubUuids = matchedSubIds.filter(isUUID);
 
-            if (config.topicId && config.topicId !== 'all') {
-              query = query.eq('topic_id', config.topicId);
-            } else {
-              const matchedIds = await resolveSubjectIdsByNameOrAlias(subId);
-              const validUuids = matchedIds.filter(isUUID);
-              if (validUuids.length > 0) {
-                query = query.in('subject_id', validUuids);
+            let retrieved: any[] = [];
+
+            // 1. If topicId is a UUID, try direct database match first
+            if (config.topicId && config.topicId !== 'all' && isUUID(config.topicId)) {
+              let query = supabase
+                .from('questions')
+                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .eq('is_active', true)
+                .eq('topic_id', config.topicId);
+
+              if (config.difficulty && config.difficulty !== 'mixed' && config.difficulty !== 'adaptive') {
+                query = query.eq('difficulty', config.difficulty);
+              }
+
+              const { data } = await query.limit(Math.max(targetCount * 2, 60));
+              if (data && data.length > 0) {
+                retrieved = data;
               }
             }
 
-            const { data, error } = await query.limit(Math.max(targetCount * 2, 60));
+            // 2. If no direct topic_id questions found, find topic name and do syllabus keyword + subject retrieval
+            if (retrieved.length === 0) {
+              let topicName = '';
+              if (config.topicId && config.topicId !== 'all') {
+                if (isUUID(config.topicId)) {
+                  const { data: topicRow } = await supabase.from('topics').select('name').eq('id', config.topicId).maybeSingle();
+                  if (topicRow) topicName = topicRow.name;
+                } else {
+                  topicName = config.topicId;
+                }
+              }
 
-            if (error) {
-              warnings.push(`Supabase error fetching Topic Drill questions: ${error.message}`);
-            } else if (data && data.length > 0) {
-              rawQuestions = data;
-            } else if (config.topicId) {
-              warnings.push(`No active questions found in database for topic ID: ${config.topicId}`);
+              // Fetch questions for this subject
+              let subjectQuery = supabase
+                .from('questions')
+                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .eq('is_active', true);
+
+              if (validSubUuids.length > 0) {
+                subjectQuery = subjectQuery.in('subject_id', validSubUuids);
+              }
+
+              if (config.difficulty && config.difficulty !== 'mixed' && config.difficulty !== 'adaptive') {
+                subjectQuery = subjectQuery.eq('difficulty', config.difficulty);
+              }
+
+              const { data: subjectQuestions, error: subjErr } = await subjectQuery.limit(Math.max(targetCount * 3, 120));
+
+              if (subjErr) {
+                warnings.push(`Supabase error fetching Topic Drill questions: ${subjErr.message}`);
+              } else if (subjectQuestions && subjectQuestions.length > 0) {
+                if (topicName && topicName !== 'all') {
+                  const keywords = topicName.toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, ' ')
+                    .split(/\s+/)
+                    .filter(w => w.length > 3 && !['with', 'from', 'their', 'some', 'types', 'basic', 'syllabus', 'introduction'].includes(w));
+
+                  const matchedByKeyword = subjectQuestions.filter(q => {
+                    const text = ((q.question_text || '') + ' ' + (q.explanation || '')).toLowerCase();
+                    return keywords.some(kw => text.includes(kw));
+                  });
+
+                  if (matchedByKeyword.length >= 5) {
+                    retrieved = matchedByKeyword;
+                  } else {
+                    // Combine keyword matched + other active questions from this subject so user always has questions
+                    const remaining = subjectQuestions.filter(q => !matchedByKeyword.includes(q));
+                    retrieved = [...matchedByKeyword, ...remaining];
+                  }
+                } else {
+                  retrieved = subjectQuestions;
+                }
+              }
             }
+
+            rawQuestions = retrieved;
             break;
           }
 
@@ -313,6 +383,11 @@ export class QuestionFlowService {
               subjectsQueried.push('General UTME');
             }
 
+            if (config.difficulty && config.difficulty !== 'mixed' && config.difficulty !== 'adaptive') {
+              query = query.eq('difficulty', config.difficulty);
+            }
+
+            // Speed test enforces exactly 20 questions
             const { data, error } = await query.limit(60);
 
             if (error) {
@@ -419,8 +494,23 @@ export class QuestionFlowService {
             const { data, error } = await query.limit(targetCount * 2);
             if (error) {
               warnings.push(`Supabase error fetching Past Questions: ${error.message}`);
-            } else if (data) {
+            } else if (data && data.length > 0) {
               rawQuestions = data;
+            } else {
+              // If selected year has no questions yet, retrieve authentic UTME questions for this subject
+              let fallbackQuery = supabase
+                .from('questions')
+                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .eq('is_active', true);
+
+              if (validUuids.length > 0) {
+                fallbackQuery = fallbackQuery.in('subject_id', validUuids);
+              }
+              const { data: fallbackData } = await fallbackQuery.limit(targetCount * 2);
+              if (fallbackData && fallbackData.length > 0) {
+                rawQuestions = fallbackData;
+                warnings.push(`Year ${config.examYear} is currently being compiled; presenting official past syllabus questions for ${canonical}.`);
+              }
             }
             break;
           }

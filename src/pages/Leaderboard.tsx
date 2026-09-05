@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Trophy, Medal, Search, Loader2, ArrowLeft, RefreshCw, Radio } from 'lucide-react';
+import { Trophy, Medal, Search, Loader2, ArrowLeft, RefreshCw, Radio, Gift, Calendar, Phone, MessageSquare, Send, Award } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -8,16 +8,67 @@ import { supabase } from '@/lib/supabase';
 import { useLiveFetch } from '@/hooks/useLiveFetch';
 import { DataLoading } from '@/components/DataLoading';
 
+const DEFAULT_PRIZE_CONFIG = {
+  frequency: 'weekly',
+  distribution_method: 'both',
+  disbursement_day: 'Every Sunday by 8:00 PM',
+  contact_instruction: 'Winners should contact the Admin via WhatsApp or phone with their registered email, bank details, or phone network. Cash prizes will be transferred directly to your account or sent as airtime recharge pins.',
+  admin_contact_phone: '+234 812 345 6789',
+  admin_whatsapp_link: 'https://wa.me/2348123456789',
+  show_prize_banner: true,
+  prizes: {
+    first: { amount: 5000, type: 'Cash / Bank Transfer', title: '₦5,000 Cash Prize' },
+    second: { amount: 3000, type: 'Cash / Recharge Card', title: '₦3,000 Prize' },
+    third: { amount: 1000, type: 'Recharge Card (Airtime)', title: '₦1,000 Recharge Card' },
+  }
+};
+
 const Leaderboard = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterPeriod, setFilterPeriod] = useState<'weekly' | 'monthly' | 'all'>('weekly');
+  const [prizeConfig, setPrizeConfig] = useState(DEFAULT_PRIZE_CONFIG);
+
+  useEffect(() => {
+    const fetchPrizeConfig = async () => {
+      try {
+        const { data } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'leaderboard_prize_config')
+          .maybeSingle();
+
+        if (data?.setting_value) {
+          const parsed = typeof data.setting_value === 'string' ? JSON.parse(data.setting_value) : data.setting_value;
+          setPrizeConfig(prev => ({ ...prev, ...parsed }));
+          if (parsed.frequency) {
+            setFilterPeriod(parsed.frequency);
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch prize config, using defaults:', err);
+      }
+    };
+    fetchPrizeConfig();
+  }, []);
 
   const { data: boardData, loading, refetch } = useLiveFetch<any[]>(
     async () => {
       // 1. Fetch exams from Supabase
-      const { data: exams } = await supabase
+      let query = supabase
         .from('exam_sessions')
-        .select('user_id, score, total_questions, status')
-        .gt('score', 0)
+        .select('user_id, score, total_questions, status, created_at')
+        .gt('score', 0);
+
+      // Period filter
+      if (filterPeriod === 'weekly') {
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', oneWeekAgo);
+      } else if (filterPeriod === 'monthly') {
+        const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('created_at', oneMonthAgo);
+      }
+
+      const { data: exams } = await query
         .order('score', { ascending: false })
         .limit(100);
 
@@ -68,7 +119,7 @@ const Leaderboard = () => {
 
         (moreProfiles || []).forEach((p, idx) => {
           if (!userBestScores.has(p.id)) {
-            const fullName = p.full_name || 'Scholar Scholar';
+            const fullName = p.full_name || 'Scholar Student';
             const nameParts = fullName.split(' ');
             const anonName = nameParts.length > 1 
               ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
@@ -84,18 +135,22 @@ const Leaderboard = () => {
         });
       }
 
+      const firstPrize = prizeConfig.prizes?.first?.title || '₦5,000 Cash Prize';
+      const secondPrize = prizeConfig.prizes?.second?.title || '₦3,000 Prize';
+      const thirdPrize = prizeConfig.prizes?.third?.title || '₦1,000 Recharge Card';
+
       const sortedBoard = Array.from(userBestScores.values())
         .sort((a, b) => b.score - a.score)
         .map((student, i) => ({
           ...student,
           rank: i + 1,
-          prize: i === 0 ? '₦5,000 Recharge Card' : i === 1 ? '₦3,000 Recharge Card' : i === 2 ? '₦1,000 Recharge Card' : null
+          prize: i === 0 ? firstPrize : i === 1 ? secondPrize : i === 2 ? thirdPrize : null
         }));
 
       return { data: sortedBoard, error: null };
     },
     {
-      contextName: 'GlobalLeaderboard',
+      contextName: `GlobalLeaderboard_${filterPeriod}`,
       fallbackData: []
     }
   );
@@ -142,7 +197,7 @@ const Leaderboard = () => {
       </header>
 
       <main className="flex-1 p-6 md:p-10 max-w-4xl mx-auto w-full">
-        <div className="mb-10 text-center">
+        <div className="mb-8 text-center">
           <div className="w-16 h-16 bg-amber-500/10 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 shadow-[0_0_30px_rgba(245,158,11,0.2)]">
             <Trophy className="h-8 w-8" />
           </div>
@@ -151,9 +206,92 @@ const Leaderboard = () => {
           </div>
           <h1 className="text-4xl font-display font-bold mb-3">Global Leaderboard</h1>
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
-            Real-time top performers from UTME Mock Exams & CBT Drills. Scores are updated live directly from the database.
+            Real-time top performers from UTME Mock Exams & CBT Drills. Scores and prizes are configured live from the administrative command center.
           </p>
+
+          {/* Period Filter Selector */}
+          <div className="inline-flex items-center p-1 bg-muted rounded-xl border border-border gap-1 mb-6">
+            <button
+              onClick={() => setFilterPeriod('weekly')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filterPeriod === 'weekly'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Weekly Rankings
+            </button>
+            <button
+              onClick={() => setFilterPeriod('monthly')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filterPeriod === 'monthly'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Monthly Rankings
+            </button>
+            <button
+              onClick={() => setFilterPeriod('all')}
+              className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                filterPeriod === 'all'
+                  ? 'bg-background text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              All Time
+            </button>
+          </div>
         </div>
+
+        {/* Prize Pool & Disbursement Policy Banner */}
+        {prizeConfig.show_prize_banner && (
+          <div className="mb-8 rounded-2xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent p-5 md:p-6 shadow-sm">
+            <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <Gift className="w-5 h-5 text-amber-500" />
+                  <h3 className="font-display font-bold text-base md:text-lg text-foreground">
+                    Official {filterPeriod === 'monthly' ? 'Monthly' : 'Weekly'} Leaderboard Prizes
+                  </h3>
+                  <span className="bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-[10px] uppercase px-2 py-0.5 rounded-full">
+                    Active Rewards
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 md:gap-4 text-xs font-medium text-foreground pt-1">
+                  <span className="bg-yellow-500/15 border border-yellow-500/30 text-yellow-700 dark:text-yellow-400 px-2.5 py-1 rounded-lg">
+                    🥇 1st: {prizeConfig.prizes.first.title}
+                  </span>
+                  <span className="bg-slate-500/15 border border-slate-500/30 text-slate-700 dark:text-slate-300 px-2.5 py-1 rounded-lg">
+                    🥈 2nd: {prizeConfig.prizes.second.title}
+                  </span>
+                  <span className="bg-amber-700/15 border border-amber-700/30 text-amber-800 dark:text-amber-400 px-2.5 py-1 rounded-lg">
+                    🥉 3rd: {prizeConfig.prizes.third.title}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground pt-1 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-primary" />
+                  <span>Disbursement Schedule: <strong>{prizeConfig.disbursement_day}</strong>.</span>
+                </p>
+                <p className="text-[11px] text-muted-foreground italic">
+                  {prizeConfig.contact_instruction}
+                </p>
+              </div>
+
+              {prizeConfig.admin_whatsapp_link && (
+                <a
+                  href={prizeConfig.admin_whatsapp_link}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md hover:shadow-lg transition-all shrink-0 active:scale-95"
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  <span>Chat Admin on WhatsApp</span>
+                </a>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="relative max-w-md mx-auto mb-10">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />

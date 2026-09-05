@@ -41,6 +41,7 @@ import { AdminLiteratureTab } from './admin-tabs/AdminLiteratureTab';
 import { BadgesAdminTab } from './admin-tabs/BadgesAdminTab';
 import { DatabaseDiagnosticsTab } from './admin-tabs/DatabaseDiagnosticsTab';
 import { EnvironmentCleanupTab } from './admin-tabs/EnvironmentCleanupTab';
+import { LeaderboardPrizesAdminTab } from './admin-tabs/LeaderboardPrizesAdminTab';
 import { FlowValidatorDashboard } from '@/components/admin/FlowValidatorDashboard';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { AdminNotificationSystem } from '@/components/admin/AdminNotificationSystem';
@@ -124,6 +125,7 @@ export default function Admin() {
       group: 'Exams & Competitions',
       items: [
         { id: 'flow-validator', label: 'CBT Flow Validator', icon: ShieldCheck },
+        { id: 'leaderboard-prizes', label: 'Leaderboard & Mock Prizes', icon: Gift },
         { id: 'tournaments', label: 'Tournaments', icon: Trophy },
         { id: 'weekly-challenges', label: 'Weekly Challenges', icon: Swords },
         { id: 'badges', label: 'Gamification Badges', icon: Trophy },
@@ -198,6 +200,7 @@ export default function Admin() {
 
       // Exams & Competitions
       case 'flow-validator': return <FlowValidatorDashboard />;
+      case 'leaderboard-prizes': return <LeaderboardPrizesAdminTab />;
       case 'tournaments': return <AdminTournamentsTab />;
       case 'weekly-challenges': return <WeeklyChallengesAdminTab />;
       case 'badges': return <BadgesAdminTab />;

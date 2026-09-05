@@ -7,6 +7,7 @@ export interface ParsedQuestionItem {
   rowNumber: number;
   subjectName: string;
   topicName?: string;
+  year?: number;
   questionText: string;
   options: string[];
   correctAnswer: string;
@@ -151,7 +152,9 @@ export const parseQuestionsCsv = async (
             const rowNumber = i + 2; // header is row 1
 
             const subjectName = getFieldValue(raw, ['subject', 'subject_name', 'subjectname', 'course', 'discipline']);
-            const topicName = getFieldValue(raw, ['topic', 'topic_name', 'topicname', 'chapter', 'unit', 'section']);
+            const topicName = getFieldValue(raw, ['topic', 'topic_name', 'topicname', 'subject_topic', 'subjecttopic', 'chapter', 'unit', 'section', 'syllabus_topic']);
+            const yearVal = getFieldValue(raw, ['year', 'exam_year', 'past_year', 'examyear', 'pastyear', 'session']);
+            const parsedYear = yearVal ? parseInt(yearVal, 10) : undefined;
             const questionText = getFieldValue(raw, ['question', 'question_text', 'questiontext', 'stem', 'problem', 'text']);
             
             const optA = getFieldValue(raw, ['option_a', 'optiona', 'option 1', 'opt_a', 'opta', 'a', 'choice_a', 'choicea']);
@@ -228,6 +231,7 @@ export const parseQuestionsCsv = async (
               rowNumber,
               subjectName,
               topicName: topicName || undefined,
+              year: (parsedYear && !isNaN(parsedYear)) ? parsedYear : undefined,
               questionText: cleanedStem,
               options: standardOptions,
               correctAnswer: resolvedCorrect,
@@ -443,6 +447,7 @@ export const importQuestionsToDatabase = async (
       correct_answer: q.correctAnswer,
       explanation: q.explanation || '',
       difficulty: q.difficulty,
+      year: q.year || null,
       is_active: publishImmediately
     });
   }

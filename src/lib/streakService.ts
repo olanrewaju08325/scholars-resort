@@ -25,23 +25,27 @@ export const recordStudyAction = async (
       );
       // If student is practicing a subject NOT in their UTME curriculum, log study but do not update primary UTME streak
       if (!isRelevant) {
-        await supabase.from('study_logs').insert({
-          user_id: userId,
-          action_type: actionType,
-          subject_context: subjectNameOrId,
-          is_utme_curriculum: false
-        }).catch(() => {});
+        try {
+          await supabase.from('study_logs').insert({
+            user_id: userId,
+            action_type: actionType,
+            subject_context: subjectNameOrId,
+            is_utme_curriculum: false
+          });
+        } catch {}
         return;
       }
     }
 
     // 3. Log the context-aware action safely
-    await supabase.from('study_logs').insert({
-      user_id: userId,
-      action_type: actionType,
-      subject_context: subjectNameOrId || 'UTME Core',
-      is_utme_curriculum: true
-    }).catch(() => {});
+    try {
+      await supabase.from('study_logs').insert({
+        user_id: userId,
+        action_type: actionType,
+        subject_context: subjectNameOrId || 'UTME Core',
+        is_utme_curriculum: true
+      });
+    } catch {}
 
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     

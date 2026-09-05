@@ -95,6 +95,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
   const [showWarning, setShowWarning] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showNavDrawer, setShowNavDrawer] = useState(false);
@@ -156,11 +157,17 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          sessionId,
           userId: profile.id,
           mode: 'CBT Exam',
           subjects: examSubjectsList
         })
-      }).catch(err => console.warn('[Exam Session Start API Notice]', err));
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data?.sessionId) setSessionId(data.sessionId);
+      })
+      .catch(err => console.warn('[Exam Session Start API Notice]', err));
 
       // Global Keydown Anti-Cheat Handler
       const handleKeyDown = (e: KeyboardEvent) => {
@@ -513,12 +520,42 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     sessionStorage.removeItem('cbt_backup');
     clearExamSnapshot();
     
-    // Save to Smart Mistake Bank
+    // Persist to Supabase exam_sessions directly to guarantee live dashboard and leaderboard progression
+    if (profile?.id) {
+      try {
+        const scaledScore = questions.length > 0 
+          ? Math.round((finalScore / questions.length) * 400) 
+          : finalScore;
+
+        await supabase.from('exam_sessions').upsert({
+          id: sessionId,
+          user_id: profile.id,
+          score: scaledScore,
+          total_questions: questions.length,
+          status: compromised ? 'compromised' : 'submitted',
+          is_ai_tutor_locked: false,
+          submitted_at: new Date().toISOString()
+        });
+
+        // Trigger real-time notification for dashboard widgets (Heatmap, Predictor, Trend)
+        window.dispatchEvent(new CustomEvent('scholars:exam-completed', {
+          detail: { score: finalScore, scaledScore, total: questions.length, sessionId }
+        }));
+      } catch (dbErr) {
+        console.warn('Failed to upsert exam_session in Supabase:', dbErr);
+      }
+    }
+
+    // Save to Smart Mistake Bank (store complete question objects for instant remedial drill)
     const mistakesToSave = questions.filter(q => answers[q.id] !== q.correct_answer && q.correct_answer);
     if (mistakesToSave.length > 0) {
       try {
         const existing = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
-        const uniqueMistakes = [...existing, ...mistakesToSave.map(q => q.id)].filter((v, i, a) => a.indexOf(v) === i);
+        const cleanExisting = Array.isArray(existing) 
+          ? existing.filter((item: any) => typeof item === 'object' && item?.id) 
+          : [];
+        const combined = [...cleanExisting, ...mistakesToSave];
+        const uniqueMistakes = Array.from(new Map(combined.map(q => [q.id, q])).values());
         localStorage.setItem('jamb_mistake_bank', JSON.stringify(uniqueMistakes));
       } catch (e) {
         console.warn('Failed to save to Mistake Bank:', e);

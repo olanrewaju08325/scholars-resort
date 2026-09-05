@@ -14,6 +14,7 @@ import { callGroqAPI, stripThinkTags } from '@/services/aiService';
 import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { cleanQuestionText, cleanOptionText, ContentNormalizer } from '@/utils/questionUtils';
+import { MathText } from '@/components/MathText';
 import { QuestionFlowService, type ExamMode } from '@/services/questionFlowService';
 import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
 import { useSwipeGesture } from '@/hooks/useSwipeGesture';
@@ -225,12 +226,39 @@ const PracticeSession = () => {
       }
 
       if (state.mode === 'mistakes') {
-        const mistakes = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
-        if (mistakes.length > 0) {
-          setQuestions(mistakes);
-        } else {
-          toast.info("No missed questions to retake!");
+        try {
+          const rawMistakes = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+          if (rawMistakes.length > 0) {
+            // Check if items are string IDs or full question objects
+            const isIdArray = typeof rawMistakes[0] === 'string';
+            if (isIdArray) {
+              const { data: fetchedQuestions } = await supabase
+                .from('questions')
+                .select('*')
+                .in('id', rawMistakes.slice(0, 40));
+
+              if (fetchedQuestions && fetchedQuestions.length > 0) {
+                setQuestions(fetchedQuestions);
+                // Also upgrade local storage to store full question objects
+                localStorage.setItem('jamb_mistake_bank', JSON.stringify(fetchedQuestions));
+              } else {
+                toast.info("No missed questions found in database.");
+                navigate('/practice');
+                return;
+              }
+            } else {
+              setQuestions(rawMistakes);
+            }
+          } else {
+            toast.info("No missed questions to retake!");
+            navigate('/practice');
+            return;
+          }
+        } catch (err) {
+          console.warn('Error loading mistake bank:', err);
+          toast.error("Could not load missed questions");
           navigate('/practice');
+          return;
         }
         setLoading(false);
         return;
@@ -255,15 +283,18 @@ const PracticeSession = () => {
         targetMode = 'speed_test';
       } else if (state.mode === 'daily') {
         targetMode = 'daily_quiz';
+      } else if (state.mode === 'past' || state.mode === 'past_questions') {
+        targetMode = 'past_questions';
       }
 
       const flowResult = await QuestionFlowService.fetchQuestionsForMode({
         mode: targetMode,
         subjectId: state.subjectId !== 'all' ? state.subjectId : undefined,
         topicId: state.topicId !== 'all' ? state.topicId : undefined,
-        count,
+        count: targetMode === 'speed_test' ? 20 : count,
         difficulty: state.difficulty,
         learningStyle: state.learningStyle,
+        examYear: state.examYear || state.year,
         userId: profile?.id
       });
 
@@ -404,9 +435,17 @@ const PracticeSession = () => {
   };
 
   const triggerAIExplanation = async (isCorrect: boolean | null, optChosen: string) => {
+    const q = currentQ;
+    if (!q) return;
+
+    // 1. Token Saver: If explanation is already attached to question, load immediately with ZERO token consumption!
+    if (q.explanation && q.explanation.trim().length > 3) {
+      setAiExplanation(q.explanation);
+      return;
+    }
+
     setIsGeneratingAi(true);
     try {
-      const q = currentQ;
       const prompt = `You are an expert Nigerian JAMB UTME tutor. A student just answered a JAMB question:
 Question: "${q.question_text || q.question}"
 Correct Answer: "${q.correct_answer}"
@@ -415,16 +454,29 @@ Student Selected: "${optChosen}"
 Provide a concise, direct, and encouraging explanation (maximum 2-3 short sentences) explaining why option ${q.correct_answer} is correct.
 STRICT RULES:
 - Standard Nigerian SS3/UTME secondary school syllabus level only (NO university calculus, NO advanced mechanics).
+- If comparing features or items, format it as a clean standard Markdown table (| Col 1 | Col 2 |).
 - NO conversational preambles (do NOT output "*Problem Recap**", "Here is the explanation", or chat headers).
 - Jump straight into the direct explanation.`;
       
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
       // Clean up any lingering markdown headers if LLM added them
-      const cleanContent = content ? content.replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
-      setAiExplanation(cleanContent || `The correct answer is ${q.correct_answer}.`);
+      const cleanContent = content ? stripThinkTags(content).replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
+      const finalExplanation = cleanContent || `The correct answer is option ${q.correct_answer}.`;
+      setAiExplanation(finalExplanation);
+      q.explanation = finalExplanation;
+
+      // Persist explanation directly to database so future encounters consume ZERO tokens!
+      if (q.id) {
+        supabase
+          .from('questions')
+          .update({ explanation: finalExplanation })
+          .eq('id', q.id)
+          .then(() => {})
+          .catch((err) => console.warn('Could not auto-cache explanation to database:', err));
+      }
     } catch (err) {
-      const q = currentQ;
-      setAiExplanation(`AI Tutor (Fallback): The correct answer is **${q.correct_answer}**. ${q.explanation || ''}`);
+      const fallback = `The correct answer is **${q.correct_answer}**.`;
+      setAiExplanation(fallback);
     } finally {
       setIsGeneratingAi(false);
     }
@@ -456,8 +508,20 @@ D) ...
       }
       
       const content = await callGroqAPI([{ role: 'user', content: prompt }]);
-      const cleanContent = content ? content.replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
-      setAiExplanation(cleanContent || 'Could not generate explanation.');
+      const cleanContent = content ? stripThinkTags(content).replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
+      const finalExp = cleanContent || 'Could not generate explanation.';
+      setAiExplanation(finalExp);
+
+      // If original explanation was blank and we got a simpler breakdown, save it
+      if (action === 'simpler' && q?.id && (!q.explanation || q.explanation.length < 5)) {
+        q.explanation = finalExp;
+        supabase
+          .from('questions')
+          .update({ explanation: finalExp })
+          .eq('id', q.id)
+          .then(() => {})
+          .catch(() => {});
+      }
     } catch (err) {
       toast.error('AI request failed.');
     } finally {
@@ -665,9 +729,9 @@ D) ...
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
-              <p className="text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium">
-                {cleanQuestionText(q.question_text || q.question)}
-              </p>
+              <div className="text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium">
+                <MathText text={cleanQuestionText(q.question_text || q.question)} />
+              </div>
 
               {q.image_url && (
                 <div className="my-4 flex justify-center">
@@ -712,7 +776,9 @@ D) ...
                         <span className="font-bold mr-3 w-6 text-muted-foreground">
                           {String.fromCharCode(65 + i)}.
                         </span>
-                        <span className={`flex-1 ${isEliminated ? 'line-through opacity-55' : ''}`}>{cleanOptionText(opt)}</span>
+                        <span className={`flex-1 ${isEliminated ? 'line-through opacity-55' : ''}`}>
+                          <MathText text={cleanOptionText(opt)} />
+                        </span>
                         {Icon}
                       </Button>
                       
@@ -739,17 +805,17 @@ D) ...
                 <div className="mt-8 pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="flex items-center gap-2 mb-3">
                     <Sparkles className="w-4 h-4 text-purple-500" />
-                    <h3 className="font-bold text-base md:text-lg font-display">AI Tutor Explanation</h3>
+                    <h3 className="font-bold text-base md:text-lg font-display">Tutor Explanation</h3>
                   </div>
                   
-                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 md:p-5 mb-4 text-muted-foreground leading-relaxed text-sm md:text-base">
+                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 md:p-5 mb-4 text-foreground leading-relaxed text-sm md:text-base">
                     {isGeneratingAi ? (
                       <div className="flex items-center gap-3">
                         <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                        <span className="animate-pulse text-xs">AI Tutor is generating tailored breakdown...</span>
+                        <span className="animate-pulse text-xs text-muted-foreground">AI Tutor is generating tailored breakdown...</span>
                       </div>
                     ) : (
-                      aiExplanation
+                      <MathText text={aiExplanation || ''} />
                     )}
                   </div>
 
@@ -773,20 +839,20 @@ D) ...
         </Card>
 
         {/* Practice Navigation Controls */}
-        <div className="flex items-center justify-between gap-2 mt-2">
+        <div className="sticky bottom-3 z-30 bg-card/95 backdrop-blur-md p-3 rounded-2xl border border-border shadow-xl flex items-center justify-between gap-3 mt-4">
           <Button 
             variant="outline" 
             onClick={handlePrev} 
             disabled={currentIndex === 0}
-            className="h-11 px-4 text-xs sm:text-sm font-semibold"
+            className="h-12 px-5 text-sm font-semibold rounded-xl active:scale-95 transition-all"
           >
-            <ChevronLeft className="w-4 h-4 mr-1" /> Previous
+            <ChevronLeft className="w-4 h-4 mr-1.5" /> Previous
           </Button>
 
           <Button 
             variant="outline" 
             onClick={() => setShowNavDrawer(true)}
-            className="h-11 px-4 text-xs sm:text-sm font-bold text-primary border-primary/30 hover:bg-primary/10 gap-1.5"
+            className="h-12 px-4 text-xs sm:text-sm font-bold text-primary border-primary/30 hover:bg-primary/10 rounded-xl gap-1.5 active:scale-95 transition-all"
           >
             <Grid3X3 className="w-4 h-4" />
             <span className="hidden sm:inline">Question Grid</span>
@@ -795,11 +861,11 @@ D) ...
 
           <Button 
             size="lg" 
-            className="h-11 px-5 text-xs sm:text-sm shadow-md font-bold" 
-            onClick={handleNext}
+            className="h-12 px-6 text-sm shadow-md font-bold rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 active:scale-95 transition-all cursor-pointer select-none flex items-center gap-1.5" 
+            onClick={() => handleNext(false)}
           >
             {currentIndex < questions.length - 1 ? 'Next Question' : 'Finish Session'} 
-            <ChevronRight className="w-4 h-4 ml-1.5" />
+            <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         </div>
       </main>

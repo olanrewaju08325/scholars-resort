@@ -17,6 +17,38 @@ const WeeklyMocks = () => {
 
   const { data: activeMock, loading } = useLiveFetch<any>(
     async () => {
+      // 1. Check admin_settings for authoritative live configuration
+      const { data: configRow } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'weekly_mock_config')
+        .maybeSingle();
+
+      if (configRow?.setting_value) {
+        const config = typeof configRow.setting_value === 'string' 
+          ? JSON.parse(configRow.setting_value) 
+          : configRow.setting_value;
+
+        if (config.is_active !== false) {
+          return {
+            data: {
+              id: 'admin_configured_mock',
+              title: config.title || 'National JAMB UTME Grand Mock Exam',
+              description: config.description || 'Synchronized live mock testing student readiness under strict UTME timing.',
+              start_time: config.start_time || new Date(Date.now() + 86400000).toISOString(),
+              end_time: config.end_time || new Date(Date.now() + 86400000 * 2).toISOString(),
+              duration_minutes: config.duration_minutes || 120,
+              question_count: config.question_count || 180,
+              rolling_mock_closes: config.rolling_mock_closes || 'Closes on Sunday at 11:59 PM',
+              cash_prize_summary: config.cash_prize_summary || '₦5,000 for 1st Place | ₦3,000 for 2nd Place | ₦1,000 for 3rd Place',
+              contact_instructions: config.contact_instructions || 'Winners receive cash or airtime every Sunday evening.'
+            },
+            error: null
+          };
+        }
+      }
+
+      // 2. Fallback to mock_exams table
       const { data, error } = await supabase
         .from('mock_exams')
         .select('*')
@@ -135,8 +167,14 @@ const WeeklyMocks = () => {
               <CardContent className="space-y-6 text-center">
                 <div className="p-4 bg-muted/50 rounded-lg">
                   <p className="text-sm font-medium mb-1">Status: <span className="text-green-500">Available Now</span></p>
-                  <p className="text-xs text-muted-foreground">Closes on Sunday at 11:59 PM</p>
+                  <p className="text-xs text-muted-foreground">{activeMock?.rolling_mock_closes || 'Closes on Sunday at 11:59 PM'}</p>
                 </div>
+                {activeMock?.cash_prize_summary && (
+                  <div className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 py-2 px-3 rounded-lg flex items-center justify-center gap-1.5">
+                    <Trophy className="w-3.5 h-3.5" />
+                    <span>{activeMock.cash_prize_summary}</span>
+                  </div>
+                )}
                 <Button onClick={startRollingMock} className="w-full h-12 text-lg">
                   <PlayCircle className="mr-2 h-5 w-5" /> Start Rolling Mock
                 </Button>
