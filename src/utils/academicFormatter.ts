@@ -24,7 +24,6 @@ const COMMON_CHEM_FORMULAS = [
  * Converts a raw chemical formula string like H2SO4 to LaTeX \mathrm{H_2SO_4}
  */
 export function formatChemicalFormulaToLatex(formula: string): string {
-  // Replace numbers following elements with subscripts
   const formatted = formula.replace(/([A-Za-z\)])(\d+)/g, '$1_{$2}');
   return `\\mathrm{${formatted}}`;
 }
@@ -39,9 +38,9 @@ export function formatRawMathToLatex(expr: string): string {
   res = res.replace(/\^([0-9a-zA-Z+-]+)/g, '^{$1}');
   res = res.replace(/\^\{([0-9a-zA-Z+-]+)\}/g, '^{$1}');
   
-  // Replace simple * with \times or \cdot
+  // Replace simple * with \times
   res = res.replace(/(\d+)\s*\*\s*(\d+)/g, '$1 \\times $2');
-  res = res.replace(/(\d+)\s*[xX]\s*10\^/g, '$1 \\times 10^');
+  res = res.replace(/(\d+)\s*[xX×]\s*10\^/g, '$1 \\times 10^');
   
   // Replace sqrt(...) with \sqrt{...}
   res = res.replace(/sqrt\(([^)]+)\)/gi, '\\sqrt{$1}');
@@ -72,7 +71,6 @@ export function renderKaTeXToString(math: string, displayMode = false): string {
       output: 'htmlAndMathml'
     });
   } catch (err) {
-    console.warn('KaTeX render error fallback:', err);
     return `<span class="katex-fallback font-mono text-sm">${escapeHtml(math)}</span>`;
   }
 }
@@ -91,112 +89,67 @@ export function escapeHtml(str: string): string {
  * Universal Academic Text Parser:
  * Processes rich text containing natural English, explicit LaTeX ($...$, $$...$$),
  * un-delimited mathematical expressions (4a^2-9b^2), and chemical formulas.
+ * Uses placeholder token substitution to completely prevent HTML tag corruption or regex collisions.
  */
 export function processAcademicContent(rawText: string): string {
   if (!rawText) return '';
 
   let text = String(rawText);
+  const renderedSlots: string[] = [];
 
-  // 1. If text already has LaTeX delimiters, process standard LaTeX blocks
-  const latexDelimiterRegex = /(\$\$[\s\S]+?\$\$|\$[^\$]+?\$|\\\[[\s\S]+?\\\]|\\\([^\)]+?\\\))/g;
-  
-  if (latexDelimiterRegex.test(text)) {
-    const parts = text.split(latexDelimiterRegex);
-    return parts.map(part => {
-      if (!part) return '';
-      if (part.startsWith('$$') && part.endsWith('$$')) {
-        return renderKaTeXToString(part.slice(2, -2), true);
-      }
-      if (part.startsWith('$') && part.endsWith('$')) {
-        return renderKaTeXToString(part.slice(1, -1), false);
-      }
-      if (part.startsWith('\\[') && part.endsWith('\\]')) {
-        return renderKaTeXToString(part.slice(2, -2), true);
-      }
-      if (part.startsWith('\\(') && part.endsWith('\\)')) {
-        return renderKaTeXToString(part.slice(2, -2), false);
-      }
-      // Process remaining non-delimited text for chemistry & powers
-      return processUnDelimitedFormulas(part);
-    }).join('');
-  }
+  const addSlot = (mathLatex: string, display = false): string => {
+    const rendered = renderKaTeXToString(mathLatex, display);
+    const id = renderedSlots.length;
+    renderedSlots.push(rendered);
+    return `___SCHOLARS_MATH_SLOT_${id}___`;
+  };
 
-  // 2. No explicit delimiters present: auto-detect and format math / chemistry segments
-  return processUnDelimitedFormulas(text);
-}
+  // 1. Explicit LaTeX blocks
+  text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => addSlot(math, true));
+  text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => addSlot(math, true));
+  text = text.replace(/\$([^\$\n]+?)\$/g, (_, math) => addSlot(math, false));
+  text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => addSlot(math, false));
 
-/**
- * Auto-detects and formats formulas in natural text
- */
-function processUnDelimitedFormulas(text: string): string {
-  if (!text) return '';
-
-  let result = text;
-
-  // 1. First, check if the ENTIRE text is a standalone algebraic expression (e.g. in option buttons like "4a+6b", "2a+3b", "4a^2-9b^2")
+  // 2. Pure algebraic options (e.g. "4a+6b", "4a^2-9b^2", "x^2+5x+6")
   const trimmed = text.trim();
-  const isPureAlgebraicOption = /^[0-9a-zA-Z^_/*().,\s+-]+$/.test(trimmed) && 
+  const isPureAlgebraic = /^[0-9a-zA-Z^_/*().,\s+-]+$/.test(trimmed) && 
     /[+*/^-]/.test(trimmed) && 
     !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both)\b/i.test(trimmed);
 
-  if (isPureAlgebraicOption) {
-    // Format entire string as KaTeX math
-    const latexExpr = formatRawMathToLatex(trimmed);
-    return renderKaTeXToString(latexExpr, false);
+  if (isPureAlgebraic) {
+    const formatted = formatRawMathToLatex(trimmed);
+    const token = addSlot(formatted, false);
+    return token.replace(/___SCHOLARS_MATH_SLOT_(\d+)___/g, (_, idx) => renderedSlots[Number(idx)] || '');
   }
 
-  // Check for options with annotations like "2a-3b (or: none)"
-  const annotatedMatch = trimmed.match(/^([0-9a-zA-Z^_/*().\s+-]+)(\s*\(.*?\))$/);
-  if (annotatedMatch && /[+*/^-]/.test(annotatedMatch[1])) {
-    const mathPart = renderKaTeXToString(formatRawMathToLatex(annotatedMatch[1].trim()), false);
-    const textPart = escapeHtml(annotatedMatch[2]);
-    return `${mathPart} ${textPart}`;
-  }
-
-  // 2. Identify chemical formulas in text and wrap them in KaTeX \mathrm{...}
+  // 3. Chemical formulas
   for (const formula of COMMON_CHEM_FORMULAS) {
-    // Escape parens for regex
-    const escapedFormula = formula.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-    const chemRegex = new RegExp(`\\b${escapedFormula}\\b`, 'g');
-    if (chemRegex.test(result)) {
+    if (text.includes(formula)) {
       const chemLatex = formatChemicalFormulaToLatex(formula);
-      const renderedChem = renderKaTeXToString(chemLatex, false);
-      result = result.replace(chemRegex, `___CHEM_${formula}___`);
-      result = result.replace(new RegExp(`___CHEM_${escapedFormula}___`, 'g'), renderedChem);
+      const token = addSlot(chemLatex, false);
+      // Replace standalone word matches
+      const escapedFormula = formula.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
+      text = text.replace(new RegExp(`\\b${escapedFormula}\\b`, 'g'), token);
     }
   }
 
-  // 3. Match inline mathematical expressions with powers, roots, or algebraic operators
-  // e.g. "4a^2-9b^2", "a^3+27b^3", "(4a+6b)^2", "x^2 + 5x + 6", "10^-3", "m/s^2", "cm^3"
-  // Tokenize words/clauses:
-  const mathClauseRegex = /((?:\(?[0-9a-zA-Z]+(?:\^[0-9a-zA-Z+-]+|_[0-9a-zA-Z]+)?(?:\s*[+*/=-]\s*\(?[0-9a-zA-Z]+(?:\^[0-9a-zA-Z+-]+|_[0-9a-zA-Z]+)?\)?)+|\(?[0-9a-zA-Z+-]+\)\^[0-9a-zA-Z]+|[0-9a-zA-Z]+\^[0-9a-zA-Z+-]+|\d+\s*[xX×]\s*10\^[-+]?\d+|\b\d+\s*°[CF]?\b|\\(?:frac|sqrt|sum|int|alpha|beta|gamma|theta|pi|omega|lambda|Delta|pm|times|div)[a-zA-Z0-9{}\\s/^_()+-]+)/g;
+  // 4. Inline mathematical clauses (powers, roots, scientific notation, LaTeX macros)
+  const mathClauseRegex = /(?:\\(?:frac|sqrt|sum|int|alpha|beta|gamma|theta|pi|omega|lambda|Delta|pm|times|div)(?:\{[^}]*\}|[a-zA-Z0-9\s()_^*+-])+|\(?[0-9a-zA-Z+-]+\)?\^[0-9a-zA-Z+-]+|\d+(?:\.\d+)?\s*[xX×]\s*10\^[-+]?\d+|\b\d+(?:\.\d+)?\s*°[CF]?\b)/g;
 
-  result = result.replace(mathClauseRegex, (match) => {
-    // Avoid formatting plain English words that happen to match simple letters
+  text = text.replace(mathClauseRegex, (match) => {
+    // Avoid turning normal short words into math
     if (/^[a-zA-Z]+$/.test(match) && match.length > 2) {
-      return escapeHtml(match);
+      return match;
     }
     const formattedLatex = formatRawMathToLatex(match);
-    return renderKaTeXToString(formattedLatex, false);
+    return addSlot(formattedLatex, false);
   });
 
-  return escapeHtmlPreservingKaTeX(result);
-}
+  // 5. Escape remaining HTML around formulas
+  let escaped = escapeHtml(text);
 
-/**
- * Escapes HTML while preserving KaTeX DOM elements (<span class="katex">...</span>)
- */
-function escapeHtmlPreservingKaTeX(htmlWithKaTeX: string): string {
-  // If string contains katex spans, split by katex tags
-  if (htmlWithKaTeX.includes('<span class="katex') || htmlWithKaTeX.includes('<span class="katex-fallback')) {
-    const parts = htmlWithKaTeX.split(/(<span class="katex[\s\S]*?<\/span>|<span class="katex-fallback[\s\S]*?<\/span>)/g);
-    return parts.map(part => {
-      if (part.startsWith('<span class="katex')) {
-        return part; // keep raw KaTeX HTML
-      }
-      return escapeHtml(part);
-    }).join('');
-  }
+  // 6. Substitute rendered KaTeX back into slots
+  escaped = escaped.replace(/___SCHOLARS_MATH_SLOT_(\d+)___/g, (_, idx) => renderedSlots[Number(idx)] || '');
 
-  return escapeHtml(htmlWithKaTeX);
+  return escaped;
 }
