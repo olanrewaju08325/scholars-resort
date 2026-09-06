@@ -303,7 +303,7 @@ export const Referrals = () => {
           setting_key: 'referral_payout_requests',
           setting_value: updatedRequests,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
 
       // Update local state and cache
       setPayoutRequests(prev => [newRequest, ...prev]);

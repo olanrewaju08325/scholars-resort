@@ -115,7 +115,7 @@ export class DailyQuoteService {
         setting_key: 'daily_quotes_bank',
         setting_value: payload,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'setting_key' });
     } catch {}
   }
 
@@ -148,7 +148,7 @@ export class DailyQuoteService {
         setting_key: 'daily_quotes_bank',
         setting_value: currentList,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'setting_key' });
 
       // 2. Also try daily_quotes table if it exists
       try {

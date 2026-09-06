@@ -138,7 +138,7 @@ export const ScholarshipTab = () => {
           setting_key: 'scholarship_program_config',
           setting_value: config,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
 
       logAdminActivity('UPDATE_SCHOLARSHIP_CONFIG', `Updated pass mark to ${config.passThresholdPercent}% and quota to ${config.monthlyQuota}`, 'scholarships');
       toast.success('Scholarship rules and threshold saved live!');
@@ -241,7 +241,7 @@ export const ScholarshipTab = () => {
             status: 'active',
             start_date: new Date().toISOString(),
             end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
-          });
+          }, { onConflict: 'user_id' });
 
           await supabase.from('profiles').update({ has_paid: true }).eq('id', foundStudent.id);
           
@@ -271,7 +271,7 @@ export const ScholarshipTab = () => {
             status: 'active',
             start_date: new Date().toISOString(),
             end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
-          });
+          }, { onConflict: 'user_id' });
 
           await supabase.from('profiles').update({ has_paid: true }).eq('id', app.userId);
         }
@@ -294,7 +294,7 @@ export const ScholarshipTab = () => {
           setting_key: 'scholarship_applications',
           setting_value: updatedApps,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
 
       setApplications(updatedApps);
       logAdminActivity('REVIEW_SCHOLARSHIP_APP', `Marked scholarship application for ${app.userName} as ${status.toUpperCase()}`, 'scholarships');

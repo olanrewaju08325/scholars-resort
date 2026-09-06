@@ -40,10 +40,21 @@ export default function Tournaments() {
       .order('start_time', { ascending: true });
       
     if (!error && data) {
-      const formatted = data.map(t => ({
-        ...t,
-        participants_count: t.tournament_participants?.[0]?.count || 0
-      }));
+      const formatted = data.map(rawT => {
+        let meta: Record<string, any> = {};
+        const searchTarget = (rawT.rules || '') + '\n' + (rawT.description || '');
+        const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
+        if (match && match[1]) {
+          try { meta = JSON.parse(match[1]); } catch {}
+        }
+        const cleanDesc = (rawT.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
+        return {
+          ...meta,
+          ...rawT,
+          description: cleanDesc,
+          participants_count: rawT.tournament_participants?.[0]?.count || 0
+        };
+      });
       setTournaments(formatted);
     }
     setLoading(false);

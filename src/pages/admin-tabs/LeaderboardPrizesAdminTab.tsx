@@ -214,21 +214,21 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
         setting_key: 'leaderboard_prize_config',
         setting_value: prizeConfig,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'setting_key' });
 
       // 2. Save platform pricing
       await supabase.from('admin_settings').upsert({
         setting_key: 'platform_pricing',
         setting_value: pricingConfig,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'setting_key' });
 
       // 3. Save weekly mock config
       await supabase.from('admin_settings').upsert({
         setting_key: 'weekly_mock_config',
         setting_value: mockConfig,
         updated_at: new Date().toISOString()
-      });
+      }, { onConflict: 'setting_key' });
 
       // 4. Also sync active mock to mock_exams table for synced events
       const { data: existingMock } = await supabase

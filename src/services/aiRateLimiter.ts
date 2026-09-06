@@ -128,7 +128,7 @@ class AIRateLimiter {
         .upsert({
           setting_key: 'ai_api_settings',
           setting_value: updatedPayload
-        });
+        }, { onConflict: 'setting_key' });
 
       // Sync to platform_config
       await supabase
@@ -136,7 +136,7 @@ class AIRateLimiter {
         .upsert({
           key: 'ai_api_settings',
           value: updatedPayload
-        });
+        }, { onConflict: 'key' });
 
       if (isWarning && !status.warningTriggered) {
         toast.warning(
@@ -208,12 +208,12 @@ class AIRateLimiter {
       await supabase.from('admin_settings').upsert({
         setting_key: 'ai_api_settings',
         setting_value: newStatus
-      });
+      }, { onConflict: 'setting_key' });
 
       await supabase.from('platform_config').upsert({
         key: 'ai_api_settings',
         value: newStatus
-      });
+      }, { onConflict: 'key' });
 
       toast.success('AI API Key updated & Token Quota reset to 0 tokens!', { duration: 5000 });
       return newStatus;

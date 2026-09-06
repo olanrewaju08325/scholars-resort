@@ -165,7 +165,7 @@ export const ReferralTab = () => {
           setting_key: 'referral_program_config',
           setting_value: config,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
 
       logAdminActivity('UPDATE_REFERRAL_CONFIG', `Updated reward to ₦${config.rewardPerPaid}/friend and min withdrawal to ₦${config.minWithdrawal}`, 'finance');
       toast.success('Referral Program settings saved and updated live for all students!');
@@ -199,7 +199,7 @@ export const ReferralTab = () => {
           setting_key: 'referral_payout_requests',
           setting_value: updatedRequests,
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
 
       setPayoutRequests(updatedRequests);
       logAdminActivity('PROCESS_REFERRAL_PAYOUT', `Marked payout ${payoutId} as ${status.toUpperCase()}`, 'finance');

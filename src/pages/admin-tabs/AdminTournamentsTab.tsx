@@ -5,12 +5,89 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Trophy, Plus, Trash2, Users, Clock, Calendar, Edit2,
-  CheckCircle, XCircle, Loader2, BarChart3, Medal, Zap, Sparkles, Lock, Unlock, ArrowLeft, RefreshCw
+  CheckCircle, XCircle, Loader2, BarChart3, Medal, Zap, Sparkles, Lock, Unlock, ArrowLeft, RefreshCw, Database
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI } from '@/services/aiService';
+
+export const parseTournamentMetadata = (t: any): any => {
+  if (!t) return t;
+  let meta: Record<string, any> = {};
+
+  const searchTarget = (t.rules || '') + '\n' + (t.description || '');
+  const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
+  if (match && match[1]) {
+    try {
+      meta = JSON.parse(match[1]);
+    } catch {}
+  }
+
+  const cleanDescription = (t.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
+  const cleanRules = (t.rules || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
+
+  return {
+    ...meta,
+    ...t,
+    description: cleanDescription,
+    rules: cleanRules
+  };
+};
+
+/**
+ * Adaptive database save: If PostgREST errors out due to missing columns in the schema cache,
+ * automatically capture the missing column, store it safely in metadata within `rules`, and retry.
+ */
+async function saveTournamentAdaptive(
+  supabaseClient: any,
+  payload: Record<string, any>,
+  isEdit: boolean,
+  tournamentId?: string
+): Promise<{ success: boolean; adaptedColumns: string[]; error?: any }> {
+  let workingPayload = { ...payload };
+  const metadata: Record<string, any> = {};
+  const adaptedColumns: string[] = [];
+
+  for (let attempt = 0; attempt < 15; attempt++) {
+    // If we have adapted columns, embed metadata cleanly inside `rules` or `description`
+    if (Object.keys(metadata).length > 0) {
+      const metaTag = `\n__meta__:${JSON.stringify(metadata)}`;
+      if ('rules' in workingPayload && workingPayload.rules !== undefined) {
+        workingPayload.rules = (workingPayload.rules || '').replace(/\n__meta__:[\s\S]*$/, '') + metaTag;
+      } else {
+        workingPayload.description = (workingPayload.description || '').replace(/\n__meta__:[\s\S]*$/, '') + metaTag;
+      }
+    }
+
+    const res = isEdit && tournamentId
+      ? await supabaseClient.from('tournaments').update(workingPayload).eq('id', tournamentId)
+      : await supabaseClient.from('tournaments').insert(workingPayload);
+
+    if (!res.error) {
+      return { success: true, adaptedColumns };
+    }
+
+    const msg = res.error.message || '';
+    const match = msg.match(/Could not find the '([^']+)' column of 'tournaments'/i)
+      || msg.match(/column "?([^"'\s]+)"? of relation "tournaments" does not exist/i)
+      || msg.match(/column "([^"]+)" does not exist/i);
+
+    if (match && match[1]) {
+      const missingCol = match[1].trim();
+      if (missingCol in workingPayload) {
+        adaptedColumns.push(missingCol);
+        metadata[missingCol] = workingPayload[missingCol];
+        delete workingPayload[missingCol];
+        continue;
+      }
+    }
+
+    return { success: false, adaptedColumns, error: res.error };
+  }
+
+  return { success: false, adaptedColumns, error: new Error('Maximum schema adaptation attempts exceeded.') };
+}
 
 const EMPTY_FORM = {
   id: '',
@@ -38,7 +115,8 @@ const EMPTY_FORM = {
   xp_reward: 0,
   badge_reward: '',
   difficulty: 'mixed',
-  question_source: 'mixed'
+  question_source: 'mixed',
+  rules: ''
 };
 
 export const AdminTournamentsTab = () => {
@@ -58,7 +136,9 @@ export const AdminTournamentsTab = () => {
       .from('tournaments')
       .select('*, tournament_participants(count)')
       .order('created_at', { ascending: false });
-    if (!error && data) setTournaments(data);
+    if (!error && data) {
+      setTournaments(data.map(parseTournamentMetadata));
+    }
     setLoading(false);
   };
 
@@ -212,17 +292,22 @@ Return STRICT JSON format:
         invite_code: form.invite_code,
         coin_reward: Number(form.coin_reward),
         xp_reward: Number(form.xp_reward),
-        difficulty: form.difficulty
+        difficulty: form.difficulty,
+        rules: form.rules || ''
       };
 
-      if (view === 'edit' && form.id) {
-        const { error } = await supabase.from('tournaments').update(payload).eq('id', form.id);
-        if (error) throw error;
-        toast.success('Tournament updated successfully!');
+      const result = await saveTournamentAdaptive(supabase, payload, view === 'edit' && !!form.id, form.id);
+      if (!result.success) {
+        throw result.error || new Error('Failed to save tournament');
+      }
+
+      if (result.adaptedColumns.length > 0) {
+        toast.success(
+          `Tournament saved! (Adapted: columns [${result.adaptedColumns.join(', ')}] were safely stored in tournament metadata)`,
+          { duration: 6000 }
+        );
       } else {
-        const { error } = await supabase.from('tournaments').insert(payload);
-        if (error) throw error;
-        toast.success('Tournament created successfully!');
+        toast.success(view === 'edit' ? 'Tournament updated successfully!' : 'Tournament created successfully!');
       }
 
       setForm(EMPTY_FORM);
@@ -300,7 +385,7 @@ Return STRICT JSON format:
           </h2>
           <p className="text-slate-400">Create, edit, lock, unlock, and award prizes for live student tournaments.</p>
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {view !== 'list' && (
             <Button variant="outline" onClick={() => { setView('list'); setForm(EMPTY_FORM); }} className="border-slate-700">
               <ArrowLeft className="w-4 h-4 mr-2" /> Back to List
@@ -308,6 +393,35 @@ Return STRICT JSON format:
           )}
           {view === 'list' && (
             <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const sql = `-- Migration to ensure all Tournament columns exist in Supabase
+ALTER TABLE public.tournaments 
+ADD COLUMN IF NOT EXISTS coin_reward INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS xp_reward INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS question_count INTEGER DEFAULT 40,
+ADD COLUMN IF NOT EXISTS duration_minutes INTEGER DEFAULT 120,
+ADD COLUMN IF NOT EXISTS subject_filter TEXT DEFAULT '',
+ADD COLUMN IF NOT EXISTS registration_deadline TIMESTAMP,
+ADD COLUMN IF NOT EXISTS prize_description TEXT,
+ADD COLUMN IF NOT EXISTS cash_prize NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS entry_fee NUMERIC DEFAULT 0,
+ADD COLUMN IF NOT EXISTS sponsor TEXT,
+ADD COLUMN IF NOT EXISTS scholarship_description TEXT,
+ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS invite_code TEXT,
+ADD COLUMN IF NOT EXISTS rules TEXT;
+NOTIFY pgrst, 'reload schema';`;
+                  navigator.clipboard.writeText(sql);
+                  toast.success("Tournament SQL fix copied! Paste into Supabase SQL Editor if needed.");
+                }}
+                className="border-slate-700 hover:bg-slate-800 text-xs text-slate-300"
+                title="Copy SQL fix for Supabase"
+              >
+                <Database className="w-3.5 h-3.5 mr-1.5 text-emerald-400" /> Copy SQL Fix
+              </Button>
               <Button onClick={handleAIGenerateWeeklyChallenge} disabled={saving} className="bg-purple-600 hover:bg-purple-700 font-bold">
                 <Sparkles className="w-4 h-4 mr-2" /> AI Generate Challenge
               </Button>

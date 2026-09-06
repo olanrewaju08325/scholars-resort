@@ -25,12 +25,25 @@ export default function TournamentArena() {
     
     const initArena = async () => {
       // 1. Fetch tournament details
-      const { data: tData } = await supabase.from('tournaments').select('*').eq('id', id).single();
-      if (!tData) {
+      const { data: rawData } = await supabase.from('tournaments').select('*').eq('id', id).single();
+      if (!rawData) {
         toast.error("Tournament not found");
         navigate('/tournaments');
         return;
       }
+
+      let meta: Record<string, any> = {};
+      const searchTarget = (rawData.rules || '') + '\n' + (rawData.description || '');
+      const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
+      if (match && match[1]) {
+        try { meta = JSON.parse(match[1]); } catch {}
+      }
+      const cleanDesc = (rawData.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
+      const tData = {
+        ...meta,
+        ...rawData,
+        description: cleanDesc
+      };
       setTournament(tData);
 
       // 2. Fetch questions based on tournament configuration (subject_filter & count)

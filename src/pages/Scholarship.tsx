@@ -219,7 +219,7 @@ export const Scholarship = () => {
             setting_key: 'scholarship_applications',
             setting_value: [testRecord, ...existingApps],
             updated_at: new Date().toISOString()
-          });
+          }, { onConflict: 'setting_key' });
       } catch {}
     }
   };
@@ -304,7 +304,7 @@ export const Scholarship = () => {
           setting_key: 'scholarship_applications',
           setting_value: [newApp, ...existingApps],
           updated_at: new Date().toISOString()
-        });
+        }, { onConflict: 'setting_key' });
 
       setAppSubmitted(true);
       toast.success('🎉 Financial Aid Application Submitted! Our scholarship committee will review and activate your account within 24 hours.');
