@@ -270,9 +270,78 @@ Return STRICT JSON format:
           </h2>
           <p className="text-muted-foreground text-sm">Configure timed weekly student competitions using real past questions or Groq AI.</p>
         </div>
-        <Button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-primary hover:bg-primary/90 font-bold">
-          <Plus className="w-4 h-4 mr-2" /> New Weekly Challenge
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const sql = `-- Migration 0044: Ensure study_logs, weekly_challenges & submissions
+CREATE TABLE IF NOT EXISTS public.study_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    action_type VARCHAR(50) DEFAULT 'practice',
+    created_at TIMESTAMPTZ DEFAULT timezone('utc', now())
+);
+
+ALTER TABLE public.study_logs
+  ADD COLUMN IF NOT EXISTS action_type VARCHAR(50) DEFAULT 'practice',
+  ADD COLUMN IF NOT EXISTS action TEXT DEFAULT 'practice',
+  ADD COLUMN IF NOT EXISTS subject_context TEXT,
+  ADD COLUMN IF NOT EXISTS is_utme_curriculum BOOLEAN DEFAULT true,
+  ADD COLUMN IF NOT EXISTS subject TEXT,
+  ADD COLUMN IF NOT EXISTS duration_minutes INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS score NUMERIC DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS public.weekly_challenges (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    subject TEXT NOT NULL,
+    question_data JSONB NOT NULL,
+    week_start DATE NOT NULL,
+    week_end DATE NOT NULL,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.weekly_challenges ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view active weekly challenges" ON public.weekly_challenges;
+CREATE POLICY "Anyone can view active weekly challenges" ON public.weekly_challenges FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Admins can manage weekly challenges" ON public.weekly_challenges;
+CREATE POLICY "Admins can manage weekly challenges" ON public.weekly_challenges FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'admin')
+);
+
+CREATE TABLE IF NOT EXISTS public.weekly_challenge_submissions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    challenge_id UUID REFERENCES public.weekly_challenges(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    selected_answer TEXT NOT NULL,
+    is_correct BOOLEAN NOT NULL,
+    submitted_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE(challenge_id, user_id)
+);
+
+ALTER TABLE public.weekly_challenge_submissions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anyone can view challenge submissions" ON public.weekly_challenge_submissions;
+CREATE POLICY "Anyone can view challenge submissions" ON public.weekly_challenge_submissions FOR SELECT USING (true);
+DROP POLICY IF EXISTS "Users can insert own challenge submissions" ON public.weekly_challenge_submissions;
+CREATE POLICY "Users can insert own challenge submissions" ON public.weekly_challenge_submissions FOR INSERT WITH CHECK (
+  auth.uid() = user_id
+);
+
+NOTIFY pgrst, 'reload schema';`;
+              navigator.clipboard.writeText(sql);
+              toast.success("Weekly Challenges & Study Logs SQL copied! Paste into Supabase SQL Editor if needed.");
+            }}
+            className="border-border text-xs text-muted-foreground hover:text-foreground"
+            title="Copy SQL fix for Supabase"
+          >
+            <Database className="w-3.5 h-3.5 mr-1.5 text-emerald-400" /> Copy SQL Fix
+          </Button>
+          <Button onClick={() => setIsFormOpen(!isFormOpen)} className="bg-primary hover:bg-primary/90 font-bold">
+            <Plus className="w-4 h-4 mr-2" /> New Weekly Challenge
+          </Button>
+        </div>
       </div>
 
       {/* Create Form */}

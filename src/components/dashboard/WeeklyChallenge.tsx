@@ -77,38 +77,39 @@ export const WeeklyChallenge = () => {
         setChallenge(activeChallenge);
 
         if (profile?.id) {
+          // 1. Check local storage first for immediate zero-latency feedback
+          const localSubRaw = localStorage.getItem(`wc_sub_${activeChallenge.id}_${profile.id}`);
+          let userSub = localSubRaw ? JSON.parse(localSubRaw) : null;
+
+          // 2. Fetch authoritative submissions from admin_settings
           try {
-            const subRes = await safeSupabaseQuery(
-              supabase
-                .from('weekly_challenge_submissions')
-                .select('*')
-                .eq('challenge_id', activeChallenge.id)
-                .eq('user_id', profile.id)
-                .maybeSingle(),
-              { contextName: 'WeeklyChallenge.fetchSubmission', fallbackValue: null }
-            );
-            if (subRes.data) {
-              setSubmission(subRes.data);
-            } else {
-              const localSub = localStorage.getItem(`wc_sub_${activeChallenge.id}_${profile.id}`);
-              if (localSub) setSubmission(JSON.parse(localSub));
+            const { data: subSetting } = await supabase
+              .from('admin_settings')
+              .select('setting_value')
+              .eq('setting_key', 'weekly_challenge_submissions_db')
+              .maybeSingle();
+
+            if (subSetting?.setting_value && Array.isArray(subSetting.setting_value)) {
+              const allSubmissions = subSetting.setting_value;
+              const challengeSubs = allSubmissions.filter((s: any) => s.challenge_id === activeChallenge.id);
+              setParticipantCount(challengeSubs.length);
+
+              if (!userSub) {
+                const found = challengeSubs.find((s: any) => s.user_id === profile.id);
+                if (found) {
+                  userSub = found;
+                  localStorage.setItem(`wc_sub_${activeChallenge.id}_${profile.id}`, JSON.stringify(found));
+                }
+              }
+            } else if (userSub) {
+              setParticipantCount(1);
             }
           } catch {
-            const localSub = localStorage.getItem(`wc_sub_${activeChallenge.id}_${profile.id}`);
-            if (localSub) setSubmission(JSON.parse(localSub));
+            if (userSub) setParticipantCount(1);
           }
 
-          try {
-            const countRes = await safeSupabaseQuery(
-              supabase
-                .from('weekly_challenge_submissions')
-                .select('*', { count: 'exact', head: true })
-                .eq('challenge_id', activeChallenge.id),
-              { contextName: 'WeeklyChallenge.fetchParticipantCount', fallbackValue: [] }
-            );
-            setParticipantCount(countRes.count || 0);
-          } catch {
-            setParticipantCount(0);
+          if (userSub) {
+            setSubmission(userSub);
           }
         }
         setLoading(false);
@@ -156,19 +157,41 @@ export const WeeklyChallenge = () => {
       const correctAnswer = challenge.question_data?.answer;
       const isCorrect = selectedAnswer.startsWith(correctAnswer);
 
-      // Try database insert
+      const newSub = {
+        challenge_id: challenge.id,
+        user_id: profile.id,
+        selected_answer: selectedAnswer,
+        is_correct: isCorrect,
+        submitted_at: new Date().toISOString()
+      };
+
+      // 1. Save local submission state immediately
+      localStorage.setItem(`wc_sub_${challenge.id}_${profile.id}`, JSON.stringify(newSub));
+      setSubmission(newSub);
+      setParticipantCount(p => p + 1);
+
+      // 2. Sync to centralized admin_settings store
       try {
-        await supabase.from('weekly_challenge_submissions').insert({
-          challenge_id: challenge.id,
-          user_id: profile.id,
-          selected_answer: selectedAnswer,
-          is_correct: isCorrect
-        });
-      } catch (dbErr) {
-        console.warn('DB submission fallback:', dbErr);
+        const { data: current } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'weekly_challenge_submissions_db')
+          .maybeSingle();
+
+        const currentList = Array.isArray(current?.setting_value) ? current.setting_value : [];
+        const filtered = currentList.filter((s: any) => !(s.challenge_id === challenge.id && s.user_id === profile.id));
+        filtered.push(newSub);
+
+        await supabase.from('admin_settings').upsert({
+          setting_key: 'weekly_challenge_submissions_db',
+          setting_value: filtered,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+      } catch (subErr) {
+        console.warn('Submission sync to admin_settings:', subErr);
       }
 
-      // Award XP if correct
+      // 3. Award XP if correct
       if (isCorrect) {
         try {
           await supabase.from('profiles').update({ xp: (profile.xp || 0) + 50 }).eq('id', profile.id);
@@ -178,11 +201,6 @@ export const WeeklyChallenge = () => {
       } else {
         toast.error('Wrong answer. Keep practicing!');
       }
-
-      // Save local submission state
-      localStorage.setItem(`wc_sub_${challenge.id}_${profile.id}`, JSON.stringify({ selected_answer: selectedAnswer, is_correct: isCorrect }));
-      setSubmission({ selected_answer: selectedAnswer, is_correct: isCorrect });
-      setParticipantCount(p => p + 1);
     } catch (err: any) {
       toast.error(`Submission error: ${err.message || 'Please try again'}`);
     }

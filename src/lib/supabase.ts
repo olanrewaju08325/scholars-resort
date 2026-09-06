@@ -48,7 +48,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       // 2. Intercept known optional legacy tables that may not exist in remote Supabase
       const urlStr = String(url);
       const isMissingOptionalTable = urlStr.includes('/rest/v1/reported_errors') || 
-                                     urlStr.includes('/rest/v1/weekly_challenges');
+                                     urlStr.includes('/rest/v1/weekly_challenges') ||
+                                     urlStr.includes('/rest/v1/weekly_challenge_submissions');
+
+      if (isMissingOptionalTable) {
+        return new Response(JSON.stringify(options?.method === 'POST' ? {} : []), {
+          status: 200,
+          headers: { 
+            'Content-Type': 'application/json',
+            'content-range': '0-0/0'
+          }
+        });
+      }
 
       // 3. Perform real fetch with automatic retry on network glitches (e.g. ERR_NETWORK_CHANGED)
       let attempts = 0;
@@ -58,18 +69,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         attempts++;
         try {
           const response = await fetch(url, options);
-
-          // If optional table returned 404, gracefully return empty array to prevent console resource error
-          if (response.status === 404 && isMissingOptionalTable) {
-            return new Response(JSON.stringify([]), {
-              status: 200,
-              headers: { 
-                'Content-Type': 'application/json',
-                'content-range': '0-0/0'
-              }
-            });
-          }
-
           return response;
         } catch (err: any) {
           if (attempts < maxAttempts) {

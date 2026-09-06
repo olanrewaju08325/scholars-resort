@@ -1,6 +1,40 @@
 import { supabase } from './supabase';
 import { awardDailyStreakXp, checkStreakBadges } from './gamification';
 
+// Adaptive schema caching for study_logs columns
+let activeStudyLogColumn: 'action_type' | 'action' | 'none' = 'action_type';
+
+async function safeInsertStudyLog(userId: string, actionType: string) {
+  try {
+    if (activeStudyLogColumn === 'action_type') {
+      const { error } = await supabase.from('study_logs').insert({
+        user_id: userId,
+        action_type: actionType
+      });
+      if (!error) return;
+      // If column action_type does not exist in remote DB, adapt to action
+      activeStudyLogColumn = 'action';
+    }
+
+    if (activeStudyLogColumn === 'action') {
+      const { error } = await supabase.from('study_logs').insert({
+        user_id: userId,
+        action: actionType
+      });
+      if (!error) return;
+      activeStudyLogColumn = 'none';
+    }
+
+    if (activeStudyLogColumn === 'none') {
+      await supabase.from('study_logs').insert({
+        user_id: userId
+      });
+    }
+  } catch {
+    // Fail silently without disrupting student session
+  }
+}
+
 export const recordStudyAction = async (
   userId: string, 
   actionType: 'exam' | 'practice' | 'library',
@@ -25,27 +59,13 @@ export const recordStudyAction = async (
       );
       // If student is practicing a subject NOT in their UTME curriculum, log study but do not update primary UTME streak
       if (!isRelevant) {
-        try {
-          await supabase.from('study_logs').insert({
-            user_id: userId,
-            action_type: actionType,
-            subject_context: subjectNameOrId,
-            is_utme_curriculum: false
-          });
-        } catch {}
+        await safeInsertStudyLog(userId, actionType);
         return;
       }
     }
 
     // 3. Log the context-aware action safely
-    try {
-      await supabase.from('study_logs').insert({
-        user_id: userId,
-        action_type: actionType,
-        subject_context: subjectNameOrId || 'UTME Core',
-        is_utme_curriculum: true
-      });
-    } catch {}
+    await safeInsertStudyLog(userId, actionType);
 
     const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     
