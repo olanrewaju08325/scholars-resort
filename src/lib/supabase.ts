@@ -46,7 +46,14 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
       }
 
       // 2. Intercept known optional legacy tables that may not exist in remote Supabase
-      const urlStr = String(url);
+      let urlStr = String(url);
+
+      // Auto-sanitize library_materials queries requesting non-existent 'type' column (real column is material_type)
+      if (urlStr.includes('/rest/v1/library_materials')) {
+        urlStr = urlStr.replace(/%2Ctype\b/g, '').replace(/,type\b/g, '');
+        url = urlStr;
+      }
+
       const isMissingOptionalTable = urlStr.includes('/rest/v1/reported_errors') || 
                                      urlStr.includes('/rest/v1/weekly_challenges') ||
                                      urlStr.includes('/rest/v1/weekly_challenge_submissions');

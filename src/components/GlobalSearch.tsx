@@ -34,28 +34,40 @@ export function GlobalSearch() {
 
         try {
           // Search Subjects
-          const { data: subjects } = await supabase.from('subjects').select('id, name').ilike('name', searchQuery).limit(3);
-          if (subjects) subjects.forEach(s => tempResults.push({ type: 'subject', id: s.id, title: s.name, subtitle: 'Subject' }));
+          try {
+            const { data: subjects } = await supabase.from('subjects').select('id, name').ilike('name', searchQuery).limit(3);
+            if (subjects) subjects.forEach(s => tempResults.push({ type: 'subject', id: s.id, title: s.name, subtitle: 'Subject' }));
+          } catch {}
 
           // Search Topics
-          const { data: topics } = await supabase.from('topics').select('id, name, subjects(name)').ilike('name', searchQuery).limit(3);
-          if (topics) topics.forEach((t: any) => tempResults.push({ type: 'topic', id: t.id, title: t.name, subtitle: `Topic in ${t.subjects?.name}` }));
+          try {
+            const { data: topics } = await supabase.from('topics').select('id, name, subjects(name)').ilike('name', searchQuery).limit(3);
+            if (topics) topics.forEach((t: any) => tempResults.push({ type: 'topic', id: t.id, title: t.name, subtitle: `Topic in ${t.subjects?.name || 'Curriculum'}` }));
+          } catch {}
 
-          // Search Library
-          const { data: library } = await supabase.from('library_materials').select('id, title, type').ilike('title', searchQuery).limit(3);
-          if (library) library.forEach((l: any) => tempResults.push({ type: 'library', id: l.id, title: l.title, subtitle: `Library ${l.type}` }));
+          // Search Library (uses universal id and title to avoid schema mismatch)
+          try {
+            const { data: library } = await supabase.from('library_materials').select('id, title').ilike('title', searchQuery).limit(3);
+            if (library) library.forEach((l: any) => tempResults.push({ type: 'library', id: l.id, title: l.title, subtitle: 'Library Material' }));
+          } catch {}
 
           // Search Profiles (Users)
-          const { data: profiles } = await supabase.from('profiles').select('id, full_name, role').ilike('full_name', searchQuery).limit(3);
-          if (profiles) profiles.forEach((p: any) => tempResults.push({ type: 'user', id: p.id, title: p.full_name, subtitle: `User (${p.role})` }));
+          try {
+            const { data: profiles } = await supabase.from('profiles').select('id, full_name, role').ilike('full_name', searchQuery).limit(3);
+            if (profiles) profiles.forEach((p: any) => tempResults.push({ type: 'user', id: p.id, title: p.full_name, subtitle: `User (${p.role})` }));
+          } catch {}
 
           // Search Tournaments
-          const { data: tournaments } = await supabase.from('tournaments').select('id, title, status').ilike('title', searchQuery).limit(3);
-          if (tournaments) tournaments.forEach((t: any) => tempResults.push({ type: 'tournament', id: t.id, title: t.title, subtitle: `Tournament (${t.status})` }));
+          try {
+            const { data: tournaments } = await supabase.from('tournaments').select('id, title, status').ilike('title', searchQuery).limit(3);
+            if (tournaments) tournaments.forEach((t: any) => tempResults.push({ type: 'tournament', id: t.id, title: t.title, subtitle: `Tournament (${t.status})` }));
+          } catch {}
 
           // Search Questions
-          const { data: questions } = await supabase.from('questions').select('id, question_text, subjects(name)').ilike('question_text', searchQuery).limit(3);
-          if (questions) questions.forEach((q: any) => tempResults.push({ type: 'question', id: q.id, title: q.question_text.substring(0, 50) + '...', subtitle: `Question in ${q.subjects?.name || 'Unknown'}` }));
+          try {
+            const { data: questions } = await supabase.from('questions').select('id, question_text, subjects(name)').ilike('question_text', searchQuery).limit(3);
+            if (questions) questions.forEach((q: any) => tempResults.push({ type: 'question', id: q.id, title: q.question_text.substring(0, 50) + '...', subtitle: `Question in ${q.subjects?.name || 'Past Questions'}` }));
+          } catch {}
 
           setResults(tempResults);
         } catch (e) {
