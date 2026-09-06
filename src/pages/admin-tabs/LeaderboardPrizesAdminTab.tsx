@@ -101,47 +101,35 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
   const loadSettings = async () => {
     setLoading(true);
     try {
-      // 1. Fetch prize config
-      const { data: prizeRow } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'leaderboard_prize_config')
-        .maybeSingle();
+      // 1. Fetch prize config from server
+      try {
+        const res = await fetch('/api/settings/leaderboard_prize_config');
+        const json = await res.json();
+        if (json?.success && json.value) {
+          const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;
+          setPrizeConfig({ ...DEFAULT_PRIZE_CONFIG, ...parsed });
+        }
+      } catch {}
 
-      if (prizeRow?.setting_value) {
-        setPrizeConfig({
-          ...DEFAULT_PRIZE_CONFIG,
-          ...(typeof prizeRow.setting_value === 'string' ? JSON.parse(prizeRow.setting_value) : prizeRow.setting_value)
-        });
-      }
+      // 2. Fetch platform pricing from server
+      try {
+        const res = await fetch('/api/settings/platform_pricing');
+        const json = await res.json();
+        if (json?.success && json.value) {
+          const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;
+          setPricingConfig({ ...DEFAULT_PLATFORM_PRICING, ...parsed });
+        }
+      } catch {}
 
-      // 2. Fetch platform pricing
-      const { data: pricingRow } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'platform_pricing')
-        .maybeSingle();
-
-      if (pricingRow?.setting_value) {
-        setPricingConfig({
-          ...DEFAULT_PLATFORM_PRICING,
-          ...(typeof pricingRow.setting_value === 'string' ? JSON.parse(pricingRow.setting_value) : pricingRow.setting_value)
-        });
-      }
-
-      // 3. Fetch weekly mock config
-      const { data: mockRow } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'weekly_mock_config')
-        .maybeSingle();
-
-      if (mockRow?.setting_value) {
-        setMockConfig({
-          ...DEFAULT_MOCK_CONFIG,
-          ...(typeof mockRow.setting_value === 'string' ? JSON.parse(mockRow.setting_value) : mockRow.setting_value)
-        });
-      }
+      // 3. Fetch weekly mock config from server
+      try {
+        const res = await fetch('/api/settings/weekly_mock_config');
+        const json = await res.json();
+        if (json?.success && json.value) {
+          const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;
+          setMockConfig({ ...DEFAULT_MOCK_CONFIG, ...parsed });
+        }
+      } catch {}
 
       // 4. Fetch current live leaders
       const { data: exams } = await supabase
@@ -210,6 +198,11 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
     setSaving(true);
     try {
       // 1. Save prize config
+      await fetch('/api/settings/leaderboard_prize_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: prizeConfig })
+      });
       await supabase.from('admin_settings').upsert({
         setting_key: 'leaderboard_prize_config',
         setting_value: prizeConfig,
@@ -217,6 +210,11 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
       }, { onConflict: 'setting_key' });
 
       // 2. Save platform pricing
+      await fetch('/api/settings/platform_pricing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: pricingConfig })
+      });
       await supabase.from('admin_settings').upsert({
         setting_key: 'platform_pricing',
         setting_value: pricingConfig,
@@ -224,6 +222,11 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
       }, { onConflict: 'setting_key' });
 
       // 3. Save weekly mock config
+      await fetch('/api/settings/weekly_mock_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: mockConfig })
+      });
       await supabase.from('admin_settings').upsert({
         setting_key: 'weekly_mock_config',
         setting_value: mockConfig,

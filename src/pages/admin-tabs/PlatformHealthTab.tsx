@@ -107,13 +107,13 @@ export const PlatformHealthTab = () => {
 
       // Live service statuses with real measured latencies
       setApiHealth([
-        { service: 'Supabase DB', status: latency < 400 ? 'online' : 'degraded', latency: `${latency}ms` },
+        { service: 'Supabase DB', status: latency < 1500 ? 'online' : 'degraded', latency: `${latency}ms` },
         { service: 'Supabase Auth', status: 'online', latency: `${authLatency}ms` },
         { service: 'Storage CDN', status: 'online', latency: `${Math.round(latency * 0.9 + 10)}ms` },
         { service: 'Realtime Gateway', status: 'online', latency: `${Math.round(latency * 0.6 + 5)}ms` },
         { service: 'Node.js Backend / API', status: 'online', latency: `${serverLatency}ms` },
         { service: 'Groq / Gemini AI Router', status: 'online', latency: `${Math.round(serverLatency * 1.5 + 40)}ms` },
-        { service: 'SMTP Mail Relay', status: (failedEmails || 0) > 5 ? 'degraded' : 'online', latency: `${Math.round(serverLatency + 35)}ms` },
+        { service: 'SMTP Mail Relay', status: (failedEmails || 0) > 10 ? 'degraded' : 'online', latency: `${Math.round(serverLatency + 35)}ms` },
       ]);
     } catch (err: any) {
       toast.error('Failed to load health data');

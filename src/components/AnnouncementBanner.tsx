@@ -31,21 +31,39 @@ export function AnnouncementBanner() {
 
   const fetchAnnouncements = useCallback(async () => {
     try {
-      const { data, error } = await supabase
-        .from('announcements')
-        .select('*')
-        .order('is_pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (!error && data) {
-        setAnnouncements(data.map(a => ({
+      const res = await fetch('/api/announcements');
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.announcements)) {
+        const sorted = [...json.announcements].sort((a: any, b: any) => {
+          if (a.is_pinned && !b.is_pinned) return -1;
+          if (!a.is_pinned && b.is_pinned) return 1;
+          return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
+        });
+        setAnnouncements(sorted.map(a => ({
           ...a,
           body: a.body || a.content || ''
         })));
+        return;
       }
+      throw new Error('Fallback to direct Supabase');
     } catch (e) {
-      console.warn('Error fetching active announcements:', e);
+      try {
+        const { data, error } = await supabase
+          .from('announcements')
+          .select('*')
+          .order('is_pinned', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(10);
+
+        if (!error && data) {
+          setAnnouncements(data.map(a => ({
+            ...a,
+            body: a.body || a.content || ''
+          })));
+        }
+      } catch (err) {
+        console.warn('Error fetching active announcements:', err);
+      }
     }
   }, []);
 

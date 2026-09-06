@@ -133,16 +133,26 @@ export const SyllabusAdminTab = () => {
 
   const fetchTopicsForSubject = async (subId: string) => {
     try {
-      const { data, error } = await supabase
-        .from('topics')
-        .select('*')
-        .eq('subject_id', subId)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTopics(data || []);
+      const res = await fetch(`/api/admin/topics?subject_id=${subId}`);
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.topics)) {
+        setTopics(data.topics);
+        localStorage.setItem(`scholar_syllabus_${subId}`, JSON.stringify(data.topics));
+        return;
+      }
+      throw new Error('Fallback to direct query');
     } catch (err) {
-      console.warn('Error fetching topics from DB, checking local storage:', err);
+      try {
+        const { data } = await supabase
+          .from('topics')
+          .select('*')
+          .eq('subject_id', subId)
+          .order('created_at', { ascending: false });
+        if (data && data.length > 0) {
+          setTopics(data);
+          return;
+        }
+      } catch {}
       try {
         const local = JSON.parse(localStorage.getItem(`scholar_syllabus_${subId}`) || '[]');
         setTopics(local);
@@ -162,6 +172,7 @@ export const SyllabusAdminTab = () => {
     setSaving(true);
     try {
       const payload: any = {
+        id: currentTopicId || crypto.randomUUID(),
         subject_id: selectedSubjectId,
         name: topicTitle.trim(),
         description: topicDescription.trim(),
@@ -176,29 +187,21 @@ export const SyllabusAdminTab = () => {
         updated_at: new Date().toISOString()
       };
 
-      if (currentTopicId && !currentTopicId.startsWith('local_')) {
-        const { error } = await supabase.from('topics').update(payload).eq('id', currentTopicId);
-        if (error) throw error;
-        toast.success('Syllabus topic updated successfully!');
-      } else {
-        const newId = crypto.randomUUID();
-        const insertPayload = { id: newId, ...payload, created_at: new Date().toISOString() };
-        const { error } = await supabase.from('topics').insert(insertPayload);
-        
-        if (error) {
-          // Fallback to local storage if RLS/DB table constraint blocks
-          const updated = [...topics, insertPayload];
-          setTopics(updated);
-          localStorage.setItem(`scholar_syllabus_${selectedSubjectId}`, JSON.stringify(updated));
-        } else {
-          fetchTopicsForSubject(selectedSubjectId);
-        }
-        toast.success('New syllabus topic created successfully!');
+      const response = await fetch('/api/admin/topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const resData = await response.json();
+
+      if (!resData.success) {
+        throw new Error(resData.error || 'Server rejected topic save');
       }
 
-      logAdminActivity('Update Syllabus Topic', `Updated topic "${topicTitle}" for subject ID ${selectedSubjectId}`);
+      toast.success(isEditing ? 'Syllabus topic updated successfully!' : 'New syllabus topic created successfully!');
+      logAdminActivity('Update Syllabus Topic', `Saved topic "${topicTitle}" for subject ID ${selectedSubjectId}`);
       resetForm();
-      fetchTopicsForSubject(selectedSubjectId);
+      await fetchTopicsForSubject(selectedSubjectId);
     } catch (err: any) {
       toast.error(`Failed to save topic: ${err.message || err}`);
     } finally {
@@ -243,9 +246,7 @@ export const SyllabusAdminTab = () => {
   const handleDelete = async () => {
     if (!deleteDialog.id) return;
     try {
-      if (!deleteDialog.id.startsWith('local_')) {
-        await supabase.from('topics').delete().eq('id', deleteDialog.id);
-      }
+      await fetch(`/api/admin/topics/${deleteDialog.id}`, { method: 'DELETE' });
       const updated = topics.filter(t => t.id !== deleteDialog.id);
       setTopics(updated);
       localStorage.setItem(`scholar_syllabus_${selectedSubjectId}`, JSON.stringify(updated));

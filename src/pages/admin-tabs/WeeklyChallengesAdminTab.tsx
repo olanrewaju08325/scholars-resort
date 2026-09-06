@@ -40,17 +40,28 @@ export const WeeklyChallengesAdminTab = () => {
     setLoading(true);
     let items: any[] = [];
 
-    // Prioritize admin_settings to prevent 404 REST queries
+    // Check server API first
     try {
-      const { data: settingData } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'weekly_challenges_db')
-        .maybeSingle();
-      if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
-        items = settingData.setting_value;
+      const res = await fetch('/api/settings/weekly_challenges_db');
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.value)) {
+        items = json.value;
       }
     } catch {}
+
+    // Prioritize admin_settings
+    if (items.length === 0) {
+      try {
+        const { data: settingData } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'weekly_challenges_db')
+          .maybeSingle();
+        if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+          items = settingData.setting_value;
+        }
+      } catch {}
+    }
 
     if (items.length === 0) {
       try {
@@ -182,7 +193,16 @@ Return STRICT JSON format:
         created_at: new Date().toISOString()
       };
 
-      // 1. Try Supabase weekly_challenges table
+      // 1. Post to server challenges API for immediate persistence
+      try {
+        await fetch('/api/admin/challenges', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newChallenge)
+        });
+      } catch {}
+
+      // 2. Try Supabase weekly_challenges table
       let savedToSupabase = false;
       try {
         const { error } = await supabase.from('weekly_challenges').insert({
@@ -196,7 +216,7 @@ Return STRICT JSON format:
         if (!error) savedToSupabase = true;
       } catch {}
 
-      // 2. Always sync to admin_settings and local storage
+      // 3. Always sync to admin_settings and local storage
       try {
         const existing = [...challenges, newChallenge];
         await supabase.from('admin_settings').upsert({
@@ -229,6 +249,11 @@ Return STRICT JSON format:
     const updated = challenges.map(c => c.id === id ? { ...c, is_active: !currentState } : c);
     setChallenges(updated);
     try {
+      await fetch('/api/settings/weekly_challenges_db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: updated })
+      });
       await supabase.from('admin_settings').upsert({
         setting_key: 'weekly_challenges_db',
         setting_value: updated,
@@ -242,12 +267,18 @@ Return STRICT JSON format:
   const handleDelete = (id: string) => {
     confirmAction('Delete Challenge', 'Delete this weekly challenge and all student submissions?', async () => {
       try {
+        await fetch(`/api/admin/challenges/${id}`, { method: 'DELETE' });
         await supabase.from('weekly_challenges').delete().eq('id', id);
       } catch {}
 
       const updated = challenges.filter(c => c.id !== id);
       setChallenges(updated);
       try {
+        await fetch('/api/settings/weekly_challenges_db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: updated })
+        });
         await supabase.from('admin_settings').upsert({
           setting_key: 'weekly_challenges_db',
           setting_value: updated,

@@ -22,25 +22,35 @@ export const WeeklyChallenge = () => {
     try {
       const now = new Date().toISOString().split('T')[0];
 
-      // 1. Check admin_settings.weekly_challenges_db (Authoritative project storage)
+      // 1. Check server API for authoritative active challenge
       let activeChallenge: any = null;
       try {
-        const { data: settingData } = await supabase
-          .from('admin_settings')
-          .select('setting_value')
-          .eq('setting_key', 'weekly_challenges_db')
-          .maybeSingle();
-
-        if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
-          const list = settingData.setting_value;
-          // Match active within window or most recent active
-          activeChallenge = list.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now) 
-            || list.find((c: any) => c.is_active) 
-            || list[0];
+        const res = await fetch('/api/challenges/active');
+        const json = await res.json();
+        if (json?.success && json.challenge) {
+          activeChallenge = json.challenge;
         }
       } catch {}
 
-      // 2. Fallback to localStorage challenges
+      // 2. Check admin_settings.weekly_challenges_db
+      if (!activeChallenge) {
+        try {
+          const { data: settingData } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'weekly_challenges_db')
+            .maybeSingle();
+
+          if (settingData?.setting_value && Array.isArray(settingData.setting_value)) {
+            const list = settingData.setting_value;
+            activeChallenge = list.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now) 
+              || list.find((c: any) => c.is_active) 
+              || list[0];
+          }
+        } catch {}
+      }
+
+      // 3. Fallback to localStorage challenges
       if (!activeChallenge) {
         try {
           const localRaw = localStorage.getItem('scholar_weekly_challenges');
@@ -55,7 +65,7 @@ export const WeeklyChallenge = () => {
         } catch {}
       }
 
-      // 3. Default curated weekly challenge if none yet created by admin
+      // 4. Default curated weekly challenge if none yet created by admin
       if (!activeChallenge) {
         activeChallenge = {
           id: 'wc-curated-1',
@@ -116,7 +126,6 @@ export const WeeklyChallenge = () => {
         return;
       }
 
-      // If no admin challenge is published, truthfully show no challenge
       setChallenge(null);
     } catch {
       setChallenge(null);
@@ -124,7 +133,6 @@ export const WeeklyChallenge = () => {
       setLoading(false);
     }
   }, [profile?.id]);
-
 
   useEffect(() => {
     fetchChallenge();
@@ -154,8 +162,13 @@ export const WeeklyChallenge = () => {
     setSubmitting(true);
 
     try {
-      const correctAnswer = challenge.question_data?.answer;
-      const isCorrect = selectedAnswer.startsWith(correctAnswer);
+      const qData = challenge.question_data || challenge;
+      const rawAns = qData?.correct_answer || qData?.answer || challenge.correct_answer || '';
+      const ansString = String(rawAns).trim();
+      
+      const isCorrect = selectedAnswer === ansString ||
+        (ansString.length === 1 && selectedAnswer.toUpperCase().startsWith(ansString.toUpperCase())) ||
+        selectedAnswer.toLowerCase().includes(ansString.toLowerCase());
 
       const newSub = {
         challenge_id: challenge.id,
@@ -230,7 +243,7 @@ export const WeeklyChallenge = () => {
     );
   }
 
-  const questionData = challenge.question_data;
+  const questionData = challenge.question_data || challenge;
 
   return (
     <Card className="bg-card text-card-foreground border-border overflow-hidden">

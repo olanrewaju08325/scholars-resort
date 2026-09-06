@@ -27,19 +27,33 @@ export const AnnouncementsTab = () => {
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('announcements')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!error && data) {
-        setAnnouncements(data.map(item => ({
+      const res = await fetch('/api/announcements');
+      const data = await res.json();
+      if (data?.success && Array.isArray(data.announcements)) {
+        setAnnouncements(data.announcements.map((item: any) => ({
           ...item,
           body: item.body || item.content || item.message || ''
         })));
+        setLoading(false);
+        return;
       }
+      throw new Error('Fallback to direct Supabase query');
     } catch (e) {
-      console.warn('Error loading announcements:', e);
+      try {
+        const { data, error } = await supabase
+          .from('announcements')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && data) {
+          setAnnouncements(data.map(item => ({
+            ...item,
+            body: item.body || item.content || item.message || ''
+          })));
+        }
+      } catch (err) {
+        console.warn('Error loading announcements:', err);
+      }
     }
     setLoading(false);
   };
@@ -73,33 +87,26 @@ export const AnnouncementsTab = () => {
       const { data: { user } } = await supabase.auth.getUser();
       
       const payload: any = {
-        title,
-        body,
-        content: body,
+        id: editingId || crypto.randomUUID(),
+        title: title.trim(),
+        content: body.trim(),
+        body: body.trim(),
         target,
-        is_pinned: isPinned
+        is_pinned: isPinned,
+        created_by: user?.email || 'Admin'
       };
 
-      if (editingId) {
-        const { error } = await supabase
-          .from('announcements')
-          .update(payload)
-          .eq('id', editingId);
-        
-        if (error) {
-          // If body column failed, try updating content column
-          await supabase.from('announcements').update({ title, content: body, target, is_pinned: isPinned }).eq('id', editingId);
-        }
-        toast.success('Announcement updated successfully!');
+      const res = await fetch('/api/admin/announcements', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        toast.success(editingId ? 'Announcement updated successfully!' : 'Announcement published successfully!');
       } else {
-        const { error } = await supabase
-          .from('announcements')
-          .insert([{ ...payload, created_by: user?.id }]);
-        
-        if (error) {
-          await supabase.from('announcements').insert([{ title, content: body, target, is_pinned: isPinned, created_by: user?.id }]);
-        }
-        toast.success('Announcement published successfully!');
+        throw new Error(data.error || 'Failed to save');
       }
       
       resetForm();
@@ -116,7 +123,10 @@ export const AnnouncementsTab = () => {
       "Delete Announcement",
       "Are you sure you want to delete this announcement?",
       async () => {
-        await supabase.from('announcements').delete().eq('id', id);
+        try {
+          await fetch(`/api/admin/announcements/${id}`, { method: 'DELETE' });
+          await supabase.from('announcements').delete().eq('id', id);
+        } catch {}
         toast.success("Announcement deleted.");
         fetchAnnouncements();
       },
@@ -125,7 +135,20 @@ export const AnnouncementsTab = () => {
   };
 
   const handleTogglePin = async (id: string, currentPinStatus: boolean) => {
-    await supabase.from('announcements').update({ is_pinned: !currentPinStatus }).eq('id', id);
+    try {
+      const ann = announcements.find(a => a.id === id);
+      if (ann) {
+        await fetch('/api/admin/announcements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ...ann,
+            is_pinned: !currentPinStatus
+          })
+        });
+      }
+      await supabase.from('announcements').update({ is_pinned: !currentPinStatus }).eq('id', id);
+    } catch {}
     toast.success(`Announcement ${!currentPinStatus ? 'pinned' : 'unpinned'}.`);
     fetchAnnouncements();
   };

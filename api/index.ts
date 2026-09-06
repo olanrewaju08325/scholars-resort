@@ -1,6 +1,7 @@
 import express from 'express';
 import http from 'http';
 import path from 'path';
+import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 
@@ -2562,6 +2563,369 @@ app.post('/api/admin/tournaments/delete', async (req, res) => {
       }
     } catch {}
 
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── Unified System Settings, Syllabuses, Challenges, Announcements & Prizes API ───
+const SYSTEM_STORE_FILE = path.join(process.cwd(), 'data', 'system_store.json');
+
+function loadSystemStore(): Record<string, any> {
+  try {
+    if (fs.existsSync(SYSTEM_STORE_FILE)) {
+      const raw = fs.readFileSync(SYSTEM_STORE_FILE, 'utf-8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.warn('[System Store Load Warning]', e);
+  }
+  return {};
+}
+
+function saveSystemStore(data: Record<string, any>) {
+  try {
+    const dir = path.dirname(SYSTEM_STORE_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(SYSTEM_STORE_FILE, JSON.stringify(data, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[System Store Save Warning]', e);
+  }
+}
+
+const inMemorySystemStore: Record<string, any> = loadSystemStore();
+
+// Helper to get a setting from Memory/File first, with DB fallback
+async function getStoredSetting(key: string, defaultValue: any = null) {
+  if (inMemorySystemStore[key] !== undefined) {
+    return inMemorySystemStore[key];
+  }
+  try {
+    const { data } = await supabase
+      .from('admin_settings')
+      .select('setting_value')
+      .eq('setting_key', key)
+      .maybeSingle();
+    if (data?.setting_value !== undefined) {
+      inMemorySystemStore[key] = data.setting_value;
+      saveSystemStore(inMemorySystemStore);
+      return data.setting_value;
+    }
+  } catch {}
+  return defaultValue;
+}
+
+// Helper to save a setting to Memory/File and DB
+async function setStoredSetting(key: string, value: any) {
+  inMemorySystemStore[key] = value;
+  saveSystemStore(inMemorySystemStore);
+  try {
+    await supabase.from('admin_settings').upsert({
+      setting_key: key,
+      setting_value: value,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'setting_key' });
+  } catch (e: any) {
+    console.warn(`[System Setting DB Sync Warning for ${key}]:`, e?.message);
+  }
+}
+
+// GET /api/settings/:key
+app.get('/api/settings/:key', async (req, res) => {
+  const { key } = req.params;
+  const value = await getStoredSetting(key);
+  return res.json({ success: true, key, value });
+});
+
+// POST /api/settings/:key or POST /api/admin/settings
+app.post('/api/settings/:key', async (req, res) => {
+  const { key } = req.params;
+  const value = req.body?.value !== undefined ? req.body.value : req.body;
+  await setStoredSetting(key, value);
+  return res.json({ success: true, key, value });
+});
+
+app.post('/api/admin/settings', async (req, res) => {
+  const { setting_key, setting_value, key, value } = req.body;
+  const targetKey = setting_key || key;
+  const targetValue = setting_value !== undefined ? setting_value : value;
+  if (!targetKey) return res.status(400).json({ success: false, error: 'Setting key is required' });
+  await setStoredSetting(targetKey, targetValue);
+  return res.json({ success: true, key: targetKey, value: targetValue });
+});
+
+// ─── SYLLABUS TOPICS API (Guaranteed Persistence & DB Synchronization) ───
+app.get('/api/admin/topics', async (req, res) => {
+  try {
+    const subjectId = req.query.subject_id as string;
+    
+    // 1. Fetch from admin_settings / persistent system store
+    let storedTopics: any[] = await getStoredSetting('syllabus_topics_db', []);
+    if (!Array.isArray(storedTopics)) storedTopics = [];
+
+    // 2. Fetch from Supabase topics table
+    let dbTopics: any[] = [];
+    try {
+      let q = supabase.from('topics').select('*');
+      if (subjectId) q = q.eq('subject_id', subjectId);
+      const { data } = await q;
+      if (data && Array.isArray(data)) dbTopics = data;
+    } catch {}
+
+    // 3. Merge seamlessly, prioritizing stored rich metadata
+    const topicMap = new Map<string, any>();
+    dbTopics.forEach(t => {
+      topicMap.set(t.id, { ...t, sequence: t.sequence || 1, level: t.level || 'Intermediate' });
+    });
+    storedTopics.forEach(t => {
+      if (!subjectId || t.subject_id === subjectId) {
+        const existing = topicMap.get(t.id) || {};
+        topicMap.set(t.id, { ...existing, ...t });
+      }
+    });
+
+    let merged = Array.from(topicMap.values());
+    if (subjectId) {
+      merged = merged.filter(t => t.subject_id === subjectId);
+    }
+    // Sort by sequence or name
+    merged.sort((a, b) => (Number(a.sequence) || 99) - (Number(b.sequence) || 99) || (a.name || '').localeCompare(b.name || ''));
+
+    return res.json({ success: true, topics: merged });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/topics', async (req, res) => {
+  try {
+    const subjectId = req.query.subject_id as string;
+    let storedTopics: any[] = await getStoredSetting('syllabus_topics_db', []);
+    if (!Array.isArray(storedTopics)) storedTopics = [];
+
+    let dbTopics: any[] = [];
+    try {
+      let q = supabase.from('topics').select('id, subject_id, name, created_at');
+      if (subjectId) q = q.eq('subject_id', subjectId);
+      const { data } = await q;
+      if (data) dbTopics = data;
+    } catch {}
+
+    const topicMap = new Map<string, any>();
+    dbTopics.forEach(t => topicMap.set(t.id, t));
+    storedTopics.forEach(t => {
+      if (!subjectId || t.subject_id === subjectId) {
+        const existing = topicMap.get(t.id) || {};
+        topicMap.set(t.id, { ...existing, ...t });
+      }
+    });
+
+    let list = Array.from(topicMap.values());
+    if (subjectId) list = list.filter(t => t.subject_id === subjectId);
+    list.sort((a, b) => (Number(a.sequence) || 99) - (Number(b.sequence) || 99) || (a.name || '').localeCompare(b.name || ''));
+
+    return res.json({ success: true, topics: list });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/admin/topics', async (req, res) => {
+  try {
+    const topicData = req.body;
+    if (!topicData || !topicData.name || !topicData.subject_id) {
+      return res.status(400).json({ success: false, error: 'Topic name and subject_id are required' });
+    }
+
+    const topicId = topicData.id || crypto.randomUUID();
+    const cleanTopic = {
+      ...topicData,
+      id: topicId,
+      sequence: Number(topicData.sequence) || 1,
+      updated_at: new Date().toISOString()
+    };
+
+    // 1. Save to Supabase topics table with columns that exist
+    try {
+      await supabase.from('topics').upsert({
+        id: topicId,
+        subject_id: topicData.subject_id,
+        name: topicData.name.trim()
+      }, { onConflict: 'id' });
+    } catch (e: any) {
+      console.warn('[Topics Table Upsert Notice]:', e?.message);
+    }
+
+    // 2. Persist full rich syllabus payload to system store & admin_settings
+    let storedTopics: any[] = await getStoredSetting('syllabus_topics_db', []);
+    if (!Array.isArray(storedTopics)) storedTopics = [];
+
+    const existingIdx = storedTopics.findIndex((t: any) => t.id === topicId);
+    if (existingIdx >= 0) {
+      storedTopics[existingIdx] = { ...storedTopics[existingIdx], ...cleanTopic };
+    } else {
+      storedTopics.push(cleanTopic);
+    }
+
+    await setStoredSetting('syllabus_topics_db', storedTopics);
+
+    return res.json({ success: true, topic: cleanTopic });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/topics/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, error: 'Topic id is required' });
+
+    // 1. Delete from Supabase topics table
+    try { await supabase.from('topics').delete().eq('id', id); } catch {}
+
+    // 2. Remove from system store
+    let storedTopics: any[] = await getStoredSetting('syllabus_topics_db', []);
+    if (Array.isArray(storedTopics)) {
+      storedTopics = storedTopics.filter((t: any) => t.id !== id);
+      await setStoredSetting('syllabus_topics_db', storedTopics);
+    }
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── ANNOUNCEMENTS API ───
+app.get('/api/announcements', async (req, res) => {
+  try {
+    let announcements: any[] = await getStoredSetting('announcements_db', []);
+    if (!Array.isArray(announcements)) announcements = [];
+
+    // Also attempt Supabase table
+    try {
+      const { data } = await supabase.from('announcements').select('*').order('created_at', { ascending: false });
+      if (data && Array.isArray(data) && data.length > 0) {
+        const annMap = new Map<string, any>();
+        data.forEach(a => annMap.set(a.id, a));
+        announcements.forEach(a => annMap.set(a.id, { ...(annMap.get(a.id) || {}), ...a }));
+        announcements = Array.from(annMap.values());
+      }
+    } catch {}
+
+    return res.json({ success: true, announcements });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/admin/announcements', async (req, res) => {
+  try {
+    const { id, title, content, target, is_pinned, created_by } = req.body;
+    if (!title || !content) return res.status(400).json({ success: false, error: 'Title and content are required' });
+
+    const annId = id || crypto.randomUUID();
+    const newAnn = {
+      id: annId,
+      title: title.trim(),
+      content: content.trim(),
+      target: target || 'all',
+      is_pinned: !!is_pinned,
+      created_by: created_by || 'Admin',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    let announcements: any[] = await getStoredSetting('announcements_db', []);
+    if (!Array.isArray(announcements)) announcements = [];
+
+    const existingIdx = announcements.findIndex((a: any) => a.id === annId);
+    if (existingIdx >= 0) {
+      announcements[existingIdx] = { ...announcements[existingIdx], ...newAnn };
+    } else {
+      announcements.unshift(newAnn);
+    }
+
+    await setStoredSetting('announcements_db', announcements);
+
+    return res.json({ success: true, announcement: newAnn });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/announcements/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let announcements: any[] = await getStoredSetting('announcements_db', []);
+    if (Array.isArray(announcements)) {
+      announcements = announcements.filter((a: any) => a.id !== id);
+      await setStoredSetting('announcements_db', announcements);
+    }
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── WEEKLY CHALLENGES API ───
+app.get('/api/challenges/active', async (req, res) => {
+  try {
+    let challenges: any[] = await getStoredSetting('weekly_challenges_db', []);
+    if (!Array.isArray(challenges)) challenges = [];
+
+    const now = new Date().toISOString().split('T')[0];
+    let activeChallenge = challenges.find((c: any) => c.is_active && c.week_start <= now && c.week_end >= now)
+      || challenges.find((c: any) => c.is_active)
+      || challenges[0]
+      || null;
+
+    return res.json({ success: true, challenge: activeChallenge });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/admin/challenges', async (req, res) => {
+  try {
+    const challengeData = req.body;
+    if (!challengeData || !challengeData.title) {
+      return res.status(400).json({ success: false, error: 'Challenge title is required' });
+    }
+
+    const cId = challengeData.id || crypto.randomUUID();
+    const cleanChallenge = {
+      ...challengeData,
+      id: cId,
+      updated_at: new Date().toISOString()
+    };
+
+    let challenges: any[] = await getStoredSetting('weekly_challenges_db', []);
+    if (!Array.isArray(challenges)) challenges = [];
+
+    const existingIdx = challenges.findIndex((c: any) => c.id === cId);
+    if (existingIdx >= 0) {
+      challenges[existingIdx] = { ...challenges[existingIdx], ...cleanChallenge };
+    } else {
+      challenges.unshift(cleanChallenge);
+    }
+
+    await setStoredSetting('weekly_challenges_db', challenges);
+    return res.json({ success: true, challenge: cleanChallenge });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.delete('/api/admin/challenges/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    let challenges: any[] = await getStoredSetting('weekly_challenges_db', []);
+    if (Array.isArray(challenges)) {
+      challenges = challenges.filter((c: any) => c.id !== id);
+      await setStoredSetting('weekly_challenges_db', challenges);
+    }
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });

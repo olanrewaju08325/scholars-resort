@@ -29,14 +29,54 @@ export function formatChemicalFormulaToLatex(formula: string): string {
 }
 
 /**
+ * Sanitizes and repairs common LaTeX/OCR mathematical formatting errors:
+ * - Fixes double superscripts like a^{2v}^{2} -> {a^{2v}}^{2}
+ * - Fixes double subscripts like x_{1}_{2} -> {x_1}_2
+ * - Replaces OCR comments like [Note: original equation formatting is unclear...]
+ * - Converts "cube root of [X]" -> \sqrt[3]{X}
+ * - Converts "square root of [X]" -> \sqrt{X}
+ */
+export function sanitizeAndRepairMathLatex(expr: string): string {
+  if (!expr) return '';
+  let s = String(expr).trim();
+
+  // Strip OCR artifacts & disclaimers
+  s = s.replace(/\[\s*Note:?\s*original equation formatting is unclear[^\]]*\]/gi, '');
+  s = s.replace(/\(\s*Note:?\s*original equation formatting is unclear[^\)]*\)/gi, '');
+  s = s.replace(/\[\s*verify\s*\]/gi, '');
+
+  // Convert roots in natural language
+  s = s.replace(/cube\s+root\s+of\s+\[([^\]]+)\]/gi, '\\sqrt[3]{$1}');
+  s = s.replace(/cube\s+root\s+of\s+\(([^)]+)\)/gi, '\\sqrt[3]{$1}');
+  s = s.replace(/square\s+root\s+of\s+\[([^\]]+)\]/gi, '\\sqrt{$1}');
+  s = s.replace(/square\s+root\s+of\s+\(([^)]+)\)/gi, '\\sqrt{$1}');
+  s = s.replace(/nth\s+root\s+of\s+\[([^\]]+)\]/gi, '\\sqrt[n]{$1}');
+
+  // Fix consecutive/nested superscripts like a^{2v}^{2} or a^{4v}^3 -> {a^{2v}}^{2}
+  for (let i = 0; i < 4; i++) {
+    s = s.replace(/([a-zA-Z0-9\)\}\]]+)\^\{([^}]+)\}\^\{([^}]+)\}/g, '{$1^{$2}}^{$3}');
+    s = s.replace(/([a-zA-Z0-9\)\}\]]+)\^\{([^}]+)\}\^([0-9a-zA-Z]+)/g, '{$1^{$2}}^{$3}');
+    s = s.replace(/([a-zA-Z0-9\)\}\]]+)\^([0-9a-zA-Z]+)\^\{([^}]+)\}/g, '{$1^{$2}}^{$3}');
+    s = s.replace(/([a-zA-Z0-9\)\}\]]+)\^([0-9a-zA-Z]+)\^([0-9a-zA-Z]+)/g, '{$1^{$2}}^{$3}');
+  }
+
+  // Fix consecutive subscripts like x_{1}_{2} -> {x_1}_2
+  for (let i = 0; i < 4; i++) {
+    s = s.replace(/([a-zA-Z0-9\)\}\]]+)_\{([^}]+)\}_\{([^}]+)\}/g, '{$1_{$2}}_{$3}');
+    s = s.replace(/([a-zA-Z0-9\)\}\]]+)_([0-9a-zA-Z]+)_([0-9a-zA-Z]+)/g, '{$1_{$2}}_{$3}');
+  }
+
+  return s;
+}
+
+/**
  * Transforms raw algebraic expressions with ^ (like 4a^2-9b^2 or (4a+6b)^2) into valid LaTeX
  */
 export function formatRawMathToLatex(expr: string): string {
-  let res = expr.trim();
+  let res = sanitizeAndRepairMathLatex(expr);
   
   // Replace ^ followed by digit(s) or (parenthesized expression)
   res = res.replace(/\^([0-9a-zA-Z+-]+)/g, '^{$1}');
-  res = res.replace(/\^\{([0-9a-zA-Z+-]+)\}/g, '^{$1}');
   
   // Replace simple * with \times
   res = res.replace(/(\d+)\s*\*\s*(\d+)/g, '$1 \\times $2');
@@ -50,6 +90,9 @@ export function formatRawMathToLatex(expr: string): string {
     return unit ? `${deg}^{\\circ}\\text{${unit}}` : `${deg}^{\\circ}`;
   });
 
+  // Repair again after replacements
+  res = sanitizeAndRepairMathLatex(res);
+
   return res;
 }
 
@@ -58,18 +101,26 @@ export function formatRawMathToLatex(expr: string): string {
  */
 export function renderKaTeXToString(math: string, displayMode = false): string {
   try {
-    let cleanMath = math.trim();
+    let cleanMath = sanitizeAndRepairMathLatex(math.trim());
     
     // Fix unescaped greek letters or common symbols
     cleanMath = cleanMath
       .replace(/(?<!\\)\b(alpha|beta|gamma|theta|lambda|pi|mu|omega|sigma|Delta|Omega|Phi)\b/g, '\\$1')
       .replace(/(?<!\\)\b(approx|neq|le|ge|pm|times|div|rightarrow|leftarrow)\b/g, '\\$1');
 
-    return katex.renderToString(cleanMath, {
+    const result = katex.renderToString(cleanMath, {
       displayMode,
       throwOnError: false,
       output: 'htmlAndMathml'
     });
+
+    // If KaTeX still output a parse error markup, fallback gracefully to clean styled typography
+    if (result.includes('katex-error')) {
+      const fallbackClean = cleanMath.replace(/[\{\}\\]/g, '');
+      return `<span class="katex-fallback font-mono text-sm tracking-wide">${escapeHtml(fallbackClean)}</span>`;
+    }
+
+    return result;
   } catch (err) {
     return `<span class="katex-fallback font-mono text-sm">${escapeHtml(math)}</span>`;
   }
@@ -94,7 +145,7 @@ export function escapeHtml(str: string): string {
 export function processAcademicContent(rawText: string): string {
   if (!rawText) return '';
 
-  let text = String(rawText);
+  let text = sanitizeAndRepairMathLatex(String(rawText));
   const renderedSlots: string[] = [];
 
   const addSlot = (mathLatex: string, display = false): string => {

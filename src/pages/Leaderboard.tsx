@@ -32,6 +32,19 @@ const Leaderboard = () => {
 
   const fetchPrizeConfig = async () => {
     try {
+      const res = await fetch('/api/settings/leaderboard_prize_config');
+      const json = await res.json();
+      if (json?.success && json.value) {
+        const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;
+        setPrizeConfig(prev => ({ ...prev, ...parsed }));
+        if (parsed.frequency) {
+          setFilterPeriod(parsed.frequency);
+        }
+        return;
+      }
+    } catch {}
+
+    try {
       const { data } = await supabase
         .from('admin_settings')
         .select('setting_value')
