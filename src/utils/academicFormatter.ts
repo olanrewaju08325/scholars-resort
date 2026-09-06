@@ -36,8 +36,8 @@ export function formatRawMathToLatex(expr: string): string {
   let res = expr.trim();
   
   // Replace ^ followed by digit(s) or (parenthesized expression)
-  res = res.replace(/\^([0-9a-zA-Z\+\-]+)/g, '^{$1}');
-  res = res.replace(/\^\{([0-9a-zA-Z\+\-]+)\}/g, '^{$1}');
+  res = res.replace(/\^([0-9a-zA-Z+-]+)/g, '^{$1}');
+  res = res.replace(/\^\{([0-9a-zA-Z+-]+)\}/g, '^{$1}');
   
   // Replace simple * with \times or \cdot
   res = res.replace(/(\d+)\s*\*\s*(\d+)/g, '$1 \\times $2');
@@ -135,8 +135,8 @@ function processUnDelimitedFormulas(text: string): string {
 
   // 1. First, check if the ENTIRE text is a standalone algebraic expression (e.g. in option buttons like "4a+6b", "2a+3b", "4a^2-9b^2")
   const trimmed = text.trim();
-  const isPureAlgebraicOption = /^[0-9a-zA-Z\^_\+\-\*\/\(\)\s\.,]+$/.test(trimmed) && 
-    /[\+\-\*\/\^]/.test(trimmed) && 
+  const isPureAlgebraicOption = /^[0-9a-zA-Z^_/*().,\s+-]+$/.test(trimmed) && 
+    /[+*/^-]/.test(trimmed) && 
     !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both)\b/i.test(trimmed);
 
   if (isPureAlgebraicOption) {
@@ -146,8 +146,8 @@ function processUnDelimitedFormulas(text: string): string {
   }
 
   // Check for options with annotations like "2a-3b (or: none)"
-  const annotatedMatch = trimmed.match(/^([0-9a-zA-Z\^_\+\-\*\/\(\)\s]+)(\s*\(.*?\))$/);
-  if (annotatedMatch && /[\+\-\*\/\^]/.test(annotatedMatch[1])) {
+  const annotatedMatch = trimmed.match(/^([0-9a-zA-Z^_/*().\s+-]+)(\s*\(.*?\))$/);
+  if (annotatedMatch && /[+*/^-]/.test(annotatedMatch[1])) {
     const mathPart = renderKaTeXToString(formatRawMathToLatex(annotatedMatch[1].trim()), false);
     const textPart = escapeHtml(annotatedMatch[2]);
     return `${mathPart} ${textPart}`;
@@ -169,7 +169,7 @@ function processUnDelimitedFormulas(text: string): string {
   // 3. Match inline mathematical expressions with powers, roots, or algebraic operators
   // e.g. "4a^2-9b^2", "a^3+27b^3", "(4a+6b)^2", "x^2 + 5x + 6", "10^-3", "m/s^2", "cm^3"
   // Tokenize words/clauses:
-  const mathClauseRegex = /((?:\(?[0-9a-zA-Z]+(?:\^[0-9a-zA-Z\+\-]+|\_[0-9a-zA-Z]+)?(?:\s*[\+\-\*\/=]\s*\(?[0-9a-zA-Z]+(?:\^[0-9a-zA-Z\+\-]+|\_[0-9a-zA-Z]+)?\)?)+|\(?[0-9a-zA-Z\+\-]+\)\^[0-9a-zA-Z]+|[0-9a-zA-Z]+\^[0-9a-zA-Z\+\-]+|\d+\s*[xX×]\s*10\^[\-+]?\d+|\b\d+\s*°[CF]?\b|\\(?:frac|sqrt|sum|int|alpha|beta|gamma|theta|pi|omega|lambda|Delta|pm|times|div)[a-zA-Z0-9\{\}\\\s\+\-\*\/\^_\(\)]+)/g;
+  const mathClauseRegex = /((?:\(?[0-9a-zA-Z]+(?:\^[0-9a-zA-Z+-]+|_[0-9a-zA-Z]+)?(?:\s*[+*/=-]\s*\(?[0-9a-zA-Z]+(?:\^[0-9a-zA-Z+-]+|_[0-9a-zA-Z]+)?\)?)+|\(?[0-9a-zA-Z+-]+\)\^[0-9a-zA-Z]+|[0-9a-zA-Z]+\^[0-9a-zA-Z+-]+|\d+\s*[xX×]\s*10\^[-+]?\d+|\b\d+\s*°[CF]?\b|\\(?:frac|sqrt|sum|int|alpha|beta|gamma|theta|pi|omega|lambda|Delta|pm|times|div)[a-zA-Z0-9{}\\s/^_()+-]+)/g;
 
   result = result.replace(mathClauseRegex, (match) => {
     // Avoid formatting plain English words that happen to match simple letters
