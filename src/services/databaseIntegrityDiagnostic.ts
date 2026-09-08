@@ -123,6 +123,7 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
 
   let criticalCount = 0;
   let warningCount = 0;
+  let allDbSubjects: any[] = [];
 
   // 1. Diagnostics on `subjects`
   let subjectMetrics: SubjectMetrics = {
@@ -145,6 +146,7 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
       });
       criticalCount++;
     } else if (dbSubjects) {
+      allDbSubjects = dbSubjects;
       subjectMetrics.totalCount = dbSubjects.length;
       subjectMetrics.inactiveCount = dbSubjects.filter((s) => s.is_active === false).length;
 
@@ -224,9 +226,9 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
       }
 
       // 2a. Find subjects with 0 topics
-      if (dbSubjects) {
+      if (allDbSubjects && allDbSubjects.length > 0) {
         const topicsBySubject = new Set(dbTopics.map((t) => t.subject_id).filter(Boolean));
-        const emptySubjects = dbSubjects
+        const emptySubjects = allDbSubjects
           .filter((s) => !topicsBySubject.has(s.id))
           .map((s) => s.name);
         

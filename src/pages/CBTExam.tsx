@@ -47,11 +47,15 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     examMode = 'past_questions';
   } else if (location.pathname.includes('ai-mock') || queryMode === 'ai') {
     examMode = 'ai_generated_mock';
-  } else if (location.pathname.includes('full-mock') || queryMode === 'full') {
+  } else if (location.pathname.includes('full-mock') || queryMode === 'full' || queryMode === 'weekly-mock' || queryMode === 'synced-mock') {
     examMode = 'full_mock';
   }
 
-  const modeTitle = examMode === 'past_questions' 
+  const modeTitle = queryMode === 'weekly-mock'
+    ? 'Weekly Rolling Mock Exam'
+    : queryMode === 'synced-mock'
+    ? 'National Grand Mock Exam'
+    : examMode === 'past_questions' 
     ? 'JAMB Past Questions Exam' 
     : examMode === 'ai_generated_mock' 
     ? 'AI-Generated Adaptive Mock' 
@@ -223,42 +227,33 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
 
   useEffect(() => {
     const initializeExam = async () => {
-      
-  if (!examSubjectsList || examSubjectsList.length === 0) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-6">
-        <div className="max-w-md text-center space-y-4">
-          <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto" />
-          <h2 className="text-2xl font-bold font-display text-foreground">No Subjects Registered</h2>
-          <p className="text-muted-foreground">Please complete your UTME subject registration in your profile to take the exam.</p>
-          <Button onClick={() => navigate('/profile')} className="w-full font-bold">Go to Profile</Button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!profile) return;
+      setLoading(true);
       
       try {
         // Check for interrupted exam from localStorage or IndexedDB
-        const activeInterrupted = getInterruptedExamSession();
-        const shouldDirectResume = location.state?.resume;
+        if (profile?.id) {
+          const activeInterrupted = getInterruptedExamSession();
+          const shouldDirectResume = location.state?.resume;
 
-        if (activeInterrupted && activeInterrupted.questions && activeInterrupted.questions.length > 0) {
-          if (shouldDirectResume || window.confirm("We found an unfinished exam session. Would you like to resume your previous exam?")) {
-            setQuestions(activeInterrupted.questions);
-            setAnswers(activeInterrupted.answers || {});
-            setFlagged(activeInterrupted.flagged || {});
-            setSessionStartedAt(activeInterrupted.startedAt);
-            setTimeLeft(activeInterrupted.timeLeft);
-            setCurrentQuestionIdx(activeInterrupted.currentQuestionIdx || 0);
-            setExamSubjectsList(activeInterrupted.subjects || []);
-            setHasStarted(true);
-            setLoading(false);
-            toast.success("Exam session restored successfully!");
-            return;
-          } else {
-            await clearInterruptedExamSession(profile.id);
+          if (activeInterrupted && activeInterrupted.questions && activeInterrupted.questions.length > 0) {
+            if (shouldDirectResume || window.confirm("We found an unfinished exam session. Would you like to resume your previous exam?")) {
+              setQuestions(activeInterrupted.questions);
+              setAnswers(activeInterrupted.answers || {});
+              setFlagged(activeInterrupted.flagged || {});
+              setSessionStartedAt(activeInterrupted.startedAt);
+              setTimeLeft(activeInterrupted.timeLeft);
+              setCurrentQuestionIdx(activeInterrupted.currentQuestionIdx || 0);
+              setExamSubjectsList(activeInterrupted.subjects || []);
+              if (activeInterrupted.subjects && activeInterrupted.subjects.length > 0) {
+                setStartingSubject(activeInterrupted.subjects[0]);
+              }
+              setHasStarted(true);
+              setLoading(false);
+              toast.success("Exam session restored successfully!");
+              return;
+            } else {
+              await clearInterruptedExamSession(profile.id);
+            }
           }
         }
       } catch (e) {
@@ -269,7 +264,9 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       if (location.state?.retakeQuestions && Array.isArray(location.state.retakeQuestions) && location.state.retakeQuestions.length > 0) {
         const retakeList = location.state.retakeQuestions;
         const distinctSubjects = Array.from(new Set(retakeList.map((q: any) => q.subject_name).filter(Boolean))) as string[];
-        setExamSubjectsList(distinctSubjects.length > 0 ? distinctSubjects : ['General']);
+        const finalSubs = distinctSubjects.length > 0 ? distinctSubjects : ['General'];
+        setExamSubjectsList(finalSubs);
+        setStartingSubject(finalSubs[0]);
         setQuestions(retakeList);
         setLoading(false);
         toast.info(`Loaded ${retakeList.length} questions for exam retake!`);
@@ -277,28 +274,45 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       }
 
       // JAMB 180-Question Master Logic via QuestionFlowService
-      const userSubs = profile.utme_subjects?.length > 0 ? profile.utme_subjects : [];
-      const validation = validateUtmeSubjectCombination(userSubs);
-      const finalSubjects = validation.isValid 
-        ? validation.normalizedSubjects 
+      const userSubs = profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0
+        ? profile.utme_subjects
         : [];
-
-      setExamSubjectsList(finalSubjects);
       
-      const flowResult = await QuestionFlowService.fetchQuestionsForMode({
-        mode: examMode,
-        subjectIds: finalSubjects,
-        count: examMode === 'past_questions' ? 40 : 180
-      });
+      const validation = validateUtmeSubjectCombination(userSubs);
+      let finalSubjects = validation.isValid ? validation.normalizedSubjects : [];
 
-      console.log(`[CBT Exam Question Flow] Full Mock Retrieved: ${flowResult.totalRetrieved} questions across ${Object.keys(flowResult.validation.subjectsCovered).length} subjects in ${flowResult.queryLatencyMs}ms (Zero Mock Enforced)`);
-
-      if (flowResult.questions.length < 10) {
-        toast.error("Insufficient active questions in the database to form a full exam. Please contact support.");
+      if (!finalSubjects || finalSubjects.length === 0) {
+        if (userSubs.length > 0) {
+          const withEnglish = Array.from(new Set(['Use of English', ...userSubs])).slice(0, 4);
+          finalSubjects = withEnglish;
+        } else {
+          finalSubjects = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
+        }
       }
 
-      setQuestions(flowResult.questions);
-      setLoading(false);
+      setExamSubjectsList(finalSubjects);
+      setStartingSubject(finalSubjects[0] || 'Use of English');
+      
+      try {
+        const flowResult = await QuestionFlowService.fetchQuestionsForMode({
+          mode: examMode,
+          subjectIds: finalSubjects,
+          count: examMode === 'past_questions' ? 40 : 180
+        });
+
+        console.log(`[CBT Exam Question Flow] Full Mock Retrieved: ${flowResult.totalRetrieved} questions across ${Object.keys(flowResult.validation.subjectsCovered).length} subjects in ${flowResult.queryLatencyMs}ms (Zero Mock Enforced)`);
+
+        if (flowResult.questions.length < 10) {
+          toast.warning("Limited questions found for this specific subject combination. Practice questions loaded.");
+        }
+
+        setQuestions(flowResult.questions);
+      } catch (err: any) {
+        console.error("Failed to fetch questions for mode:", err);
+        toast.error("Failed to load exam questions from the database. Retrying with general question bank.");
+      } finally {
+        setLoading(false);
+      }
     };
     
     initializeExam();

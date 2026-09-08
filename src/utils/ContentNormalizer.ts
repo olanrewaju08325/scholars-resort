@@ -240,7 +240,7 @@ export class ContentNormalizer {
       explanation: this.cleanExplanation(rawQuestion.explanation || rawQuestion.solution || rawQuestion.sol),
       hint: this.cleanExplanation(rawQuestion.hint || rawQuestion.tip),
       subject_id: rawQuestion.subject_id || rawQuestion.subjectId,
-      subject_name: rawQuestion.subject_name || rawQuestion.subjectName || rawQuestion.subject,
+      subject_name: rawQuestion.subject_name || rawQuestion.subjectName || rawQuestion.subject || rawQuestion.subjects?.name || rawQuestion.subject_title || rawQuestion.topic_name,
       topic: rawQuestion.topic || rawQuestion.topic_name,
       year: rawQuestion.year || rawQuestion.exam_year,
       image_url: rawQuestion.image_url || rawQuestion.imageUrl || rawQuestion.image,

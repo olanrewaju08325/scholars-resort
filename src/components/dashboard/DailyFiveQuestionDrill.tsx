@@ -44,21 +44,30 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
 
         // 2. Resolve Subject IDs for selected subjects
         let targetSubjectIds: string[] = [];
+        const subjectIdToName: Record<string, string> = {};
         try {
           const { data: subs } = await supabase
             .from('subjects')
             .select('id, name');
           
           if (subs && subs.length > 0) {
+            subs.forEach((s: any) => {
+              if (s.id && s.name) subjectIdToName[s.id] = s.name;
+            });
             targetSubjectIds = subs
               .filter((s: any) => selectedSubjects.some(us => us.toLowerCase() === s.name.toLowerCase() || s.name.toLowerCase().includes(us.toLowerCase())))
               .map((s: any) => s.id);
           }
         } catch {}
 
-        // Helper to validate questions have at least 2 non-empty options
+        // Helper to validate questions have at least 2 non-empty options and attach verified subject name
         const filterValidOptions = (rawList: any[]): NormalizedQuestion[] => {
-          return ContentNormalizer.normalizeStream(rawList).filter(q => {
+          return ContentNormalizer.normalizeStream(rawList).map(q => {
+            if (!q.subject_name && q.subject_id && subjectIdToName[q.subject_id]) {
+              q.subject_name = subjectIdToName[q.subject_id];
+            }
+            return q;
+          }).filter(q => {
             if (!q.question_text || q.question_text.trim().length < 5) return false;
             if (!Array.isArray(q.options) || q.options.length < 2) return false;
             // Check that options have non-empty text
@@ -179,7 +188,7 @@ export const DailyFiveQuestionDrill = ({ userId }: { userId: string }) => {
   if (!isOpen || questions.length === 0) return null;
 
   const currentQ = questions[currentIdx];
-  const subjectLabel = currentQ?.subject_name || userUTMESubjects[0] || 'UTME';
+  const subjectLabel = currentQ?.subject_name || 'UTME Practice';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">

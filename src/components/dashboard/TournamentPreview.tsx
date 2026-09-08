@@ -12,12 +12,25 @@ export const TournamentPreview = () => {
 
   useEffect(() => {
     const fetchNextTournament = async () => {
+      try {
+        // 1. Fetch from /api/tournaments
+        const res = await fetch('/api/tournaments');
+        const json = await res.json();
+        if (json?.success && Array.isArray(json.tournaments) && json.tournaments.length > 0) {
+          const upcoming = json.tournaments.find((t: any) => t.status === 'upcoming' || t.status === 'active') || json.tournaments[0];
+          if (upcoming) {
+            setNextMock(DataSanitizer.sanitizeTournament(upcoming));
+            setLoading(false);
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Fallback to Supabase query
       const res = await safeSupabaseQuery(
         supabase
           .from('tournaments')
           .select('*')
-          .eq('status', 'upcoming')
-          .gt('start_time', new Date().toISOString())
           .order('start_time', { ascending: true })
           .limit(1)
           .maybeSingle(),

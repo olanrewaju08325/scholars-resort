@@ -23,40 +23,79 @@ export default function Tournaments() {
     setLoading(true);
     
     // Check if feature is enabled
-    const { data: settingsData } = await supabase.from('admin_settings').select('*').eq('setting_key', 'feature_toggles').maybeSingle();
-    if (settingsData && settingsData.setting_value && settingsData.setting_value.tournaments_enabled === false) {
-      setEnabled(false);
-      setLoading(false);
-      return;
-    }
+    try {
+      const { data: settingsData } = await supabase.from('admin_settings').select('*').eq('setting_key', 'feature_toggles').maybeSingle();
+      if (settingsData && settingsData.setting_value && settingsData.setting_value.tournaments_enabled === false) {
+        setEnabled(false);
+        setLoading(false);
+        return;
+      }
+    } catch {}
 
-    // Query real tournaments
-    const { data, error } = await supabase
-      .from('tournaments')
-      .select(`
-        *,
-        tournament_participants (count)
-      `)
-      .order('start_time', { ascending: true });
-      
-    if (!error && data) {
-      const formatted = data.map(rawT => {
-        let meta: Record<string, any> = {};
-        const searchTarget = (rawT.rules || '') + '\n' + (rawT.description || '');
-        const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
-        if (match && match[1]) {
-          try { meta = JSON.parse(match[1]); } catch {}
-        }
-        const cleanDesc = (rawT.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
-        return {
-          ...meta,
-          ...rawT,
-          description: cleanDesc,
-          participants_count: rawT.tournament_participants?.[0]?.count || 0
-        };
-      });
-      setTournaments(formatted);
-    }
+    const listMap = new Map<string, any>();
+
+    // 1. Try /api/tournaments
+    try {
+      const res = await fetch('/api/tournaments');
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.tournaments)) {
+        json.tournaments.forEach((t: any) => listMap.set(t.id, t));
+      }
+    } catch {}
+
+    // 2. Query real tournaments table in Supabase
+    try {
+      const { data, error } = await supabase
+        .from('tournaments')
+        .select(`
+          *,
+          tournament_participants (count)
+        `)
+        .order('start_time', { ascending: true });
+        
+      if (!error && data && Array.isArray(data)) {
+        data.forEach(rawT => {
+          let meta: Record<string, any> = {};
+          const searchTarget = (rawT.rules || '') + '\n' + (rawT.description || '');
+          const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
+          if (match && match[1]) {
+            try { meta = JSON.parse(match[1]); } catch {}
+          }
+          const cleanDesc = (rawT.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
+          listMap.set(rawT.id, {
+            ...meta,
+            ...rawT,
+            description: cleanDesc,
+            participants_count: rawT.tournament_participants?.[0]?.count || 0
+          });
+        });
+      }
+    } catch {}
+
+    // 3. Check admin_settings tournaments_db fallback
+    try {
+      const { data: currentSettings } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournaments_db')
+        .maybeSingle();
+
+      if (currentSettings?.setting_value && Array.isArray(currentSettings.setting_value)) {
+        currentSettings.setting_value.forEach((t: any) => {
+          if (!listMap.has(t.id)) {
+            listMap.set(t.id, t);
+          }
+        });
+      }
+    } catch {}
+
+    const finalTournaments = Array.from(listMap.values()).sort((a, b) => {
+      const timeA = new Date(a.start_time || 0).getTime();
+      const timeB = new Date(b.start_time || 0).getTime();
+      return timeA - timeB;
+    });
+
+    setTournaments(finalTournaments);
     setLoading(false);
   };
 

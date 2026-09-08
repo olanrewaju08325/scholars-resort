@@ -21,10 +21,13 @@ const COMMON_CHEM_FORMULAS = [
 ];
 
 /**
- * Converts a raw chemical formula string like H2SO4 to LaTeX \mathrm{H_2SO_4}
+ * Converts a raw chemical formula string like H2SO4 or Ca(OH)2 or Fe2(SO4)3 to LaTeX \mathrm{...}
  */
 export function formatChemicalFormulaToLatex(formula: string): string {
-  const formatted = formula.replace(/([A-Za-z\)])(\d+)/g, '$1_{$2}');
+  // Convert numbers after elements or closing parens to subscripts
+  let formatted = formula.replace(/([A-Za-z\)])(\d+)/g, '$1_{$2}');
+  // Handle charges like 2+, 3+, 2-, +, -
+  formatted = formatted.replace(/\^?(\d*[+-])/g, '^{$1}');
   return `\\mathrm{${formatted}}`;
 }
 
@@ -44,6 +47,10 @@ export function sanitizeAndRepairMathLatex(expr: string): string {
   s = s.replace(/\[\s*Note:?\s*original equation formatting is unclear[^\]]*\]/gi, '');
   s = s.replace(/\(\s*Note:?\s*original equation formatting is unclear[^\)]*\)/gi, '');
   s = s.replace(/\[\s*verify\s*\]/gi, '');
+
+  // Convert arrows in chemical or physics reactions
+  s = s.replace(/\s*(?:->|-->|\\rightarrow)\s*/g, ' \\rightarrow ');
+  s = s.replace(/\s*(?:<=>|<==>|\\rightleftharpoons)\s*/g, ' \\rightleftharpoons ');
 
   // Convert roots in natural language
   s = s.replace(/cube\s+root\s+of\s+\[([^\]]+)\]/gi, '\\sqrt[3]{$1}');
@@ -161,11 +168,11 @@ export function processAcademicContent(rawText: string): string {
   text = text.replace(/\$([^\$\n]+?)\$/g, (_, math) => addSlot(math, false));
   text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => addSlot(math, false));
 
-  // 2. Pure algebraic options (e.g. "4a+6b", "4a^2-9b^2", "x^2+5x+6")
+  // 2. Pure algebraic options (e.g. "4a+6b", "4a^2-9b^2", "x^2+5x+6", "1/2 mv^2")
   const trimmed = text.trim();
   const isPureAlgebraic = /^[0-9a-zA-Z^_/*().,\s+-]+$/.test(trimmed) && 
     /[+*/^-]/.test(trimmed) && 
-    !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both)\b/i.test(trimmed);
+    !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both|because|since|when|with)\b/i.test(trimmed);
 
   if (isPureAlgebraic) {
     const formatted = formatRawMathToLatex(trimmed);
@@ -173,14 +180,16 @@ export function processAcademicContent(rawText: string): string {
     return token.replace(/___SCHOLARS_MATH_SLOT_(\d+)___/g, (_, idx) => renderedSlots[Number(idx)] || '');
   }
 
-  // 3. Chemical formulas
+  // 3. Chemical formulas (matching exact tokens safely even with parens)
   for (const formula of COMMON_CHEM_FORMULAS) {
     if (text.includes(formula)) {
       const chemLatex = formatChemicalFormulaToLatex(formula);
       const token = addSlot(chemLatex, false);
-      // Replace standalone word matches
-      const escapedFormula = formula.replace(/\(/g, '\\(').replace(/\)/g, '\\)');
-      text = text.replace(new RegExp(`\\b${escapedFormula}\\b`, 'g'), token);
+      
+      // Escape for regex safely
+      const escapedFormula = formula.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Look for boundary that handles parens and spaces
+      text = text.replace(new RegExp(`(?<=^|[^a-zA-Z0-9])${escapedFormula}(?=[^a-zA-Z0-9]|$)`, 'g'), token);
     }
   }
 

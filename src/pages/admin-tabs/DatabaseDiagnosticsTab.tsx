@@ -148,11 +148,29 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
     setRepairing(true);
     toast.info('Starting database integrity auto-repair and mock data cleanup...');
     try {
+      // 1. Call server-side repair API (bypasses client-side RLS and permissions)
+      try {
+        const apiRes = await fetch('/api/admin/repair-database', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        const apiJson = await apiRes.json();
+        if (apiJson?.success) {
+          toast.success(apiJson.message || 'Database auto-repair succeeded!');
+          if (Array.isArray(apiJson.repairedItems)) {
+            apiJson.repairedItems.forEach((item: string) => toast.success(item, { duration: 4000 }));
+          }
+        }
+      } catch (e) {
+        console.warn('Server repair endpoint warning:', e);
+      }
+
+      // 2. Run client-side database integrity repair
       const res = await repairDatabaseIntegrity();
       if (res.success) {
         toast.success(res.message);
         if (res.repairedItems.length > 0) {
-          res.repairedItems.forEach(item => toast.success(item, { duration: 5000 }));
+          res.repairedItems.forEach(item => toast.success(item, { duration: 4000 }));
         }
         await fetchDiagnostics();
       } else {
