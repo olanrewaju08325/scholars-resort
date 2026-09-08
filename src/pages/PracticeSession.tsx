@@ -14,7 +14,7 @@ import { callGroqAPI, stripThinkTags } from '@/services/aiService';
 import { ExplanationCacheService } from '@/services/explanationCacheService';
 import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
-import { cleanQuestionText, cleanOptionText, ContentNormalizer } from '@/utils/questionUtils';
+import { cleanQuestionText, cleanOptionText, ContentNormalizer, checkIsCorrect } from '@/utils/questionUtils';
 import { MathText } from '@/components/MathText';
 import { QuestionFlowService, type ExamMode } from '@/services/questionFlowService';
 import { CBTNavigationDrawer } from '@/components/cbt/CBTNavigationDrawer';
@@ -150,12 +150,12 @@ const PracticeSession = () => {
       });
       
       // Update Smart Mistake Bank
-      const mistakesToSave = questions.filter(q => answersMap[q.id] && answersMap[q.id] !== q.correct_answer);
+      const mistakesToSave = questions.filter(q => answersMap[q.id] && !checkIsCorrect(answersMap[q.id], q));
       try {
         let existing = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
         if (state?.mode === 'mistakes') {
           // Remove questions answered correctly this time
-          const correctlyAnsweredIds = questions.filter(q => answersMap[q.id] === q.correct_answer).map(q => q.id);
+          const correctlyAnsweredIds = questions.filter(q => answersMap[q.id] && checkIsCorrect(answersMap[q.id], q)).map(q => q.id);
           existing = existing.filter((q: any) => !correctlyAnsweredIds.includes(q.id));
         }
         if (mistakesToSave.length > 0) {
@@ -477,7 +477,7 @@ const PracticeSession = () => {
     try {
       if (actualCorrectAnswer) {
         // We are offline, or the question object already has it (fallback)
-        isCorrect = option === actualCorrectAnswer;
+        isCorrect = checkIsCorrect(option, currentQ);
       } else {
         // Secure server-side check
         const { data: { session } } = await supabase.auth.getSession();
@@ -879,7 +879,8 @@ D) ...
                   const isEliminated = (eliminatedOptions[q.id] || []).includes(opt);
                   
                   if (isAnswered) {
-                    if (opt === q.correct_answer) {
+                    const isCorrectOpt = checkIsCorrect(opt, q) || checkIsCorrect(String.fromCharCode(65 + i), q);
+                    if (isCorrectOpt) {
                       btnClass = "bg-green-500/10 border-green-500 text-green-700 dark:text-green-400 font-semibold";
                       Icon = <CheckCircle className="w-5 h-5 text-green-500" />;
                     } else if (opt === selectedAns) {

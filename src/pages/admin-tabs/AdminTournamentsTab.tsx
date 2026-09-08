@@ -11,21 +11,22 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI } from '@/services/aiService';
+import { authFetch } from '@/lib/apiAuth';
 
 export const parseTournamentMetadata = (t: any): any => {
   if (!t) return t;
   let meta: Record<string, any> = {};
 
   const searchTarget = (t.rules || '') + '\n' + (t.description || '');
-  const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
+  const match = searchTarget.match(/__meta__:(\{[\s\S]*?\})(?:\n|$)/);
   if (match && match[1]) {
     try {
       meta = JSON.parse(match[1]);
     } catch {}
   }
 
-  const cleanDescription = (t.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
-  const cleanRules = (t.rules || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
+  const cleanDescription = (t.description || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
+  const cleanRules = (t.rules || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
 
   return {
     ...meta,
@@ -88,9 +89,8 @@ async function saveTournamentAdaptive(
 
   // 1. Try server endpoint first (bypasses client-side RLS and handles service role)
   try {
-    const res = await fetch('/api/admin/tournaments/save', {
+    const res = await authFetch('/api/admin/tournaments/save', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ tournament: payload, isEdit, id: tournamentId })
     });
     if (res.ok) {
@@ -486,9 +486,8 @@ Return STRICT JSON format:
       'Are you sure? This will remove all participant and leaderboard records.',
       async () => {
         try {
-          await fetch('/api/admin/tournaments/delete', {
+          await authFetch('/api/admin/tournaments/delete', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id })
           });
         } catch {}
@@ -531,14 +530,14 @@ Return STRICT JSON format:
       {ConfirmElement}
       <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
+          <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
             <Trophy className="w-6 h-6 text-yellow-500" /> Tournament & Battle Management
           </h2>
-          <p className="text-slate-400">Create, edit, lock, unlock, and award prizes for live student tournaments.</p>
+          <p className="text-muted-foreground text-sm">Create, edit, lock, unlock, and award prizes for live student tournaments.</p>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           {view !== 'list' && (
-            <Button variant="outline" onClick={() => { setView('list'); setForm(EMPTY_FORM); }} className="border-slate-700">
+            <Button variant="outline" onClick={() => { setView('list'); setForm(EMPTY_FORM); }} className="border-border text-foreground hover:bg-muted">
               <ArrowLeft className="w-4 h-4 mr-2" /> Back to List
             </Button>
           )}
@@ -582,15 +581,15 @@ NOTIFY pgrst, 'reload schema';`;
                   navigator.clipboard.writeText(sql);
                   toast.success("Complete Tournament & Materials SQL copied! Paste into Supabase SQL Editor.");
                 }}
-                className="border-slate-700 hover:bg-slate-800 text-xs text-slate-300"
+                className="border-border hover:bg-muted text-xs text-foreground"
                 title="Copy SQL fix for Supabase"
               >
-                <Database className="w-3.5 h-3.5 mr-1.5 text-emerald-400" /> Copy SQL Fix
+                <Database className="w-3.5 h-3.5 mr-1.5 text-emerald-500" /> Copy SQL Fix
               </Button>
-              <Button onClick={handleAIGenerateWeeklyChallenge} disabled={saving} className="bg-purple-600 hover:bg-purple-700 font-bold">
+              <Button onClick={handleAIGenerateWeeklyChallenge} disabled={saving} className="bg-purple-600 hover:bg-purple-700 text-white font-bold">
                 <Sparkles className="w-4 h-4 mr-2" /> AI Generate Challenge
               </Button>
-              <Button onClick={() => { setForm(EMPTY_FORM); setView('create'); }} className="bg-primary hover:bg-primary/90 font-bold">
+              <Button onClick={() => { setForm(EMPTY_FORM); setView('create'); }} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
                 <Plus className="w-4 h-4 mr-2" /> Create Tournament
               </Button>
             </>
@@ -608,8 +607,8 @@ NOTIFY pgrst, 'reload schema';`;
                 onClick={() => setStatusFilter(tab)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold capitalize transition-colors ${
                   statusFilter === tab
-                    ? 'bg-primary text-white'
-                    : 'bg-slate-900 text-slate-400 border border-slate-800 hover:text-white'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted text-muted-foreground border border-border hover:text-foreground hover:bg-muted/80'
                 }`}
               >
                 {tab}
@@ -620,10 +619,10 @@ NOTIFY pgrst, 'reload schema';`;
           {loading ? (
             <div className="flex justify-center p-12"><RefreshCw className="w-8 h-8 animate-spin text-primary" /></div>
           ) : filteredTournaments.length === 0 ? (
-            <Card className="bg-slate-900 border-slate-800 text-center py-12 text-slate-400">
-              <Trophy className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-              <p className="font-bold">No tournaments found in this category.</p>
-              <p className="text-xs text-slate-500 mt-1">Create one manually or use AI generation above.</p>
+            <Card className="bg-card border-border text-center py-12 text-muted-foreground">
+              <Trophy className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
+              <p className="font-bold text-foreground">No tournaments found in this category.</p>
+              <p className="text-xs text-muted-foreground mt-1">Create one manually or use AI generation above.</p>
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -632,52 +631,52 @@ NOTIFY pgrst, 'reload schema';`;
                 const isLocked = t.status === 'locked';
 
                 return (
-                  <Card key={t.id} className="bg-slate-900 border-slate-800 text-slate-100 flex flex-col justify-between hover:border-slate-700 transition-all">
+                  <Card key={t.id} className="bg-card border-border text-foreground flex flex-col justify-between hover:border-primary/50 shadow-sm transition-all">
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start gap-2">
-                        <CardTitle className="text-lg font-bold flex items-center gap-2">
-                          {isLocked && <Lock className="w-4 h-4 text-red-400" />}
+                        <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
+                          {isLocked && <Lock className="w-4 h-4 text-red-500" />}
                           {t.title}
                         </CardTitle>
                         <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
-                          t.status === 'active' ? 'bg-green-500/20 text-green-400' :
-                          t.status === 'upcoming' ? 'bg-blue-500/20 text-blue-400' :
-                          t.status === 'locked' ? 'bg-red-500/20 text-red-400' : 'bg-slate-700 text-slate-300'
+                          t.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+                          t.status === 'upcoming' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
+                          t.status === 'locked' ? 'bg-red-500/20 text-red-700 dark:text-red-400' : 'bg-muted text-muted-foreground'
                         }`}>
                           {t.status}
                         </span>
                       </div>
-                      <CardDescription className="text-slate-400 line-clamp-2 text-xs">
+                      <CardDescription className="text-muted-foreground line-clamp-2 text-xs">
                         {t.description || 'No description provided.'}
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4 pt-2">
-                      <div className="grid grid-cols-2 gap-2 text-xs text-slate-400 bg-slate-950 p-2.5 rounded-lg border border-slate-800">
-                        <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-400" /> {new Date(t.start_time).toLocaleDateString()}</div>
-                        <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-400" /> {t.duration_minutes} mins ({t.question_count} Qs)</div>
-                        <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-purple-400" /> {count} / {t.max_participants} Players</div>
-                        <div className="flex items-center gap-1.5 font-bold text-yellow-400 truncate"><Trophy className="w-3.5 h-3.5" /> {t.prize_description || 'XP Prize'}</div>
+                      <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/50 p-2.5 rounded-lg border border-border">
+                        <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-500" /> {new Date(t.start_time).toLocaleDateString()}</div>
+                        <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> {t.duration_minutes} mins ({t.question_count} Qs)</div>
+                        <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-purple-500" /> {count} / {t.max_participants} Players</div>
+                        <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 truncate"><Trophy className="w-3.5 h-3.5" /> {t.prize_description || 'XP Prize'}</div>
                       </div>
 
-                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-800/80">
+                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
                         <div className="flex gap-1.5">
-                          <Button size="sm" variant="outline" onClick={() => handleEdit(t)} className="h-8 px-2 text-xs border-slate-700 text-slate-300 hover:text-white">
+                          <Button size="sm" variant="outline" onClick={() => handleEdit(t)} className="h-8 px-2 text-xs border-border text-foreground hover:bg-muted">
                             <Edit2 className="w-3.5 h-3.5 mr-1" /> Edit
                           </Button>
                           <Button 
                             size="sm" 
                             variant="outline" 
                             onClick={() => handleToggleLock(t)} 
-                            className={`h-8 px-2 text-xs border-slate-700 ${isLocked ? 'text-amber-400 hover:text-amber-300' : 'text-slate-400 hover:text-red-400'}`}
+                            className={`h-8 px-2 text-xs border-border ${isLocked ? 'text-amber-600 dark:text-amber-400 hover:bg-amber-500/10' : 'text-muted-foreground hover:text-red-600 hover:bg-red-500/10'}`}
                           >
                             {isLocked ? <Unlock className="w-3.5 h-3.5 mr-1" /> : <Lock className="w-3.5 h-3.5 mr-1" />}
                             {isLocked ? 'Unlock' : 'Lock'}
                           </Button>
-                          <Button size="sm" variant="outline" onClick={() => openDetail(t)} className="h-8 px-2 text-xs border-slate-700 text-slate-300">
+                          <Button size="sm" variant="outline" onClick={() => openDetail(t)} className="h-8 px-2 text-xs border-border text-foreground hover:bg-muted">
                             <Users className="w-3.5 h-3.5 mr-1" /> Players
                           </Button>
                         </div>
-                        <Button size="sm" variant="ghost" onClick={() => handleDelete(t.id)} className="h-8 px-2 text-red-400 hover:text-red-300 hover:bg-red-500/10">
+                        <Button size="sm" variant="ghost" onClick={() => handleDelete(t.id)} className="h-8 px-2 text-red-600 dark:text-red-400 hover:text-red-700 hover:bg-red-500/10">
                           <Trash2 className="w-3.5 h-3.5" />
                         </Button>
                       </div>
@@ -691,30 +690,30 @@ NOTIFY pgrst, 'reload schema';`;
       )}
 
       {(view === 'create' || view === 'edit') && (
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader>
             <CardTitle>{view === 'edit' ? 'Edit Tournament' : 'Create New Tournament'}</CardTitle>
-            <CardDescription className="text-slate-400">Configure tournament rules, subject syllabus, dates, and reward prizes.</CardDescription>
+            <CardDescription className="text-muted-foreground">Configure tournament rules, subject syllabus, dates, and reward prizes.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSave} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Tournament Title</label>
+                  <label className="text-sm font-medium text-foreground">Tournament Title</label>
                   <Input 
                     value={form.title} 
                     onChange={e => setForm({ ...form, title: e.target.value })} 
                     placeholder="e.g. National UTME Grand Master Duel"
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Status</label>
+                  <label className="text-sm font-medium text-foreground">Status</label>
                   <select 
                     value={form.status}
                     onChange={e => setForm({ ...form, status: e.target.value })}
-                    className="w-full h-10 px-3 bg-slate-950 border border-slate-800 rounded-md text-sm text-slate-200 outline-none"
+                    className="w-full h-10 px-3 bg-background border border-border rounded-md text-sm text-foreground outline-none"
                   >
                     <option value="upcoming">Upcoming</option>
                     <option value="active">Active (Live Now)</option>
@@ -725,121 +724,121 @@ NOTIFY pgrst, 'reload schema';`;
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Description & Overview</label>
+                <label className="text-sm font-medium text-foreground">Description & Overview</label>
                 <Textarea 
                   value={form.description} 
                   onChange={e => setForm({ ...form, description: e.target.value })} 
                   placeholder="Describe the rules, target subjects, and special eligibility..."
-                  className="bg-slate-950 border-slate-800 h-24"
+                  className="bg-background border-border text-foreground h-24"
                 />
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Start Date & Time</label>
+                  <label className="text-sm font-medium text-foreground">Start Date & Time</label>
                   <Input 
                     type="datetime-local" 
                     value={form.start_time} 
                     onChange={e => setForm({ ...form, start_time: e.target.value })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">End Date & Time</label>
+                  <label className="text-sm font-medium text-foreground">End Date & Time</label>
                   <Input 
                     type="datetime-local" 
                     value={form.end_time} 
                     onChange={e => setForm({ ...form, end_time: e.target.value })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                     required
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Registration Deadline</label>
+                  <label className="text-sm font-medium text-foreground">Registration Deadline</label>
                   <Input 
                     type="datetime-local" 
                     value={form.registration_deadline} 
                     onChange={e => setForm({ ...form, registration_deadline: e.target.value })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Duration (Mins)</label>
+                  <label className="text-sm font-medium text-foreground">Duration (Mins)</label>
                   <Input 
                     type="number" 
                     value={form.duration_minutes} 
                     onChange={e => setForm({ ...form, duration_minutes: Number(e.target.value) })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Question Count</label>
+                  <label className="text-sm font-medium text-foreground">Question Count</label>
                   <Input 
                     type="number" 
                     value={form.question_count} 
                     onChange={e => setForm({ ...form, question_count: Number(e.target.value) })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Max Players</label>
+                  <label className="text-sm font-medium text-foreground">Max Players</label>
                   <Input 
                     type="number" 
                     value={form.max_participants} 
                     onChange={e => setForm({ ...form, max_participants: Number(e.target.value) })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Subject Filter</label>
+                  <label className="text-sm font-medium text-foreground">Subject Filter</label>
                   <Input 
                     value={form.subject_filter} 
                     onChange={e => setForm({ ...form, subject_filter: e.target.value })} 
                     placeholder="e.g. Physics, Math"
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Prize Description</label>
+                  <label className="text-sm font-medium text-foreground">Prize Description</label>
                   <Input 
                     value={form.prize_description} 
                     onChange={e => setForm({ ...form, prize_description: e.target.value })} 
                     placeholder="e.g. ₦50,000 Cash + Certificate"
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">Coin Reward</label>
+                  <label className="text-sm font-medium text-foreground">Coin Reward</label>
                   <Input 
                     type="number" 
                     value={form.coin_reward} 
                     onChange={e => setForm({ ...form, coin_reward: Number(e.target.value) })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-medium">XP Reward</label>
+                  <label className="text-sm font-medium text-foreground">XP Reward</label>
                   <Input 
                     type="number" 
                     value={form.xp_reward} 
                     onChange={e => setForm({ ...form, xp_reward: Number(e.target.value) })} 
-                    className="bg-slate-950 border-slate-800"
+                    className="bg-background border-border text-foreground"
                   />
                 </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setView('list')} className="border-slate-700">
+                <Button type="button" variant="outline" onClick={() => setView('list')} className="border-border text-foreground hover:bg-muted">
                   Cancel
                 </Button>
-                <Button type="submit" disabled={saving} className="bg-primary hover:bg-primary/90 font-bold">
+                <Button type="submit" disabled={saving} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   {view === 'edit' ? 'Update Tournament' : 'Publish Tournament'}
                 </Button>
@@ -850,38 +849,38 @@ NOTIFY pgrst, 'reload schema';`;
       )}
 
       {view === 'detail' && selectedTournament && (
-        <Card className="bg-slate-900 border-slate-800 text-slate-100">
+        <Card className="bg-card border-border text-card-foreground">
           <CardHeader>
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="text-xl font-bold">{selectedTournament.title} - Leaderboard</CardTitle>
-                <CardDescription className="text-slate-400">Total Registered: {participants.length} students</CardDescription>
+                <CardTitle className="text-xl font-bold text-foreground">{selectedTournament.title} - Leaderboard</CardTitle>
+                <CardDescription className="text-muted-foreground">Total Registered: {participants.length} students</CardDescription>
               </div>
             </div>
           </CardHeader>
           <CardContent>
             {participants.length === 0 ? (
-              <div className="text-center py-8 text-slate-500">No participants registered yet.</div>
+              <div className="text-center py-8 text-muted-foreground">No participants registered yet.</div>
             ) : (
               <div className="space-y-2">
                 {participants.map((p, idx) => (
-                  <div key={p.id} className="flex items-center justify-between p-3 bg-slate-950 border border-slate-800 rounded-lg">
+                  <div key={p.id} className="flex items-center justify-between p-3 bg-muted/40 border border-border rounded-lg">
                     <div className="flex items-center gap-3">
                       <span className={`w-6 h-6 flex items-center justify-center rounded-full text-xs font-bold ${
                         idx === 0 ? 'bg-yellow-500 text-black' :
                         idx === 1 ? 'bg-slate-300 text-black' :
-                        idx === 2 ? 'bg-amber-600 text-white' : 'bg-slate-800 text-slate-400'
+                        idx === 2 ? 'bg-amber-600 text-white' : 'bg-muted text-muted-foreground'
                       }`}>
                         {idx + 1}
                       </span>
                       <div>
-                        <p className="font-bold text-sm">{p.profiles?.full_name || 'Scholar Student'}</p>
-                        <p className="text-xs text-slate-500">{p.profiles?.email || 'N/A'}</p>
+                        <p className="font-bold text-sm text-foreground">{p.profiles?.full_name || 'Scholar Student'}</p>
+                        <p className="text-xs text-muted-foreground">{p.profiles?.email || 'N/A'}</p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-primary">{p.score || 0} PTS</p>
-                      <p className="text-xs text-slate-500">{p.time_spent_seconds ? `${Math.floor(p.time_spent_seconds / 60)}m ${p.time_spent_seconds % 60}s` : 'Registered'}</p>
+                      <p className="text-xs text-muted-foreground">{p.time_spent_seconds ? `${Math.floor(p.time_spent_seconds / 60)}m ${p.time_spent_seconds % 60}s` : 'Registered'}</p>
                     </div>
                   </div>
                 ))}

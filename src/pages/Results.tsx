@@ -16,7 +16,7 @@ import { triggerConfetti, playSuccessChime } from '@/lib/celebration';
 import { generateExamResultPdf } from '@/lib/pdfExport';
 import { exportPracticeReportPdf } from '@/lib/practiceReportExporter';
 import { ContentNormalizer } from '@/utils/ContentNormalizer';
-import { cleanQuestionText } from '@/utils/questionUtils';
+import { cleanQuestionText, checkIsCorrect } from '@/utils/questionUtils';
 import { normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
 
 interface ResultsState {
@@ -65,7 +65,7 @@ const Results = () => {
   // Auto-sync missed questions to the Smart Mistake Bank
   useEffect(() => {
     if (questions && questions.length > 0) {
-      const missed = questions.filter(q => answers[q.id] && answers[q.id] !== q.correct_answer);
+      const missed = questions.filter(q => answers[q.id] && !checkIsCorrect(answers[q.id], q));
       if (missed.length > 0) {
         try {
           const existing = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
@@ -169,7 +169,7 @@ const Results = () => {
           const rawSName = q.subject_name || q.subjects?.name || 'Use of English';
           const sName = normalizeToCanonicalSubjectName(rawSName);
           const userAnswer = answers[q.id];
-          const isCorrect = userAnswer === q.correct_answer;
+          const isCorrect = checkIsCorrect(userAnswer, q);
 
           if (!topicCounts[tName]) {
             topicCounts[tName] = { total: 0, correct: 0, subject: sName };
@@ -259,13 +259,13 @@ const Results = () => {
   };
 
   // Filter lists
-  const missedList = questions.filter(q => answers[q.id] && answers[q.id] !== q.correct_answer);
-  const correctList = questions.filter(q => answers[q.id] === q.correct_answer);
+  const missedList = questions.filter(q => answers[q.id] && !checkIsCorrect(answers[q.id], q));
+  const correctList = questions.filter(q => answers[q.id] && checkIsCorrect(answers[q.id], q));
   const skippedList = questions.filter(q => !answers[q.id]);
 
   const displayedQuestions = questions.filter(q => {
     const userAnswer = answers[q.id];
-    const isCorrect = userAnswer === q.correct_answer;
+    const isCorrect = checkIsCorrect(userAnswer, q);
     const wasSkipped = !userAnswer;
     if (reviewFilter === 'missed') return !isCorrect && !wasSkipped;
     if (reviewFilter === 'correct') return isCorrect;
@@ -484,7 +484,7 @@ const Results = () => {
               {displayedQuestions.map((q, idx) => {
                 const originalIdx = questions.findIndex(item => item.id === q.id);
                 const userAnswer = answers[q.id];
-                const isCorrect = userAnswer === q.correct_answer;
+                const isCorrect = checkIsCorrect(userAnswer, q);
                 const wasSkipped = !userAnswer;
                 return (
                   <Card key={q.id} className={`border-l-4 ${isCorrect ? 'border-l-green-500' : wasSkipped ? 'border-l-slate-500' : 'border-l-red-500'} border-border bg-card shadow-xs`}>
@@ -505,8 +505,19 @@ const Results = () => {
                           const label = String.fromCharCode(65 + i);
                           const optText = ContentNormalizer.cleanOptionText(opt);
                           const optRaw = typeof opt === 'object' && opt !== null ? (opt.text || opt.value || opt.id || '') : String(opt || '');
-                          const isCorrectOpt = optText === q.correct_answer || optRaw === q.correct_answer || (typeof opt === 'object' && opt?.id === q.correct_answer) || (label === q.correct_answer);
-                          const isUserOpt = optText === userAnswer || optRaw === userAnswer || (typeof opt === 'object' && opt?.id === userAnswer) || (label === userAnswer);
+                          
+                          // Check if this option is the correct one or the user's chosen one
+                          const isCorrectOpt = checkIsCorrect(label, q) || checkIsCorrect(optRaw, q) || checkIsCorrect(optText, q) || (typeof opt === 'object' && checkIsCorrect(opt?.id, q));
+                          const isUserOpt = userAnswer && (
+                            userAnswer === label || 
+                            userAnswer.toLowerCase() === label.toLowerCase() ||
+                            userAnswer === optRaw || 
+                            userAnswer.toLowerCase() === optRaw.toLowerCase() ||
+                            userAnswer === optText || 
+                            userAnswer.toLowerCase() === optText.toLowerCase() ||
+                            (typeof opt === 'object' && opt?.id && (userAnswer === opt.id || userAnswer.toLowerCase() === opt.id.toLowerCase()))
+                          );
+
                           let cls = 'border-border bg-muted/20 text-foreground';
                           if (isCorrectOpt) cls = 'border-green-500 bg-green-500/10 text-green-700 dark:text-green-300 font-semibold';
                           else if (isUserOpt && !isCorrectOpt) cls = 'border-red-500 bg-red-500/10 text-red-700 dark:text-red-300 line-through';

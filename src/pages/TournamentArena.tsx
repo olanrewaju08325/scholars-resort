@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
+import { checkIsCorrect } from '@/utils/questionUtils';
 
 export default function TournamentArena() {
   const { id } = useParams();
@@ -24,30 +25,66 @@ export default function TournamentArena() {
     if (!profile || !id) return;
     
     const initArena = async () => {
-      // 1. Fetch tournament details
-      const { data: rawData } = await supabase.from('tournaments').select('*').eq('id', id).single();
-      if (!rawData) {
+      let tData: any = null;
+
+      // 1. Fetch tournament details from Supabase
+      try {
+        const { data: rawData } = await supabase.from('tournaments').select('*').eq('id', id).maybeSingle();
+        if (rawData) {
+          tData = rawData;
+        }
+      } catch {}
+
+      // 2. Fallback to API / admin_settings if needed
+      if (!tData) {
+        try {
+          const res = await fetch('/api/tournaments');
+          const json = await res.json();
+          if (json?.tournaments && Array.isArray(json.tournaments)) {
+            tData = json.tournaments.find((t: any) => String(t.id) === String(id));
+          }
+        } catch {}
+      }
+
+      if (!tData) {
+        try {
+          const { data: currentSettings } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'tournaments_db')
+            .maybeSingle();
+
+          if (currentSettings?.setting_value && Array.isArray(currentSettings.setting_value)) {
+            tData = currentSettings.setting_value.find((t: any) => String(t.id) === String(id));
+          }
+        } catch {}
+      }
+
+      if (!tData) {
         toast.error("Tournament not found");
         navigate('/tournaments');
         return;
       }
 
       let meta: Record<string, any> = {};
-      const searchTarget = (rawData.rules || '') + '\n' + (rawData.description || '');
-      const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
+      const searchTarget = (tData.rules || '') + '\n' + (tData.description || '');
+      const match = searchTarget.match(/__meta__:(\{[\s\S]*?\})(?:\n|$)/);
       if (match && match[1]) {
         try { meta = JSON.parse(match[1]); } catch {}
       }
-      const cleanDesc = (rawData.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
-      const tData = {
+      const cleanDesc = (tData.description || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
+      const cleanRules = (tData.rules || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
+
+      const finalTournament = {
         ...meta,
-        ...rawData,
-        description: cleanDesc
+        ...tData,
+        description: cleanDesc,
+        rules: cleanRules
       };
-      setTournament(tData);
+      setTournament(finalTournament);
 
       // 2. Fetch questions based on tournament configuration (subject_filter & count)
-      const count = Number(tData.question_count) || 20;
+      const count = Number(finalTournament.question_count) || 20;
       let qData: any[] | null = null;
 
       // Filter by tournament subject if specified
@@ -152,7 +189,7 @@ export default function TournamentArena() {
 
   const handleAnswer = async (selected: string) => {
     const q = questions[currentIdx];
-    const isCorrect = selected === q.correct_answer;
+    const isCorrect = checkIsCorrect(selected, q);
     
     let newScore = score;
     if (isCorrect) {

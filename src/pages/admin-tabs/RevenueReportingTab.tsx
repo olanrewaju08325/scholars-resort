@@ -127,66 +127,66 @@ export const RevenueReportingTab = () => {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2">
+          <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
             <DollarSign className="w-6 h-6 text-green-500" /> Revenue & Financial Reporting
           </h2>
-          <p className="text-slate-400">Track platform income, average revenue, and payment history.</p>
+          <p className="text-muted-foreground text-sm">Track platform income, average revenue, and payment history.</p>
         </div>
-        <Button onClick={exportCSV} variant="outline" className="gap-2 border-slate-700 bg-slate-900">
+        <Button onClick={exportCSV} variant="outline" className="gap-2 border-border bg-card text-foreground hover:bg-muted">
           <Download className="w-4 h-4" /> Export CSV
         </Button>
       </div>
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-green-500/20 rounded-lg">
                 <TrendingUp className="w-6 h-6 text-green-500" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-slate-400">Total Approved Revenue</h3>
-            <div className="text-2xl font-bold text-white mt-1">{formatNaira(totalRevenue)}</div>
+            <h3 className="text-sm font-medium text-muted-foreground">Total Approved Revenue</h3>
+            <div className="text-2xl font-bold text-foreground mt-1">{formatNaira(totalRevenue)}</div>
           </CardContent>
         </Card>
         
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-amber-500/20 rounded-lg">
                 <CreditCard className="w-6 h-6 text-amber-500" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-slate-400">Pending Approvals</h3>
-            <div className="text-2xl font-bold text-white mt-1">{formatNaira(pendingAmount)}</div>
+            <h3 className="text-sm font-medium text-muted-foreground">Pending Approvals</h3>
+            <div className="text-2xl font-bold text-foreground mt-1">{formatNaira(pendingAmount)}</div>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="p-2 bg-blue-500/20 rounded-lg">
                 <Users className="w-6 h-6 text-blue-500" />
               </div>
             </div>
-            <h3 className="text-sm font-medium text-slate-400">Avg Revenue Per Student</h3>
-            <div className="text-2xl font-bold text-white mt-1">{formatNaira(arps)}</div>
+            <h3 className="text-sm font-medium text-muted-foreground">Avg Revenue Per Student</h3>
+            <div className="text-2xl font-bold text-foreground mt-1">{formatNaira(arps)}</div>
           </CardContent>
         </Card>
 
-        <Card className="bg-slate-900 border-slate-800">
+        <Card className="bg-card border-border">
           <CardContent className="p-6">
             <div className="flex items-center justify-between mb-2">
-               <h3 className="text-sm font-medium text-slate-400">Revenue by Plan</h3>
+               <h3 className="text-sm font-medium text-muted-foreground">Revenue by Plan</h3>
             </div>
-            <div className="space-y-3 mt-4">
+            <div className="space-y-3 mt-4 text-foreground">
               <div>
                 <div className="flex justify-between text-xs mb-1">
                   <span>Lifetime</span>
                   <span className="font-bold">{formatNaira(planBreakdown.lifetime)}</span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-800 rounded-full">
+                <div className="w-full h-1.5 bg-muted rounded-full">
                   <div className="h-full bg-purple-500 rounded-full" style={{ width: `${totalRevenue > 0 ? (planBreakdown.lifetime/totalRevenue)*100 : 0}%` }}></div>
                 </div>
               </div>
@@ -195,7 +195,7 @@ export const RevenueReportingTab = () => {
                   <span>Yearly</span>
                   <span className="font-bold">{formatNaira(planBreakdown.yearly)}</span>
                 </div>
-                <div className="w-full h-1.5 bg-slate-800 rounded-full">
+                <div className="w-full h-1.5 bg-muted rounded-full">
                   <div className="h-full bg-blue-500 rounded-full" style={{ width: `${totalRevenue > 0 ? (planBreakdown.yearly/totalRevenue)*100 : 0}%` }}></div>
                 </div>
               </div>
@@ -205,21 +205,21 @@ export const RevenueReportingTab = () => {
       </div>
 
       {/* Chart Section */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card className="bg-card border-border">
         <CardHeader>
-          <CardTitle>Monthly Revenue Trend</CardTitle>
-          <CardDescription className="text-slate-400">Approved payments over the current year.</CardDescription>
+          <CardTitle className="text-foreground">Monthly Revenue Trend</CardTitle>
+          <CardDescription className="text-muted-foreground">Approved payments over the current year.</CardDescription>
         </CardHeader>
         <CardContent>
            <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <RechartsBarChart data={monthlyData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-                <XAxis dataKey="name" stroke="#64748b" tick={{fill: '#64748b', fontSize: 12}} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" tick={{fill: '#64748b', fontSize: 12}} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${value/1000}k`} />
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
+                <XAxis dataKey="name" stroke="currentColor" className="text-muted-foreground" tick={{fontSize: 12}} tickLine={false} axisLine={false} />
+                <YAxis stroke="currentColor" className="text-muted-foreground" tick={{fontSize: 12}} tickLine={false} axisLine={false} tickFormatter={(value) => `₦${value/1000}k`} />
                 <Tooltip 
-                  cursor={{fill: '#1e293b'}} 
-                  contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#f8fafc', borderRadius: '8px'}}
+                  cursor={{fill: 'rgba(100, 100, 100, 0.1)'}} 
+                  contentStyle={{backgroundColor: 'var(--card)', borderColor: 'var(--border)', color: 'var(--foreground)', borderRadius: '8px'}}
                   formatter={(value) => [formatNaira(Number(value)), 'Revenue']}
                 />
                 <Bar dataKey="Revenue" fill="#22c55e" radius={[4, 4, 0, 0]} maxBarSize={50} />
@@ -230,17 +230,17 @@ export const RevenueReportingTab = () => {
       </Card>
       
       {/* Table Section */}
-      <Card className="bg-slate-900 border-slate-800">
+      <Card className="bg-card border-border">
         <CardHeader>
           <div className="flex justify-between items-center">
-            <CardTitle>Recent Transactions</CardTitle>
-            <Button variant="ghost" size="sm" className="text-slate-400"><Filter className="w-4 h-4 mr-2" /> Filter</Button>
+            <CardTitle className="text-foreground">Recent Transactions</CardTitle>
+            <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground"><Filter className="w-4 h-4 mr-2" /> Filter</Button>
           </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left text-slate-300">
-              <thead className="text-xs text-slate-400 uppercase bg-slate-950/50">
+            <table className="w-full text-sm text-left text-foreground">
+              <thead className="text-xs text-muted-foreground uppercase bg-muted/50">
                 <tr>
                   <th className="px-4 py-3 rounded-tl-lg">Date</th>
                   <th className="px-4 py-3">Student</th>
@@ -250,24 +250,24 @@ export const RevenueReportingTab = () => {
                   <th className="px-4 py-3 rounded-tr-lg">Status</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/50">
+              <tbody className="divide-y divide-border">
                 {loading ? (
-                  <tr><td colSpan={6} className="text-center py-8 text-slate-500">Loading...</td></tr>
+                  <tr><td colSpan={6} className="text-center py-8 text-muted-foreground">Loading...</td></tr>
                 ) : payments.slice(0, 10).map((payment) => (
-                  <tr key={payment.id} className="hover:bg-slate-800/20 transition-colors">
-                    <td className="px-4 py-3 whitespace-nowrap">{new Date(payment.created_at).toLocaleDateString()}</td>
+                  <tr key={payment.id} className="hover:bg-muted/40 transition-colors">
+                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">{new Date(payment.created_at).toLocaleDateString()}</td>
                     <td className="px-4 py-3">
-                      <div className="font-medium text-slate-200">{payment.profiles?.full_name}</div>
-                      <div className="text-xs text-slate-500">{payment.profiles?.email}</div>
+                      <div className="font-medium text-foreground">{payment.profiles?.full_name}</div>
+                      <div className="text-xs text-muted-foreground">{payment.profiles?.email}</div>
                     </td>
-                    <td className="px-4 py-3 capitalize">{payment.plan_type}</td>
-                    <td className="px-4 py-3 font-medium">{formatNaira(payment.amount)}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-400">{payment.reference || 'N/A'}</td>
+                    <td className="px-4 py-3 capitalize text-foreground">{payment.plan_type}</td>
+                    <td className="px-4 py-3 font-medium text-foreground">{formatNaira(payment.amount)}</td>
+                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{payment.reference || 'N/A'}</td>
                     <td className="px-4 py-3">
                       <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase ${
-                        payment.status === 'approved' ? 'bg-green-500/20 text-green-400' :
-                        payment.status === 'pending' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-red-500/20 text-red-400'
+                        payment.status === 'approved' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
+                        payment.status === 'pending' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400' :
+                        'bg-red-500/20 text-red-700 dark:text-red-400'
                       }`}>
                         {payment.status}
                       </span>

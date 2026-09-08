@@ -19,7 +19,7 @@ import { enqueueOfflineWrite } from '@/lib/syncQueue';
 import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
-import { cleanQuestionText, cleanOptionText } from '@/utils/questionUtils';
+import { cleanQuestionText, cleanOptionText, checkIsCorrect } from '@/utils/questionUtils';
 import { QuestionFlowService } from '@/services/questionFlowService';
 import { validateUtmeSubjectCombination } from '@/utils/subjectTaxonomy';
 import { useFocusLock } from '@/hooks/useFocusLock';
@@ -432,7 +432,12 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       const currentQ = questions[currentQuestionIdx];
       if (!currentQ) return;
 
-      const options = [currentQ.option_a, currentQ.option_b, currentQ.option_c, currentQ.option_d];
+      let options: any[] = [];
+      if (Array.isArray(currentQ.options) && currentQ.options.length > 0) {
+        options = currentQ.options;
+      } else {
+        options = [currentQ.option_a, currentQ.option_b, currentQ.option_c, currentQ.option_d].filter(Boolean);
+      }
       
       switch (key) {
         case 'A':
@@ -527,7 +532,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       console.warn("Secure server submission failed, falling back to local scoring. Note: Offline scoring requires locally cached answer keys.", err);
       // Fallback local scoring (will only work correctly if offline pack provided correct_answer)
       questions.forEach((q) => {
-        if (answers[q.id] === q.correct_answer) finalScore++;
+        if (checkIsCorrect(answers[q.id], q)) finalScore++;
       });
       
       // Save offline fallback result

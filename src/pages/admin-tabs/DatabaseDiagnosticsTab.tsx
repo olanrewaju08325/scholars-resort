@@ -22,6 +22,7 @@ import { FlowValidatorDashboard } from '@/components/admin/FlowValidatorDashboar
 import { AISimulationTester } from '@/components/admin/AISimulationTester';
 import { AIBrandingAuditTester } from '@/components/admin/AIBrandingAuditTester';
 import { SubjectCoverageDashboard } from '@/components/admin/SubjectCoverageDashboard';
+import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 
 export const DatabaseDiagnosticsTab: React.FC = () => {
@@ -150,9 +151,8 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
     try {
       // 1. Call server-side repair API (bypasses client-side RLS and permissions)
       try {
-        const apiRes = await fetch('/api/admin/repair-database', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
+        const apiRes = await authFetch('/api/admin/repair-database', {
+          method: 'POST'
         });
         const apiJson = await apiRes.json();
         if (apiJson?.success) {

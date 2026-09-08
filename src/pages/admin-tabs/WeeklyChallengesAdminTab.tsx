@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { Swords, Plus, Trash2, CheckCircle, XCircle, Sparkles, RefreshCw, Calendar, Clock, Database, ShieldAlert } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI } from '@/services/aiService';
+import { authFetch } from '@/lib/apiAuth';
 
 const SUBJECTS = ['English', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Economics', 'Government', 'Literature', 'Geography', 'Commerce', 'Accounting'];
 
@@ -195,9 +196,8 @@ Return STRICT JSON format:
 
       // 1. Post to server challenges API for immediate persistence
       try {
-        await fetch('/api/admin/challenges', {
+        await authFetch('/api/admin/challenges', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(newChallenge)
         });
       } catch {}
@@ -267,7 +267,7 @@ Return STRICT JSON format:
   const handleDelete = (id: string) => {
     confirmAction('Delete Challenge', 'Delete this weekly challenge and all student submissions?', async () => {
       try {
-        await fetch(`/api/admin/challenges/${id}`, { method: 'DELETE' });
+        await authFetch(`/api/admin/challenges/${id}`, { method: 'DELETE' });
         await supabase.from('weekly_challenges').delete().eq('id', id);
       } catch {}
 

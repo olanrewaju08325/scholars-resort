@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
+import { authFetch } from '@/lib/apiAuth';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { logAdminActivity } from '@/services/adminActivityService';
 import { QuestionClassificationService } from '@/services/questionClassificationService';
@@ -133,7 +134,7 @@ export const SyllabusAdminTab = () => {
 
   const fetchTopicsForSubject = async (subId: string) => {
     try {
-      const res = await fetch(`/api/admin/topics?subject_id=${subId}`);
+      const res = await authFetch(`/api/admin/topics?subject_id=${subId}`);
       const data = await res.json();
       if (data?.success && Array.isArray(data.topics)) {
         setTopics(data.topics);
@@ -187,9 +188,8 @@ export const SyllabusAdminTab = () => {
         updated_at: new Date().toISOString()
       };
 
-      const response = await fetch('/api/admin/topics', {
+      const response = await authFetch('/api/admin/topics', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
       const resData = await response.json();
@@ -246,7 +246,7 @@ export const SyllabusAdminTab = () => {
   const handleDelete = async () => {
     if (!deleteDialog.id) return;
     try {
-      await fetch(`/api/admin/topics/${deleteDialog.id}`, { method: 'DELETE' });
+      await authFetch(`/api/admin/topics/${deleteDialog.id}`, { method: 'DELETE' });
       const updated = topics.filter(t => t.id !== deleteDialog.id);
       setTopics(updated);
       localStorage.setItem(`scholar_syllabus_${selectedSubjectId}`, JSON.stringify(updated));

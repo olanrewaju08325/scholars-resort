@@ -86,7 +86,20 @@ const Leaderboard = () => {
 
   const { data: boardData, loading, refetch } = useLiveFetch<any[]>(
     async () => {
-      // 1. Fetch exams from Supabase
+      // 1. Try server-side verified leaderboard API first
+      try {
+        const res = await fetch(`/api/leaderboard?period=${filterPeriod}`);
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.success && Array.isArray(json.rankings)) {
+            return { data: json.rankings, error: null };
+          }
+        }
+      } catch (apiErr) {
+        console.warn('[Leaderboard API Notice]', apiErr);
+      }
+
+      // 2. Direct Supabase query fallback (100% Real verified data)
       let query = supabase
         .from('exam_sessions')
         .select('user_id, score, total_questions, status, created_at')
@@ -108,13 +121,13 @@ const Leaderboard = () => {
       const validExams = (exams || []).filter(e => e.status === 'submitted' || e.status === 'completed' || !e.status);
       const userIds = Array.from(new Set(validExams.map(e => e.user_id).filter(Boolean)));
 
-      // 2. Fetch profiles
+      // Fetch real student profiles
       const { data: profiles } = userIds.length > 0 
         ? await supabase.from('profiles').select('id, full_name, avatar_url, target_score, phone').in('id', userIds)
         : { data: [] };
 
       const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-      const userBestScores = new Map();
+      const userBestScores = new Map<string, { id: string; name: string; score: number; hasPhone: boolean }>();
 
       validExams.forEach(exam => {
         const currentBest = userBestScores.get(exam.user_id)?.score || 0;
@@ -127,17 +140,17 @@ const Leaderboard = () => {
 
         if (totalQ >= 40) {
           // Full UTME Mock or Subject Exam: Standard scaled score out of 400
-          calculatedScore = Math.min(375, Math.round(accuracy * 400));
+          calculatedScore = Math.min(400, Math.round(accuracy * 400));
         } else {
           // Practice drill or speed test with fewer questions: weighted score reflecting session size
           const volumeWeight = Math.min(totalQ / 40, 1);
-          calculatedScore = Math.min(340, Math.round((accuracy * 0.75 + volumeWeight * 0.25) * 360));
+          calculatedScore = Math.min(360, Math.round((accuracy * 0.75 + volumeWeight * 0.25) * 360));
         }
 
         if (calculatedScore > currentBest) {
           const prof = profileMap.get(exam.user_id);
           const fullName = prof?.full_name || 'Scholar Student';
-          const nameParts = fullName.split(' ');
+          const nameParts = fullName.trim().split(/\s+/);
           const anonName = nameParts.length > 1 
             ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
             : nameParts[0];
@@ -150,36 +163,6 @@ const Leaderboard = () => {
           });
         }
       });
-
-      // If few records exist, supplement with active student profiles so the board is vibrant
-      if (userBestScores.size < 5) {
-        const { data: moreProfiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, target_score, phone')
-          .limit(10);
-
-        const naturalScoreOffsets = [338, 319, 304, 291, 282, 274, 265, 258, 249];
-        (moreProfiles || []).forEach((p, idx) => {
-          if (!userBestScores.has(p.id)) {
-            const fullName = p.full_name || 'Scholar Student';
-            const nameParts = fullName.split(' ');
-            const anonName = nameParts.length > 1 
-              ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
-              : nameParts[0];
-
-            const simulatedScore = p.target_score 
-              ? Math.min(p.target_score - 15 - (idx * 8), 342) 
-              : (naturalScoreOffsets[idx % naturalScoreOffsets.length]);
-
-            userBestScores.set(p.id, {
-              id: p.id,
-              name: anonName,
-              score: Math.max(simulatedScore, 245),
-              hasPhone: Boolean(p.phone)
-            });
-          }
-        });
-      }
 
       const firstPrize = prizeConfig.prizes?.first?.title || '₦5,000 Grand Prize';
       const secondPrize = prizeConfig.prizes?.second?.title || '₦3,000 2nd Prize';

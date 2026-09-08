@@ -48,6 +48,129 @@ function createStudyRoom(params: { roomId: string; title: string; subject: strin
 const app = express();
 const PORT = 3000;
 
+// Disable Express fingerprinting
+app.disable('x-powered-by');
+
+// Enterprise Security Headers Middleware
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'SAMEORIGIN');
+  res.setHeader('Permissions-Policy', 'camera=(self), microphone=(self), geolocation=(), payment=()');
+  next();
+});
+
+// In-Memory Production-Grade Rate Limiting Engine
+interface RateLimitBucket {
+  count: number;
+  resetAt: number;
+}
+const rateLimitStore = new Map<string, RateLimitBucket>();
+
+function createRateLimiter(options: { windowMs: number; max: number; message: string; name?: string }) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Determine unique client identifier using true IP
+    const forwarded = req.headers['x-forwarded-for'];
+    const ip = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : (req.socket.remoteAddress || '127.0.0.1');
+    const bucketKey = `${options.name || 'api'}:${ip}`;
+    const now = Date.now();
+
+    let bucket = rateLimitStore.get(bucketKey);
+    if (!bucket || now > bucket.resetAt) {
+      bucket = { count: 1, resetAt: now + options.windowMs };
+      rateLimitStore.set(bucketKey, bucket);
+    } else {
+      bucket.count += 1;
+    }
+
+    const remaining = Math.max(0, options.max - bucket.count);
+    const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
+    res.setHeader('X-RateLimit-Limit', options.max);
+    res.setHeader('X-RateLimit-Remaining', remaining);
+    res.setHeader('X-RateLimit-Reset', Math.ceil(bucket.resetAt / 1000));
+
+    if (bucket.count > options.max) {
+      res.setHeader('Retry-After', retryAfterSec);
+      return res.status(429).json({
+        success: false,
+        error: options.message,
+        retryAfter: retryAfterSec
+      });
+    }
+
+    next();
+  };
+}
+
+// Background cleanup for stale rate limit buckets
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of rateLimitStore.entries()) {
+    if (now > bucket.resetAt) {
+      rateLimitStore.delete(key);
+    }
+  }
+}, 3 * 60 * 1000);
+
+// Specialized Rate Limiters
+const globalApiLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 300,
+  message: 'Too many requests from this IP address. Please slow down and try again shortly.',
+  name: 'global'
+});
+
+const authRateLimiter = createRateLimiter({
+  windowMs: 5 * 60 * 1000,
+  max: 15,
+  message: 'Too many authentication attempts. For security reasons, please wait 5 minutes before trying again.',
+  name: 'auth'
+});
+
+const aiRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 45,
+  message: 'AI assistant rate limit reached. Please wait a moment before sending more prompts.',
+  name: 'ai'
+});
+
+const emailRateLimiter = createRateLimiter({
+  windowMs: 10 * 60 * 1000,
+  max: 30,
+  message: 'Email dispatch rate limit reached. Please wait 10 minutes before triggering more emails.',
+  name: 'email'
+});
+
+// Deep Input Sanitization and Prototype Pollution Protection
+function sanitizePayload(data: any, depth = 0): any {
+  if (depth > 12 || data === null || data === undefined) return data;
+  if (typeof data === 'string') {
+    // Strip null bytes and control characters
+    let cleaned = data.replace(/\0/g, '');
+    // Strip direct executable script tags
+    cleaned = cleaned
+      .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+      .replace(/javascript:/gi, '')
+      .replace(/vbscript:/gi, '');
+    return cleaned;
+  }
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizePayload(item, depth + 1));
+  }
+  if (typeof data === 'object') {
+    const safeObj: Record<string, any> = {};
+    for (const key of Object.keys(data)) {
+      if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+        continue;
+      }
+      safeObj[key] = sanitizePayload(data[key], depth + 1);
+    }
+    return safeObj;
+  }
+  return data;
+}
+
 // Universal CORS configuration for Vercel, dev preview, custom domains, and local development
 app.use((req, res, next) => {
   const origin = req.headers.origin;
@@ -60,6 +183,9 @@ app.use((req, res, next) => {
   }
   next();
 });
+
+// Apply global rate limiting to all /api/ endpoints
+app.use('/api', globalApiLimiter);
 
 // Vercel Serverless Function path normalization middleware
 app.use((req, res, next) => {
@@ -203,6 +329,15 @@ async function verifyUserToken(req: express.Request, res: express.Response, next
   }
 }
 
+// Security Audit Logger Helper
+function logSecurityAudit(action: string, req: express.Request, details?: Record<string, any>) {
+  const user = (req as any).user || (req as any).adminUser;
+  const userEmail = user?.email || 'anonymous';
+  const userId = user?.id || 'none';
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || 'unknown-ip';
+  console.log(`[SECURITY AUDIT] [${new Date().toISOString()}] Action: ${action} | User: ${userEmail} (${userId}) | IP: ${ip} | Route: ${req.method} ${req.originalUrl || req.url}`, details ? JSON.stringify(details) : '');
+}
+
 async function verifyAdminToken(req: express.Request, res: express.Response, next: express.NextFunction) {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -223,14 +358,42 @@ async function verifyAdminToken(req: express.Request, res: express.Response, nex
     const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
     const userEmail = (user.email || '').toLowerCase().trim();
 
-    const scopedClient = getScopedSupabaseClient(token);
-    const { data: prof } = await scopedClient.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
-    const profRole = prof?.role;
-    const profEmail = (prof?.email || '').toLowerCase().trim();
+    // 1. Try checking profile with scoped client first
+    let profRole: string | undefined;
+    let profEmail: string | undefined;
+    try {
+      const scopedClient = getScopedSupabaseClient(token);
+      const { data: prof } = await scopedClient.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
+      if (prof) {
+        profRole = prof.role;
+        profEmail = (prof.email || '').toLowerCase().trim();
+      }
+    } catch (_) {}
 
-    const isAdmin = profRole === 'admin' || profRole === 'superadmin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || AUTHORIZED_ADMIN_EMAILS.includes(profEmail);
+    // 2. Fallback to server client if scoped query was blocked
+    if (!profRole) {
+      try {
+        const { data: serverProf } = await supabase.from('profiles').select('role, email').eq('id', user.id).maybeSingle();
+        if (serverProf) {
+          profRole = serverProf.role;
+          profEmail = (serverProf.email || '').toLowerCase().trim();
+        }
+      } catch (_) {}
+    }
+
+    // 3. Also check metadata claims
+    const metaRole = (user.app_metadata as any)?.role || (user.user_metadata as any)?.role;
+
+    const isAdmin = 
+      profRole === 'admin' || 
+      profRole === 'superadmin' || 
+      metaRole === 'admin' || 
+      metaRole === 'superadmin' || 
+      AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || 
+      (profEmail && AUTHORIZED_ADMIN_EMAILS.includes(profEmail));
 
     if (!isAdmin) {
+      logSecurityAudit('UNAUTHORIZED_ADMIN_ACCESS_ATTEMPT', req, { email: userEmail, role: profRole || metaRole });
       return res.status(403).json({ success: false, error: 'Forbidden: Enterprise Administrator privileges required.' });
     }
 
@@ -727,7 +890,7 @@ app.post('/api/payment-notification', async (req, res) => {
 });
 
 // API Route: Test SMTP (Supports /api/test-smtp and /api/admin/test-smtp)
-app.post(['/api/test-smtp', '/api/admin/test-smtp'], async (req, res) => {
+app.post(['/api/test-smtp', '/api/admin/test-smtp'], verifyAdminToken, async (req, res) => {
   const startTime = Date.now();
   const { host, port, user, pass, fromEmail, testRecipient, to } = req.body || {};
 
@@ -877,9 +1040,85 @@ function addGroqServerLog(entry: Omit<GroqTelemetryLog, 'id' | 'timestamp'>) {
   return log;
 }
 
+// Helper: Robust backend question correctness checker
+function backendCheckIsCorrect(studentAns: string | undefined | null, q: any): boolean {
+  if (!studentAns || !q) return false;
+  const rawUser = String(studentAns).trim();
+  const rawCorrect = String(q.correct_answer || q.correct_option || q.correctAnswer || '').trim();
+  if (!rawCorrect) return false;
+  if (rawUser.toLowerCase() === rawCorrect.toLowerCase()) return true;
+
+  let rawOptions: any[] = [];
+  if (q.options) {
+    if (typeof q.options === 'string') {
+      try {
+        rawOptions = JSON.parse(q.options);
+      } catch {
+        rawOptions = [];
+      }
+    } else if (Array.isArray(q.options)) {
+      rawOptions = q.options;
+    } else if (typeof q.options === 'object') {
+      rawOptions = Object.values(q.options);
+    }
+  }
+
+  if (rawOptions.length === 0) {
+    rawOptions = [q.option_a, q.option_b, q.option_c, q.option_d].filter(Boolean);
+  }
+
+  const cleanOpt = (txt: string) => String(txt || '').replace(/^[A-Ea-e][\.\:\)\-\s]+/, '').trim().toLowerCase();
+
+  const mapped = rawOptions.map((opt: any, idx: number) => {
+    const letter = String.fromCharCode(65 + idx);
+    const text = typeof opt === 'object' && opt !== null ? (opt.text || opt.value || opt.id || '') : String(opt || '');
+    const clean = cleanOpt(text);
+    const id = (typeof opt === 'object' && opt !== null && opt.id ? String(opt.id) : letter).toUpperCase();
+    return { letter, id, text: text.trim().toLowerCase(), clean };
+  });
+
+  const userOpt = mapped.find(m => 
+    m.id.toLowerCase() === rawUser.toLowerCase() || 
+    m.letter.toLowerCase() === rawUser.toLowerCase() ||
+    m.clean === cleanOpt(rawUser) ||
+    m.text === rawUser.toLowerCase()
+  );
+
+  const correctOpt = mapped.find(m => 
+    m.id.toLowerCase() === rawCorrect.toLowerCase() || 
+    m.letter.toLowerCase() === rawCorrect.toLowerCase() ||
+    m.clean === cleanOpt(rawCorrect) ||
+    m.text === rawCorrect.toLowerCase()
+  );
+
+  if (userOpt && correctOpt) {
+    return userOpt.letter === correctOpt.letter || userOpt.id === correctOpt.id;
+  }
+  if (/^[A-E]$/i.test(rawCorrect) && userOpt) {
+    return userOpt.letter.toUpperCase() === rawCorrect.toUpperCase();
+  }
+  if (/^[A-E]$/i.test(rawUser) && correctOpt) {
+    return correctOpt.letter.toUpperCase() === rawUser.toUpperCase();
+  }
+  return false;
+}
+
 // API Route: Exam Session Handler - Start Exam (Lock AI Tutor)
 app.post('/api/exam-session/start', async (req, res) => {
-  const { userId, sessionId, mode, subjects } = req.body;
+  let userId = req.body?.userId;
+  const { sessionId, mode, subjects } = req.body;
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1]?.trim();
+      if (token) {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user?.id) userId = user.id;
+      }
+    } catch (_) {}
+  }
+
   if (!userId) {
     return res.status(400).json({ success: false, error: 'userId is required.' });
   }
@@ -916,8 +1155,6 @@ app.post('/api/exam-session/start', async (req, res) => {
   }
 });
 
-
-
 // API Route: Secure CBT Check Answer (For Practice Modes)
 app.post('/api/cbt/check-answer', verifyUserToken, async (req, res) => {
   const { questionId, selectedAnswer } = req.body;
@@ -926,13 +1163,13 @@ app.post('/api/cbt/check-answer', verifyUserToken, async (req, res) => {
   try {
     const { data: q, error } = await supabase
       .from('questions')
-      .select('correct_answer, explanation')
+      .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
       .eq('id', questionId)
       .single();
       
     if (error || !q) throw new Error('Question not found');
     
-    const isCorrect = q.correct_answer === selectedAnswer;
+    const isCorrect = backendCheckIsCorrect(selectedAnswer, q);
     
     return res.json({
       success: true,
@@ -957,19 +1194,19 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
 
   try {
     const questionIds = Object.keys(answers);
-    let correctAnswersMap: Record<string, string> = {};
+    const questionsMap: Record<string, any> = {};
     
     if (questionIds.length > 0) {
-      // Securely fetch correct answers from the database (bypassing RLS if needed, though server has admin privileges)
+      // Securely fetch correct answers and options from the database
       const { data: questions, error } = await supabase
         .from('questions')
-        .select('id, correct_answer')
+        .select('id, correct_answer, option_a, option_b, option_c, option_d, options')
         .in('id', questionIds);
         
       if (error) throw error;
       
-      questions.forEach(q => {
-        correctAnswersMap[q.id] = q.correct_answer;
+      (questions || []).forEach(q => {
+        questionsMap[q.id] = q;
       });
     }
 
@@ -979,8 +1216,8 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
 
     for (const qId of questionIds) {
       const studentAns = answers[qId];
-      const correctAns = correctAnswersMap[qId];
-      const isCorrect = studentAns === correctAns;
+      const q = questionsMap[qId];
+      const isCorrect = q ? backendCheckIsCorrect(studentAns, q) : false;
       
       if (isCorrect) score++;
 
@@ -1004,7 +1241,6 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
 
     // Update session status and score
     if (sessionId) {
-      // Both practice and CBT exams track sessions in exam_sessions
       const { error: updateError } = await supabase.from('exam_sessions').update({
         status: 'completed',
         score: score,
@@ -1021,8 +1257,8 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
       totalQuestions,
       results: Object.keys(answers).map(qId => ({
         id: qId,
-        is_correct: answers[qId] === correctAnswersMap[qId],
-        correct_answer: correctAnswersMap[qId]
+        is_correct: questionsMap[qId] ? backendCheckIsCorrect(answers[qId], questionsMap[qId]) : false,
+        correct_answer: questionsMap[qId]?.correct_answer
       }))
     });
   } catch (err: any) {
@@ -1033,7 +1269,19 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
 
 // API Route: Exam Session Handler - End / Submit Exam (Unlock AI Tutor)
 app.post('/api/exam-session/end', async (req, res) => {
-  const { sessionId, userId, status, score, totalQuestions } = req.body;
+  let userId = req.body?.userId;
+  const { sessionId, status, score, totalQuestions } = req.body;
+
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1]?.trim();
+      if (token) {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user?.id) userId = user.id;
+      }
+    } catch (_) {}
+  }
   
   try {
     const updatePayload: any = {
@@ -2303,7 +2551,7 @@ Output strictly raw JSON without markdown code fences or conversational greeting
 });
 
 // API Route: Admin Schema Validation Report Inspection
-app.get('/api/admin/schema-validation-report', async (req, res) => {
+app.get('/api/admin/schema-validation-report', verifyAdminToken, async (req, res) => {
   try {
     const { count: qCount } = await supabase.from('questions').select('id', { count: 'exact', head: true });
     const { data: subData } = await supabase.from('subjects').select('id, name, is_active');
@@ -2330,13 +2578,14 @@ app.get('/api/admin/schema-validation-report', async (req, res) => {
 });
 
 // API Route: Admin Material Ingestion & Association (Bypasses Client-Side RLS)
-app.post('/api/admin/materials/upload-metadata', async (req, res) => {
+app.post('/api/admin/materials/upload-metadata', verifyAdminToken, async (req, res) => {
   const { title, description, subject_id, topic_id, file_path, is_premium } = req.body;
   if (!title || !file_path) {
     return res.status(400).json({ success: false, error: 'Missing required title or file path' });
   }
 
   try {
+    logSecurityAudit('UPLOAD_STUDY_MATERIAL_METADATA', req, { title, subject_id });
     const results: string[] = [];
 
     // 1. Insert into materials table (use UUID if table expects UUID)
@@ -2397,13 +2646,14 @@ app.post('/api/admin/materials/upload-metadata', async (req, res) => {
 const isValidUUID = (str: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str);
 
 // API Route: Secure Material Deletion (Bypasses Client-Side RLS)
-app.post('/api/admin/materials/delete', async (req, res) => {
+app.post('/api/admin/materials/delete', verifyAdminToken, async (req, res) => {
   const { id, title, file_path } = req.body;
   if (!id && !title && !file_path) {
     return res.status(400).json({ success: false, error: 'Missing required id, title, or file_path parameter' });
   }
 
   try {
+    logSecurityAudit('DELETE_STUDY_MATERIAL', req, { id, title, file_path });
     const results: string[] = [];
 
     // 1. Delete from materials table by UUID or by matching title
@@ -2437,13 +2687,124 @@ app.post('/api/admin/materials/delete', async (req, res) => {
   }
 });
 
+// API Route: Global Leaderboard (100% Real Student Data with RLS Bypass)
+app.get('/api/leaderboard', async (req, res) => {
+  try {
+    const period = String(req.query.period || 'all').toLowerCase();
+    
+    // 1. Fetch real completed/submitted exam sessions
+    let query = supabase
+      .from('exam_sessions')
+      .select('user_id, score, total_questions, status, created_at')
+      .gt('score', 0);
+
+    if (period === 'weekly') {
+      const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('created_at', oneWeekAgo);
+    } else if (period === 'monthly') {
+      const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      query = query.gte('created_at', oneMonthAgo);
+    }
+
+    const { data: exams, error: examsErr } = await query
+      .order('score', { ascending: false })
+      .limit(150);
+
+    if (examsErr) {
+      console.warn('[Leaderboard Exam Query Notice]', examsErr.message);
+    }
+
+    const validExams = (exams || []).filter(e => e.status === 'submitted' || e.status === 'completed' || !e.status);
+    const userIds = Array.from(new Set(validExams.map(e => e.user_id).filter(Boolean)));
+
+    // 2. Fetch student profiles
+    const { data: profiles } = userIds.length > 0
+      ? await supabase.from('profiles').select('id, full_name, avatar_url, target_score, phone').in('id', userIds)
+      : { data: [] };
+
+    const profileMap = new Map((profiles || []).map(p => [p.id, p]));
+    const userBestScores = new Map<string, { id: string; name: string; score: number; hasPhone: boolean; accuracy: number; totalExams: number }>();
+
+    validExams.forEach(exam => {
+      const totalQ = Number(exam.total_questions) || 1;
+      const rawScore = Number(exam.score) || 0;
+      const accuracy = Math.min(rawScore / totalQ, 1);
+
+      let calculatedScore = 0;
+      if (totalQ >= 40) {
+        calculatedScore = Math.min(400, Math.round(accuracy * 400));
+      } else {
+        const volumeWeight = Math.min(totalQ / 40, 1);
+        calculatedScore = Math.min(360, Math.round((accuracy * 0.75 + volumeWeight * 0.25) * 360));
+      }
+
+      const existing = userBestScores.get(exam.user_id);
+      if (!existing || calculatedScore > existing.score) {
+        const prof = profileMap.get(exam.user_id);
+        const fullName = prof?.full_name || 'Scholar Student';
+        const nameParts = fullName.trim().split(/\s+/);
+        const anonName = nameParts.length > 1
+          ? `${nameParts[0]} ${nameParts[1].charAt(0)}.`
+          : nameParts[0];
+
+        userBestScores.set(exam.user_id, {
+          id: exam.user_id,
+          name: anonName,
+          score: calculatedScore,
+          hasPhone: Boolean(prof?.phone),
+          accuracy: Math.round(accuracy * 100),
+          totalExams: (existing?.totalExams || 0) + 1
+        });
+      } else {
+        existing.totalExams += 1;
+      }
+    });
+
+    // 3. Fetch prize config
+    let prizeConfig: any = {};
+    try {
+      const { data: prizeData } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'leaderboard_prize_config')
+        .maybeSingle();
+      if (prizeData?.setting_value) prizeConfig = prizeData.setting_value;
+    } catch {}
+
+    const firstPrize = prizeConfig?.prizes?.first?.title || '₦5,000 Grand Prize';
+    const secondPrize = prizeConfig?.prizes?.second?.title || '₦3,000 2nd Prize';
+    const thirdPrize = prizeConfig?.prizes?.third?.title || '₦1,000 Airtime Prize';
+
+    const rankings = Array.from(userBestScores.values())
+      .sort((a, b) => b.score - a.score)
+      .map((student, idx) => ({
+        ...student,
+        rank: idx + 1,
+        prize: idx === 0 ? firstPrize : idx === 1 ? secondPrize : idx === 2 ? thirdPrize : null
+      }));
+
+    return res.json({
+      success: true,
+      period,
+      totalRankedStudents: rankings.length,
+      rankings,
+      prizeConfig
+    });
+  } catch (err: any) {
+    console.error('[API /api/leaderboard Error]', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to generate leaderboard', rankings: [] });
+  }
+});
+
 // API Route: Admin Save Tournament (Bypasses Client-Side RLS & Schema Cache Mismatches)
-app.post('/api/admin/tournaments/save', async (req, res) => {
+app.post('/api/admin/tournaments/save', verifyAdminToken, async (req, res) => {
   try {
     const { tournament, isEdit, id } = req.body;
     if (!tournament || !tournament.title) {
       return res.status(400).json({ success: false, error: 'Tournament title is required' });
     }
+
+    logSecurityAudit(isEdit ? 'UPDATE_TOURNAMENT' : 'CREATE_TOURNAMENT', req, { title: tournament.title, id });
 
     const metadata: Record<string, any> = {
       subject_filter: tournament.subject_filter,
@@ -2537,36 +2898,76 @@ app.post('/api/admin/tournaments/save', async (req, res) => {
   }
 });
 
+// API Route: Admin Delete Tournament
+app.post('/api/admin/tournaments/delete', verifyAdminToken, async (req, res) => {
+  try {
+    const { id } = req.body;
+    if (!id) return res.status(400).json({ success: false, error: 'Tournament ID is required' });
+
+    logSecurityAudit('DELETE_TOURNAMENT', req, { id });
+
+    try { await supabase.from('tournament_participants').delete().eq('tournament_id', id); } catch {}
+    try { await supabase.from('tournaments').delete().eq('id', id); } catch {}
+
+    try {
+      const { data: currentSettings } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournaments_db')
+        .maybeSingle();
+      
+      if (Array.isArray(currentSettings?.setting_value)) {
+        const list = currentSettings.setting_value.filter((t: any) => t.id !== id);
+        await supabase.from('admin_settings').upsert({
+          setting_key: 'tournaments_db',
+          setting_value: list,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+      }
+    } catch (_) {}
+
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // API Route: Public Get Tournaments (Merged from DB & Settings Backup)
 app.get('/api/tournaments', async (req, res) => {
   try {
     const listMap = new Map<string, any>();
 
+    const parseAndClean = (rawT: any) => {
+      if (!rawT) return null;
+      let meta: Record<string, any> = {};
+      const searchTarget = (rawT.rules || '') + '\n' + (rawT.description || '');
+      const match = searchTarget.match(/__meta__:(\{[\s\S]*?\})(?:\n|$)/);
+      if (match && match[1]) {
+        try { meta = JSON.parse(match[1]); } catch {}
+      }
+      const cleanDesc = (rawT.description || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
+      const cleanRules = (rawT.rules || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
+
+      return {
+        ...meta,
+        ...rawT,
+        description: cleanDesc || 'Compete in this UTME subject challenge and win rewards.',
+        rules: cleanRules,
+        participants_count: rawT.participants_count || rawT.participant_count || 0
+      };
+    };
+
     // 1. Fetch from tournaments table
     try {
       const { data: dbTournaments, error } = await supabase
         .from('tournaments')
-        .select(`
-          *,
-          tournament_participants (count)
-        `)
+        .select('*')
         .order('start_time', { ascending: true });
 
       if (!error && dbTournaments && Array.isArray(dbTournaments)) {
         dbTournaments.forEach(rawT => {
-          let meta: Record<string, any> = {};
-          const searchTarget = (rawT.rules || '') + '\n' + (rawT.description || '');
-          const match = searchTarget.match(/__meta__:(\{.*?\})(?:\n|$)/s);
-          if (match && match[1]) {
-            try { meta = JSON.parse(match[1]); } catch {}
-          }
-          const cleanDesc = (rawT.description || '').replace(/__meta__:\{.*?\}(?:\n|$)/s, '').trim();
-          listMap.set(rawT.id, {
-            ...meta,
-            ...rawT,
-            description: cleanDesc,
-            participants_count: rawT.tournament_participants?.[0]?.count || 0
-          });
+          const parsed = parseAndClean(rawT);
+          if (parsed?.id) listMap.set(parsed.id, parsed);
         });
       }
     } catch (dbErr: any) {
@@ -2583,8 +2984,9 @@ app.get('/api/tournaments', async (req, res) => {
 
       if (currentSettings?.setting_value && Array.isArray(currentSettings.setting_value)) {
         currentSettings.setting_value.forEach((t: any) => {
-          if (!listMap.has(t.id)) {
-            listMap.set(t.id, t);
+          const parsed = parseAndClean(t);
+          if (parsed?.id && !listMap.has(parsed.id)) {
+            listMap.set(parsed.id, parsed);
           }
         });
       }
@@ -2603,7 +3005,7 @@ app.get('/api/tournaments', async (req, res) => {
 });
 
 // API Route: Admin Run Full Database & Schema Auto-Repair
-app.post('/api/admin/repair-database', async (req, res) => {
+app.post('/api/admin/repair-database', verifyAdminToken, async (req, res) => {
   try {
     const repairedItems: string[] = [];
 
@@ -2751,14 +3153,14 @@ app.get('/api/settings/:key', async (req, res) => {
 });
 
 // POST /api/settings/:key or POST /api/admin/settings
-app.post('/api/settings/:key', async (req, res) => {
+app.post('/api/settings/:key', verifyAdminToken, async (req, res) => {
   const { key } = req.params;
   const value = req.body?.value !== undefined ? req.body.value : req.body;
   await setStoredSetting(key, value);
   return res.json({ success: true, key, value });
 });
 
-app.post('/api/admin/settings', async (req, res) => {
+app.post('/api/admin/settings', verifyAdminToken, async (req, res) => {
   const { setting_key, setting_value, key, value } = req.body;
   const targetKey = setting_key || key;
   const targetValue = setting_value !== undefined ? setting_value : value;
@@ -2843,7 +3245,7 @@ app.get('/api/topics', async (req, res) => {
   }
 });
 
-app.post('/api/admin/topics', async (req, res) => {
+app.post('/api/admin/topics', verifyAdminToken, async (req, res) => {
   try {
     const topicData = req.body;
     if (!topicData || !topicData.name || !topicData.subject_id) {
@@ -2888,7 +3290,7 @@ app.post('/api/admin/topics', async (req, res) => {
   }
 });
 
-app.delete('/api/admin/topics/:id', async (req, res) => {
+app.delete('/api/admin/topics/:id', verifyAdminToken, async (req, res) => {
   try {
     const { id } = req.params;
     if (!id) return res.status(400).json({ success: false, error: 'Topic id is required' });
@@ -2932,7 +3334,7 @@ app.get('/api/announcements', async (req, res) => {
   }
 });
 
-app.post('/api/admin/announcements', async (req, res) => {
+app.post('/api/admin/announcements', verifyAdminToken, async (req, res) => {
   try {
     const { id, title, content, target, is_pinned, created_by } = req.body;
     if (!title || !content) return res.status(400).json({ success: false, error: 'Title and content are required' });
@@ -2967,7 +3369,7 @@ app.post('/api/admin/announcements', async (req, res) => {
   }
 });
 
-app.delete('/api/admin/announcements/:id', async (req, res) => {
+app.delete('/api/admin/announcements/:id', verifyAdminToken, async (req, res) => {
   try {
     const { id } = req.params;
     let announcements: any[] = await getStoredSetting('announcements_db', []);
@@ -2999,7 +3401,7 @@ app.get('/api/challenges/active', async (req, res) => {
   }
 });
 
-app.post('/api/admin/challenges', async (req, res) => {
+app.post('/api/admin/challenges', verifyAdminToken, async (req, res) => {
   try {
     const challengeData = req.body;
     if (!challengeData || !challengeData.title) {
@@ -3030,7 +3432,7 @@ app.post('/api/admin/challenges', async (req, res) => {
   }
 });
 
-app.delete('/api/admin/challenges/:id', async (req, res) => {
+app.delete('/api/admin/challenges/:id', verifyAdminToken, async (req, res) => {
   try {
     const { id } = req.params;
     let challenges: any[] = await getStoredSetting('weekly_challenges_db', []);
@@ -3751,7 +4153,7 @@ app.all('/api/guardian/*all', (req, res) => {
 });
 
 // API Route: Admin Materials Metadata Upload & Persistence Handler
-app.post('/api/admin/materials/upload-metadata', async (req, res) => {
+app.post('/api/admin/materials/upload-metadata', verifyAdminToken, async (req, res) => {
   const { title, description, subject_id, file_path, is_premium } = req.body;
   if (!title) {
     return res.status(400).json({ success: false, error: 'Title is required for study material.' });
@@ -3803,7 +4205,7 @@ app.post('/api/admin/materials/upload-metadata', async (req, res) => {
 });
 
 // API Route: Verify & Diagnose Supabase Storage Buckets
-app.get('/api/admin/storage/verify', async (req, res) => {
+app.get('/api/admin/storage/verify', verifyAdminToken, async (req, res) => {
   const targetBuckets = ['study-materials', 'materials', 'library'];
   const results: Record<string, { exists: boolean; public: boolean; error?: string; probeSuccess?: boolean }> = {};
   let overallBucketCount = 0;
@@ -3938,7 +4340,7 @@ USING (bucket_id IN ('study-materials', 'materials', 'library'));
 });
 
 // API Route: Backend Proxied File Upload with Exponential Backoff Retries & Fallbacks
-app.post('/api/admin/materials/upload-file', async (req, res) => {
+app.post('/api/admin/materials/upload-file', verifyAdminToken, async (req, res) => {
   const { fileName, fileBase64, contentType = 'application/pdf', title, description, subject_id, is_premium } = req.body;
 
   if (!title) {

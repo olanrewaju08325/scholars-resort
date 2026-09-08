@@ -177,15 +177,19 @@ export class DataSanitizer {
    */
   static sanitizeTournament(item: any): SanitizedTournament | null {
     if (!item || typeof item !== 'object') return null;
-    if (!item.title || !item.start_time) return null;
+    if (!item.title) return null;
+
+    let cleanDesc = String(item.description || '');
+    // Strip __meta__ payload if embedded in description or rules
+    cleanDesc = cleanDesc.replace(/\s*__meta__:[\s\S]*$/, '').trim();
 
     return {
       id: String(item.id || Math.random().toString(36).substring(2, 9)),
       title: String(item.title),
-      start_time: String(item.start_time),
+      start_time: item.start_time ? String(item.start_time) : new Date().toISOString(),
       duration_minutes: typeof item.duration_minutes === 'number' ? item.duration_minutes : 60,
       status: String(item.status || 'upcoming'),
-      prize_pool: item.prize_pool ? String(item.prize_pool) : undefined
+      prize_pool: item.prize_pool || item.prize_description ? String(item.prize_pool || item.prize_description) : undefined
     };
   }
 }
