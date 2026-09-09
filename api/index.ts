@@ -4672,15 +4672,48 @@ app.delete('/api/admin/challenges/:id', verifyAdminToken, async (req, res) => {
   }
 });
 
-// ─── Persistent Server-Side User Overrides Store ─────────────────────────────
+// ─── Persistent Server-Side User Overrides & Deletion Store ─────────────────────────────
 // Guarantees all admin grants, lifetime passes, onboarding completions, and role changes
 // immediately and permanently persist across page refreshes and client sessions.
 const persistentUserOverrides = new Map<string, Partial<any>>();
+const deletedUserIds = new Set<string>();
+
+// Load previously deleted user IDs from admin_settings on startup
+async function loadDeletedUserIds() {
+  try {
+    const { data } = await supabase
+      .from('admin_settings')
+      .select('setting_value')
+      .eq('setting_key', 'deleted_user_ids')
+      .maybeSingle();
+    if (data?.setting_value && Array.isArray(data.setting_value)) {
+      data.setting_value.forEach((id: string) => {
+        if (id) deletedUserIds.add(id);
+      });
+    }
+  } catch (_) {}
+}
+loadDeletedUserIds();
+
+export async function markUserAsDeleted(userId: string) {
+  if (!userId) return;
+  deletedUserIds.add(userId);
+  persistentUserOverrides.delete(userId);
+  try {
+    const arr = Array.from(deletedUserIds);
+    await supabase.from('admin_settings').upsert({
+      setting_key: 'deleted_user_ids',
+      setting_value: arr,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'setting_key' });
+  } catch (_) {}
+}
 
 // Helper to merge DB profile with server overrides
 function mergeProfileWithOverrides(dbProfile: any, userId?: string) {
   const id = dbProfile?.id || userId;
   if (!id) return dbProfile;
+  if (deletedUserIds.has(id)) return null;
   const overrides = persistentUserOverrides.get(id) || {};
   const emailVal = (dbProfile?.email || overrides.email || '').toLowerCase().trim();
   const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
@@ -4982,6 +5015,8 @@ app.post('/api/admin/subscriptions/revoke', verifyAdminToken, async (req, res) =
 // API Route: Full User Directory for Admin (Merged with Real-Time Server Overrides)
 app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
   try {
+    await loadDeletedUserIds();
+
     const { data: dbProfiles, error } = await supabase
       .from('profiles')
       .select('*')
@@ -4991,13 +5026,27 @@ app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
       console.warn('[Admin User Directory DB Warning]', error.message);
     }
 
-    const profilesList = (dbProfiles || []).map((p: any) => mergeProfileWithOverrides(p, p.id));
+    const profilesList: any[] = [];
+    const seenIds = new Set<string>();
+
+    (dbProfiles || []).forEach((p: any) => {
+      if (p?.id && !deletedUserIds.has(p.id)) {
+        const merged = mergeProfileWithOverrides(p, p.id);
+        if (merged) {
+          profilesList.push(merged);
+          seenIds.add(p.id);
+        }
+      }
+    });
 
     // Also include any profiles registered only in override map
-    const existingIds = new Set(profilesList.map((p: any) => p.id));
     persistentUserOverrides.forEach((override, id) => {
-      if (!existingIds.has(id)) {
-        profilesList.push(mergeProfileWithOverrides({ id, created_at: new Date().toISOString() }, id));
+      if (!seenIds.has(id) && !deletedUserIds.has(id)) {
+        const merged = mergeProfileWithOverrides({ id, created_at: new Date().toISOString() }, id);
+        if (merged) {
+          profilesList.push(merged);
+          seenIds.add(id);
+        }
       }
     });
 
