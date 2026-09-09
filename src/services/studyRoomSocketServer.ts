@@ -1,70 +1,19 @@
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
-import type { RoomParticipant, WhiteboardStroke, RoomTimerState, RoomChatMessage } from '../types/studyRoomTypes';
+import type { RoomParticipant, WhiteboardStroke, RoomTimerState, RoomChatMessage, StudyRoomRecord } from '../types/studyRoomTypes';
+import {
+  getStudyRoomById,
+  createStudyRoom as storageCreateRoom,
+  joinRoomParticipant,
+  leaveRoomParticipant,
+  saveRoomStroke,
+  clearRoomWhiteboard,
+  saveRoomMessage,
+  updateRoomTimer,
+  getStudyRoomsMetaList
+} from './studyRoomStorage';
 
 export type { RoomParticipant, WhiteboardStroke, RoomTimerState, RoomChatMessage };
-
-export interface StudyRoomState {
-  roomId: string;
-  title: string;
-  subject: string;
-  hostName: string;
-  participants: Map<string, RoomParticipant>;
-  whiteboardStrokes: WhiteboardStroke[];
-  timerState: RoomTimerState;
-  messages: Array<{
-    id: string;
-    senderId: string;
-    senderName: string;
-    text: string;
-    timestamp: string;
-    type?: 'chat' | 'system' | 'question';
-    questionData?: any;
-  }>;
-}
-
-const activeRooms = new Map<string, StudyRoomState>();
-
-// Seed default active study rooms for students to join right away
-function initializeDefaultRooms() {
-  const defaults = [
-    { roomId: 'room_physics_01', title: 'UTME Physics Mechanics & Optics Sprint', subject: 'Physics', hostName: 'Dr. Adebayo' },
-    { roomId: 'room_english_01', title: 'Use of English Concord & Lexis Circle', subject: 'Use of English', hostName: 'Scholar Chinedu' },
-    { roomId: 'room_math_01', title: 'Calculus & Quadratics Problem Solving', subject: 'Mathematics', hostName: 'Engineer Fatima' },
-    { roomId: 'room_chem_01', title: 'Organic Chemistry & Stoichiometry Group', subject: 'Chemistry', hostName: 'Tutor Kingsley' },
-  ];
-
-  defaults.forEach(d => {
-    if (!activeRooms.has(d.roomId)) {
-      activeRooms.set(d.roomId, {
-        roomId: d.roomId,
-        title: d.title,
-        subject: d.subject,
-        hostName: d.hostName,
-        participants: new Map(),
-        whiteboardStrokes: [],
-        timerState: {
-          mode: 'sprint',
-          durationSeconds: 1500, // 25 min
-          remainingSeconds: 1500,
-          isRunning: false
-        },
-        messages: [
-          {
-            id: 'msg_welcome',
-            senderId: 'system',
-            senderName: 'System Bot',
-            text: `Welcome to ${d.title}! Collaborate on the shared whiteboard and solve UTME questions together.`,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            type: 'system'
-          }
-        ]
-      });
-    }
-  });
-}
-
-initializeDefaultRooms();
 
 export function setupStudyRoomWebSocket(server: http.Server) {
   const wss = new WebSocketServer({ server, path: '/ws/study-room' });
@@ -82,71 +31,53 @@ export function setupStudyRoomWebSocket(server: http.Server) {
 
         if (!roomId) return;
 
-        // Ensure room exists or create dynamically
-        if (!activeRooms.has(roomId)) {
-          activeRooms.set(roomId, {
-            roomId,
+        // Ensure room exists in persistent storage
+        let room = getStudyRoomById(roomId);
+        if (!room) {
+          room = storageCreateRoom({
             title: payload.roomTitle || `UTME ${payload.subject || 'General'} Study Room`,
             subject: payload.subject || 'General',
-            hostName: userName || 'Scholar Peer',
-            participants: new Map(),
-            whiteboardStrokes: [],
-            timerState: {
-              mode: 'pomodoro',
-              durationSeconds: 1500,
-              remainingSeconds: 1500,
-              isRunning: false
-            },
-            messages: []
+            hostName: userName || 'Scholar Peer'
           });
         }
-
-        const room = activeRooms.get(roomId)!;
 
         switch (type) {
           case 'join_room': {
             clientSockets.set(ws, { roomId, userId, userName });
-            
-            // Add or update participant
-            room.participants.set(userId, {
+
+            // Record participant in persistent storage
+            const updatedRoom = joinRoomParticipant(roomId, {
               id: userId,
               name: userName || 'Anonymous Scholar',
-              avatar: avatar || userName?.substring(0, 2).toUpperCase() || 'SC',
-              isHandRaised: false,
-              joinedAt: new Date().toISOString()
-            });
+              avatar: avatar || userName?.substring(0, 2).toUpperCase() || 'SC'
+            }) || room;
 
             // Send current full state to newly joined participant
-            const participantList = Array.from(room.participants.values());
             ws.send(JSON.stringify({
               type: 'room_init_state',
               roomId,
-              title: room.title,
-              subject: room.subject,
-              participants: participantList,
-              whiteboardStrokes: room.whiteboardStrokes,
-              timerState: room.timerState,
-              messages: room.messages
+              title: updatedRoom.title,
+              subject: updatedRoom.subject,
+              participants: updatedRoom.participants,
+              whiteboardStrokes: updatedRoom.whiteboardStrokes,
+              timerState: updatedRoom.timerState,
+              messages: updatedRoom.messages
             }));
 
             // Broadcast user joined to other clients in room
-            broadcastToRoom(wss, roomId, {
+            broadcastToRoom(wss, clientSockets, roomId, {
               type: 'participant_joined',
-              participant: room.participants.get(userId),
-              participants: participantList,
-              systemMessage: `${userName} joined the study room.`
+              participant: updatedRoom.participants.find(p => p.id === userId),
+              participants: updatedRoom.participants,
+              systemMessage: `${userName || 'A scholar'} joined the study room.`
             }, ws);
             break;
           }
 
           case 'draw_stroke': {
             if (data?.stroke) {
-              room.whiteboardStrokes.push(data.stroke);
-              // Cap history to 300 strokes for performance
-              if (room.whiteboardStrokes.length > 300) {
-                room.whiteboardStrokes = room.whiteboardStrokes.slice(-300);
-              }
-              broadcastToRoom(wss, roomId, {
+              saveRoomStroke(roomId, data.stroke);
+              broadcastToRoom(wss, clientSockets, roomId, {
                 type: 'draw_stroke_broadcast',
                 stroke: data.stroke,
                 senderId: userId
@@ -156,8 +87,8 @@ export function setupStudyRoomWebSocket(server: http.Server) {
           }
 
           case 'clear_whiteboard': {
-            room.whiteboardStrokes = [];
-            broadcastToRoom(wss, roomId, {
+            clearRoomWhiteboard(roomId);
+            broadcastToRoom(wss, clientSockets, roomId, {
               type: 'clear_whiteboard_broadcast',
               clearedBy: userName
             });
@@ -166,18 +97,17 @@ export function setupStudyRoomWebSocket(server: http.Server) {
 
           case 'chat_message': {
             if (data?.text) {
-              const msg = {
+              const msg: RoomChatMessage = {
                 id: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
                 senderId: userId,
                 senderName: userName,
                 text: data.text,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                type: 'chat' as const
+                type: 'chat'
               };
-              room.messages.push(msg);
-              if (room.messages.length > 100) room.messages = room.messages.slice(-100);
+              saveRoomMessage(roomId, msg);
 
-              broadcastToRoom(wss, roomId, {
+              broadcastToRoom(wss, clientSockets, roomId, {
                 type: 'chat_message_broadcast',
                 message: msg
               });
@@ -194,20 +124,20 @@ export function setupStudyRoomWebSocket(server: http.Server) {
                 width: 2,
                 questionData: data.question
               };
-              room.whiteboardStrokes.push(stroke);
+              saveRoomStroke(roomId, stroke);
 
-              const sysMsg = {
+              const sysMsg: RoomChatMessage = {
                 id: `msg_q_${Date.now()}`,
                 senderId: userId,
                 senderName: userName,
                 text: `Shared UTME Question: "${data.question.question_text?.substring(0, 80)}..." onto whiteboard!`,
                 timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-                type: 'question' as const,
+                type: 'question',
                 questionData: data.question
               };
-              room.messages.push(sysMsg);
+              saveRoomMessage(roomId, sysMsg);
 
-              broadcastToRoom(wss, roomId, {
+              broadcastToRoom(wss, clientSockets, roomId, {
                 type: 'question_shared_broadcast',
                 stroke,
                 message: sysMsg
@@ -218,21 +148,31 @@ export function setupStudyRoomWebSocket(server: http.Server) {
 
           case 'update_timer': {
             if (data?.timerAction) {
+              const currentRoom = getStudyRoomById(roomId);
+              const timer = currentRoom?.timerState || {
+                mode: 'sprint',
+                durationSeconds: 1500,
+                remainingSeconds: 1500,
+                isRunning: false
+              };
+
               const { action, duration } = data;
               if (action === 'start') {
-                room.timerState.isRunning = true;
+                timer.isRunning = true;
               } else if (action === 'pause') {
-                room.timerState.isRunning = false;
+                timer.isRunning = false;
               } else if (action === 'reset') {
-                room.timerState.isRunning = false;
-                room.timerState.remainingSeconds = duration || room.timerState.durationSeconds;
+                timer.isRunning = false;
+                timer.remainingSeconds = duration || timer.durationSeconds;
               } else if (action === 'tick' && typeof data.remainingSeconds === 'number') {
-                room.timerState.remainingSeconds = data.remainingSeconds;
+                timer.remainingSeconds = data.remainingSeconds;
               }
 
-              broadcastToRoom(wss, roomId, {
+              updateRoomTimer(roomId, timer);
+
+              broadcastToRoom(wss, clientSockets, roomId, {
                 type: 'timer_updated_broadcast',
-                timerState: room.timerState,
+                timerState: timer,
                 action,
                 updatedBy: userName
               });
@@ -241,22 +181,25 @@ export function setupStudyRoomWebSocket(server: http.Server) {
           }
 
           case 'toggle_raise_hand': {
-            const p = room.participants.get(userId);
-            if (p) {
-              p.isHandRaised = !p.isHandRaised;
-              broadcastToRoom(wss, roomId, {
-                type: 'participant_hand_toggled',
-                userId,
-                isHandRaised: p.isHandRaised,
-                participants: Array.from(room.participants.values())
-              });
+            const currentRoom = getStudyRoomById(roomId);
+            if (currentRoom) {
+              const p = currentRoom.participants.find(part => part.id === userId);
+              if (p) {
+                p.isHandRaised = !p.isHandRaised;
+                broadcastToRoom(wss, clientSockets, roomId, {
+                  type: 'participant_hand_toggled',
+                  userId,
+                  isHandRaised: p.isHandRaised,
+                  participants: currentRoom.participants
+                });
+              }
             }
             break;
           }
 
           case 'reaction_emoji': {
             if (data?.emoji) {
-              broadcastToRoom(wss, roomId, {
+              broadcastToRoom(wss, clientSockets, roomId, {
                 type: 'reaction_emoji_broadcast',
                 userId,
                 userName,
@@ -275,16 +218,13 @@ export function setupStudyRoomWebSocket(server: http.Server) {
       const clientInfo = clientSockets.get(ws);
       if (clientInfo) {
         const { roomId, userId, userName } = clientInfo;
-        const room = activeRooms.get(roomId);
-        if (room) {
-          room.participants.delete(userId);
-          broadcastToRoom(wss, roomId, {
-            type: 'participant_left',
-            userId,
-            userName,
-            participants: Array.from(room.participants.values())
-          });
-        }
+        const updatedRoom = leaveRoomParticipant(roomId, userId);
+        broadcastToRoom(wss, clientSockets, roomId, {
+          type: 'participant_left',
+          userId,
+          userName,
+          participants: updatedRoom?.participants || []
+        });
         clientSockets.delete(ws);
       }
     });
@@ -293,57 +233,26 @@ export function setupStudyRoomWebSocket(server: http.Server) {
   console.log('[StudyRoom WebSocket Server] Initialized on path /ws/study-room');
 }
 
-function broadcastToRoom(wss: WebSocketServer, roomId: string, payload: any, skipSocket?: WebSocket) {
+function broadcastToRoom(
+  wss: WebSocketServer,
+  clientSockets: Map<WebSocket, { roomId: string; userId: string; userName: string }>,
+  roomId: string,
+  payload: any,
+  skipSocket?: WebSocket
+) {
   const json = JSON.stringify(payload);
-  wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN && client !== skipSocket) {
-      client.send(json);
+  clientSockets.forEach((clientInfo, clientWs) => {
+    if (clientInfo.roomId === roomId && clientWs.readyState === WebSocket.OPEN && clientWs !== skipSocket) {
+      clientWs.send(json);
     }
   });
 }
 
 // REST API helper to list public rooms for frontend room browser
 export function getActiveStudyRoomsList() {
-  initializeDefaultRooms();
-  return Array.from(activeRooms.values()).map(r => ({
-    roomId: r.roomId,
-    title: r.title,
-    subject: r.subject,
-    hostName: r.hostName,
-    participantCount: r.participants.size,
-    isTimerRunning: r.timerState.isRunning,
-    participants: Array.from(r.participants.values()).map(p => ({ id: p.id, name: p.name, avatar: p.avatar }))
-  }));
+  return getStudyRoomsMetaList();
 }
 
-export function createStudyRoom(params: { roomId: string; title: string; subject: string; hostName: string }) {
-  initializeDefaultRooms();
-  if (!activeRooms.has(params.roomId)) {
-    activeRooms.set(params.roomId, {
-      roomId: params.roomId,
-      title: params.title,
-      subject: params.subject,
-      hostName: params.hostName,
-      participants: new Map(),
-      whiteboardStrokes: [],
-      timerState: {
-        mode: 'sprint',
-        durationSeconds: 1500,
-        remainingSeconds: 1500,
-        isRunning: false
-      },
-      messages: [
-        {
-          id: 'msg_created',
-          senderId: 'system',
-          senderName: 'System Bot',
-          text: `Study room created by ${params.hostName}! Welcome peers!`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-          type: 'system'
-        }
-      ]
-    });
-  }
-  return activeRooms.get(params.roomId);
+export function createStudyRoom(params: { title: string; subject: string; hostName?: string; isOfficial?: boolean; topic?: string }) {
+  return storageCreateRoom(params);
 }
-

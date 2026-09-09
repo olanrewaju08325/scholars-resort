@@ -26,10 +26,10 @@ export const JambScorePredictorCard: React.FC<JambScorePredictorCardProps> = ({ 
         <div className="flex items-center justify-between">
           <div>
             <CardTitle className="text-base flex items-center gap-2">
-              <Trophy className="w-5 h-5 text-amber-500" /> Projected JAMB/UTME Score Predictor
+              <Trophy className="w-5 h-5 text-amber-500" /> Projected JAMB Score
             </CardTitle>
             <CardDescription className="text-xs">
-              Algorithmic readiness calculation based on verified exam history
+              Estimated aggregate score based on your practice and mock performance
             </CardDescription>
           </div>
           <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${getScoreColor(prediction.estimatedScore)}`}>

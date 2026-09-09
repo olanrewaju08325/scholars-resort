@@ -13,7 +13,8 @@ import {
   Flame, 
   ShieldCheck, 
   X,
-  Volume2
+  Volume2,
+  BookOpen
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,23 +22,14 @@ import { WhiteboardCanvas } from '@/components/studyroom/WhiteboardCanvas';
 import { GroupTimer } from '@/components/studyroom/GroupTimer';
 import { RoomChat } from '@/components/studyroom/RoomChat';
 import { RoomQuestionLauncher } from '@/components/studyroom/RoomQuestionLauncher';
-import { type WhiteboardStroke, type RoomTimerState, type RoomParticipant } from '@/types/studyRoomTypes';
+import { type WhiteboardStroke, type RoomTimerState, type RoomParticipant, type StudyRoomMeta } from '@/types/studyRoomTypes';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
-interface RoomMeta {
-  roomId: string;
-  title: string;
-  subject: string;
-  hostName: string;
-  participantCount: number;
-  isTimerRunning: boolean;
-  participants: Array<{ id: string; name: string; avatar: string }>;
-}
-
 export const PeerStudyRoomPage: React.FC = () => {
   const { profile, user } = useAuth();
-  const [activeRooms, setActiveRooms] = useState<RoomMeta[]>([]);
+  const [activeRooms, setActiveRooms] = useState<StudyRoomMeta[]>([]);
+  const [selectedSubject, setSelectedSubject] = useState<string>('All');
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoomTitle, setNewRoomTitle] = useState('');
@@ -283,7 +275,8 @@ export const PeerStudyRoomPage: React.FC = () => {
         body: JSON.stringify({
           title: newRoomTitle.trim(),
           subject: newRoomSubject,
-          hostName: currentUserName
+          hostName: currentUserName,
+          hostId: currentUserId
         })
       });
       const data = await res.json();
@@ -605,65 +598,125 @@ export const PeerStudyRoomPage: React.FC = () => {
         </Button>
       </div>
 
-      {/* Active Rooms Grid */}
+      {/* Active Rooms Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold font-display text-foreground flex items-center gap-2">
-            <Users className="w-5 h-5 text-primary" /> Active Study Rooms ({activeRooms.length})
-          </h2>
-          <Button variant="ghost" size="sm" onClick={fetchRooms} className="text-xs font-bold">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold font-display text-foreground flex items-center gap-2">
+              <Users className="w-5 h-5 text-primary" /> Active Study Rooms ({activeRooms.length})
+            </h2>
+            <p className="text-xs text-muted-foreground">Join any active session or start your own collaborative group.</p>
+          </div>
+          <Button variant="ghost" size="sm" onClick={fetchRooms} className="text-xs font-bold self-start sm:self-auto">
             Refresh List
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {activeRooms.map((room) => (
-            <motion.div
-              key={room.roomId}
-              whileHover={{ y: -2 }}
-              className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4 hover:border-primary/50 transition-all"
+        {/* Subject Filter Pills */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-1">
+          {['All', 'Use of English', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Economics'].map((sub) => (
+            <button
+              key={sub}
+              onClick={() => setSelectedSubject(sub)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all ${
+                selectedSubject === sub
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
+              }`}
             >
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <Badge variant="outline" className="text-[10px] font-mono mb-1">
-                    {room.subject}
-                  </Badge>
-                  <h3 className="text-base font-bold font-display text-foreground leading-snug">
-                    {room.title}
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Host: <span className="font-medium text-foreground">{room.hostName}</span>
-                  </p>
-                </div>
-
-                <Badge className={`text-xs border-none font-mono font-bold ${
-                  room.isTimerRunning ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'
-                }`}>
-                  {room.isTimerRunning ? 'Sprint Active' : 'Waiting'}
-                </Badge>
-              </div>
-
-              {/* Participants Previews */}
-              <div className="flex items-center justify-between pt-2 border-t border-border">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                  <Users className="w-4 h-4 text-primary" />
-                  <span className="font-bold text-foreground">{room.participantCount}</span> Scholars In Room
-                </div>
-
-                <Button
-                  onClick={() => {
-                    setRoomTitle(room.title);
-                    setRoomSubject(room.subject);
-                    setSelectedRoomId(room.roomId);
-                  }}
-                  className="bg-primary text-primary-foreground font-bold size-sm flex items-center gap-1.5"
-                >
-                  <Play className="w-3.5 h-3.5 fill-current" /> Join Session
-                </Button>
-              </div>
-            </motion.div>
+              {sub}
+            </button>
           ))}
         </div>
+
+        {activeRooms.filter(r => selectedSubject === 'All' || r.subject.toLowerCase() === selectedSubject.toLowerCase()).length === 0 ? (
+          <div className="bg-card border border-dashed border-border rounded-2xl p-8 sm:p-12 text-center space-y-4">
+            <div className="w-14 h-14 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mx-auto shadow-sm">
+              <Users className="w-7 h-7" />
+            </div>
+            <div className="space-y-1 max-w-md mx-auto">
+              <h3 className="text-lg font-bold font-display text-foreground">
+                {activeRooms.length === 0 ? 'No Active Study Rooms Right Now' : `No Active Rooms for ${selectedSubject}`}
+              </h3>
+              <p className="text-xs sm:text-sm text-muted-foreground">
+                {activeRooms.length === 0
+                  ? 'Be the first scholar to launch a study session! Pick your UTME subject, collaborate on the shared whiteboard, and solve practice problems with peers.'
+                  : `There are currently no active study rooms for ${selectedSubject}. You can be the first to launch one or switch to "All" subjects.`}
+              </p>
+            </div>
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              className="bg-primary text-primary-foreground font-bold text-sm shadow-sm"
+            >
+              <Plus className="w-4 h-4 mr-1.5" /> Start First Study Room
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {activeRooms
+              .filter(r => selectedSubject === 'All' || r.subject.toLowerCase() === selectedSubject.toLowerCase())
+              .map((room) => (
+                <motion.div
+                  key={room.roomId}
+                  whileHover={{ y: -2 }}
+                  className="bg-card border border-border rounded-2xl p-5 shadow-sm space-y-4 hover:border-primary/50 transition-all flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <Badge variant="outline" className="text-[10px] font-mono">
+                            {room.subject}
+                          </Badge>
+                          {room.isOfficial && (
+                            <Badge className="bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 text-[10px] font-bold">
+                              <Sparkles className="w-2.5 h-2.5 mr-1" /> Official Masterclass
+                            </Badge>
+                          )}
+                        </div>
+                        <h3 className="text-base font-bold font-display text-foreground leading-snug">
+                          {room.title}
+                        </h3>
+                        {room.topic && (
+                          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+                            <BookOpen className="w-3 h-3 text-primary shrink-0" /> {room.topic}
+                          </p>
+                        )}
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Host: <span className="font-medium text-foreground">{room.hostName}</span>
+                        </p>
+                      </div>
+
+                      <Badge className={`text-xs border-none font-mono font-bold shrink-0 ${
+                        room.isTimerRunning ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {room.isTimerRunning ? 'Sprint Active' : 'Waiting'}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* Participants Previews */}
+                  <div className="flex items-center justify-between pt-3 border-t border-border">
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Users className="w-4 h-4 text-primary" />
+                      <span className="font-bold text-foreground">{room.participantCount}</span> Scholars In Room
+                    </div>
+
+                    <Button
+                      onClick={() => {
+                        setRoomTitle(room.title);
+                        setRoomSubject(room.subject);
+                        setSelectedRoomId(room.roomId);
+                      }}
+                      className="bg-primary text-primary-foreground font-bold size-sm flex items-center gap-1.5 shadow-sm"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" /> Join Session
+                    </Button>
+                  </div>
+                </motion.div>
+              ))}
+          </div>
+        )}
       </div>
 
       {/* Create Room Modal Dialog */}

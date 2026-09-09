@@ -33,4 +33,40 @@ export interface RoomChatMessage {
   text: string;
   timestamp: string;
   type?: 'chat' | 'system' | 'question';
+  questionData?: any;
+}
+
+export interface StudyRoomRecord {
+  roomId: string;
+  title: string;
+  subject: string;
+  hostName: string;
+  hostId?: string;
+  isOfficial?: boolean;
+  topic?: string;
+  status: 'active' | 'waiting' | 'concluded' | 'archived';
+  participantCount: number;
+  isTimerRunning: boolean;
+  participants: RoomParticipant[];
+  whiteboardStrokes: WhiteboardStroke[];
+  timerState: RoomTimerState;
+  messages: RoomChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StudyRoomMeta {
+  roomId: string;
+  title: string;
+  subject: string;
+  hostName: string;
+  hostId?: string;
+  isOfficial?: boolean;
+  topic?: string;
+  status: 'active' | 'waiting' | 'concluded' | 'archived';
+  participantCount: number;
+  isTimerRunning: boolean;
+  participants: Array<{ id: string; name: string; avatar: string }>;
+  createdAt?: string;
+  updatedAt?: string;
 }

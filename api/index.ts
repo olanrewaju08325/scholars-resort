@@ -5,45 +5,16 @@ import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 
-// In-memory study rooms cache for serverless environment
-const serverlessActiveRooms = new Map<string, any>();
-
-function getActiveStudyRoomsList() {
-  if (serverlessActiveRooms.size === 0) {
-    const defaults = [
-      { roomId: 'room_physics_01', title: 'UTME Physics Mechanics & Optics Sprint', subject: 'Physics', hostName: 'Dr. Adebayo' },
-      { roomId: 'room_english_01', title: 'Use of English Concord & Lexis Circle', subject: 'Use of English', hostName: 'Scholar Chinedu' },
-      { roomId: 'room_math_01', title: 'Calculus & Quadratics Problem Solving', subject: 'Mathematics', hostName: 'Engineer Fatima' },
-      { roomId: 'room_chem_01', title: 'Organic Chemistry & Stoichiometry Group', subject: 'Chemistry', hostName: 'Tutor Kingsley' },
-    ];
-    defaults.forEach(d => {
-      serverlessActiveRooms.set(d.roomId, {
-        roomId: d.roomId,
-        title: d.title,
-        subject: d.subject,
-        hostName: d.hostName,
-        participantCount: 0,
-        isTimerRunning: false,
-        participants: []
-      });
-    });
-  }
-  return Array.from(serverlessActiveRooms.values());
-}
-
-function createStudyRoom(params: { roomId: string; title: string; subject: string; hostName: string }) {
-  const room = {
-    roomId: params.roomId,
-    title: params.title,
-    subject: params.subject,
-    hostName: params.hostName,
-    participantCount: 1,
-    isTimerRunning: false,
-    participants: [{ id: 'host', name: params.hostName }]
-  };
-  serverlessActiveRooms.set(params.roomId, room);
-  return room;
-}
+import {
+  getStudyRoomsMetaList,
+  getStoredStudyRooms,
+  getStudyRoomById,
+  createStudyRoom,
+  updateStudyRoom,
+  deleteStudyRoom,
+  joinRoomParticipant,
+  leaveRoomParticipant
+} from '../src/services/studyRoomStorage';
 
 const app = express();
 const PORT = 3000;
@@ -4814,32 +4785,103 @@ app.post('/api/admin/materials/upload-file', verifyAdminToken, async (req, res) 
   }
 });
 
-// API Route: Peer Study Rooms List & Creation
+// API Route: Peer Study Rooms List, Creation, Details, Update, Delete, Join, Leave
 app.get('/api/study-rooms', (req, res) => {
   try {
-    return res.json({ success: true, rooms: getActiveStudyRoomsList() });
+    const subject = req.query.subject as string | undefined;
+    const status = req.query.status as string | undefined;
+    const rooms = getStudyRoomsMetaList({ subject, status });
+    return res.json({ success: true, rooms });
   } catch (err: any) {
     console.error('Error in GET /api/study-rooms:', err);
     return res.status(500).json({ success: false, error: err?.message || String(err), rooms: [] });
   }
 });
 
+app.get('/api/study-rooms/:roomId', (req, res) => {
+  try {
+    const room = getStudyRoomById(req.params.roomId);
+    if (!room) {
+      return res.status(404).json({ success: false, error: 'Study room not found' });
+    }
+    return res.json({ success: true, room });
+  } catch (err: any) {
+    console.error('Error in GET /api/study-rooms/:roomId:', err);
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
 app.post('/api/study-rooms', express.json(), (req, res) => {
   try {
-    const { title, subject, hostName } = req.body || {};
-    if (!title) {
+    const { title, subject, hostName, hostId, isOfficial, topic, durationMinutes } = req.body || {};
+    if (!title || !title.trim()) {
       return res.status(400).json({ success: false, error: 'Room title is required.' });
     }
-    const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
     const room = createStudyRoom({
-      roomId,
       title: title.trim(),
       subject: subject || 'General',
-      hostName: hostName || 'Scholar Student'
+      hostName: hostName || 'Scholar Student',
+      hostId,
+      isOfficial: Boolean(isOfficial),
+      topic,
+      durationMinutes: durationMinutes ? Number(durationMinutes) : 25
     });
     return res.json({ success: true, room });
   } catch (err: any) {
     console.error('Error in POST /api/study-rooms:', err);
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+app.put('/api/study-rooms/:roomId', express.json(), (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const updates = req.body || {};
+    const updated = updateStudyRoom(roomId, updates);
+    if (!updated) {
+      return res.status(404).json({ success: false, error: 'Study room not found.' });
+    }
+    return res.json({ success: true, room: updated });
+  } catch (err: any) {
+    console.error('Error in PUT /api/study-rooms/:roomId:', err);
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+app.delete('/api/study-rooms/:roomId', (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const success = deleteStudyRoom(roomId);
+    return res.json({ success });
+  } catch (err: any) {
+    console.error('Error in DELETE /api/study-rooms/:roomId:', err);
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+app.post('/api/study-rooms/:roomId/join', express.json(), (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { userId, userName, avatar } = req.body || {};
+    const room = joinRoomParticipant(roomId, {
+      id: userId || `user_${Date.now()}`,
+      name: userName || 'Scholar',
+      avatar
+    });
+    if (!room) return res.status(404).json({ success: false, error: 'Room not found' });
+    return res.json({ success: true, room });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+app.post('/api/study-rooms/:roomId/leave', express.json(), (req, res) => {
+  try {
+    const { roomId } = req.params;
+    const { userId } = req.body || {};
+    const room = leaveRoomParticipant(roomId, userId);
+    return res.json({ success: true, room });
+  } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message || String(err) });
   }
 });

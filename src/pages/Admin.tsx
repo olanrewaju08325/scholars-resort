@@ -52,6 +52,7 @@ import { AdminSessionTimeout } from '@/components/admin/AdminSessionTimeout';
 import { QuestionBankContentStudioTab } from './admin-tabs/QuestionBankContentStudioTab';
 import { AcademicTaxonomyHubTab } from './admin-tabs/AcademicTaxonomyHubTab';
 import { AICommandCenterTab } from './admin-tabs/AICommandCenterTab';
+import { AdminPeerStudyRoomsTab } from './admin-tabs/AdminPeerStudyRoomsTab';
 
 export default function Admin() {
   const { profile, user, signOut } = useAuth();
@@ -117,6 +118,7 @@ export default function Admin() {
       group: 'Students',
       items: [
         { id: 'students', label: 'Users Directory', icon: Users },
+        { id: 'peer-study-rooms', label: 'Peer Study Rooms', icon: Video },
         { id: 'support', label: 'Support Center', icon: MessageSquare },
         { id: 'correction-queue', label: 'Correction Queue', icon: AlertTriangle },
       ]
@@ -195,6 +197,7 @@ export default function Admin() {
 
       // Students
       case 'students': return <StudentsTab />;
+      case 'peer-study-rooms': return <AdminPeerStudyRoomsTab />;
       case 'support': return <SupportTab />;
       case 'correction-queue': return <CorrectionQueueTab />;
 

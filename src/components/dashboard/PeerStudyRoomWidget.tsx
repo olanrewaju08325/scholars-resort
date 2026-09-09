@@ -11,6 +11,7 @@ interface RoomMeta {
   title: string;
   subject: string;
   hostName: string;
+  isOfficial?: boolean;
   participantCount: number;
   isTimerRunning: boolean;
   participants: Array<{ id: string; name: string; avatar: string }>;
@@ -104,13 +105,18 @@ export const PeerStudyRoomWidget: React.FC = () => {
                 className="group flex items-center justify-between p-3 rounded-xl border border-border/80 bg-background/80 hover:bg-muted/40 hover:border-primary/40 transition-all cursor-pointer"
               >
                 <div className="min-w-0 flex-1 pr-3">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center gap-1.5 mb-1">
                     <span className="font-semibold text-xs text-foreground truncate group-hover:text-primary transition-colors">
                       {room.title}
                     </span>
                     <Badge variant="outline" className="text-[10px] py-0 px-1.5 bg-primary/5 text-primary border-primary/20 shrink-0">
                       {room.subject}
                     </Badge>
+                    {room.isOfficial && (
+                      <Badge className="text-[9px] py-0 px-1 bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold shrink-0">
+                        Official
+                      </Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
                     <span>Host: {room.hostName}</span>
