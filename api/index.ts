@@ -5,16 +5,233 @@ import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 
-import {
-  getStudyRoomsMetaList,
-  getStoredStudyRooms,
-  getStudyRoomById,
-  createStudyRoom,
-  updateStudyRoom,
-  deleteStudyRoom,
-  joinRoomParticipant,
-  leaveRoomParticipant
-} from '../src/services/studyRoomStorage';
+// In-Memory & Local Backed Peer Study Rooms Storage (Self-Contained in API Module)
+interface ApiStudyRoomParticipant {
+  id: string;
+  name: string;
+  avatar?: string;
+  isHandRaised?: boolean;
+  joinedAt?: string;
+}
+
+interface ApiStudyRoomRecord {
+  roomId: string;
+  title: string;
+  subject: string;
+  hostName: string;
+  hostId?: string;
+  isOfficial?: boolean;
+  topic?: string;
+  status: 'active' | 'waiting' | 'concluded' | 'archived';
+  participantCount: number;
+  isTimerRunning: boolean;
+  participants: ApiStudyRoomParticipant[];
+  whiteboardStrokes: any[];
+  timerState: any;
+  messages: any[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+const memoryRoomsCache = new Map<string, ApiStudyRoomRecord>();
+const LOCAL_ROOMS_FILE = path.join(process.cwd(), '.data_study_rooms.json');
+
+function apiReadRoomsDisk(): ApiStudyRoomRecord[] {
+  try {
+    if (fs.existsSync(LOCAL_ROOMS_FILE)) {
+      const content = fs.readFileSync(LOCAL_ROOMS_FILE, 'utf-8');
+      const parsed = JSON.parse(content);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function apiWriteRoomsDisk(rooms: ApiStudyRoomRecord[]): void {
+  try {
+    fs.writeFileSync(LOCAL_ROOMS_FILE, JSON.stringify(rooms, null, 2), 'utf-8');
+  } catch {}
+}
+
+function loadAllRooms(): ApiStudyRoomRecord[] {
+  if (memoryRoomsCache.size > 0) {
+    return Array.from(memoryRoomsCache.values());
+  }
+  const diskRooms = apiReadRoomsDisk();
+  diskRooms.forEach(r => memoryRoomsCache.set(r.roomId, r));
+  return Array.from(memoryRoomsCache.values());
+}
+
+function getStoredStudyRooms(filter?: { subject?: string; status?: string }): ApiStudyRoomRecord[] {
+  const all = loadAllRooms();
+  let result = all.filter(r => r.status !== 'archived');
+  if (filter?.subject && filter.subject !== 'All') {
+    result = result.filter(r => r.subject?.toLowerCase() === filter.subject!.toLowerCase());
+  }
+  if (filter?.status) {
+    result = result.filter(r => r.status === filter.status);
+  }
+  return result;
+}
+
+function getStudyRoomsMetaList(filter?: { subject?: string; status?: string }) {
+  return getStoredStudyRooms(filter).map(r => ({
+    roomId: r.roomId,
+    title: r.title,
+    subject: r.subject,
+    hostName: r.hostName,
+    hostId: r.hostId,
+    isOfficial: r.isOfficial,
+    topic: r.topic,
+    status: r.status,
+    participantCount: r.participants?.length || 0,
+    isTimerRunning: Boolean(r.timerState?.isRunning),
+    participants: (r.participants || []).map(p => ({
+      id: p.id,
+      name: p.name,
+      avatar: p.avatar
+    })),
+    createdAt: r.createdAt,
+    updatedAt: r.updatedAt
+  }));
+}
+
+function getStudyRoomById(roomId: string): ApiStudyRoomRecord | null {
+  loadAllRooms();
+  return memoryRoomsCache.get(roomId) || null;
+}
+
+function createStudyRoom(params: {
+  title: string;
+  subject: string;
+  hostName?: string;
+  hostId?: string;
+  isOfficial?: boolean;
+  topic?: string;
+  durationMinutes?: number;
+}): ApiStudyRoomRecord {
+  loadAllRooms();
+  const roomId = `room_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const now = new Date().toISOString();
+  const durationSec = (params.durationMinutes || 25) * 60;
+
+  const newRoom: ApiStudyRoomRecord = {
+    roomId,
+    title: params.title.trim(),
+    subject: params.subject || 'General',
+    hostName: params.hostName?.trim() || 'Scholar Student',
+    hostId: params.hostId,
+    isOfficial: Boolean(params.isOfficial),
+    topic: params.topic?.trim() || undefined,
+    status: 'waiting',
+    participantCount: 0,
+    isTimerRunning: false,
+    participants: [],
+    whiteboardStrokes: [],
+    timerState: {
+      mode: 'sprint',
+      durationSeconds: durationSec,
+      remainingSeconds: durationSec,
+      isRunning: false
+    },
+    messages: [
+      {
+        id: `msg_welcome_${Date.now()}`,
+        senderId: 'system',
+        senderName: 'System Bot',
+        text: `Welcome to ${params.title}!`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        type: 'system'
+      }
+    ],
+    createdAt: now,
+    updatedAt: now
+  };
+
+  memoryRoomsCache.set(roomId, newRoom);
+  apiWriteRoomsDisk(Array.from(memoryRoomsCache.values()));
+  return newRoom;
+}
+
+function updateStudyRoom(roomId: string, updates: Partial<ApiStudyRoomRecord>): ApiStudyRoomRecord | null {
+  loadAllRooms();
+  const existing = memoryRoomsCache.get(roomId);
+  if (!existing) return null;
+
+  const updated: ApiStudyRoomRecord = {
+    ...existing,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (updates.participants) {
+    updated.participantCount = updates.participants.length;
+  }
+
+  memoryRoomsCache.set(roomId, updated);
+  apiWriteRoomsDisk(Array.from(memoryRoomsCache.values()));
+  return updated;
+}
+
+function deleteStudyRoom(roomId: string): boolean {
+  loadAllRooms();
+  if (!memoryRoomsCache.has(roomId)) return false;
+  memoryRoomsCache.delete(roomId);
+  apiWriteRoomsDisk(Array.from(memoryRoomsCache.values()));
+  return true;
+}
+
+function joinRoomParticipant(
+  roomId: string,
+  participant: { id: string; name: string; avatar?: string }
+): ApiStudyRoomRecord | null {
+  loadAllRooms();
+  let room = memoryRoomsCache.get(roomId);
+  if (!room) return null;
+
+  const existingIdx = room.participants.findIndex(p => p.id === participant.id);
+  const pRecord: ApiStudyRoomParticipant = {
+    id: participant.id,
+    name: participant.name || 'Anonymous Scholar',
+    avatar: participant.avatar || participant.name?.substring(0, 2).toUpperCase() || 'SC',
+    isHandRaised: false,
+    joinedAt: new Date().toISOString()
+  };
+
+  if (existingIdx >= 0) {
+    room.participants[existingIdx] = pRecord;
+  } else {
+    room.participants.push(pRecord);
+  }
+
+  room.participantCount = room.participants.length;
+  room.status = 'active';
+  room.updatedAt = new Date().toISOString();
+
+  memoryRoomsCache.set(roomId, room);
+  apiWriteRoomsDisk(Array.from(memoryRoomsCache.values()));
+  return room;
+}
+
+function leaveRoomParticipant(
+  roomId: string,
+  participantId: string
+): ApiStudyRoomRecord | null {
+  loadAllRooms();
+  let room = memoryRoomsCache.get(roomId);
+  if (!room) return null;
+
+  room.participants = room.participants.filter(p => p.id !== participantId);
+  room.participantCount = room.participants.length;
+  if (room.participantCount === 0 && !room.isOfficial) {
+    room.status = 'waiting';
+  }
+  room.updatedAt = new Date().toISOString();
+
+  memoryRoomsCache.set(roomId, room);
+  apiWriteRoomsDisk(Array.from(memoryRoomsCache.values()));
+  return room;
+}
 
 const app = express();
 const PORT = 3000;
@@ -75,7 +292,7 @@ function createRateLimiter(options: { windowMs: number; max: number; message: st
 }
 
 // Background cleanup for stale rate limit buckets
-setInterval(() => {
+const cleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, bucket] of rateLimitStore.entries()) {
     if (now > bucket.resetAt) {
@@ -83,6 +300,9 @@ setInterval(() => {
     }
   }
 }, 3 * 60 * 1000);
+if (cleanupTimer && typeof cleanupTimer.unref === 'function') {
+  cleanupTimer.unref();
+}
 
 // Specialized Rate Limiters
 const globalApiLimiter = createRateLimiter({

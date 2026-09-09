@@ -7,10 +7,11 @@
 
 export interface ApiCallMetric {
   url: string;
+  endpoint?: string;
   method: string;
   durationMs: number;
   status: number | string;
-  timestamp: string;
+  timestamp: string | number;
   isSlow: boolean;
 }
 
@@ -29,6 +30,30 @@ class PerformanceMonitor {
     return PerformanceMonitor.instance;
   }
 
+  public recordMetric(metric: {
+    endpoint?: string;
+    url?: string;
+    method: string;
+    durationMs: number;
+    status: number | string;
+    timestamp: string | number;
+    isSlow?: boolean;
+  }): void {
+    const formatted: ApiCallMetric = {
+      url: metric.url || metric.endpoint || '',
+      endpoint: metric.endpoint || metric.url || '',
+      method: metric.method || 'GET',
+      durationMs: metric.durationMs,
+      status: metric.status || 200,
+      timestamp: metric.timestamp,
+      isSlow: metric.isSlow ?? (metric.durationMs > this.SLOW_API_THRESHOLD_MS)
+    };
+    this.metrics.push(formatted);
+    if (this.metrics.length > 100) {
+      this.metrics.shift();
+    }
+  }
+
   /**
    * Initializes global fetch interception for API latency tracking in development mode
    */
@@ -41,10 +66,11 @@ class PerformanceMonitor {
       if (typeof window !== 'undefined' && 'PerformanceObserver' in window) {
         const supported = (PerformanceObserver as any).supportedEntryTypes;
         if (!supported || supported.includes('resource')) {
+          const self = this;
           const observer = new PerformanceObserver((list) => {
             list.getEntries().forEach((entry) => {
-              if (entry && typeof entry.startTime === 'number' && entry.duration > this.SLOW_API_THRESHOLD_MS) {
-                this.recordMetric({
+              if (entry && typeof entry.startTime === 'number' && entry.duration > self.SLOW_API_THRESHOLD_MS) {
+                self.recordMetric({
                   endpoint: entry.name,
                   method: 'RESOURCE',
                   durationMs: Math.round(entry.duration),
