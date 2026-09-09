@@ -39,20 +39,28 @@ class PerformanceMonitor {
     // Safely listen to native performance observer entries if available, without replacing native window.fetch
     try {
       if (typeof window !== 'undefined' && 'PerformanceObserver' in window) {
-        const observer = new PerformanceObserver((list) => {
-          list.getEntries().forEach((entry) => {
-            if (entry && typeof entry.startTime === 'number' && entry.duration > this.SLOW_API_THRESHOLD_MS) {
-              console.warn(
-                `%c🚨 [SLOW RESOURCE > 2s] ${entry.name} took ${(entry.duration / 1000).toFixed(2)}s (${entry.duration.toFixed(0)}ms)`,
-                'background: #7f1d1d; color: #fecaca; font-weight: bold; padding: 2px 6px; border-radius: 4px;'
-              );
-            }
+        const supported = (PerformanceObserver as any).supportedEntryTypes;
+        if (!supported || supported.includes('resource')) {
+          const observer = new PerformanceObserver((list) => {
+            list.getEntries().forEach((entry) => {
+              if (entry && typeof entry.startTime === 'number' && entry.duration > this.SLOW_API_THRESHOLD_MS) {
+                this.recordMetric({
+                  endpoint: entry.name,
+                  method: 'RESOURCE',
+                  durationMs: Math.round(entry.duration),
+                  status: 200,
+                  timestamp: Date.now(),
+                  isSlow: true
+                });
+              }
+            });
           });
-        });
-        observer.observe({ entryTypes: ['resource'], buffered: true });
+          // W3C spec: buffered flag is only valid with single `type`, not `entryTypes`
+          observer.observe({ type: 'resource', buffered: true });
+        }
       }
     } catch {
-      // Safe fallback if observer fails
+      // Safe fallback if observer fails or buffered type not supported
     }
   }
 
