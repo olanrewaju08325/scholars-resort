@@ -63,7 +63,11 @@ function AppContent() {
     // Initialize automatic sync listeners for network reconnection & IndexedDB sync queue
     const cleanupSync = initSyncQueueListeners();
 
+    let lastSyncTime = 0;
     const handleOnline = () => {
+      const now = Date.now();
+      if (now - lastSyncTime < 6000) return;
+      lastSyncTime = now;
       console.log('App is online. Triggering background sync...');
       syncWithSupabase();
     };

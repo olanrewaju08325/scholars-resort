@@ -39,6 +39,15 @@ export const NotificationBell = () => {
     fetchNotifications();
 
     let channel: any = null;
+    const cleanChannel = () => {
+      if (channel) {
+        try {
+          supabase.removeChannel(channel);
+        } catch {}
+        channel = null;
+      }
+    };
+
     try {
       const channelId = `notif_${user.id}_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
       channel = supabase.channel(channelId)
@@ -51,17 +60,23 @@ export const NotificationBell = () => {
           setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20));
           setUnreadCount(c => c + 1);
         })
-        .subscribe();
+        .subscribe((status) => {
+          if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+            cleanChannel();
+          }
+        });
     } catch (err) {
       console.warn('Realtime notifications notice:', err);
     }
 
+    const handlePageHide = () => {
+      cleanChannel();
+    };
+    window.addEventListener('pagehide', handlePageHide);
+
     return () => { 
-      if (channel) {
-        try {
-          supabase.removeChannel(channel);
-        } catch {}
-      }
+      window.removeEventListener('pagehide', handlePageHide);
+      cleanChannel();
     };
   }, [user]);
 

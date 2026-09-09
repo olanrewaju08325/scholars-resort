@@ -311,13 +311,21 @@ export async function getPendingQueueCount(): Promise<number> {
  * plus a periodic background check adjusted by Battery Saver mode.
  */
 export function initSyncQueueListeners(): () => void {
+  let lastSyncTrigger = 0;
+
   const handleOnline = () => {
+    const now = Date.now();
+    if (now - lastSyncTrigger < 6000) return; // Debounce rapid online events & bfcache restorations
+    lastSyncTrigger = now;
     console.log('[SyncQueue] Network connection detected. Triggering sync...');
     processSyncQueue();
   };
 
   const handleVisibility = () => {
+    const now = Date.now();
     if (document.visibilityState === 'visible' && navigator.onLine) {
+      if (now - lastSyncTrigger < 6000) return;
+      lastSyncTrigger = now;
       processSyncQueue();
     }
   };

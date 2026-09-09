@@ -110,13 +110,71 @@ export default function CBTCenter() {
   ];
 
   const [tournaments, setTournaments] = useState<any[]>([]);
-  useEffect(() => {
-    const fetchTournaments = async () => {
+  const [registeredTournamentIds, setRegisteredTournamentIds] = useState<string[]>([]);
+  const [registeringTournamentId, setRegisteringTournamentId] = useState<string | null>(null);
+
+  const fetchTournaments = async () => {
+    try {
+      const res = await fetch('/api/tournaments');
+      const json = await res.json();
+      if (json?.success && Array.isArray(json.tournaments)) {
+        setTournaments(json.tournaments);
+      } else {
+        const { data } = await supabase.from('tournaments').select('*').in('status', ['upcoming', 'active']).order('start_time', { ascending: true });
+        if (data) setTournaments(data);
+      }
+    } catch {
       const { data } = await supabase.from('tournaments').select('*').in('status', ['upcoming', 'active']).order('start_time', { ascending: true });
       if (data) setTournaments(data);
-    };
+    }
+
+    if (profile?.id) {
+      try {
+        const regRes = await fetch(`/api/tournaments/my-registrations?userId=${encodeURIComponent(profile.id)}`);
+        const regJson = await regRes.json();
+        if (regJson?.success && Array.isArray(regJson.registeredTournamentIds)) {
+          setRegisteredTournamentIds(regJson.registeredTournamentIds);
+        }
+      } catch {}
+    }
+  };
+
+  useEffect(() => {
     fetchTournaments();
-  }, []);
+  }, [profile?.id]);
+
+  const handleRegisterTournament = async (t: any) => {
+    if (!profile) {
+      toast.error('Please log in to register for tournaments.');
+      return;
+    }
+    setRegisteringTournamentId(t.id);
+    try {
+      const res = await fetch('/api/tournaments/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournament_id: t.id,
+          legacy_id: t.legacy_id,
+          user_id: profile.id,
+          user_name: profile.full_name || profile.name || 'Scholar',
+          user_email: profile.email || ''
+        })
+      });
+      const json = await res.json();
+      if (json?.success) {
+        toast.success(json.message || 'Successfully registered for tournament!');
+        setRegisteredTournamentIds(prev => [...prev, t.id, t.legacy_id].filter(Boolean));
+        fetchTournaments();
+      } else {
+        toast.error(json?.error || 'Registration failed.');
+      }
+    } catch {
+      toast.error('Network error during registration.');
+    } finally {
+      setRegisteringTournamentId(null);
+    }
+  };
 
   return (
     <div className="flex-1 p-4 md:p-8 overflow-y-auto w-full max-w-7xl mx-auto space-y-8 bg-background text-foreground min-h-screen pb-20">
@@ -302,39 +360,118 @@ export default function CBTCenter() {
 
         {activeTab === 'tournaments' && (
           <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-xl font-bold font-display text-foreground">National UTME Tournaments & Arena</h3>
+                <p className="text-sm text-muted-foreground">Compete under timed exam conditions with scholars across Nigeria.</p>
+              </div>
+              <Link to="/tournaments">
+                <Button variant="outline" size="sm" className="gap-1.5 text-xs font-semibold">
+                  <Trophy className="w-4 h-4 text-amber-500" /> Full Arena Hub <ArrowRight className="w-3.5 h-3.5" />
+                </Button>
+              </Link>
+            </div>
+
             {tournaments.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">No upcoming tournaments right now. Check back later!</div>
-            ) : tournaments.map((t) => (
-              <Card key={t.id} className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border-indigo-500/30 overflow-hidden relative">
-                <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                  <Trophy className="w-64 h-64" />
-                </div>
-                <CardHeader className="relative z-10 pb-0">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-xs font-bold uppercase tracking-wider text-indigo-300 w-max mb-4">
-                    <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" /> {t.status}
-                  </div>
-                  <CardTitle className="text-3xl md:text-4xl font-display font-bold text-white mb-2">
-                    {t.title}
-                  </CardTitle>
-                  <CardDescription className="text-indigo-200 text-lg">
-                    {t.description || 'Compete with thousands of students nationwide.'}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="relative z-10 pt-8 pb-8 flex flex-col sm:flex-row gap-6">
-                  <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex-1">
-                    <p className="text-sm text-indigo-300 font-semibold uppercase mb-1">Starts In</p>
-                    <p className="text-xl font-bold font-display text-white">{new Date(t.start_time).toLocaleDateString()}</p>
-                  </div>
-                  <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-4 flex-1">
-                    <p className="text-sm text-indigo-300 font-semibold uppercase mb-1">Entry</p>
-                    <p className="text-xl font-bold font-display text-white">{t.entry_fee ? `₦${t.entry_fee}` : 'Free'}</p>
-                  </div>
-                  <Button asChild className="h-auto bg-indigo-500 hover:bg-indigo-600 text-white font-bold text-lg px-8 shadow-xl shadow-indigo-500/20">
-                    <Link to={`/tournaments/${t.id}`}>Enter Arena</Link>
-                  </Button>
-                </CardContent>
+              <Card className="bg-card border-border rounded-2xl p-12 text-center shadow-sm">
+                <Trophy className="w-12 h-12 text-muted-foreground/60 mx-auto mb-3" />
+                <h3 className="text-lg font-bold text-foreground">No active tournaments right now</h3>
+                <p className="text-muted-foreground mt-1 text-sm max-w-sm mx-auto">
+                  New tournaments are scheduled weekly. Check back soon or visit the Challenges hub!
+                </p>
               </Card>
-            ))}
+            ) : tournaments.map((t) => {
+              const isLive = t.status === 'active';
+              const isLocked = t.status === 'locked';
+              const isRegistered = registeredTournamentIds.includes(t.id) || (t.legacy_id && registeredTournamentIds.includes(t.legacy_id));
+              const isRegistering = registeringTournamentId === t.id;
+              const prize = t.prize_description || t.cash_prize || t.prize_pool || 'Scholar Prestige & Badges';
+
+              return (
+                <Card key={t.id} className={`bg-card text-card-foreground border transition-all rounded-2xl overflow-hidden shadow-sm hover:shadow-md ${
+                  isLive ? 'border-orange-500 ring-1 ring-orange-500/30' : isRegistered ? 'border-emerald-500/40' : 'border-border'
+                }`}>
+                  <div className={`px-5 py-2 flex items-center justify-between text-xs font-semibold border-b ${
+                    isLive ? 'bg-orange-500 text-white border-orange-600' :
+                    isRegistered ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-500/20' :
+                    'bg-muted/60 text-muted-foreground border-border'
+                  }`}>
+                    <div className="flex items-center gap-2">
+                      {isLive ? (
+                        <>
+                          <span className="w-2 h-2 rounded-full bg-white animate-ping" />
+                          <span className="font-bold uppercase tracking-wider">Live Battle Arena</span>
+                        </>
+                      ) : isRegistered ? (
+                        <>
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                          <span className="font-bold">You are registered for this event</span>
+                        </>
+                      ) : (
+                        <span>Scheduled Competition</span>
+                      )}
+                    </div>
+                    {isLocked && <span className="font-bold uppercase text-red-600">Locked</span>}
+                  </div>
+
+                  <CardHeader className="p-5 pb-3">
+                    <CardTitle className="text-xl sm:text-2xl font-bold font-display text-foreground">
+                      {t.title}
+                    </CardTitle>
+                    <CardDescription className="text-muted-foreground text-sm mt-1">
+                      {t.description || 'Test your speed and accuracy in timed national UTME competition.'}
+                    </CardDescription>
+                  </CardHeader>
+
+                  <CardContent className="p-5 pt-0 space-y-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-muted/50 border border-border rounded-xl p-3">
+                        <p className="text-[11px] text-muted-foreground font-semibold uppercase">Date & Time</p>
+                        <p className="text-sm font-bold text-foreground mt-0.5">{new Date(t.start_time).toLocaleDateString()}</p>
+                      </div>
+                      <div className="bg-muted/50 border border-border rounded-xl p-3">
+                        <p className="text-[11px] text-muted-foreground font-semibold uppercase">Entry Fee</p>
+                        <p className="text-sm font-bold text-foreground mt-0.5">{t.entry_fee ? `₦${t.entry_fee}` : 'Free'}</p>
+                      </div>
+                      <div className="bg-muted/50 border border-border rounded-xl p-3">
+                        <p className="text-[11px] text-muted-foreground font-semibold uppercase">Format</p>
+                        <p className="text-sm font-bold text-foreground mt-0.5">{t.question_count || 40} Qs • {t.duration_minutes || 30}m</p>
+                      </div>
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                        <p className="text-[11px] text-amber-700 dark:text-amber-400 font-bold uppercase">Prize</p>
+                        <p className="text-sm font-bold text-amber-800 dark:text-amber-300 mt-0.5 truncate" title={prize}>{prize}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
+                      {isLive ? (
+                        <Button asChild className="w-full sm:flex-1 h-11 bg-orange-600 hover:bg-orange-700 text-white font-bold text-sm">
+                          <Link to={`/tournaments/${t.id}`}><Zap className="w-4 h-4 mr-2" /> Enter Live Arena</Link>
+                        </Button>
+                      ) : isRegistered ? (
+                        <Button disabled variant="outline" className="w-full sm:flex-1 h-11 font-bold text-sm border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400">
+                          <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" /> Registered (Awaiting Battle)
+                        </Button>
+                      ) : (
+                        <Button 
+                          disabled={isLocked || isRegistering}
+                          onClick={() => handleRegisterTournament(t)}
+                          className="w-full sm:flex-1 h-11 font-bold text-sm bg-primary text-primary-foreground"
+                        >
+                          {isRegistering ? 'Registering Seat...' : isLocked ? 'Locked' : 'Register for Tournament'}
+                        </Button>
+                      )}
+
+                      <Link to="/tournaments" className="w-full sm:w-auto">
+                        <Button variant="outline" className="w-full h-11 text-xs font-semibold px-4 border-border">
+                          View Rules & Specs
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
 
