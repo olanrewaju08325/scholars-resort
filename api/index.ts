@@ -36,91 +36,18 @@ interface ApiStudyRoomRecord {
 const memoryRoomsCache = new Map<string, ApiStudyRoomRecord>();
 const LOCAL_ROOMS_FILE = path.join(process.cwd(), '.data_study_rooms.json');
 
-const DEFAULT_API_SEED_ROOMS: ApiStudyRoomRecord[] = [
-  {
-    roomId: 'room_utme_english_mastery',
-    title: 'JAMB Use of English: Lexis, Structure & Oral Masterclass',
-    subject: 'Use of English',
-    hostName: 'Dr. Scholar (UTME Lead)',
-    hostId: 'official_lead_1',
-    isOfficial: true,
-    topic: 'Sentence Completion, Idioms & Concord Rules',
-    status: 'active',
-    participantCount: 4,
-    isTimerRunning: true,
-    participants: [
-      { id: 'p_1', name: 'Chinedu O.', avatar: 'CO' },
-      { id: 'p_2', name: 'Amina B.', avatar: 'AB' },
-      { id: 'p_3', name: 'Folake A.', avatar: 'FA' },
-      { id: 'p_4', name: 'Emeka K.', avatar: 'EK' }
-    ],
-    whiteboardStrokes: [],
-    timerState: { mode: 'sprint', durationSeconds: 2700, remainingSeconds: 2100, isRunning: true },
-    messages: [
-      { id: 'm_1', senderId: 'official_lead_1', senderName: 'Dr. Scholar', text: 'Welcome scholars! We are currently working on Oral English vowel sounds.', timestamp: '10:00 AM', type: 'chat' }
-    ],
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    roomId: 'room_utme_physics_mechanics',
-    title: 'UTME Physics: Mechanics, Waves & Optics Problem Solving',
-    subject: 'Physics',
-    hostName: 'Engr. Dapo (Academic Team)',
-    hostId: 'official_lead_2',
-    isOfficial: true,
-    topic: 'Projectiles, Circular Motion & Simple Harmonic Motion',
-    status: 'active',
-    participantCount: 3,
-    isTimerRunning: true,
-    participants: [
-      { id: 'p_5', name: 'Tunde W.', avatar: 'TW' },
-      { id: 'p_6', name: 'Zainab M.', avatar: 'ZM' },
-      { id: 'p_7', name: 'David I.', avatar: 'DI' }
-    ],
-    whiteboardStrokes: [],
-    timerState: { mode: 'sprint', durationSeconds: 2400, remainingSeconds: 1800, isRunning: true },
-    messages: [
-      { id: 'm_2', senderId: 'official_lead_2', senderName: 'Engr. Dapo', text: 'Step 1: Calculate the vertical component of the initial projectile velocity.', timestamp: '10:15 AM', type: 'chat' }
-    ],
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    roomId: 'room_utme_math_calculus',
-    title: 'General Mathematics: Calculus, Vectors & Matrices Sprint',
-    subject: 'Mathematics',
-    hostName: 'Prof. Bello',
-    hostId: 'official_lead_3',
-    isOfficial: true,
-    topic: 'Differentiation, Integration by Parts & Determinants',
-    status: 'active',
-    participantCount: 5,
-    isTimerRunning: true,
-    participants: [
-      { id: 'p_8', name: 'Ngozi E.', avatar: 'NE' },
-      { id: 'p_9', name: 'Ibrahim S.', avatar: 'IS' },
-      { id: 'p_10', name: 'Blessing C.', avatar: 'BC' },
-      { id: 'p_11', name: 'Victor U.', avatar: 'VU' },
-      { id: 'p_12', name: 'Khadijat A.', avatar: 'KA' }
-    ],
-    whiteboardStrokes: [],
-    timerState: { mode: 'sprint', durationSeconds: 3000, remainingSeconds: 2400, isRunning: true },
-    messages: [],
-    createdAt: new Date(Date.now() - 1800000).toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
-
 function apiReadRoomsDisk(): ApiStudyRoomRecord[] {
   try {
     if (fs.existsSync(LOCAL_ROOMS_FILE)) {
       const content = fs.readFileSync(LOCAL_ROOMS_FILE, 'utf-8');
       const parsed = JSON.parse(content);
-      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      if (Array.isArray(parsed)) {
+        // Filter out any obsolete mock room IDs
+        return parsed.filter(r => !['room_utme_english_mastery', 'room_utme_physics_mechanics', 'room_utme_math_calculus'].includes(r.roomId));
+      }
     }
   } catch {}
-  return DEFAULT_API_SEED_ROOMS;
+  return [];
 }
 
 function apiWriteRoomsDisk(rooms: ApiStudyRoomRecord[]): void {
@@ -3292,6 +3219,7 @@ app.get('/api/tournaments', async (req, res) => {
 });
 
 const LOCAL_PARTICIPANTS_FILE = path.join(process.cwd(), '.data_tournament_participants.json');
+const LOCAL_PRIZE_CLAIMS_FILE = path.join(process.cwd(), '.data_tournament_prize_claims.json');
 
 function getLocalParticipants(): any[] {
   try {
@@ -3312,10 +3240,39 @@ function saveLocalParticipants(list: any[]) {
   }
 }
 
+function getLocalPrizeClaims(): any[] {
+  try {
+    if (fs.existsSync(LOCAL_PRIZE_CLAIMS_FILE)) {
+      const raw = fs.readFileSync(LOCAL_PRIZE_CLAIMS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalPrizeClaims(list: any[]) {
+  try {
+    fs.writeFileSync(LOCAL_PRIZE_CLAIMS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[Local Prize Claims Save Warning]', e);
+  }
+}
+
 // API Route: Register for Tournament (Guaranteed zero-failure with Disk, DB & Settings fallback)
 app.post('/api/tournaments/register', async (req, res) => {
   try {
-    const { tournament_id, user_id, user_name, user_email, legacy_id } = req.body;
+    const { 
+      tournament_id, 
+      user_id, 
+      user_name, 
+      user_email, 
+      legacy_id,
+      payment_method = 'free',
+      payment_reference = null,
+      coins_deducted = 0
+    } = req.body;
+
     if (!tournament_id) {
       return res.status(400).json({ success: false, error: 'Tournament ID is required' });
     }
@@ -3341,7 +3298,51 @@ app.post('/api/tournaments/register', async (req, res) => {
       return res.status(401).json({ success: false, error: 'Authentication required to register for this challenge' });
     }
 
-    // 1. Gather existing registrations from local disk and admin_settings
+    // 1. Check if tournament requires entry fee
+    let tournamentEntryFee = 0;
+    try {
+      const { data: tournSetting } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournaments_db')
+        .maybeSingle();
+
+      if (Array.isArray(tournSetting?.setting_value)) {
+        const foundT = tournSetting.setting_value.find((t: any) => t.id === tournament_id || t.id === legacy_id);
+        if (foundT) {
+          tournamentEntryFee = Number(foundT.entry_fee) || 0;
+        }
+      }
+    } catch {}
+
+    // If paid with coins, verify user has enough coins and deduct
+    if (payment_method === 'coins' && coins_deducted > 0) {
+      try {
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('coins')
+          .eq('id', effectiveUserId)
+          .maybeSingle();
+
+        const currentCoins = Number(userProfile?.coins) || 0;
+        if (currentCoins < coins_deducted) {
+          return res.status(400).json({ 
+            success: false, 
+            error: `Insufficient Scholar Coins. You have ${currentCoins} coins, but ${coins_deducted} are required.` 
+          });
+        }
+
+        // Deduct coins
+        await supabase
+          .from('profiles')
+          .update({ coins: currentCoins - coins_deducted })
+          .eq('id', effectiveUserId);
+      } catch (coinErr: any) {
+        console.warn('[Coin Deduction Warning]', coinErr);
+      }
+    }
+
+    // 2. Gather existing registrations from local disk and admin_settings
     const participantsMap = new Map<string, any>();
     getLocalParticipants().forEach(p => {
       if (p.id) participantsMap.set(p.id, p);
@@ -3375,7 +3376,7 @@ app.post('/api/tournaments/register', async (req, res) => {
       });
     }
 
-    // 2. Add new participant record
+    // 3. Add new participant record
     const newParticipant = {
       id: crypto.randomUUID(),
       tournament_id,
@@ -3383,6 +3384,11 @@ app.post('/api/tournaments/register', async (req, res) => {
       user_id: effectiveUserId,
       user_name: effectiveUserName,
       user_email: effectiveUserEmail,
+      payment_method,
+      payment_reference,
+      coins_deducted,
+      entry_fee_amount: tournamentEntryFee,
+      is_paid: tournamentEntryFee > 0 || payment_method === 'coins' || payment_method === 'paystack',
       joined_at: new Date().toISOString(),
       score: 0,
       time_taken_seconds: 0
@@ -3405,7 +3411,7 @@ app.post('/api/tournaments/register', async (req, res) => {
       console.warn('[Tournament Participant Save Notice]', settErr?.message);
     }
 
-    // 3. Update participant count on tournament in admin_settings.tournaments_db
+    // 4. Update participant count on tournament in admin_settings.tournaments_db
     try {
       const { data: tournSetting } = await supabase
         .from('admin_settings')
@@ -3431,7 +3437,7 @@ app.post('/api/tournaments/register', async (req, res) => {
       }
     } catch {}
 
-    // 4. Also attempt insert to public.tournament_participants if tournament_id is valid UUID
+    // 5. Also attempt insert to public.tournament_participants if tournament_id is valid UUID
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tournament_id);
     if (isUUID && token) {
       try {
@@ -3596,6 +3602,237 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
 
     return res.json({ success: true, message: 'Score recorded successfully' });
   } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Submit Tournament Prize Claim (Cash / Airtime / Wallet)
+app.post('/api/tournaments/prize-claim', async (req, res) => {
+  try {
+    const {
+      tournament_id,
+      tournament_title,
+      user_id,
+      user_name,
+      user_email,
+      rank,
+      score,
+      payout_type, // 'bank_transfer' | 'airtime' | 'scholar_wallet'
+      bank_name,
+      account_number,
+      account_name,
+      phone_number,
+      telecom_network,
+      prize_amount,
+      notes
+    } = req.body;
+
+    if (!tournament_id || !user_id) {
+      return res.status(400).json({ success: false, error: 'Tournament ID and User ID are required' });
+    }
+
+    if (!payout_type) {
+      return res.status(400).json({ success: false, error: 'Payout type (bank transfer, airtime, or wallet) is required' });
+    }
+
+    // Validate payout details based on type
+    if (payout_type === 'bank_transfer') {
+      if (!bank_name || !account_number || !account_name) {
+        return res.status(400).json({ success: false, error: 'Bank Name, Account Number, and Account Name are required for cash disbursal' });
+      }
+    } else if (payout_type === 'airtime') {
+      if (!phone_number || !telecom_network) {
+        return res.status(400).json({ success: false, error: 'Phone Number and Telecom Network (MTN, Airtel, Glo, 9mobile) are required for airtime disbursal' });
+      }
+    }
+
+    const claimsMap = new Map<string, any>();
+    getLocalPrizeClaims().forEach((c: any) => {
+      if (c.id) claimsMap.set(c.id, c);
+    });
+
+    try {
+      const { data: claimsSetting } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournament_prize_claims_db')
+        .maybeSingle();
+
+      if (Array.isArray(claimsSetting?.setting_value)) {
+        claimsSetting.setting_value.forEach((c: any) => {
+          if (c.id) claimsMap.set(c.id, c);
+        });
+      }
+    } catch {}
+
+    const claimsList = Array.from(claimsMap.values());
+
+    // Check if user already submitted a claim for this tournament
+    const existingIndex = claimsList.findIndex(
+      (c: any) => c.tournament_id === tournament_id && c.user_id === user_id
+    );
+
+    const claimRecord = {
+      id: existingIndex >= 0 ? claimsList[existingIndex].id : crypto.randomUUID(),
+      tournament_id,
+      tournament_title: tournament_title || 'UTME Challenge Duel',
+      user_id,
+      user_name: user_name || 'Scholar Candidate',
+      user_email: user_email || '',
+      rank: Number(rank) || 1,
+      score: Number(score) || 0,
+      payout_type,
+      bank_name: bank_name || null,
+      account_number: account_number || null,
+      account_name: account_name || null,
+      phone_number: phone_number || null,
+      telecom_network: telecom_network || null,
+      prize_amount: prize_amount || 'Cash / Airtime Prize',
+      notes: notes || '',
+      status: 'pending', // 'pending' | 'verified' | 'disbursed' | 'rejected'
+      created_at: existingIndex >= 0 ? claimsList[existingIndex].created_at : new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      disbursed_at: null,
+      disbursal_reference: null
+    };
+
+    if (existingIndex >= 0) {
+      claimsList[existingIndex] = claimRecord;
+    } else {
+      claimsList.unshift(claimRecord);
+    }
+
+    // Save to local disk
+    saveLocalPrizeClaims(claimsList);
+
+    // Save to admin_settings
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'tournament_prize_claims_db',
+        setting_value: claimsList,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch (settErr) {
+      console.warn('[Prize Claims Save Note]', settErr);
+    }
+
+    return res.json({
+      success: true,
+      claim: claimRecord,
+      message: 'Prize claim submitted successfully! Your payout details have been queued for admin verification.'
+    });
+  } catch (err: any) {
+    console.error('[API /api/tournaments/prize-claim Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to submit prize claim' });
+  }
+});
+
+// API Route: Get Tournament Prize Claims
+app.get('/api/tournaments/prize-claims', async (req, res) => {
+  try {
+    const { tournament_id, user_id, status } = req.query;
+
+    const claimsMap = new Map<string, any>();
+    getLocalPrizeClaims().forEach((c: any) => {
+      if (c.id) claimsMap.set(c.id, c);
+    });
+
+    try {
+      const { data: claimsSetting } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournament_prize_claims_db')
+        .maybeSingle();
+
+      if (Array.isArray(claimsSetting?.setting_value)) {
+        claimsSetting.setting_value.forEach((c: any) => {
+          if (c.id) claimsMap.set(c.id, c);
+        });
+      }
+    } catch {}
+
+    let claimsList = Array.from(claimsMap.values());
+
+    if (tournament_id) {
+      claimsList = claimsList.filter((c: any) => c.tournament_id === String(tournament_id));
+    }
+    if (user_id) {
+      claimsList = claimsList.filter((c: any) => c.user_id === String(user_id));
+    }
+    if (status && status !== 'all') {
+      claimsList = claimsList.filter((c: any) => c.status === String(status));
+    }
+
+    // Sort newest first
+    claimsList.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    return res.json({ success: true, claims: claimsList });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message, claims: [] });
+  }
+});
+
+// API Route: Admin Update / Disburse Tournament Prize Claim
+app.post('/api/tournaments/admin/update-claim', verifyAdminToken, async (req, res) => {
+  try {
+    const { claim_id, status, disbursal_reference, admin_note } = req.body;
+
+    if (!claim_id || !status) {
+      return res.status(400).json({ success: false, error: 'Claim ID and Status are required' });
+    }
+
+    const claimsMap = new Map<string, any>();
+    getLocalPrizeClaims().forEach((c: any) => {
+      if (c.id) claimsMap.set(c.id, c);
+    });
+
+    try {
+      const { data: claimsSetting } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournament_prize_claims_db')
+        .maybeSingle();
+
+      if (Array.isArray(claimsSetting?.setting_value)) {
+        claimsSetting.setting_value.forEach((c: any) => {
+          if (c.id) claimsMap.set(c.id, c);
+        });
+      }
+    } catch {}
+
+    const claimsList = Array.from(claimsMap.values());
+    const targetIdx = claimsList.findIndex((c: any) => c.id === claim_id);
+
+    if (targetIdx === -1) {
+      return res.status(404).json({ success: false, error: 'Prize claim not found' });
+    }
+
+    claimsList[targetIdx] = {
+      ...claimsList[targetIdx],
+      status,
+      disbursal_reference: disbursal_reference || claimsList[targetIdx].disbursal_reference,
+      admin_note: admin_note || claimsList[targetIdx].admin_note,
+      updated_at: new Date().toISOString(),
+      disbursed_at: status === 'disbursed' ? (claimsList[targetIdx].disbursed_at || new Date().toISOString()) : claimsList[targetIdx].disbursed_at
+    };
+
+    saveLocalPrizeClaims(claimsList);
+
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'tournament_prize_claims_db',
+        setting_value: claimsList,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    return res.json({
+      success: true,
+      claim: claimsList[targetIdx],
+      message: `Prize claim updated to "${status}" successfully`
+    });
+  } catch (err: any) {
+    console.error('[API /api/tournaments/admin/update-claim Error]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

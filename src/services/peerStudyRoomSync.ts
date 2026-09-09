@@ -5,69 +5,12 @@ const LOBBY_CHANNEL_NAME = 'study_rooms_global_lobby';
 const LOCAL_STORAGE_KEY = 'scholars_resort_study_rooms_cache';
 const BROADCAST_CHANNEL_NAME = 'scholars_peer_study_rooms_sync';
 
-// Default Masterclass Rooms so candidates always have active study sessions available
-const DEFAULT_MASTERCLASS_ROOMS: StudyRoomMeta[] = [
-  {
-    roomId: 'room_utme_english_mastery',
-    title: 'JAMB Use of English: Lexis, Structure & Oral Masterclass',
-    subject: 'Use of English',
-    hostName: 'Dr. Scholar (UTME Lead)',
-    hostId: 'official_lead_1',
-    isOfficial: true,
-    topic: 'Sentence Completion, Idioms & Concord Rules',
-    status: 'active',
-    participantCount: 4,
-    isTimerRunning: true,
-    participants: [
-      { id: 'p_1', name: 'Chinedu O.', avatar: 'CO' },
-      { id: 'p_2', name: 'Amina B.', avatar: 'AB' },
-      { id: 'p_3', name: 'Folake A.', avatar: 'FA' },
-      { id: 'p_4', name: 'Emeka K.', avatar: 'EK' }
-    ],
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    roomId: 'room_utme_physics_mechanics',
-    title: 'UTME Physics: Mechanics, Waves & Optics Problem Solving',
-    subject: 'Physics',
-    hostName: 'Engr. Dapo (Academic Team)',
-    hostId: 'official_lead_2',
-    isOfficial: true,
-    topic: 'Projectiles, Circular Motion & Simple Harmonic Motion',
-    status: 'active',
-    participantCount: 3,
-    isTimerRunning: true,
-    participants: [
-      { id: 'p_5', name: 'Tunde W.', avatar: 'TW' },
-      { id: 'p_6', name: 'Zainab M.', avatar: 'ZM' },
-      { id: 'p_7', name: 'David I.', avatar: 'DI' }
-    ],
-    createdAt: new Date(Date.now() - 7200000).toISOString(),
-    updatedAt: new Date().toISOString()
-  },
-  {
-    roomId: 'room_utme_math_calculus',
-    title: 'General Mathematics: Calculus, Vectors & Matrices Sprint',
-    subject: 'Mathematics',
-    hostName: 'Prof. Bello',
-    hostId: 'official_lead_3',
-    isOfficial: true,
-    topic: 'Differentiation, Integration by Parts & Determinants',
-    status: 'active',
-    participantCount: 5,
-    isTimerRunning: true,
-    participants: [
-      { id: 'p_8', name: 'Ngozi E.', avatar: 'NE' },
-      { id: 'p_9', name: 'Ibrahim S.', avatar: 'IS' },
-      { id: 'p_10', name: 'Blessing C.', avatar: 'BC' },
-      { id: 'p_11', name: 'Victor U.', avatar: 'VU' },
-      { id: 'p_12', name: 'Khadijat A.', avatar: 'KA' }
-    ],
-    createdAt: new Date(Date.now() - 1800000).toISOString(),
-    updatedAt: new Date().toISOString()
-  }
-];
+// Obsolete mock room IDs that must never reappear
+const OBSOLETE_MOCK_ROOM_IDS = new Set([
+  'room_utme_english_mastery',
+  'room_utme_physics_mechanics',
+  'room_utme_math_calculus'
+]);
 
 class PeerStudyRoomSyncService {
   private lobbyChannel: any = null;
@@ -84,25 +27,20 @@ class PeerStudyRoomSyncService {
 
   private loadFromLocalStorage() {
     try {
-      // Seed defaults first
-      DEFAULT_MASTERCLASS_ROOMS.forEach(r => {
-        if (!this.knownRoomsMap.has(r.roomId)) {
-          this.knownRoomsMap.set(r.roomId, r);
-        }
-      });
-
       if (typeof window !== 'undefined' && window.localStorage) {
         const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
         if (stored) {
           const parsed = JSON.parse(stored);
           if (Array.isArray(parsed)) {
             parsed.forEach((r: StudyRoomMeta) => {
-              if (r && r.roomId) {
+              if (r && r.roomId && !OBSOLETE_MOCK_ROOM_IDS.has(r.roomId)) {
                 this.knownRoomsMap.set(r.roomId, r);
               }
             });
           }
         }
+        // Save cleaned list immediately
+        this.saveToLocalStorage();
       }
     } catch (_) {}
   }
@@ -319,6 +257,18 @@ class PeerStudyRoomSyncService {
           payload: { room }
         });
       } catch (_) {}
+    }
+  }
+
+  public async deleteRoom(roomId: string): Promise<boolean> {
+    this.broadcastRoomDeletion(roomId);
+    try {
+      const res = await fetch(`/api/study-rooms/${encodeURIComponent(roomId)}`, {
+        method: 'DELETE'
+      });
+      return res.ok;
+    } catch {
+      return false;
     }
   }
 

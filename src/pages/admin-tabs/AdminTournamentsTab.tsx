@@ -5,13 +5,19 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import {
   Trophy, Plus, Trash2, Users, Clock, Calendar, Edit2,
-  CheckCircle, XCircle, Loader2, BarChart3, Medal, Zap, Sparkles, Lock, Unlock, ArrowLeft, RefreshCw, Database
+  CheckCircle, XCircle, Loader2, Sparkles, Lock, Unlock, ArrowLeft, RefreshCw, Database,
+  Gift, Coins, Check, Building2, Smartphone
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI } from '@/services/aiService';
 import { authFetch } from '@/lib/apiAuth';
+
+const isValidUUID = (val?: string | null): boolean => {
+  if (!val || typeof val !== 'string') return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+};
 
 export const parseTournamentMetadata = (t: any): any => {
   if (!t) return t;
@@ -54,6 +60,10 @@ async function saveTournamentAdaptive(
     registration_deadline: payload.registration_deadline,
     prize_description: payload.prize_description,
     cash_prize: payload.cash_prize,
+    prize_first_place: payload.prize_first_place,
+    prize_second_place: payload.prize_second_place,
+    prize_third_place: payload.prize_third_place,
+    prize_airtime: payload.prize_airtime,
     sponsor: payload.sponsor,
     scholarship_description: payload.scholarship_description,
     is_private: payload.is_private,
@@ -101,8 +111,8 @@ async function saveTournamentAdaptive(
     }
   } catch (_) {}
 
-  // 2. If server route didn't complete, perform direct Supabase client query with universal base columns
-  if (!savedOk) {
+  // 2. If server route didn't complete, perform direct Supabase client query with universal base columns if ID is valid UUID
+  if (!savedOk && (!tournamentId || isValidUUID(tournamentId))) {
     try {
       const res = isEdit && tournamentId
         ? await supabaseClient.from('tournaments').update(cleanBasePayload).eq('id', tournamentId)
@@ -119,7 +129,7 @@ async function saveTournamentAdaptive(
 
   // 3. Always mirror to admin_settings and localStorage as high-availability fallback
   try {
-    const effectiveId = tournamentId || `t_${Date.now()}`;
+    const effectiveId = tournamentId || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `t_${Date.now()}`);
     const localItem = {
       ...payload,
       id: effectiveId,
@@ -166,6 +176,10 @@ const EMPTY_FORM = {
   max_participants: 500,
   prize_description: '',
   cash_prize: 0,
+  prize_first_place: 0,
+  prize_second_place: 0,
+  prize_third_place: 0,
+  prize_airtime: '',
   entry_fee: 0,
   sponsor: '',
   scholarship_description: '',
@@ -187,12 +201,18 @@ export const AdminTournamentsTab = () => {
   const [tournaments, setTournaments] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [view, setView] = useState<'list' | 'create' | 'edit' | 'detail'>('list');
+  const [view, setView] = useState<'list' | 'create' | 'edit' | 'detail' | 'claims'>('list');
   const [selectedTournament, setSelectedTournament] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const [form, setForm] = useState(EMPTY_FORM);
   const [statusFilter, setStatusFilter] = useState('all');
   const { confirmAction, ConfirmElement } = useConfirm();
+
+  // Prize Claims state
+  const [claims, setClaims] = useState<any[]>([]);
+  const [loadingClaims, setLoadingClaims] = useState(false);
+  const [claimsFilter, setClaimsFilter] = useState('all');
+  const [updatingClaimId, setUpdatingClaimId] = useState<string | null>(null);
 
   const fetchTournaments = async () => {
     setLoading(true);
@@ -249,9 +269,70 @@ export const AdminTournamentsTab = () => {
     setLoading(false);
   };
 
+  const fetchClaims = async () => {
+    setLoadingClaims(true);
+    try {
+      const res = await authFetch('/api/tournaments/prize-claims');
+      if (res.ok) {
+        const json = await res.json();
+        if (json?.success && Array.isArray(json.claims)) {
+          setClaims(json.claims);
+        }
+      }
+    } catch (err) {
+      console.warn('Could not fetch prize claims:', err);
+    } finally {
+      setLoadingClaims(false);
+    }
+  };
+
   useEffect(() => {
     fetchTournaments();
+    fetchClaims();
   }, []);
+
+  const handleUpdateClaimStatus = async (claimId: string, status: 'verified' | 'disbursed' | 'rejected') => {
+    let disbursalReference = '';
+    let adminNote = '';
+
+    if (status === 'disbursed') {
+      const ref = window.prompt('Enter Bank Payout / Airtime Transfer Reference ID (e.g. NIP/2026/98234 or PSTK_TRF_123):');
+      if (!ref) {
+        toast.error('Payout reference is recommended when marking as disbursed.');
+        return;
+      }
+      disbursalReference = ref;
+    } else if (status === 'rejected') {
+      const note = window.prompt('Enter rejection note / reason (e.g. Invalid account details or mismatched name):');
+      if (!note) return;
+      adminNote = note;
+    }
+
+    setUpdatingClaimId(claimId);
+    try {
+      const res = await authFetch('/api/tournaments/admin/update-claim', {
+        method: 'POST',
+        body: JSON.stringify({
+          claim_id: claimId,
+          status,
+          disbursal_reference: disbursalReference,
+          admin_note: adminNote
+        })
+      });
+
+      const json = await res.json();
+      if (json?.success) {
+        toast.success(`Claim marked as ${status.toUpperCase()}`);
+        setClaims(prev => prev.map(c => c.id === claimId ? json.claim : c));
+      } else {
+        toast.error(json?.error || 'Failed to update claim');
+      }
+    } catch {
+      toast.error('Network error updating claim status');
+    } finally {
+      setUpdatingClaimId(null);
+    }
+  };
 
   const fetchParticipants = async (tournamentId: string) => {
     try {
@@ -293,13 +374,18 @@ export const AdminTournamentsTab = () => {
 
   const handleAIGenerateWeeklyChallenge = async () => {
     setSaving(true);
-    toast.info("Groq AI is generating a Weekly Challenge...");
+    toast.info("Groq AI is generating a Prized Challenge...");
     try {
-      const prompt = `Generate a JSON configuration for a 'Weekly Challenge' JAMB UTME tournament for Nigerian students.
+      const prompt = `Generate a JSON configuration for a 100% FREE entry JAMB UTME tournament with cash and airtime prizes for Nigerian students.
 It should include:
-- "title": exciting title (e.g. "Mega UTME Physics & Math Duel")
+- "title": exciting title (e.g. "National Physics & Math Speed Duel")
 - "description": compelling description
-- "prize_description": e.g. "₦25,000 Cash Prize + Scholar Badge"
+- "prize_description": "1st: ₦15,000 • 2nd: ₦10,000 • 3rd: ₦5,000 + Airtime"
+- "cash_prize": 30000
+- "prize_first_place": 15000
+- "prize_second_place": 10000
+- "prize_third_place": 5000
+- "prize_airtime": "₦1,000 Airtime for 4th to 10th place"
 - "duration_minutes": 60
 - "question_count": 50
 - "subject_filter": "Physics, Mathematics"
@@ -311,6 +397,11 @@ Return STRICT JSON format:
   "title": "...",
   "description": "...",
   "prize_description": "...",
+  "cash_prize": 30000,
+  "prize_first_place": 15000,
+  "prize_second_place": 10000,
+  "prize_third_place": 5000,
+  "prize_airtime": "...",
   "duration_minutes": 60,
   "question_count": 50,
   "subject_filter": "...",
@@ -332,7 +423,6 @@ Return STRICT JSON format:
       try {
         parsed = JSON.parse(jsonCandidate);
       } catch (pErr) {
-        // Fallback: fix trailing commas if present
         const fixed = jsonCandidate.replace(/,\s*([}\]])/g, '$1');
         parsed = JSON.parse(fixed);
       }
@@ -343,16 +433,22 @@ Return STRICT JSON format:
       start.setHours(10, 0, 0, 0);
       
       const end = new Date(start);
-      end.setHours(12, 0, 0, 0); // 2 hours later
+      end.setHours(12, 0, 0, 0);
       
       setForm({
         ...EMPTY_FORM,
-        title: parsed.title || "AI Weekly Challenge",
+        title: parsed.title || "National UTME Challenge Duel",
         description: parsed.description || "",
-        prize_description: parsed.prize_description || "₦25,000 Cash Prize",
+        prize_description: parsed.prize_description || "1st: ₦15,000 • 2nd: ₦10,000 • 3rd: ₦5,000",
+        cash_prize: Number(parsed.cash_prize) || 30000,
+        prize_first_place: Number(parsed.prize_first_place) || 15000,
+        prize_second_place: Number(parsed.prize_second_place) || 10000,
+        prize_third_place: Number(parsed.prize_third_place) || 5000,
+        prize_airtime: parsed.prize_airtime || "₦1,000 Airtime for 4th-10th",
+        entry_fee: 0,
         duration_minutes: parsed.duration_minutes || 60,
         question_count: parsed.question_count || 50,
-        subject_filter: parsed.subject_filter || "Mathematics",
+        subject_filter: parsed.subject_filter || "Mathematics, Physics",
         coin_reward: parsed.coin_reward || 500,
         xp_reward: parsed.xp_reward || 1500,
         start_time: start.toISOString().slice(0, 16),
@@ -361,7 +457,7 @@ Return STRICT JSON format:
       });
       
       setView('create');
-      toast.success("AI generated challenge! Please review and save.");
+      toast.success("AI generated prized competition! Please review and publish.");
     } catch (err: any) {
       toast.error("AI Generation failed: " + err.message);
     } finally {
@@ -377,6 +473,12 @@ Return STRICT JSON format:
     }
     setSaving(true);
     try {
+      // Auto-compute prize description if empty
+      let computedPrize = form.prize_description;
+      if (!computedPrize && (form.prize_first_place || form.cash_prize)) {
+        computedPrize = `1st: ₦${Number(form.prize_first_place || form.cash_prize).toLocaleString()}${form.prize_second_place ? ` • 2nd: ₦${Number(form.prize_second_place).toLocaleString()}` : ''}${form.prize_third_place ? ` • 3rd: ₦${Number(form.prize_third_place).toLocaleString()}` : ''}${form.prize_airtime ? ` • ${form.prize_airtime}` : ''}`;
+      }
+
       const payload: any = {
         title: form.title,
         description: form.description,
@@ -389,8 +491,12 @@ Return STRICT JSON format:
           ? new Date(form.registration_deadline).toISOString()
           : new Date(form.start_time).toISOString(),
         max_participants: Number(form.max_participants),
-        prize_description: form.prize_description,
+        prize_description: computedPrize || 'Scholar Certificate & XP',
         cash_prize: Number(form.cash_prize),
+        prize_first_place: Number(form.prize_first_place),
+        prize_second_place: Number(form.prize_second_place),
+        prize_third_place: Number(form.prize_third_place),
+        prize_airtime: form.prize_airtime,
         entry_fee: Number(form.entry_fee),
         sponsor: form.sponsor,
         scholarship_description: form.scholarship_description,
@@ -408,15 +514,7 @@ Return STRICT JSON format:
         throw result.error || new Error('Failed to save tournament');
       }
 
-      if (result.adaptedColumns.length > 0) {
-        toast.success(
-          `Tournament saved! (Adapted: columns [${result.adaptedColumns.join(', ')}] were safely stored in tournament metadata)`,
-          { duration: 6000 }
-        );
-      } else {
-        toast.success(view === 'edit' ? 'Tournament updated successfully!' : 'Tournament created successfully!');
-      }
-
+      toast.success(view === 'edit' ? 'Tournament updated successfully!' : 'Tournament published successfully!');
       setForm(EMPTY_FORM);
       setView('list');
       fetchTournaments();
@@ -440,10 +538,11 @@ Return STRICT JSON format:
 
   const handleToggleLock = async (tournament: any) => {
     const newStatus = tournament.status === 'locked' ? 'upcoming' : 'locked';
-    try {
-      await supabase.from('tournaments').update({ status: newStatus }).eq('id', tournament.id);
-    } catch {}
-    // Update local state and admin_settings
+    if (isValidUUID(tournament.id)) {
+      try {
+        await supabase.from('tournaments').update({ status: newStatus }).eq('id', tournament.id);
+      } catch {}
+    }
     setTournaments(prev => prev.map(t => t.id === tournament.id ? { ...t, status: newStatus } : t));
     try {
       const localRaw = localStorage.getItem('scholar_tournaments');
@@ -460,26 +559,6 @@ Return STRICT JSON format:
     toast.success(`Tournament is now ${newStatus === 'locked' ? 'Locked (Students cannot enter)' : 'Unlocked'}`);
   };
 
-  const handleStatusChange = async (id: string, newStatus: string) => {
-    try {
-      await supabase.from('tournaments').update({ status: newStatus }).eq('id', id);
-    } catch {}
-    setTournaments(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
-    try {
-      const localRaw = localStorage.getItem('scholar_tournaments');
-      if (localRaw) {
-        const list = JSON.parse(localRaw).map((t: any) => t.id === id ? { ...t, status: newStatus } : t);
-        localStorage.setItem('scholar_tournaments', JSON.stringify(list));
-        await supabase.from('admin_settings').upsert({
-          setting_key: 'tournaments_db',
-          setting_value: list,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
-      }
-    } catch {}
-    toast.success(`Tournament marked as ${newStatus}`);
-  };
-
   const handleDelete = (id: string) => {
     confirmAction(
       'Delete Tournament',
@@ -491,10 +570,11 @@ Return STRICT JSON format:
             body: JSON.stringify({ id })
           });
         } catch {}
-        try { await supabase.from('tournament_participants').delete().eq('tournament_id', id); } catch {}
-        try { await supabase.from('tournaments').delete().eq('id', id); } catch {}
+        if (isValidUUID(id)) {
+          try { await supabase.from('tournament_participants').delete().eq('tournament_id', id); } catch {}
+          try { await supabase.from('tournaments').delete().eq('id', id); } catch {}
+        }
 
-        // Remove from local and admin_settings
         setTournaments(prev => prev.filter(t => t.id !== id));
         try {
           const localRaw = localStorage.getItem('scholar_tournaments');
@@ -525,78 +605,58 @@ Return STRICT JSON format:
     return t.status === statusFilter;
   });
 
+  const pendingClaimsCount = claims.filter(c => c.status === 'pending').length;
+  const filteredClaims = claims.filter(c => {
+    if (claimsFilter === 'all') return true;
+    return c.status === claimsFilter;
+  });
+
   return (
     <div className="space-y-6">
       {ConfirmElement}
-      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4">
+      
+      {/* Header Bar */}
+      <div className="flex flex-col md:flex-row justify-between md:items-center gap-4 border-b border-border pb-4">
         <div>
-          <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground">
-            <Trophy className="w-6 h-6 text-yellow-500" /> Tournament & Battle Management
+          <h2 className="text-2xl font-bold flex items-center gap-2 text-foreground font-display">
+            <Trophy className="w-6 h-6 text-amber-500" /> Tournament & Prized Duel Center
           </h2>
-          <p className="text-muted-foreground text-sm">Create, edit, lock, unlock, and award prizes for live student tournaments.</p>
+          <p className="text-muted-foreground text-sm">
+            Host 100% Free competitions with Cash/Airtime prizes or Paid entry duels with direct bank payouts.
+          </p>
         </div>
         <div className="flex gap-2 flex-wrap items-center">
           {view !== 'list' && (
-            <Button variant="outline" onClick={() => { setView('list'); setForm(EMPTY_FORM); }} className="border-border text-foreground hover:bg-muted">
-              <ArrowLeft className="w-4 h-4 mr-2" /> Back to List
+            <Button variant="outline" onClick={() => { setView('list'); setForm(EMPTY_FORM); }} className="border-border text-foreground hover:bg-muted text-xs">
+              <ArrowLeft className="w-4 h-4 mr-1.5" /> Back to List
             </Button>
           )}
           {view === 'list' && (
             <>
               <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const sql = `-- Comprehensive Fix for Tournaments and Materials
-ALTER TABLE public.tournaments 
-ADD COLUMN IF NOT EXISTS coin_reward INTEGER DEFAULT 0,
-ADD COLUMN IF NOT EXISTS xp_reward INTEGER DEFAULT 0,
-ADD COLUMN IF NOT EXISTS question_count INTEGER DEFAULT 40,
-ADD COLUMN IF NOT EXISTS duration_minutes INTEGER DEFAULT 120,
-ADD COLUMN IF NOT EXISTS subject_filter TEXT DEFAULT '',
-ADD COLUMN IF NOT EXISTS registration_deadline TIMESTAMP,
-ADD COLUMN IF NOT EXISTS prize_description TEXT,
-ADD COLUMN IF NOT EXISTS cash_prize NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS entry_fee NUMERIC DEFAULT 0,
-ADD COLUMN IF NOT EXISTS sponsor TEXT,
-ADD COLUMN IF NOT EXISTS scholarship_description TEXT,
-ADD COLUMN IF NOT EXISTS is_private BOOLEAN DEFAULT false,
-ADD COLUMN IF NOT EXISTS invite_code TEXT,
-ADD COLUMN IF NOT EXISTS rules TEXT;
-
-ALTER TABLE public.library_materials 
-ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'pdf';
-
--- RLS permissions so tournaments can be managed without 403 Forbidden
-ALTER TABLE public.tournaments ENABLE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS "Anyone can view tournaments." ON public.tournaments;
-CREATE POLICY "Anyone can view tournaments." ON public.tournaments FOR SELECT USING (true);
-DROP POLICY IF EXISTS "Admins manage tournaments." ON public.tournaments;
-CREATE POLICY "Admins manage tournaments." ON public.tournaments FOR ALL USING (
-  auth.role() = 'authenticated' OR 
-  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND (role = 'admin' OR role = 'superadmin'))
-);
-
-NOTIFY pgrst, 'reload schema';`;
-                  navigator.clipboard.writeText(sql);
-                  toast.success("Complete Tournament & Materials SQL copied! Paste into Supabase SQL Editor.");
-                }}
-                className="border-border hover:bg-muted text-xs text-foreground"
-                title="Copy SQL fix for Supabase"
+                variant={view === 'claims' ? 'default' : 'outline'}
+                onClick={() => { setView('claims'); fetchClaims(); }}
+                className="border-border hover:bg-muted text-xs text-foreground font-bold relative"
               >
-                <Database className="w-3.5 h-3.5 mr-1.5 text-emerald-500" /> Copy SQL Fix
+                <Gift className="w-4 h-4 mr-1.5 text-emerald-500" /> Prize Claims
+                {pendingClaimsCount > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] bg-red-600 text-white font-bold">
+                    {pendingClaimsCount}
+                  </span>
+                )}
               </Button>
-              <Button onClick={handleAIGenerateWeeklyChallenge} disabled={saving} className="bg-purple-600 hover:bg-purple-700 text-white font-bold">
-                <Sparkles className="w-4 h-4 mr-2" /> AI Generate Challenge
+              <Button onClick={handleAIGenerateWeeklyChallenge} disabled={saving} className="bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs">
+                <Sparkles className="w-4 h-4 mr-1.5" /> AI Generate Prized Duel
               </Button>
-              <Button onClick={() => { setForm(EMPTY_FORM); setView('create'); }} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold">
-                <Plus className="w-4 h-4 mr-2" /> Create Tournament
+              <Button onClick={() => { setForm(EMPTY_FORM); setView('create'); }} className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs">
+                <Plus className="w-4 h-4 mr-1.5" /> Create Tournament
               </Button>
             </>
           )}
         </div>
       </div>
 
+      {/* VIEW 1: TOURNAMENTS LIST */}
       {view === 'list' && (
         <div className="space-y-4">
           {/* Status Filter tabs */}
@@ -627,17 +687,37 @@ NOTIFY pgrst, 'reload schema';`;
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {filteredTournaments.map(t => {
-                const count = t.tournament_participants?.[0]?.count || 0;
+                const count = t.tournament_participants?.[0]?.count || t.participants_count || 0;
                 const isLocked = t.status === 'locked';
+                const isFree = !t.entry_fee || Number(t.entry_fee) === 0;
 
                 return (
-                  <Card key={t.id} className="bg-card border-border text-foreground flex flex-col justify-between hover:border-primary/50 shadow-sm transition-all">
+                  <Card key={t.id} className="bg-card border-border text-foreground flex flex-col justify-between hover:border-primary/50 shadow-sm transition-all rounded-xl">
                     <CardHeader className="pb-2">
                       <div className="flex justify-between items-start gap-2">
-                        <CardTitle className="text-lg font-bold flex items-center gap-2 text-foreground">
-                          {isLocked && <Lock className="w-4 h-4 text-red-500" />}
-                          {t.title}
-                        </CardTitle>
+                        <div>
+                          <div className="flex items-center gap-2 mb-1">
+                            {isFree ? (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30">
+                                100% FREE ENTRY
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30">
+                                PAID: ₦{Number(t.entry_fee).toLocaleString()}
+                              </span>
+                            )}
+                            {t.sponsor && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 text-blue-700 dark:text-blue-400">
+                                {t.sponsor}
+                              </span>
+                            )}
+                          </div>
+                          <CardTitle className="text-base font-bold flex items-center gap-2 text-foreground">
+                            {isLocked && <Lock className="w-4 h-4 text-red-500" />}
+                            {t.title}
+                          </CardTitle>
+                        </div>
+
                         <span className={`text-xs px-2.5 py-0.5 rounded-full font-bold uppercase ${
                           t.status === 'active' ? 'bg-green-500/20 text-green-700 dark:text-green-400' :
                           t.status === 'upcoming' ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400' :
@@ -653,9 +733,9 @@ NOTIFY pgrst, 'reload schema';`;
                     <CardContent className="space-y-4 pt-2">
                       <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground bg-muted/50 p-2.5 rounded-lg border border-border">
                         <div className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5 text-blue-500" /> {new Date(t.start_time).toLocaleDateString()}</div>
-                        <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> {t.duration_minutes} mins ({t.question_count} Qs)</div>
+                        <div className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 text-amber-500" /> {t.duration_minutes}m ({t.question_count} Qs)</div>
                         <div className="flex items-center gap-1.5"><Users className="w-3.5 h-3.5 text-purple-500" /> {count} / {t.max_participants} Players</div>
-                        <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 truncate"><Trophy className="w-3.5 h-3.5" /> {t.prize_description || 'XP Prize'}</div>
+                        <div className="flex items-center gap-1.5 font-bold text-amber-600 dark:text-amber-400 truncate"><Trophy className="w-3.5 h-3.5" /> {t.prize_description || (t.cash_prize ? `₦${t.cash_prize}` : 'Prestige')}</div>
                       </div>
 
                       <div className="flex items-center justify-between gap-2 pt-2 border-t border-border">
@@ -673,7 +753,7 @@ NOTIFY pgrst, 'reload schema';`;
                             {isLocked ? 'Unlock' : 'Lock'}
                           </Button>
                           <Button size="sm" variant="outline" onClick={() => openDetail(t)} className="h-8 px-2 text-xs border-border text-foreground hover:bg-muted">
-                            <Users className="w-3.5 h-3.5 mr-1" /> Players
+                            <Users className="w-3.5 h-3.5 mr-1" /> Leaderboard
                           </Button>
                         </div>
                         <Button size="sm" variant="ghost" onClick={() => handleDelete(t.id)} className="h-8 px-2 text-red-600 dark:text-red-400 hover:text-red-700 hover:bg-red-500/10">
@@ -689,11 +769,164 @@ NOTIFY pgrst, 'reload schema';`;
         </div>
       )}
 
+      {/* VIEW 2: PRIZE CLAIMS & DISBURSALS */}
+      {view === 'claims' && (
+        <Card className="bg-card border-border text-card-foreground">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="text-xl font-bold flex items-center gap-2 text-foreground font-display">
+                  <Gift className="w-5 h-5 text-emerald-500" /> Student Prize Claims & Disbursals
+                </CardTitle>
+                <CardDescription className="text-muted-foreground">
+                  Verify student bank accounts, phone numbers for airtime, and record payment transaction references.
+                </CardDescription>
+              </div>
+
+              {/* Status Filter */}
+              <div className="flex items-center gap-2">
+                {['all', 'pending', 'verified', 'disbursed', 'rejected'].map(st => (
+                  <button
+                    key={st}
+                    onClick={() => setClaimsFilter(st)}
+                    className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition-colors ${
+                      claimsFilter === st
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-muted text-muted-foreground border border-border hover:text-foreground'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingClaims ? (
+              <div className="text-center py-12"><Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" /></div>
+            ) : filteredClaims.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Gift className="w-12 h-12 text-muted-foreground/60 mx-auto mb-2" />
+                <p className="font-bold text-foreground">No prize claims found in this category.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {filteredClaims.map((claim: any) => {
+                  const isPending = claim.status === 'pending';
+                  const isVerified = claim.status === 'verified';
+                  const isDisbursed = claim.status === 'disbursed';
+                  const isUpdating = updatingClaimId === claim.id;
+
+                  return (
+                    <div key={claim.id} className="p-4 bg-muted/40 border border-border rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4">
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-foreground text-sm">{claim.user_name}</span>
+                          <span className="text-xs text-muted-foreground">({claim.user_email})</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-bold bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20">
+                            Rank #{claim.rank} • {claim.score} PTS
+                          </span>
+                          <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                            {claim.prize_amount}
+                          </span>
+                        </div>
+
+                        <p className="text-xs font-semibold text-foreground">
+                          Tournament: <span className="text-primary">{claim.tournament_title}</span>
+                        </p>
+
+                        {/* Payout Details */}
+                        <div className="p-2.5 bg-background border border-border rounded-lg text-xs space-y-1">
+                          {claim.payout_type === 'bank_transfer' ? (
+                            <div className="flex items-center gap-2 text-foreground font-mono">
+                              <Building2 className="w-4 h-4 text-blue-500 shrink-0" />
+                              <span><strong>Bank:</strong> {claim.bank_name} • <strong>Acct:</strong> {claim.account_number} • <strong>Name:</strong> {claim.account_name}</span>
+                            </div>
+                          ) : claim.payout_type === 'airtime' ? (
+                            <div className="flex items-center gap-2 text-foreground font-mono">
+                              <Smartphone className="w-4 h-4 text-emerald-500 shrink-0" />
+                              <span><strong>Network:</strong> {claim.telecom_network} • <strong>Phone:</strong> {claim.phone_number}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 text-foreground">
+                              <Coins className="w-4 h-4 text-amber-500 shrink-0" />
+                              <span>Scholar Wallet Credit</span>
+                            </div>
+                          )}
+
+                          {claim.notes && (
+                            <p className="text-muted-foreground italic text-[11px]">Note from student: "{claim.notes}"</p>
+                          )}
+                          {claim.disbursal_reference && (
+                            <p className="text-emerald-600 dark:text-emerald-400 font-bold text-[11px]">Payment Ref: {claim.disbursal_reference}</p>
+                          )}
+                          {claim.admin_note && (
+                            <p className="text-red-500 text-[11px]">Admin Note: {claim.admin_note}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Admin Actions */}
+                      <div className="flex flex-col sm:flex-row md:flex-col items-end gap-2 shrink-0">
+                        <span className={`text-xs px-3 py-1 rounded-full font-bold uppercase ${
+                          isDisbursed ? 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30' :
+                          isVerified ? 'bg-blue-500/20 text-blue-700 dark:text-blue-400 border border-blue-500/30' :
+                          'bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30'
+                        }`}>
+                          {claim.status}
+                        </span>
+
+                        <div className="flex items-center gap-1.5 mt-1">
+                          {isPending && (
+                            <Button
+                              size="sm"
+                              disabled={isUpdating}
+                              onClick={() => handleUpdateClaimStatus(claim.id, 'verified')}
+                              className="h-7 text-xs bg-blue-600 hover:bg-blue-700 text-white font-bold"
+                            >
+                              Verify Details
+                            </Button>
+                          )}
+
+                          {!isDisbursed && (
+                            <Button
+                              size="sm"
+                              disabled={isUpdating}
+                              onClick={() => handleUpdateClaimStatus(claim.id, 'disbursed')}
+                              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                            >
+                              <Check className="w-3.5 h-3.5 mr-1" /> Mark Disbursed
+                            </Button>
+                          )}
+
+                          {isPending && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={isUpdating}
+                              onClick={() => handleUpdateClaimStatus(claim.id, 'rejected')}
+                              className="h-7 text-xs text-red-600 hover:text-red-700 hover:bg-red-500/10"
+                            >
+                              Reject
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* VIEW 3: CREATE / EDIT TOURNAMENT */}
       {(view === 'create' || view === 'edit') && (
         <Card className="bg-card border-border text-card-foreground">
           <CardHeader>
-            <CardTitle>{view === 'edit' ? 'Edit Tournament' : 'Create New Tournament'}</CardTitle>
-            <CardDescription className="text-muted-foreground">Configure tournament rules, subject syllabus, dates, and reward prizes.</CardDescription>
+            <CardTitle>{view === 'edit' ? 'Edit Tournament' : 'Publish New Tournament'}</CardTitle>
+            <CardDescription className="text-muted-foreground">Configure tournament rules, entry fee, prizes, and schedule.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSave} className="space-y-4">
@@ -703,7 +936,7 @@ NOTIFY pgrst, 'reload schema';`;
                   <Input 
                     value={form.title} 
                     onChange={e => setForm({ ...form, title: e.target.value })} 
-                    placeholder="e.g. National UTME Grand Master Duel"
+                    placeholder="e.g. National UTME Physics & Math Grand Duel"
                     className="bg-background border-border text-foreground"
                     required
                   />
@@ -715,9 +948,9 @@ NOTIFY pgrst, 'reload schema';`;
                     onChange={e => setForm({ ...form, status: e.target.value })}
                     className="w-full h-10 px-3 bg-background border border-border rounded-md text-sm text-foreground outline-none"
                   >
-                    <option value="upcoming">Upcoming</option>
-                    <option value="active">Active (Live Now)</option>
-                    <option value="locked">Locked (Disabled)</option>
+                    <option value="upcoming">Upcoming (Registration Open)</option>
+                    <option value="active">Active (Live Arena Open)</option>
+                    <option value="locked">Locked (Temporarily Disabled)</option>
                     <option value="completed">Completed</option>
                   </select>
                 </div>
@@ -729,8 +962,116 @@ NOTIFY pgrst, 'reload schema';`;
                   value={form.description} 
                   onChange={e => setForm({ ...form, description: e.target.value })} 
                   placeholder="Describe the rules, target subjects, and special eligibility..."
-                  className="bg-background border-border text-foreground h-24"
+                  className="bg-background border-border text-foreground h-20"
                 />
+              </div>
+
+              {/* Entry Mode & Fee */}
+              <div className="p-4 bg-muted/40 border border-border rounded-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-foreground flex items-center gap-2">
+                    <Coins className="w-4 h-4 text-amber-500" /> Entry Mode & Fee (₦)
+                  </label>
+                  <span className="text-xs text-muted-foreground">
+                    {Number(form.entry_fee) === 0 ? '100% Free Entry Mode (Students join for free)' : `Paid Entry: ₦${Number(form.entry_fee).toLocaleString()}`}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Entry Fee (₦)</label>
+                    <Input 
+                      type="number" 
+                      value={form.entry_fee} 
+                      onChange={e => setForm({ ...form, entry_fee: Number(e.target.value) })} 
+                      placeholder="0 for 100% Free"
+                      className="bg-background border-border text-foreground font-mono"
+                    />
+                    <p className="text-[11px] text-muted-foreground">Set 0 for free entry with sponsored prizes</p>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">Sponsor / Partner Name</label>
+                    <Input 
+                      value={form.sponsor} 
+                      onChange={e => setForm({ ...form, sponsor: e.target.value })} 
+                      placeholder="e.g. AdmitWise Foundation"
+                      className="bg-background border-border text-foreground"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-muted-foreground">VIP / Scholarship Code</label>
+                    <Input 
+                      value={form.invite_code} 
+                      onChange={e => setForm({ ...form, invite_code: e.target.value })} 
+                      placeholder="e.g. SCHOLAR2026"
+                      className="bg-background border-border text-foreground font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Prize Configuration */}
+              <div className="p-4 bg-amber-500/5 dark:bg-amber-950/20 border border-amber-500/30 rounded-xl space-y-3">
+                <label className="text-sm font-bold text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-500" /> Cash Prizes & Airtime Rewards Breakdown
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground">1st Place Cash (₦)</label>
+                    <Input 
+                      type="number" 
+                      value={form.prize_first_place} 
+                      onChange={e => setForm({ ...form, prize_first_place: Number(e.target.value) })} 
+                      placeholder="10000"
+                      className="bg-background border-border text-foreground font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground">2nd Place Cash (₦)</label>
+                    <Input 
+                      type="number" 
+                      value={form.prize_second_place} 
+                      onChange={e => setForm({ ...form, prize_second_place: Number(e.target.value) })} 
+                      placeholder="5000"
+                      className="bg-background border-border text-foreground font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground">3rd Place Cash (₦)</label>
+                    <Input 
+                      type="number" 
+                      value={form.prize_third_place} 
+                      onChange={e => setForm({ ...form, prize_third_place: Number(e.target.value) })} 
+                      placeholder="2000"
+                      className="bg-background border-border text-foreground font-mono text-xs"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-xs font-semibold text-foreground">Airtime Reward</label>
+                    <Input 
+                      value={form.prize_airtime} 
+                      onChange={e => setForm({ ...form, prize_airtime: e.target.value })} 
+                      placeholder="e.g. ₦1,000 to Top 10"
+                      className="bg-background border-border text-foreground text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1 pt-1">
+                  <label className="text-xs font-semibold text-muted-foreground">Custom Prize Summary Label</label>
+                  <Input 
+                    value={form.prize_description} 
+                    onChange={e => setForm({ ...form, prize_description: e.target.value })} 
+                    placeholder="e.g. 1st: ₦10,000 • 2nd: ₦5,000 • 3rd: ₦2,000 + Airtime to Top 10"
+                    className="bg-background border-border text-foreground text-xs"
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -804,36 +1145,6 @@ NOTIFY pgrst, 'reload schema';`;
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Prize Description</label>
-                  <Input 
-                    value={form.prize_description} 
-                    onChange={e => setForm({ ...form, prize_description: e.target.value })} 
-                    placeholder="e.g. ₦50,000 Cash + Certificate"
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">Coin Reward</label>
-                  <Input 
-                    type="number" 
-                    value={form.coin_reward} 
-                    onChange={e => setForm({ ...form, coin_reward: Number(e.target.value) })} 
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground">XP Reward</label>
-                  <Input 
-                    type="number" 
-                    value={form.xp_reward} 
-                    onChange={e => setForm({ ...form, xp_reward: Number(e.target.value) })} 
-                    className="bg-background border-border text-foreground"
-                  />
-                </div>
-              </div>
-
               <div className="flex justify-end gap-2 pt-4">
                 <Button type="button" variant="outline" onClick={() => setView('list')} className="border-border text-foreground hover:bg-muted">
                   Cancel
@@ -848,6 +1159,7 @@ NOTIFY pgrst, 'reload schema';`;
         </Card>
       )}
 
+      {/* VIEW 4: DETAIL & LEADERBOARD */}
       {view === 'detail' && selectedTournament && (
         <Card className="bg-card border-border text-card-foreground">
           <CardHeader>

@@ -65,21 +65,25 @@ class PerformanceMonitor {
     try {
       if (typeof window !== 'undefined' && 'PerformanceObserver' in window) {
         const supported = (PerformanceObserver as any).supportedEntryTypes;
-        if (!supported || supported.includes('resource')) {
-          const self = this;
+        if (supported && Array.isArray(supported) && supported.includes('resource')) {
           const observer = new PerformanceObserver((list) => {
-            list.getEntries().forEach((entry) => {
-              if (entry && typeof entry.startTime === 'number' && entry.duration > self.SLOW_API_THRESHOLD_MS) {
-                self.recordMetric({
-                  endpoint: entry.name,
-                  method: 'RESOURCE',
-                  durationMs: Math.round(entry.duration),
-                  status: 200,
-                  timestamp: Date.now(),
-                  isSlow: true
+            try {
+              const entries = list.getEntries();
+              if (Array.isArray(entries)) {
+                entries.forEach((entry) => {
+                  if (entry && typeof entry.startTime === 'number' && typeof entry.duration === 'number' && entry.duration > this.SLOW_API_THRESHOLD_MS) {
+                    this.recordMetric({
+                      endpoint: entry.name || 'Resource',
+                      method: 'RESOURCE',
+                      durationMs: Math.round(entry.duration),
+                      status: 200,
+                      timestamp: Date.now(),
+                      isSlow: true
+                    });
+                  }
                 });
               }
-            });
+            } catch (_) {}
           });
           // W3C spec: buffered flag is only valid with single `type`, not `entryTypes`
           observer.observe({ type: 'resource', buffered: true });
