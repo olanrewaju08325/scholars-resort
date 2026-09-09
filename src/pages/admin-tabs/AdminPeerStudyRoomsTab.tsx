@@ -24,11 +24,12 @@ import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
 import { useNavigate } from 'react-router-dom';
 import type { StudyRoomMeta } from '@/types/studyRoomTypes';
+import { peerStudyRoomSync } from '@/services/peerStudyRoomSync';
 
 export const AdminPeerStudyRoomsTab: React.FC = () => {
   const navigate = useNavigate();
   const [rooms, setRooms] = useState<StudyRoomMeta[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubject, setSelectedSubject] = useState<string>('All');
   
@@ -49,13 +50,7 @@ export const AdminPeerStudyRoomsTab: React.FC = () => {
   const fetchRooms = async () => {
     try {
       setLoading(true);
-      const res = await fetch('/api/study-rooms');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.rooms) {
-          setRooms(json.rooms);
-        }
-      }
+      await peerStudyRoomSync.fetchRoomsFromApi();
     } catch (err) {
       console.error('Error fetching admin study rooms:', err);
       toast.error('Failed to load study rooms');
@@ -65,9 +60,13 @@ export const AdminPeerStudyRoomsTab: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchRooms();
-    const interval = setInterval(fetchRooms, 8000);
-    return () => clearInterval(interval);
+    const unsubscribe = peerStudyRoomSync.subscribe((syncedRooms) => {
+      setRooms(syncedRooms);
+      setLoading(false);
+    });
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const handleCreateOrUpdate = async (e: React.FormEvent) => {
@@ -92,7 +91,8 @@ export const AdminPeerStudyRoomsTab: React.FC = () => {
           })
         });
         const data = await res.json();
-        if (data.success) {
+        if (data.success && data.room) {
+          peerStudyRoomSync.broadcastRoom(data.room, 'room_updated');
           toast.success('Study room updated successfully!');
           setEditingRoom(null);
           setShowCreateDialog(false);
@@ -102,34 +102,25 @@ export const AdminPeerStudyRoomsTab: React.FC = () => {
         }
       } else {
         // Create new official room
-        const res = await fetch('/api/study-rooms', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            title: formData.title.trim(),
-            subject: formData.subject,
-            hostName: formData.hostName.trim(),
-            topic: formData.topic.trim() || undefined,
-            durationMinutes: formData.durationMinutes,
-            isOfficial: formData.isOfficial
-          })
+        const created = await peerStudyRoomSync.createRoom({
+          title: formData.title.trim(),
+          subject: formData.subject,
+          hostName: formData.hostName.trim(),
+          topic: formData.topic.trim() || undefined,
+          durationMinutes: formData.durationMinutes,
+          isOfficial: formData.isOfficial
         });
-        const data = await res.json();
-        if (data.success) {
-          toast.success('Official study room launched successfully!');
-          setShowCreateDialog(false);
-          setFormData({
-            title: '',
-            subject: 'Use of English',
-            hostName: 'Admin UTME Specialist',
-            topic: '',
-            durationMinutes: 45,
-            isOfficial: true
-          });
-          fetchRooms();
-        } else {
-          toast.error(data.error || 'Failed to create study room.');
-        }
+        toast.success('Official study room launched successfully!');
+        setShowCreateDialog(false);
+        setFormData({
+          title: '',
+          subject: 'Use of English',
+          hostName: 'Admin UTME Specialist',
+          topic: '',
+          durationMinutes: 45,
+          isOfficial: true
+        });
+        fetchRooms();
       }
     } catch (err) {
       toast.error('Network error during operation.');
@@ -140,6 +131,7 @@ export const AdminPeerStudyRoomsTab: React.FC = () => {
     if (!confirm(`Are you sure you want to end and remove "${title}"?`)) return;
 
     try {
+      peerStudyRoomSync.broadcastRoomDeletion(roomId);
       const res = await fetch(`/api/study-rooms/${roomId}`, {
         method: 'DELETE'
       });

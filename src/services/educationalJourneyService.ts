@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/db';
 import { fetchAcademicLearningRules, type AcademicLearningRules } from './academicLearningRulesService';
+import { CANONICAL_UTME_SUBJECTS, CANONICAL_SYLLABUS_DETAILS } from '@/utils/subjectTaxonomy';
 
 export interface JourneyNode {
   id: string;
@@ -64,17 +65,22 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
     console.warn('[EducationalJourney] Error fetching subjects/topics from Supabase:', err);
   }
 
-  // If DB topics are empty for a subject, try local storage syllabus
-  if (topicsList.length === 0 && subjectsList.length > 0) {
-    subjectsList.forEach((sub) => {
-      try {
-        const local = JSON.parse(localStorage.getItem(`scholar_syllabus_${sub.id}`) || '[]');
-        if (Array.isArray(local) && local.length > 0) {
-          local.forEach((t) => {
-            topicsList.push({ ...t, subjects: { id: sub.id, name: sub.name } });
-          });
-        }
-      } catch {}
+  // If DB topics are empty, load canonical UTME subjects & syllabus
+  if (topicsList.length === 0) {
+    CANONICAL_UTME_SUBJECTS.forEach((sub) => {
+      const details = CANONICAL_SYLLABUS_DETAILS[sub.id] || [];
+      details.forEach((top, idx) => {
+        topicsList.push({
+          id: `top_${sub.code.toLowerCase()}_${idx + 1}`,
+          name: top.name,
+          description: top.description,
+          sequence: idx + 1,
+          jamb_weight: 15,
+          level: Math.min(Math.floor(idx / 3) + 1, 4),
+          learning_objectives: top.subtopics?.flatMap(st => st.learningObjectives) || [top.name],
+          subjects: { id: sub.id, name: sub.name }
+        });
+      });
     });
   }
 

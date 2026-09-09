@@ -116,10 +116,30 @@ export default function TournamentArena() {
       }
 
       if (qData && qData.length > 0) {
-        setQuestions(qData.map(q => ({
-          ...q,
-          options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options
-        })));
+        setQuestions(qData.map(q => {
+          let opts: string[] = [];
+          if (q.options) {
+            if (typeof q.options === 'string') {
+              try {
+                const parsed = JSON.parse(q.options);
+                opts = Array.isArray(parsed) ? parsed : Object.values(parsed);
+              } catch {
+                opts = [];
+              }
+            } else if (Array.isArray(q.options)) {
+              opts = q.options;
+            } else if (typeof q.options === 'object') {
+              opts = Object.values(q.options);
+            }
+          }
+          if (opts.length === 0) {
+            opts = [q.option_a, q.option_b, q.option_c, q.option_d].filter(Boolean);
+          }
+          return {
+            ...q,
+            options: opts.map((opt: any) => typeof opt === 'object' && opt !== null ? (opt.text || opt.value || opt.id || '') : String(opt || ''))
+          };
+        }));
       } else {
         toast.error("No questions currently assigned to this tournament.");
       }

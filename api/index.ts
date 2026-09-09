@@ -36,15 +36,91 @@ interface ApiStudyRoomRecord {
 const memoryRoomsCache = new Map<string, ApiStudyRoomRecord>();
 const LOCAL_ROOMS_FILE = path.join(process.cwd(), '.data_study_rooms.json');
 
+const DEFAULT_API_SEED_ROOMS: ApiStudyRoomRecord[] = [
+  {
+    roomId: 'room_utme_english_mastery',
+    title: 'JAMB Use of English: Lexis, Structure & Oral Masterclass',
+    subject: 'Use of English',
+    hostName: 'Dr. Scholar (UTME Lead)',
+    hostId: 'official_lead_1',
+    isOfficial: true,
+    topic: 'Sentence Completion, Idioms & Concord Rules',
+    status: 'active',
+    participantCount: 4,
+    isTimerRunning: true,
+    participants: [
+      { id: 'p_1', name: 'Chinedu O.', avatar: 'CO' },
+      { id: 'p_2', name: 'Amina B.', avatar: 'AB' },
+      { id: 'p_3', name: 'Folake A.', avatar: 'FA' },
+      { id: 'p_4', name: 'Emeka K.', avatar: 'EK' }
+    ],
+    whiteboardStrokes: [],
+    timerState: { mode: 'sprint', durationSeconds: 2700, remainingSeconds: 2100, isRunning: true },
+    messages: [
+      { id: 'm_1', senderId: 'official_lead_1', senderName: 'Dr. Scholar', text: 'Welcome scholars! We are currently working on Oral English vowel sounds.', timestamp: '10:00 AM', type: 'chat' }
+    ],
+    createdAt: new Date(Date.now() - 3600000).toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    roomId: 'room_utme_physics_mechanics',
+    title: 'UTME Physics: Mechanics, Waves & Optics Problem Solving',
+    subject: 'Physics',
+    hostName: 'Engr. Dapo (Academic Team)',
+    hostId: 'official_lead_2',
+    isOfficial: true,
+    topic: 'Projectiles, Circular Motion & Simple Harmonic Motion',
+    status: 'active',
+    participantCount: 3,
+    isTimerRunning: true,
+    participants: [
+      { id: 'p_5', name: 'Tunde W.', avatar: 'TW' },
+      { id: 'p_6', name: 'Zainab M.', avatar: 'ZM' },
+      { id: 'p_7', name: 'David I.', avatar: 'DI' }
+    ],
+    whiteboardStrokes: [],
+    timerState: { mode: 'sprint', durationSeconds: 2400, remainingSeconds: 1800, isRunning: true },
+    messages: [
+      { id: 'm_2', senderId: 'official_lead_2', senderName: 'Engr. Dapo', text: 'Step 1: Calculate the vertical component of the initial projectile velocity.', timestamp: '10:15 AM', type: 'chat' }
+    ],
+    createdAt: new Date(Date.now() - 7200000).toISOString(),
+    updatedAt: new Date().toISOString()
+  },
+  {
+    roomId: 'room_utme_math_calculus',
+    title: 'General Mathematics: Calculus, Vectors & Matrices Sprint',
+    subject: 'Mathematics',
+    hostName: 'Prof. Bello',
+    hostId: 'official_lead_3',
+    isOfficial: true,
+    topic: 'Differentiation, Integration by Parts & Determinants',
+    status: 'active',
+    participantCount: 5,
+    isTimerRunning: true,
+    participants: [
+      { id: 'p_8', name: 'Ngozi E.', avatar: 'NE' },
+      { id: 'p_9', name: 'Ibrahim S.', avatar: 'IS' },
+      { id: 'p_10', name: 'Blessing C.', avatar: 'BC' },
+      { id: 'p_11', name: 'Victor U.', avatar: 'VU' },
+      { id: 'p_12', name: 'Khadijat A.', avatar: 'KA' }
+    ],
+    whiteboardStrokes: [],
+    timerState: { mode: 'sprint', durationSeconds: 3000, remainingSeconds: 2400, isRunning: true },
+    messages: [],
+    createdAt: new Date(Date.now() - 1800000).toISOString(),
+    updatedAt: new Date().toISOString()
+  }
+];
+
 function apiReadRoomsDisk(): ApiStudyRoomRecord[] {
   try {
     if (fs.existsSync(LOCAL_ROOMS_FILE)) {
       const content = fs.readFileSync(LOCAL_ROOMS_FILE, 'utf-8');
       const parsed = JSON.parse(content);
-      if (Array.isArray(parsed)) return parsed;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch {}
-  return [];
+  return DEFAULT_API_SEED_ROOMS;
 }
 
 function apiWriteRoomsDisk(rooms: ApiStudyRoomRecord[]): void {
@@ -54,11 +130,10 @@ function apiWriteRoomsDisk(rooms: ApiStudyRoomRecord[]): void {
 }
 
 function loadAllRooms(): ApiStudyRoomRecord[] {
-  if (memoryRoomsCache.size > 0) {
-    return Array.from(memoryRoomsCache.values());
+  if (memoryRoomsCache.size === 0) {
+    const diskRooms = apiReadRoomsDisk();
+    diskRooms.forEach(r => memoryRoomsCache.set(r.roomId, r));
   }
-  const diskRooms = apiReadRoomsDisk();
-  diskRooms.forEach(r => memoryRoomsCache.set(r.roomId, r));
   return Array.from(memoryRoomsCache.values());
 }
 

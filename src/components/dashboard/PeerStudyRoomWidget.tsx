@@ -5,46 +5,23 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Users, Plus, ArrowRight, Sparkles, Flame, Radio, BookOpen } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-
-interface RoomMeta {
-  roomId: string;
-  title: string;
-  subject: string;
-  hostName: string;
-  isOfficial?: boolean;
-  participantCount: number;
-  isTimerRunning: boolean;
-  participants: Array<{ id: string; name: string; avatar: string }>;
-}
+import { peerStudyRoomSync } from '@/services/peerStudyRoomSync';
+import { type StudyRoomMeta } from '@/types/studyRoomTypes';
 
 export const PeerStudyRoomWidget: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const [rooms, setRooms] = useState<RoomMeta[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [rooms, setRooms] = useState<StudyRoomMeta[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    let isMounted = true;
-    const fetchRooms = async () => {
-      try {
-        const res = await fetch('/api/study-rooms');
-        if (res.ok) {
-          const data = await res.json();
-          if (isMounted && data.rooms) {
-            setRooms(data.rooms);
-          }
-        }
-      } catch (_) {
-      } finally {
-        if (isMounted) setLoading(false);
-      }
-    };
+    const unsubscribe = peerStudyRoomSync.subscribe((syncedRooms) => {
+      setRooms(syncedRooms);
+      setLoading(false);
+    });
 
-    fetchRooms();
-    const interval = setInterval(fetchRooms, 10000);
     return () => {
-      isMounted = false;
-      clearInterval(interval);
+      unsubscribe();
     };
   }, []);
 

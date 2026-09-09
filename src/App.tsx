@@ -112,15 +112,18 @@ function AppContent() {
               <Route path="/library" element={<Library />} />
               <Route path="/novel-hub" element={<JambNovelHub />} />
               <Route path="/journey-map" element={<EducationalJourneyMapPage />} />
+              <Route path="/my-learning" element={<EducationalJourneyMapPage />} />
               <Route path="/adaptive-path" element={<AdaptiveLearningPathPage />} />
               <Route path="/study-rooms" element={<PeerStudyRoomPage />} />
               <Route path="/eligibility-checker" element={<CourseEligibilityChecker />} />
               <Route path="/offline-packs" element={<OfflinePackManager />} />
               <Route path="/mocks" element={<WeeklyMocks />} />
               <Route path="/weakness" element={<WeaknessDrill />} />
+              <Route path="/weakness-practice" element={<WeaknessDrill />} />
               <Route path="/leaderboard" element={<Leaderboard />} />
               <Route path="/support" element={<Support />} />
               <Route path="/tournaments" element={<Tournaments />} />
+              <Route path="/challenges" element={<Tournaments />} />
               <Route path="/analytics" element={<Leaderboard />} />
               <Route path="/bookmarks" element={<Library />} />
               <Route path="/history" element={<CBTCenter />} />

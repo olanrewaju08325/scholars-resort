@@ -14,7 +14,8 @@ import {
   ShieldCheck, 
   X,
   Volume2,
-  BookOpen
+  BookOpen,
+  RefreshCw
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,7 @@ import { RoomChat } from '@/components/studyroom/RoomChat';
 import { RoomQuestionLauncher } from '@/components/studyroom/RoomQuestionLauncher';
 import { type WhiteboardStroke, type RoomTimerState, type RoomParticipant, type StudyRoomMeta } from '@/types/studyRoomTypes';
 import { supabase } from '@/lib/supabase';
+import { peerStudyRoomSync } from '@/services/peerStudyRoomSync';
 import { toast } from 'sonner';
 
 export const PeerStudyRoomPage: React.FC = () => {
@@ -33,11 +35,12 @@ export const PeerStudyRoomPage: React.FC = () => {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newRoomTitle, setNewRoomTitle] = useState('');
-  const [newRoomSubject, setNewRoomSubject] = useState('Physics');
+  const [newRoomSubject, setNewRoomSubject] = useState('Use of English');
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Active Session State
   const [roomTitle, setRoomTitle] = useState('');
-  const [roomSubject, setRoomSubject] = useState('Physics');
+  const [roomSubject, setRoomSubject] = useState('Use of English');
   const [participants, setParticipants] = useState<RoomParticipant[]>([]);
   const [whiteboardStrokes, setWhiteboardStrokes] = useState<WhiteboardStroke[]>([]);
   const [timerState, setTimerState] = useState<RoomTimerState>({
@@ -50,37 +53,75 @@ export const PeerStudyRoomPage: React.FC = () => {
   const [isHandRaised, setIsHandRaised] = useState(false);
   const [showQuestionLauncher, setShowQuestionLauncher] = useState(false);
 
-  // WebSocket Reference
+  // References
   const wsRef = useRef<WebSocket | null>(null);
+  const supabaseChannelRef = useRef<any>(null);
+  const whiteboardStrokesRef = useRef<WhiteboardStroke[]>([]);
+  const timerStateRef = useRef<RoomTimerState>(timerState);
+  const messagesRef = useRef<Array<any>>([]);
+
+  useEffect(() => {
+    whiteboardStrokesRef.current = whiteboardStrokes;
+  }, [whiteboardStrokes]);
+  useEffect(() => {
+    timerStateRef.current = timerState;
+  }, [timerState]);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const currentUserId = user?.id || `anon_${Math.random().toString(36).substring(2, 7)}`;
   const currentUserName = profile?.full_name || 'Scholar Student';
 
-  // Fetch Public Rooms list from REST API
-  const fetchRooms = async () => {
-    try {
-      const res = await fetch('/api/study-rooms');
-      if (res.ok) {
-        const json = await res.json();
-        if (json.rooms) {
-          setActiveRooms(json.rooms);
-        }
-      }
-    } catch (_) {}
-  };
-
+  // Real-time synchronization across all accounts & devices
   useEffect(() => {
-    fetchRooms();
-    const interval = setInterval(fetchRooms, 5000);
-    return () => clearInterval(interval);
+    const unsubscribe = peerStudyRoomSync.subscribe((rooms) => {
+      setActiveRooms(rooms);
+    });
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
-  // Supabase Realtime channel reference
-  const supabaseChannelRef = useRef<any>(null);
+  const handleRefresh = async () => {
+    try {
+      setIsRefreshing(true);
+      await peerStudyRoomSync.fetchRoomsFromApi();
+      toast.success('Study rooms refreshed!');
+    } catch (_) {
+      toast.error('Could not refresh rooms');
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
 
-  // Connect to WebSocket and Supabase Realtime Channel when entering a room
+  // Connect to In-Room Supabase Channel and WebSocket when entering a room
   useEffect(() => {
-    if (!selectedRoomId) return;
+    if (!selectedRoomId) {
+      peerStudyRoomSync.trackActiveRoom(null);
+      return;
+    }
+
+    const currentRoomMeta: StudyRoomMeta = {
+      roomId: selectedRoomId,
+      title: roomTitle || 'UTME Study Session',
+      subject: roomSubject || 'Use of English',
+      hostName: currentUserName,
+      hostId: currentUserId,
+      status: 'active',
+      participantCount: Math.max(participants.length, 1),
+      isTimerRunning: timerState.isRunning,
+      participants: [{
+        id: currentUserId,
+        name: currentUserName,
+        avatar: currentUserName.substring(0, 2).toUpperCase()
+      }],
+      updatedAt: new Date().toISOString()
+    };
+
+    // Announce active room on global lobby presence so all other scholars see it live
+    peerStudyRoomSync.trackActiveRoom(currentRoomMeta);
 
     // 1. Initialize Supabase Realtime Channel for direct real-time broadcast & presence sync
     const channelName = `study_room_${selectedRoomId}`;
@@ -136,6 +177,38 @@ export const PeerStudyRoomPage: React.FC = () => {
         }
         toast.success('New UTME question posted to whiteboard!');
       })
+      .on('broadcast', { event: 'request_room_state' }, () => {
+        if (whiteboardStrokesRef.current.length > 0 || messagesRef.current.length > 0) {
+          channel.send({
+            type: 'broadcast',
+            event: 'room_state_response',
+            payload: {
+              strokes: whiteboardStrokesRef.current,
+              timerState: timerStateRef.current,
+              messages: messagesRef.current
+            }
+          });
+        }
+      })
+      .on('broadcast', { event: 'room_state_response' }, ({ payload }) => {
+        if (payload?.strokes && payload.strokes.length > 0) {
+          setWhiteboardStrokes((prev) => {
+            const ids = new Set(prev.map(s => s.id));
+            const newStrokes = payload.strokes.filter((s: any) => !ids.has(s.id));
+            return [...prev, ...newStrokes];
+          });
+        }
+        if (payload?.timerState) {
+          setTimerState(payload.timerState);
+        }
+        if (payload?.messages && payload.messages.length > 0) {
+          setMessages((prev) => {
+            const ids = new Set(prev.map(m => m.id));
+            const newMsgs = payload.messages.filter((m: any) => !ids.has(m.id));
+            return [...prev, ...newMsgs];
+          });
+        }
+      })
       .on('presence', { event: 'sync' }, () => {
         const presenceState = channel.presenceState();
         const activeParticipants: RoomParticipant[] = [];
@@ -154,14 +227,10 @@ export const PeerStudyRoomPage: React.FC = () => {
           });
         });
         if (activeParticipants.length > 0) {
-          setParticipants((prev) => {
-            const merged = [...prev];
-            activeParticipants.forEach((ap) => {
-              if (!merged.some((m) => m.id === ap.id)) {
-                merged.push(ap);
-              }
-            });
-            return merged;
+          setParticipants(activeParticipants);
+          peerStudyRoomSync.trackActiveRoom({
+            ...currentRoomMeta,
+            participantCount: activeParticipants.length
           });
         }
       })
@@ -174,91 +243,99 @@ export const PeerStudyRoomPage: React.FC = () => {
             joinedAt: new Date().toISOString(),
             isHandRaised: false
           });
+
+          channel.send({
+            type: 'broadcast',
+            event: 'request_room_state',
+            payload: { userId: currentUserId }
+          });
         }
       });
 
-    // 2. Initialize WebSocket server connection
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/ws/study-room`;
+    // 2. Initialize WebSocket server connection fallback
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      const wsUrl = `${protocol}//${host}/ws/study-room`;
 
-    const socket = new WebSocket(wsUrl);
-    wsRef.current = socket;
+      const socket = new WebSocket(wsUrl);
+      wsRef.current = socket;
 
-    socket.onopen = () => {
-      console.log('[PeerStudyRoom] Connected to WebSocket room:', selectedRoomId);
-      socket.send(JSON.stringify({
-        type: 'join_room',
-        roomId: selectedRoomId,
-        roomTitle: roomTitle || 'UTME Study Session',
-        subject: roomSubject,
-        userId: currentUserId,
-        userName: currentUserName,
-        avatar: currentUserName.substring(0, 2).toUpperCase()
-      }));
-    };
+      socket.onopen = () => {
+        socket.send(JSON.stringify({
+          type: 'join_room',
+          roomId: selectedRoomId,
+          roomTitle: roomTitle || 'UTME Study Session',
+          subject: roomSubject,
+          userId: currentUserId,
+          userName: currentUserName,
+          avatar: currentUserName.substring(0, 2).toUpperCase()
+        }));
+      };
 
-    socket.onmessage = (event) => {
-      try {
-        const payload = JSON.parse(event.data);
-        const { type } = payload;
+      socket.onmessage = (event) => {
+        try {
+          const payload = JSON.parse(event.data);
+          const { type } = payload;
 
-        if (type === 'room_init_state') {
-          setRoomTitle(payload.title);
-          setRoomSubject(payload.subject);
-          setParticipants(payload.participants || []);
-          setWhiteboardStrokes(payload.whiteboardStrokes || []);
-          if (payload.timerState) setTimerState(payload.timerState);
-          setMessages(payload.messages || []);
-        } else if (type === 'participant_joined' || type === 'participant_left') {
-          if (payload.participants) setParticipants(payload.participants);
-          if (payload.systemMessage) {
-            toast.info(payload.systemMessage);
+          if (type === 'room_init_state') {
+            setRoomTitle(payload.title);
+            setRoomSubject(payload.subject);
+            setParticipants(payload.participants || []);
+            setWhiteboardStrokes(payload.whiteboardStrokes || []);
+            if (payload.timerState) setTimerState(payload.timerState);
+            setMessages(payload.messages || []);
+          } else if (type === 'participant_joined' || type === 'participant_left') {
+            if (payload.participants) setParticipants(payload.participants);
+            if (payload.systemMessage) {
+              toast.info(payload.systemMessage);
+            }
+          } else if (type === 'draw_stroke_broadcast') {
+            if (payload.stroke) {
+              setWhiteboardStrokes((prev) => {
+                if (prev.some((s) => s.id === payload.stroke.id)) return prev;
+                return [...prev, payload.stroke];
+              });
+            }
+          } else if (type === 'clear_whiteboard_broadcast') {
+            setWhiteboardStrokes([]);
+            toast.info(`Whiteboard cleared by ${payload.clearedBy || 'peer'}.`);
+          } else if (type === 'chat_message_broadcast') {
+            if (payload.message) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === payload.message.id)) return prev;
+                return [...prev, payload.message];
+              });
+            }
+          } else if (type === 'question_shared_broadcast') {
+            if (payload.stroke) {
+              setWhiteboardStrokes((prev) => [...prev, payload.stroke]);
+            }
+            if (payload.message) {
+              setMessages((prev) => [...prev, payload.message]);
+            }
+            toast.success('New UTME question posted to whiteboard!');
+          } else if (type === 'timer_updated_broadcast') {
+            if (payload.timerState) setTimerState(payload.timerState);
+          } else if (type === 'participant_hand_toggled') {
+            if (payload.participants) setParticipants(payload.participants);
+          } else if (type === 'reaction_emoji_broadcast') {
+            toast(`${payload.userName}: ${payload.emoji}`, { duration: 1500 });
           }
-        } else if (type === 'draw_stroke_broadcast') {
-          if (payload.stroke) {
-            setWhiteboardStrokes((prev) => {
-              if (prev.some((s) => s.id === payload.stroke.id)) return prev;
-              return [...prev, payload.stroke];
-            });
-          }
-        } else if (type === 'clear_whiteboard_broadcast') {
-          setWhiteboardStrokes([]);
-          toast.info(`Whiteboard cleared by ${payload.clearedBy || 'peer'}.`);
-        } else if (type === 'chat_message_broadcast') {
-          if (payload.message) {
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === payload.message.id)) return prev;
-              return [...prev, payload.message];
-            });
-          }
-        } else if (type === 'question_shared_broadcast') {
-          if (payload.stroke) {
-            setWhiteboardStrokes((prev) => [...prev, payload.stroke]);
-          }
-          if (payload.message) {
-            setMessages((prev) => [...prev, payload.message]);
-          }
-          toast.success('New UTME question posted to whiteboard!');
-        } else if (type === 'timer_updated_broadcast') {
-          if (payload.timerState) setTimerState(payload.timerState);
-        } else if (type === 'participant_hand_toggled') {
-          if (payload.participants) setParticipants(payload.participants);
-        } else if (type === 'reaction_emoji_broadcast') {
-          toast(`${payload.userName}: ${payload.emoji}`, { duration: 1500 });
+        } catch (err) {
+          console.warn('Error handling study room socket message:', err);
         }
-      } catch (err) {
-        console.warn('Error handling study room socket message:', err);
-      }
-    };
+      };
+    } catch (_) {}
 
     return () => {
-      if (socket.readyState === WebSocket.OPEN) {
-        socket.close();
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+        wsRef.current.close();
       }
       wsRef.current = null;
       supabase.removeChannel(channel);
       supabaseChannelRef.current = null;
+      peerStudyRoomSync.trackActiveRoom(null);
     };
   }, [selectedRoomId]);
 
@@ -269,36 +346,22 @@ export const PeerStudyRoomPage: React.FC = () => {
     }
 
     try {
-      const res = await fetch('/api/study-rooms', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title: newRoomTitle.trim(),
-          subject: newRoomSubject,
-          hostName: currentUserName,
-          hostId: currentUserId
-        })
+      const createdRoom = await peerStudyRoomSync.createRoom({
+        title: newRoomTitle.trim(),
+        subject: newRoomSubject,
+        hostName: currentUserName,
+        hostId: currentUserId
       });
-      const data = await res.json();
-      if (data.success && data.room) {
-        setRoomTitle(data.room.title);
-        setRoomSubject(data.room.subject);
-        setSelectedRoomId(data.room.roomId);
-        setShowCreateModal(false);
-        setNewRoomTitle('');
-        toast.success('Peer Study Room created! Welcome!');
-        fetchRooms();
-        return;
-      }
-    } catch (_) {}
 
-    const roomId = `room_${Date.now()}`;
-    setRoomTitle(newRoomTitle.trim());
-    setRoomSubject(newRoomSubject);
-    setSelectedRoomId(roomId);
-    setShowCreateModal(false);
-    setNewRoomTitle('');
-    toast.success('Peer Study Room created! Welcome!');
+      setRoomTitle(createdRoom.title);
+      setRoomSubject(createdRoom.subject);
+      setSelectedRoomId(createdRoom.roomId);
+      setShowCreateModal(false);
+      setNewRoomTitle('');
+      toast.success(`Study Room "${createdRoom.title}" is now LIVE! Broadcasted to all scholars.`);
+    } catch (err: any) {
+      toast.error('Could not create room: ' + (err.message || 'Error'));
+    }
   };
 
   const handleAddStroke = (stroke: WhiteboardStroke) => {
@@ -607,8 +670,15 @@ export const PeerStudyRoomPage: React.FC = () => {
             </h2>
             <p className="text-xs text-muted-foreground">Join any active session or start your own collaborative group.</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={fetchRooms} className="text-xs font-bold self-start sm:self-auto">
-            Refresh List
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh} 
+            disabled={isRefreshing}
+            className="text-xs font-bold self-start sm:self-auto gap-1.5 border-border hover:border-primary/50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-primary' : 'text-muted-foreground'}`} />
+            {isRefreshing ? 'Syncing...' : 'Refresh List'}
           </Button>
         </div>
 
