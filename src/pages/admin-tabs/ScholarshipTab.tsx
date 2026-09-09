@@ -95,18 +95,38 @@ export const ScholarshipTab = () => {
       }
     } catch {}
 
-    // 2. Fetch Applications
+    // 2. Fetch Applications (Server API + Supabase)
     try {
-      const { data: appRow } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'scholarship_applications')
-        .maybeSingle();
+      const res = await fetch('/api/scholarships/applications');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && Array.isArray(data.applications)) {
+          setApplications(data.applications);
+        }
+      } else {
+        const { data: appRow } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'scholarship_applications')
+          .maybeSingle();
 
-      if (appRow?.setting_value && Array.isArray(appRow.setting_value)) {
-        setApplications(appRow.setting_value);
+        if (appRow?.setting_value && Array.isArray(appRow.setting_value)) {
+          setApplications(appRow.setting_value);
+        }
       }
-    } catch {}
+    } catch {
+      try {
+        const { data: appRow } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'scholarship_applications')
+          .maybeSingle();
+
+        if (appRow?.setting_value && Array.isArray(appRow.setting_value)) {
+          setApplications(appRow.setting_value);
+        }
+      } catch {}
+    }
 
     // 3. Fetch Discount / Voucher Codes
     try {
@@ -274,31 +294,19 @@ export const ScholarshipTab = () => {
     if (!app) return;
 
     try {
-      if (status === 'approved') {
-        // Activate student subscription and profile
-        if (app.userId) {
-          try {
-            await supabase.from('subscriptions').upsert({
-              user_id: app.userId,
-              plan: 'lifetime',
-              status: 'active',
-              started_at: new Date().toISOString(),
-              expires_at: new Date(Date.now() + 3650 * 86400000).toISOString()
-            }, { onConflict: 'user_id' });
-          } catch {
-            try {
-              await supabase.from('subscriptions').upsert({
-                user_id: app.userId,
-                plan_id: 'lifetime',
-                status: 'active',
-                start_date: new Date().toISOString(),
-                end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
-              }, { onConflict: 'user_id' });
-            } catch {}
-          }
+      const res = await fetch('/api/scholarships/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appId,
+          status,
+          adminNote: status === 'approved' ? '100% Full Lifetime Scholarship Approved' : 'Application declined by review committee'
+        })
+      });
 
-          await supabase.from('profiles').update({ has_paid: true }).eq('id', app.userId);
-        }
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to update scholarship application status.');
       }
 
       const updatedApps = applications.map(a => {
@@ -312,16 +320,8 @@ export const ScholarshipTab = () => {
         return a;
       });
 
-      await supabase
-        .from('admin_settings')
-        .upsert({
-          setting_key: 'scholarship_applications',
-          setting_value: updatedApps,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
-
       setApplications(updatedApps);
-      logAdminActivity('REVIEW_SCHOLARSHIP_APP', `Marked scholarship application for ${app.userName} as ${status.toUpperCase()}`, 'scholarships');
+      logAdminActivity('REVIEW_SCHOLARSHIP_APP', `Marked scholarship application for ${app.userName || (app as any).fullName || 'Student'} as ${status.toUpperCase()}`, 'scholarships');
       toast.success(`Application marked as ${status === 'approved' ? 'Approved & Account Activated' : 'Rejected'}!`);
     } catch (err: any) {
       toast.error(`Action failed: ${err.message}`);

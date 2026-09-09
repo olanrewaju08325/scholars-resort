@@ -78,7 +78,65 @@ export const Referrals = () => {
     const loadReferralData = async () => {
       setLoading(true);
 
-      // 1. Fetch live config from admin_settings
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        // Fetch consolidated state from reliable server API
+        const res = await fetch(`/api/referrals/user/${user.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.success) {
+            if (data.config) {
+              setConfig({
+                rewardPerPaid: Number(data.config.rewardPerPaid) || 500,
+                minWithdrawal: Number(data.config.minWithdrawal) || 2000,
+                isActive: data.config.isActive !== false,
+                programTitle: data.config.programTitle || 'UTME Student Referral & Ambassador Program',
+                programDescription: data.config.programDescription || 'Earn cash rewards for every UTME candidate you invite.'
+              });
+            }
+            if (data.referralCode) setReferralCode(data.referralCode);
+            if (Array.isArray(data.referrals)) {
+              setReferralsList(data.referrals.map((r: any) => ({
+                id: r.id,
+                created_at: r.createdAt || r.created_at,
+                converted: r.converted,
+                name: r.referredName || 'UTME Student',
+                email: r.referredEmail ? `${r.referredEmail.substring(0, 3)}***@${r.referredEmail.split('@')[1] || 'email.com'}` : 'Anonymous'
+              })));
+            }
+            if (Array.isArray(data.payoutRequests)) {
+              setPayoutRequests(data.payoutRequests.map((p: any) => ({
+                id: p.id,
+                userId: p.userId,
+                userName: p.userName,
+                userEmail: p.userEmail,
+                userPhone: p.userPhone,
+                amount: p.amount,
+                payoutType: p.payoutType,
+                bankName: p.bankName,
+                accountNumber: p.accountNumber,
+                accountName: p.accountName,
+                airtimeNetwork: p.airtimeNetwork,
+                airtimePhone: p.airtimePhone,
+                status: p.status,
+                created_at: p.createdAt || p.created_at,
+                processed_at: p.processedAt || p.processed_at,
+                adminNote: p.adminNote
+              })));
+            }
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('Backend referral fetch notice, falling back to direct query:', e);
+      }
+
+      // 1. Fallback: Fetch live config from admin_settings
       try {
         const { data: configRow } = await supabase
           .from('admin_settings')
@@ -102,11 +160,6 @@ export const Referrals = () => {
         console.warn('Error fetching referral config:', err);
       }
 
-      if (!user) {
-        setLoading(false);
-        return;
-      }
-
       // 2. Generate or fetch user's referral code
       const generatedCode = profile?.referral_code || `SR-${(profile?.full_name || 'SCHOLAR').substring(0, 4).toUpperCase()}-${user.id.substring(0, 4).toUpperCase()}`;
       setReferralCode(generatedCode);
@@ -127,7 +180,6 @@ export const Referrals = () => {
           .eq('referrer_id', user.id);
 
         if (refRows && refRows.length > 0) {
-          // Fetch referred user profile details
           const referredIds = refRows.map(r => r.referred_id);
           const { data: profilesData } = await supabase
             .from('profiles')
@@ -150,14 +202,6 @@ export const Referrals = () => {
         console.warn('Error fetching referrals list:', err);
       }
 
-      // Fallback: check localStorage for offline / mock data
-      if (referredUsers.length === 0) {
-        try {
-          const localRefs = localStorage.getItem(`scholar_refs_${user.id}`);
-          if (localRefs) referredUsers = JSON.parse(localRefs);
-        } catch {}
-      }
-
       setReferralsList(referredUsers);
 
       // 4. Fetch user's payout requests
@@ -171,9 +215,6 @@ export const Referrals = () => {
         if (payoutRow?.setting_value && Array.isArray(payoutRow.setting_value)) {
           const myRequests = payoutRow.setting_value.filter((req: PayoutRequest) => req.userId === user.id);
           setPayoutRequests(myRequests);
-        } else {
-          const localPayouts = localStorage.getItem(`scholar_payouts_${user.id}`);
-          if (localPayouts) setPayoutRequests(JSON.parse(localPayouts));
         }
       } catch (err) {
         console.warn('Error fetching payout requests:', err);
@@ -283,32 +324,48 @@ export const Referrals = () => {
     };
 
     try {
-      // 1. Fetch current requests from admin_settings
-      const { data: existingRow } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'referral_payout_requests')
-        .maybeSingle();
+      // 1. Submit via reliable server API
+      const response = await fetch('/api/referrals/request-payout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user.id,
+          userName: profile?.full_name || 'Scholar Student',
+          userEmail: user.email || '',
+          userPhone: profile?.phone || airtimePhone || '',
+          amount: withdrawAmount,
+          payoutType: withdrawType,
+          bankName: withdrawType === 'bank' ? bankName : undefined,
+          accountNumber: withdrawType === 'bank' ? accountNumber.trim() : undefined,
+          accountName: withdrawType === 'bank' ? accountName.trim() : undefined,
+          airtimeNetwork: withdrawType === 'airtime' ? airtimeNetwork : undefined,
+          airtimePhone: withdrawType === 'airtime' ? airtimePhone.trim() : undefined
+        })
+      });
 
-      const existingRequests: PayoutRequest[] = existingRow?.setting_value && Array.isArray(existingRow.setting_value)
-        ? existingRow.setting_value
-        : [];
+      const resData = await response.json();
+      if (!response.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to submit withdrawal request.');
+      }
 
-      const updatedRequests = [newRequest, ...existingRequests];
+      const confirmedPayout: PayoutRequest = {
+        id: resData.payout?.id || `PAYOUT-${Date.now()}`,
+        userId: user.id,
+        userName: profile?.full_name || 'Student',
+        userEmail: user.email || '',
+        userPhone: profile?.phone || airtimePhone || '',
+        amount: withdrawAmount,
+        payoutType: withdrawType,
+        bankName: withdrawType === 'bank' ? bankName : undefined,
+        accountNumber: withdrawType === 'bank' ? accountNumber.trim() : undefined,
+        accountName: withdrawType === 'bank' ? accountName.trim() : undefined,
+        airtimeNetwork: withdrawType === 'airtime' ? airtimeNetwork : undefined,
+        airtimePhone: withdrawType === 'airtime' ? airtimePhone.trim() : undefined,
+        status: 'pending',
+        created_at: new Date().toISOString()
+      };
 
-      // 2. Save back to admin_settings
-      await supabase
-        .from('admin_settings')
-        .upsert({
-          setting_key: 'referral_payout_requests',
-          setting_value: updatedRequests,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
-
-      // Update local state and cache
-      setPayoutRequests(prev => [newRequest, ...prev]);
-      localStorage.setItem(`scholar_payouts_${user.id}`, JSON.stringify([newRequest, ...payoutRequests]));
-
+      setPayoutRequests(prev => [confirmedPayout, ...prev]);
       toast.success('🎉 Payout request submitted successfully! Admin will disburse your funds within 24-48 hours.');
       setIsWithdrawModalOpen(false);
     } catch (err: any) {

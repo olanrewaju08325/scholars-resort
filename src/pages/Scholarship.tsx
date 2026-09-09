@@ -285,41 +285,30 @@ export const Scholarship = () => {
 
     setSubmittingApp(true);
     try {
-      const { data: existingRow } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'scholarship_applications')
-        .maybeSingle();
-
-      const existingApps = existingRow?.setting_value && Array.isArray(existingRow.setting_value)
-        ? existingRow.setting_value
-        : [];
-
-      const newApp = {
-        id: `AID-APP-${Date.now()}`,
+      const payload = {
         userId: user.id,
-        userName: fullName.trim() || profile?.full_name || 'Applicant',
-        userEmail: email.trim() || user.email || '',
-        userPhone: phone.trim() || profile?.phone || '',
+        fullName: fullName.trim() || profile?.full_name || 'Applicant',
+        email: email.trim() || user.email || '',
+        phone: phone.trim() || profile?.phone || '',
         stateOfOrigin: stateOfOrigin.trim(),
         targetCourse: targetCourse.trim(),
-        targetUni: targetUni.trim(),
-        reason: reason.trim(),
-        type: 'financial_aid',
-        status: 'pending_review',
-        created_at: new Date().toISOString()
+        targetUniversity: targetUni.trim(),
+        reason: reason.trim()
       };
 
-      await supabase
-        .from('admin_settings')
-        .upsert({
-          setting_key: 'scholarship_applications',
-          setting_value: [newApp, ...existingApps],
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
+      const res = await fetch('/api/scholarships/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to submit scholarship application.');
+      }
 
       setAppSubmitted(true);
-      toast.success('🎉 Financial Aid Application Submitted! Our scholarship committee will review and activate your account within 24 hours.');
+      toast.success('🎉 Financial Aid Application Submitted! Check your email for confirmation. Our scholarship committee will review and activate your account.');
     } catch (err: any) {
       toast.error(`Submission failed: ${err.message}`);
     } finally {

@@ -1431,6 +1431,13 @@ app.post('/api/manual-payments/update-status', verifyAdminToken, async (req, res
         ).catch(() => {});
       }
     } catch {}
+
+    // d. Trigger referral conversion & credit referrer
+    try {
+      await triggerReferralConversion(userId, undefined, Number(amount || 3000));
+    } catch (refErr) {
+      console.warn('[Referral conversion trigger notice]:', refErr);
+    }
   }
 
   return res.json({ success: true, message: `Payment ${newStatus} successfully.` });
@@ -3126,63 +3133,95 @@ app.get('/api/admin/schema-validation-report', verifyAdminToken, async (req, res
 
 // API Route: Admin Material Ingestion & Association (Bypasses Client-Side RLS)
 app.post('/api/admin/materials/upload-metadata', verifyAdminToken, async (req, res) => {
-  const { title, description, subject_id, topic_id, file_path, is_premium } = req.body;
-  if (!title || !file_path) {
-    return res.status(400).json({ success: false, error: 'Missing required title or file path' });
+  const { title, description, subject_id, topic_id, file_path, file_url, is_premium } = req.body || {};
+  const filePath = file_path || file_url;
+  if (!title) {
+    return res.status(400).json({ success: false, error: 'Title is required for study material.' });
   }
 
   try {
     logSecurityAudit('UPLOAD_STUDY_MATERIAL_METADATA', req, { title, subject_id });
     const results: string[] = [];
+    let insertedData: any = null;
+
+    const payload = {
+      title,
+      description: description || '',
+      subject_id: subject_id || null,
+      file_path: filePath || '',
+      file_size_bytes: 1024 * 1024 * 2,
+      visibility: true,
+      is_premium: !!is_premium,
+      created_at: new Date().toISOString()
+    };
 
     // 1. Insert into materials table (use UUID if table expects UUID)
     const newMaterialId = crypto.randomUUID();
-    const { error: matError } = await supabase.from('materials').insert({
-      id: newMaterialId,
-      title,
-      description: description || '',
-      subject_id: subject_id || null,
-      file_path,
-      file_size_bytes: 1024 * 1024 * 2,
-      visibility: true,
-      is_premium: !!is_premium
-    });
-    if (!matError) results.push('materials_inserted');
-    else console.warn('Server materials insert warn:', matError.message);
+    try {
+      const { data: matData, error: matError } = await supabase.from('materials').insert({
+        id: newMaterialId,
+        ...payload
+      }).select().maybeSingle();
+      if (!matError) {
+        results.push('materials_inserted');
+        insertedData = matData;
+      } else {
+        console.warn('Server materials insert warn:', matError.message);
+      }
+    } catch (_) {}
 
     // 2. Insert into library_materials table
-    const { error: libError } = await supabase.from('library_materials').insert({
-      title,
-      description: description || '',
-      subject_id: subject_id || null,
-      file_url: file_path,
-      is_premium: !!is_premium,
-      is_active: true
-    });
-    if (!libError) results.push('library_materials_inserted');
-    else console.warn('Server library_materials insert warn:', libError.message);
+    try {
+      const { data: libData, error: libError } = await supabase.from('library_materials').insert({
+        title,
+        description: description || '',
+        subject_id: subject_id || null,
+        file_url: filePath || '',
+        file_path: filePath || '',
+        is_premium: !!is_premium,
+        is_active: true
+      }).select().maybeSingle();
+      if (!libError) {
+        results.push('library_materials_inserted');
+        if (!insertedData) insertedData = libData;
+      } else {
+        console.warn('Server library_materials insert warn:', libError.message);
+      }
+    } catch (_) {}
 
     // 3. Update subjects table with study_material_url if requested and no topic is specified
-    if (subject_id && !topic_id) {
-      const { error: subError } = await supabase
-        .from('subjects')
-        .update({ study_material_url: file_path })
-        .eq('id', subject_id);
-      if (!subError) results.push('subject_url_updated');
-      else console.warn('Server subject update warn:', subError.message);
+    if (subject_id && filePath && !topic_id) {
+      try {
+        const { error: subError } = await supabase
+          .from('subjects')
+          .update({ 
+            study_material_url: filePath,
+            study_materials_url: filePath,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', subject_id);
+        if (!subError) results.push('subject_url_updated');
+        else console.warn('Server subject update warn:', subError.message);
+      } catch (_) {}
     }
 
     // 4. Update topics table with study_material_url if topic_id is specified
-    if (topic_id) {
-      const { error: topError } = await supabase
-        .from('topics')
-        .update({ study_material_url: file_path })
-        .eq('id', topic_id);
-      if (!topError) results.push('topic_url_updated');
-      else console.warn('Server topic update warn:', topError.message);
+    if (topic_id && filePath) {
+      try {
+        const { error: topError } = await supabase
+          .from('topics')
+          .update({ study_material_url: filePath })
+          .eq('id', topic_id);
+        if (!topError) results.push('topic_url_updated');
+        else console.warn('Server topic update warn:', topError.message);
+      } catch (_) {}
     }
 
-    return res.json({ success: true, results });
+    return res.json({
+      success: true,
+      results,
+      data: insertedData || { ...payload, id: newMaterialId }
+    });
   } catch (err: any) {
     console.error('[Server Admin Material Upload Metadata Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server error uploading material metadata' });
@@ -5397,58 +5436,6 @@ app.all('/api/guardian/*all', (req, res) => {
   res.status(410).json({ success: false, error: 'Guardian Portal is disabled and no longer supported on Scholars Resort.' });
 });
 
-// API Route: Admin Materials Metadata Upload & Persistence Handler
-app.post('/api/admin/materials/upload-metadata', verifyAdminToken, async (req, res) => {
-  const { title, description, subject_id, file_path, is_premium } = req.body;
-  if (!title) {
-    return res.status(400).json({ success: false, error: 'Title is required for study material.' });
-  }
-
-  try {
-    const payload = {
-      title,
-      description: description || '',
-      subject_id: subject_id || null,
-      file_path: file_path || '',
-      is_premium: !!is_premium,
-      created_at: new Date().toISOString()
-    };
-
-    let insertedData: any = null;
-
-    // 1. Try inserting into library_materials
-    try {
-      const { data, error } = await supabase.from('library_materials').insert(payload).select().maybeSingle();
-      if (!error && data) insertedData = data;
-    } catch (_) {}
-
-    // 2. Try inserting into materials table as fallback/complement
-    try {
-      const { data, error } = await supabase.from('materials').insert(payload).select().maybeSingle();
-      if (!error && data && !insertedData) insertedData = data;
-    } catch (_) {}
-
-    // 3. If subject_id is provided, safely update subjects table
-    if (subject_id && file_path) {
-      try {
-        await supabase.from('subjects').update({
-          study_material_url: file_path,
-          study_materials_url: file_path,
-          updated_at: new Date().toISOString()
-        }).eq('id', subject_id);
-      } catch (_) {}
-    }
-
-    return res.json({
-      success: true,
-      data: insertedData || { ...payload, id: `mat_${Date.now()}` }
-    });
-  } catch (err: any) {
-    console.error('[API /api/admin/materials/upload-metadata Error]', err);
-    return res.status(500).json({ success: false, error: err.message || 'Failed to save material metadata.' });
-  }
-});
-
 // API Route: Verify & Diagnose Supabase Storage Buckets
 app.get('/api/admin/storage/verify', verifyAdminToken, async (req, res) => {
   const targetBuckets = ['study-materials', 'materials', 'library'];
@@ -5827,6 +5814,867 @@ app.post('/api/study-rooms/:roomId/leave', express.json(), (req, res) => {
     return res.json({ success: true, room });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+// ==========================================
+// REFERRAL & AMBASSADOR ENGINE (FAILSAFE)
+// ==========================================
+const LOCAL_REFERRALS_FILE = path.join(process.cwd(), '.data_referrals.json');
+const LOCAL_REFERRAL_PAYOUTS_FILE = path.join(process.cwd(), '.data_referral_payouts.json');
+const LOCAL_SCHOLARSHIP_APPLICATIONS_FILE = path.join(process.cwd(), '.data_scholarship_applications.json');
+
+interface ReferralRecord {
+  id: string;
+  referrerId: string;
+  referrerCode: string;
+  referrerName?: string;
+  referrerEmail?: string;
+  referredId: string;
+  referredName: string;
+  referredEmail: string;
+  referredPhone?: string;
+  converted: boolean;
+  conversionAmount?: number;
+  rewardEarned?: number;
+  createdAt: string;
+  convertedAt?: string;
+}
+
+interface ReferralPayoutRecord {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userPhone: string;
+  amount: number;
+  payoutType: 'bank' | 'airtime';
+  bankName?: string;
+  accountNumber?: string;
+  accountName?: string;
+  airtimeNetwork?: string;
+  airtimePhone?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  processedAt?: string;
+  adminNote?: string;
+}
+
+function getLocalReferrals(): ReferralRecord[] {
+  try {
+    if (fs.existsSync(LOCAL_REFERRALS_FILE)) {
+      const data = fs.readFileSync(LOCAL_REFERRALS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalReferrals(list: ReferralRecord[]) {
+  try {
+    fs.writeFileSync(LOCAL_REFERRALS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch {}
+}
+
+function getLocalReferralPayouts(): ReferralPayoutRecord[] {
+  try {
+    if (fs.existsSync(LOCAL_REFERRAL_PAYOUTS_FILE)) {
+      const data = fs.readFileSync(LOCAL_REFERRAL_PAYOUTS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalReferralPayouts(list: ReferralPayoutRecord[]) {
+  try {
+    fs.writeFileSync(LOCAL_REFERRAL_PAYOUTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch {}
+}
+
+async function getReferralConfig() {
+  try {
+    const { data: configRow } = await supabase
+      .from('admin_settings')
+      .select('setting_value')
+      .eq('setting_key', 'referral_program_config')
+      .maybeSingle();
+
+    if (configRow?.setting_value) {
+      const parsed = typeof configRow.setting_value === 'string'
+        ? JSON.parse(configRow.setting_value)
+        : configRow.setting_value;
+      return {
+        rewardPerPaid: Number(parsed.rewardPerPaid) || 500,
+        minWithdrawal: Number(parsed.minWithdrawal) || 2000,
+        isActive: parsed.isActive !== false,
+        programTitle: parsed.programTitle || 'UTME Student Referral & Ambassador Program',
+        programDescription: parsed.programDescription || 'Earn cash rewards for every candidate you invite.'
+      };
+    }
+  } catch {}
+  return {
+    rewardPerPaid: 500,
+    minWithdrawal: 2000,
+    isActive: true,
+    programTitle: 'UTME Student Referral & Ambassador Program',
+    programDescription: 'Earn cash rewards for every candidate you invite.'
+  };
+}
+
+// Convert referral & credit referrer wallet
+async function triggerReferralConversion(userId: string, userEmail?: string, amountPaid?: number) {
+  try {
+    const referrals = getLocalReferrals();
+    const config = await getReferralConfig();
+    const reward = config.rewardPerPaid || 500;
+
+    // Find if this student was referred
+    let matchIdx = referrals.findIndex(r => 
+      (userId && r.referredId === userId) || 
+      (userEmail && r.referredEmail && r.referredEmail.toLowerCase() === userEmail.toLowerCase())
+    );
+
+    // If not found in local, check Supabase profiles for referred_by or referral_code
+    if (matchIdx === -1 && userId) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, referred_by, referral_code')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (profile?.referred_by) {
+          // Look up referrer profile
+          const { data: referrerProfile } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, referral_code')
+            .eq('id', profile.referred_by)
+            .maybeSingle();
+
+          if (referrerProfile) {
+            const newRecord: ReferralRecord = {
+              id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              referrerId: referrerProfile.id,
+              referrerCode: referrerProfile.referral_code || 'REF',
+              referrerName: referrerProfile.full_name || 'Scholar Referrer',
+              referrerEmail: referrerProfile.email || '',
+              referredId: userId,
+              referredName: profile.full_name || userEmail?.split('@')[0] || 'Scholar Student',
+              referredEmail: userEmail || profile.email || '',
+              converted: true,
+              conversionAmount: Number(amountPaid || 3000),
+              rewardEarned: reward,
+              createdAt: new Date().toISOString(),
+              convertedAt: new Date().toISOString()
+            };
+            referrals.unshift(newRecord);
+            saveLocalReferrals(referrals);
+            matchIdx = 0;
+          }
+        }
+      } catch (profErr) {
+        console.warn('[Referral lookup error]:', profErr);
+      }
+    }
+
+    if (matchIdx !== -1) {
+      const target = referrals[matchIdx];
+      target.converted = true;
+      target.convertedAt = new Date().toISOString();
+      target.conversionAmount = Number(amountPaid || 3000);
+      target.rewardEarned = reward;
+      saveLocalReferrals(referrals);
+
+      // Sync with Supabase referrals table
+      try {
+        await supabase.from('referrals').upsert({
+          referrer_id: target.referrerId,
+          referred_id: target.referredId,
+          converted: true
+        });
+      } catch {}
+
+      // Notify Referrer via Email
+      if (target.referrerEmail) {
+        sendServerSmtpEmail(
+          target.referrerEmail,
+          `🎉 Referral Reward Earned: ₦${reward.toLocaleString()} credited to your balance!`,
+          `<div style="font-family: sans-serif; padding: 24px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+             <h2 style="color: #10B981; margin-top: 0;">🎉 You've Earned ₦${reward.toLocaleString()}!</h2>
+             <p>Hi ${target.referrerName || 'Scholar'},</p>
+             <p>Great news! Your referred candidate <strong>${target.referredName || 'A student'}</strong> just successfully upgraded their account on Scholars Resort.</p>
+             <div style="background: #F0FDF4; border: 1px solid #BBF7D0; padding: 16px; border-radius: 8px; margin: 16px 0;">
+               <p style="margin: 0; font-weight: bold; color: #166534;">Reward Credited: ₦${reward.toLocaleString()}</p>
+               <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803D;">Your reward has been added to your Referral Wallet and is ready for withdrawal.</p>
+             </div>
+             <p>Keep sharing your link to earn more rewards!</p>
+             <p style="margin-top: 24px;">
+               <a href="https://scholarsresort.com/referrals" style="background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">View My Earnings & Withdraw</a>
+             </p>
+           </div>`
+        ).catch(() => {});
+      }
+
+      return { success: true, reward, referrerId: target.referrerId };
+    }
+
+    return { success: false, message: 'No referral link found for user.' };
+  } catch (err: any) {
+    console.warn('[triggerReferralConversion error]:', err);
+    return { success: false, error: err.message };
+  }
+}
+
+// 1. Track New User Signup with Referral Code / Link
+app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
+  try {
+    const { referrerCode, referredId, referredName, referredEmail, referredPhone } = req.body || {};
+
+    if (!referrerCode || (!referredId && !referredEmail)) {
+      return res.status(400).json({ success: false, error: 'Referrer code and student details are required.' });
+    }
+
+    const cleanCode = String(referrerCode).trim().toUpperCase();
+
+    // Look up Referrer by code or user id
+    let referrerId: string | null = null;
+    let referrerName = 'Scholar Referrer';
+    let referrerEmail = '';
+
+    // Search in Supabase profiles
+    try {
+      const { data: refProfile } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, referral_code')
+        .or(`referral_code.eq.${cleanCode},id.eq.${cleanCode}`)
+        .maybeSingle();
+
+      if (refProfile) {
+        referrerId = refProfile.id;
+        referrerName = refProfile.full_name || 'Scholar Referrer';
+        referrerEmail = refProfile.email || '';
+      }
+    } catch {}
+
+    // Fallback: Check local profiles or local referrals
+    if (!referrerId) {
+      const existingRefs = getLocalReferrals();
+      const match = existingRefs.find(r => r.referrerCode === cleanCode);
+      if (match) {
+        referrerId = match.referrerId;
+        referrerName = match.referrerName || 'Scholar Referrer';
+        referrerEmail = match.referrerEmail || '';
+      }
+    }
+
+    if (!referrerId) {
+      referrerId = `ref_usr_${cleanCode}`;
+    }
+
+    // Save to local referral store
+    const referrals = getLocalReferrals();
+    const existingEntry = referrals.find(r => 
+      (referredId && r.referredId === referredId) || 
+      (referredEmail && r.referredEmail.toLowerCase() === referredEmail.toLowerCase())
+    );
+
+    if (!existingEntry) {
+      const newRecord: ReferralRecord = {
+        id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        referrerId,
+        referrerCode: cleanCode,
+        referrerName,
+        referrerEmail,
+        referredId: referredId || `student_${Date.now()}`,
+        referredName: referredName || 'New Student',
+        referredEmail: (referredEmail || '').toLowerCase(),
+        referredPhone: referredPhone || '',
+        converted: false,
+        createdAt: new Date().toISOString()
+      };
+      referrals.unshift(newRecord);
+      saveLocalReferrals(referrals);
+
+      // Attempt Supabase insert
+      try {
+        if (referredId && referrerId && !referrerId.startsWith('ref_usr_')) {
+          await supabase.from('referrals').insert({
+            referrer_id: referrerId,
+            referred_id: referredId,
+            converted: false
+          });
+          await supabase.from('profiles').update({
+            referred_by: referrerId
+          }).eq('id', referredId);
+        }
+      } catch {}
+    }
+
+    return res.json({ success: true, message: 'Referral tracking successfully registered.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Convert Referral on Payment Trigger
+app.post('/api/referrals/convert-payment', express.json(), async (req, res) => {
+  try {
+    const { userId, userEmail, amount } = req.body || {};
+    if (!userId && !userEmail) {
+      return res.status(400).json({ success: false, error: 'User ID or email is required.' });
+    }
+    const result = await triggerReferralConversion(userId, userEmail, amount);
+    return res.json(result);
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Get User Referral Stats & History
+app.get('/api/referrals/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const config = await getReferralConfig();
+    const allReferrals = getLocalReferrals();
+    const allPayouts = getLocalReferralPayouts();
+
+    // Query user's referral code from profiles if available
+    let referralCode = '';
+    let userName = 'Scholar';
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, referral_code')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profile) {
+        userName = profile.full_name || 'Scholar';
+        referralCode = profile.referral_code || `SR-${(profile.full_name || 'SCHOLAR').substring(0, 4).toUpperCase()}-${userId.substring(0, 4).toUpperCase()}`;
+      }
+    } catch {}
+
+    if (!referralCode) {
+      referralCode = `SR-${userId.substring(0, 4).toUpperCase()}`;
+    }
+
+    // Filter referrals for this user
+    let userReferrals = allReferrals.filter(r => r.referrerId === userId || r.referrerCode === referralCode);
+
+    // Also merge from Supabase referrals table if any
+    try {
+      const { data: sbRefs } = await supabase
+        .from('referrals')
+        .select('id, created_at, converted, referred_id')
+        .eq('referrer_id', userId);
+
+      if (sbRefs && sbRefs.length > 0) {
+        const referredIds = sbRefs.map(r => r.referred_id);
+        const { data: profs } = await supabase
+          .from('profiles')
+          .select('id, full_name, email, has_paid, created_at')
+          .in('id', referredIds);
+
+        const profMap = new Map((profs || []).map(p => [p.id, p]));
+        sbRefs.forEach(sr => {
+          if (!userReferrals.some(ur => ur.referredId === sr.referred_id)) {
+            const p = profMap.get(sr.referred_id);
+            userReferrals.push({
+              id: sr.id,
+              referrerId: userId,
+              referrerCode: referralCode,
+              referredId: sr.referred_id,
+              referredName: p?.full_name || 'Scholar Student',
+              referredEmail: p?.email || '',
+              converted: sr.converted || p?.has_paid || false,
+              rewardEarned: (sr.converted || p?.has_paid) ? config.rewardPerPaid : 0,
+              createdAt: sr.created_at
+            });
+          }
+        });
+      }
+    } catch {}
+
+    // Calculate financials
+    const totalReferred = userReferrals.length;
+    const convertedCount = userReferrals.filter(r => r.converted).length;
+    const totalEarned = convertedCount * config.rewardPerPaid;
+
+    // Filter user's payout requests
+    const userPayouts = allPayouts.filter(p => p.userId === userId);
+
+    const totalPaidOut = userPayouts
+      .filter(p => p.status === 'approved')
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const totalPending = userPayouts
+      .filter(p => p.status === 'pending')
+      .reduce((sum, p) => sum + (p.amount || 0), 0);
+
+    const availableBalance = Math.max(0, totalEarned - totalPaidOut - totalPending);
+
+    return res.json({
+      success: true,
+      referralCode,
+      userName,
+      config,
+      totalReferred,
+      convertedCount,
+      totalEarned,
+      totalPaidOut,
+      totalPending,
+      availableBalance,
+      referrals: userReferrals,
+      payoutRequests: userPayouts
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 4. Request Referral Payout (Bank / Airtime)
+app.post('/api/referrals/request-payout', express.json(), async (req, res) => {
+  try {
+    const {
+      userId,
+      userName,
+      userEmail,
+      userPhone,
+      amount,
+      payoutType,
+      bankName,
+      accountNumber,
+      accountName,
+      airtimeNetwork,
+      airtimePhone
+    } = req.body || {};
+
+    if (!userId || !amount || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: 'User ID and valid payout amount are required.' });
+    }
+
+    const config = await getReferralConfig();
+    const reqAmount = Number(amount);
+
+    if (reqAmount < config.minWithdrawal) {
+      return res.status(400).json({
+        success: false,
+        error: `Minimum withdrawal amount is ₦${config.minWithdrawal.toLocaleString()}.`
+      });
+    }
+
+    // Verify balance
+    const allReferrals = getLocalReferrals();
+    const allPayouts = getLocalReferralPayouts();
+    const userRefs = allReferrals.filter(r => r.referrerId === userId);
+    const converted = userRefs.filter(r => r.converted).length;
+    const earned = converted * config.rewardPerPaid;
+    const paidOut = allPayouts.filter(p => p.userId === userId && p.status === 'approved').reduce((s, p) => s + p.amount, 0);
+    const pending = allPayouts.filter(p => p.userId === userId && p.status === 'pending').reduce((s, p) => s + p.amount, 0);
+    const available = earned - paidOut - pending;
+
+    if (reqAmount > available) {
+      return res.status(400).json({
+        success: false,
+        error: `Insufficient referral balance. Available: ₦${available.toLocaleString()}, Requested: ₦${reqAmount.toLocaleString()}`
+      });
+    }
+
+    const newPayout: ReferralPayoutRecord = {
+      id: `payout_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId,
+      userName: userName || 'Scholar Advocate',
+      userEmail: userEmail || '',
+      userPhone: userPhone || '',
+      amount: reqAmount,
+      payoutType: payoutType === 'airtime' ? 'airtime' : 'bank',
+      bankName: bankName || '',
+      accountNumber: accountNumber || '',
+      accountName: accountName || '',
+      airtimeNetwork: airtimeNetwork || '',
+      airtimePhone: airtimePhone || '',
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+
+    allPayouts.unshift(newPayout);
+    saveLocalReferralPayouts(allPayouts);
+
+    // Sync with Supabase admin_settings
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'referral_payout_requests',
+        setting_value: allPayouts,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    // Dispatch notification to Admin
+    sendServerSmtpEmail(
+      'admitwise2@gmail.com',
+      `🔔 New Referral Withdrawal Request: ₦${reqAmount.toLocaleString()} (${userName})`,
+      `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+         <h2 style="color: #4F46E5; margin-top: 0;">New Referral Payout Request</h2>
+         <p><strong>Candidate:</strong> ${userName} (${userEmail})</p>
+         <p><strong>Amount:</strong> ₦${reqAmount.toLocaleString()}</p>
+         <p><strong>Payout Method:</strong> ${payoutType === 'airtime' ? `Airtime (${airtimeNetwork} - ${airtimePhone})` : `Bank Transfer (${bankName} - ${accountNumber} - ${accountName})`}</p>
+         <p style="margin-top: 24px;">
+           <a href="https://scholarsresort.com/admin" style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Review in Admin Dashboard</a>
+         </p>
+       </div>`
+    ).catch(() => {});
+
+    return res.json({ success: true, payout: newPayout, message: 'Withdrawal request submitted successfully!' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 5. Admin: Get All Referrals & Payouts
+app.get('/api/referrals/admin/all', async (req, res) => {
+  try {
+    const config = await getReferralConfig();
+    const localRefs = getLocalReferrals();
+    const localPayouts = getLocalReferralPayouts();
+
+    // Query Supabase for any additional referral rows
+    let combinedRefs = [...localRefs];
+    try {
+      const { data: sbRefs } = await supabase
+        .from('referrals')
+        .select(`
+          id, converted, created_at,
+          referrer:profiles!referrer_id(id, full_name, email),
+          referred:profiles!referred_id(id, full_name, email)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (sbRefs && Array.isArray(sbRefs)) {
+        sbRefs.forEach(sr => {
+          const exists = combinedRefs.some(cr => cr.id === sr.id || (cr.referredId === (sr.referred as any)?.id && cr.referrerId === (sr.referrer as any)?.id));
+          if (!exists) {
+            combinedRefs.push({
+              id: sr.id,
+              referrerId: (sr.referrer as any)?.id || '',
+              referrerCode: 'REF',
+              referrerName: (sr.referrer as any)?.full_name || 'Scholar Referrer',
+              referrerEmail: (sr.referrer as any)?.email || '',
+              referredId: (sr.referred as any)?.id || '',
+              referredName: (sr.referred as any)?.full_name || 'Scholar Student',
+              referredEmail: (sr.referred as any)?.email || '',
+              converted: sr.converted,
+              createdAt: sr.created_at
+            });
+          }
+        });
+      }
+    } catch {}
+
+    const totalReferrals = combinedRefs.length;
+    const convertedCount = combinedRefs.filter(r => r.converted).length;
+    const totalDisbursed = localPayouts.filter(p => p.status === 'approved').reduce((s, p) => s + p.amount, 0);
+    const totalPendingPayout = localPayouts.filter(p => p.status === 'pending').reduce((s, p) => s + p.amount, 0);
+
+    return res.json({
+      success: true,
+      config,
+      totalReferrals,
+      convertedCount,
+      totalDisbursed,
+      totalPendingPayout,
+      referrals: combinedRefs,
+      payoutRequests: localPayouts
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 6. Admin: Update Payout Status (Approve / Reject)
+app.post('/api/referrals/admin/update-payout', verifyAdminToken, async (req, res) => {
+  try {
+    const { payoutId, status, adminNote } = req.body || {};
+    if (!payoutId || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Valid payout ID and status (approved/rejected) are required.' });
+    }
+
+    const allPayouts = getLocalReferralPayouts();
+    const target = allPayouts.find(p => p.id === payoutId);
+    if (!target) {
+      return res.status(404).json({ success: false, error: 'Payout request not found.' });
+    }
+
+    target.status = status;
+    target.processedAt = new Date().toISOString();
+    target.adminNote = adminNote || (status === 'approved' ? 'Disbursed via direct transfer' : 'Rejected by admin');
+    saveLocalReferralPayouts(allPayouts);
+
+    // Sync with Supabase
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'referral_payout_requests',
+        setting_value: allPayouts,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    // Send confirmation email to student
+    if (target.userEmail) {
+      const isApproved = status === 'approved';
+      sendServerSmtpEmail(
+        target.userEmail,
+        isApproved 
+          ? `💸 Referral Payout Processed: ₦${target.amount.toLocaleString()} Disbursed!` 
+          : `Update Regarding Your Referral Payout Request (₦${target.amount.toLocaleString()})`,
+        `<div style="font-family: sans-serif; padding: 24px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+           <h2 style="color: ${isApproved ? '#10B981' : '#EF4444'}; margin-top: 0;">
+             ${isApproved ? 'Withdrawal Successful!' : 'Withdrawal Request Update'}
+           </h2>
+           <p>Hi ${target.userName || 'Scholar'},</p>
+           <p>Your referral payout request of <strong>₦${target.amount.toLocaleString()}</strong> has been <strong>${isApproved ? 'Approved & Disbursed' : 'Rejected'}</strong>.</p>
+           ${target.adminNote ? `<p style="background: #F8FAFC; padding: 12px; border-radius: 6px; font-size: 13px;"><strong>Note:</strong> ${target.adminNote}</p>` : ''}
+           <p>Thank you for being a Scholars Resort Ambassador!</p>
+         </div>`
+      ).catch(() => {});
+    }
+
+    return res.json({ success: true, payout: target, message: `Payout marked as ${status}.` });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// SCHOLARSHIP FINANCIAL AID ENGINE (FAILSAFE)
+// ==========================================
+function getLocalScholarshipApplications(): any[] {
+  try {
+    if (fs.existsSync(LOCAL_SCHOLARSHIP_APPLICATIONS_FILE)) {
+      const data = fs.readFileSync(LOCAL_SCHOLARSHIP_APPLICATIONS_FILE, 'utf-8');
+      const parsed = JSON.parse(data);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalScholarshipApplications(list: any[]) {
+  try {
+    fs.writeFileSync(LOCAL_SCHOLARSHIP_APPLICATIONS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch {}
+}
+
+// 7. Submit Financial Aid Application
+app.post('/api/scholarships/apply', express.json(), async (req, res) => {
+  try {
+    const {
+      userId,
+      fullName,
+      email,
+      phone,
+      stateOfOrigin,
+      targetUniversity,
+      targetCourse,
+      reason,
+      parentOccupation,
+      jambScore
+    } = req.body || {};
+
+    if (!fullName || !email || !reason) {
+      return res.status(400).json({ success: false, error: 'Full name, email, and statement of need are required.' });
+    }
+
+    const apps = getLocalScholarshipApplications();
+    const newApp = {
+      id: `sch_app_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      userId: userId || `user_${Date.now()}`,
+      fullName,
+      email: email.trim().toLowerCase(),
+      phone: phone || '',
+      stateOfOrigin: stateOfOrigin || '',
+      targetUniversity: targetUniversity || '',
+      targetCourse: targetCourse || '',
+      reason,
+      parentOccupation: parentOccupation || '',
+      jambScore: jambScore || '',
+      status: 'pending',
+      appliedAt: new Date().toISOString()
+    };
+
+    apps.unshift(newApp);
+    saveLocalScholarshipApplications(apps);
+
+    // Sync with Supabase admin_settings
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'scholarship_applications',
+        setting_value: apps,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    // Dispatch acknowledgment email to student
+    sendServerSmtpEmail(
+      email.trim().toLowerCase(),
+      'Scholarship Application Received - Scholars Resort',
+      `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+         <h2 style="color: #4F46E5; margin-top: 0;">Scholarship Application Under Review</h2>
+         <p>Dear ${fullName},</p>
+         <p>We have successfully received your 100% Financial Aid / Need-Based Scholarship application for Scholars Resort.</p>
+         <p>Our review committee evaluates applications every 24–48 hours. If approved, you will receive an instant account activation notice granting full lifetime access to all CBT past questions and mock exams.</p>
+         <p>Best wishes in your UTME preparations!</p>
+       </div>`
+    ).catch(() => {});
+
+    // Dispatch notice to Admin
+    sendServerSmtpEmail(
+      'admitwise2@gmail.com',
+      `🎓 New Scholarship Application: ${fullName} (${targetUniversity || 'UTME Candidate'})`,
+      `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+         <h2 style="color: #4F46E5; margin-top: 0;">New Scholarship Application</h2>
+         <p><strong>Candidate:</strong> ${fullName} (${email})</p>
+         <p><strong>Phone:</strong> ${phone || 'N/A'}</p>
+         <p><strong>Target School & Course:</strong> ${targetUniversity} - ${targetCourse}</p>
+         <p><strong>Statement of Need:</strong></p>
+         <blockquote style="background: #F8FAFC; padding: 12px; border-left: 4px solid #4F46E5; font-style: italic;">
+           ${reason}
+         </blockquote>
+         <p style="margin-top: 24px;">
+           <a href="https://scholarsresort.com/admin" style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Review in Admin Dashboard</a>
+         </p>
+       </div>`
+    ).catch(() => {});
+
+    return res.json({ success: true, application: newApp, message: 'Application submitted successfully! Check your email for confirmation.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. Get All Scholarship Applications (Admin & Student)
+app.get('/api/scholarships/applications', async (req, res) => {
+  try {
+    const localApps = getLocalScholarshipApplications();
+    let combinedApps = [...localApps];
+
+    try {
+      const { data: dbRow } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'scholarship_applications')
+        .maybeSingle();
+
+      if (dbRow?.setting_value && Array.isArray(dbRow.setting_value)) {
+        dbRow.setting_value.forEach((da: any) => {
+          if (!combinedApps.some(ca => ca.id === da.id || (ca.email === da.email && ca.appliedAt === da.appliedAt))) {
+            combinedApps.push(da);
+          }
+        });
+      }
+    } catch {}
+
+    return res.json({ success: true, applications: combinedApps });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 9. Admin Review Scholarship Application (Approve & Grant Lifetime Access / Reject)
+app.post('/api/scholarships/review', verifyAdminToken, async (req, res) => {
+  try {
+    const { appId, status, adminNote } = req.body || {};
+    if (!appId || !['approved', 'rejected'].includes(status)) {
+      return res.status(400).json({ success: false, error: 'Valid application ID and status (approved/rejected) are required.' });
+    }
+
+    const apps = getLocalScholarshipApplications();
+    const target = apps.find(a => a.id === appId);
+    if (!target) {
+      return res.status(404).json({ success: false, error: 'Application not found.' });
+    }
+
+    target.status = status;
+    target.reviewedAt = new Date().toISOString();
+    target.adminNote = adminNote || (status === 'approved' ? '100% Free Lifetime Scholarship Granted' : 'Application not approved');
+    saveLocalScholarshipApplications(apps);
+
+    // Sync with Supabase
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'scholarship_applications',
+        setting_value: apps,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    // If approved, activate student subscription & profile
+    if (status === 'approved') {
+      let targetUserId = target.userId;
+
+      // If user profile exists by email, find id
+      if (target.email) {
+        try {
+          const { data: p } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('email', target.email)
+            .maybeSingle();
+          if (p?.id) targetUserId = p.id;
+        } catch {}
+      }
+
+      if (targetUserId) {
+        // Activate subscription
+        try {
+          await supabase.from('subscriptions').upsert({
+            user_id: targetUserId,
+            plan: 'lifetime',
+            status: 'active',
+            started_at: new Date().toISOString(),
+            expires_at: new Date(Date.now() + 3650 * 86400000).toISOString()
+          }, { onConflict: 'user_id' });
+        } catch {
+          try {
+            await supabase.from('subscriptions').upsert({
+              user_id: targetUserId,
+              plan_id: 'lifetime',
+              status: 'active',
+              start_date: new Date().toISOString(),
+              end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
+            });
+          } catch {}
+        }
+
+        // Activate profile
+        try {
+          await supabase.from('profiles').update({ has_paid: true }).eq('id', targetUserId);
+        } catch {}
+      }
+
+      // Send congratulations email
+      if (target.email) {
+        sendServerSmtpEmail(
+          target.email,
+          '🎉 Congratulations! Your 100% Scholarship has been APPROVED!',
+          `<div style="font-family: sans-serif; padding: 24px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+             <h2 style="color: #4F46E5; margin-top: 0;">🎉 Scholarship Approved - Full Lifetime Access Granted!</h2>
+             <p>Dear ${target.fullName},</p>
+             <p>We are delighted to inform you that your application for a <strong>100% Full Scholarship</strong> at Scholars Resort has been <strong>APPROVED</strong>!</p>
+             <p>Your account now has complete lifetime access to all UTME mock exams, question banks, study rooms, literature drills, and AI tutoring at zero cost.</p>
+             <p style="margin-top: 24px;">
+               <a href="https://scholarsresort.com/cbt" style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Start Practicing Now</a>
+             </p>
+           </div>`
+        ).catch(() => {});
+      }
+    }
+
+    return res.json({ success: true, application: target, message: `Application ${status} successfully.` });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

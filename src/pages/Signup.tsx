@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { BookOpen, Shield, Lock, Mail, Eye, EyeOff, User, Phone } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { BookOpen, Shield, Lock, Mail, Eye, EyeOff, User, Phone, Gift, Sparkles } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,14 +10,35 @@ import { sendWelcomeEmail } from '@/services/emailService';
 
 const Signup = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Extract referral code from URL query (?ref=... or ?referral=...) or cached storage
+  useEffect(() => {
+    const urlRef = searchParams.get('ref') || searchParams.get('referral') || searchParams.get('code');
+    if (urlRef) {
+      const cleanRef = urlRef.trim().toUpperCase();
+      setReferralCode(cleanRef);
+      try {
+        localStorage.setItem('scholar_ref_code', cleanRef);
+      } catch {}
+    } else {
+      try {
+        const storedRef = localStorage.getItem('scholar_ref_code');
+        if (storedRef) {
+          setReferralCode(storedRef);
+        }
+      } catch {}
+    }
+  }, [searchParams]);
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,15 +57,20 @@ const Signup = () => {
     
     try {
       const cleanPhone = phone.trim();
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanName = fullName.trim();
+      const cleanRefCode = referralCode.trim().toUpperCase();
+
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email: email.trim().toLowerCase(),
+        email: cleanEmail,
         password,
         options: {
           data: {
-            full_name: fullName.trim(),
+            full_name: cleanName,
             phone_number: cleanPhone,
             phone: cleanPhone,
             role: 'student',
+            referral_code_used: cleanRefCode || undefined
           }
         }
       });
@@ -56,18 +82,42 @@ const Signup = () => {
           setError(signUpError.message);
         }
       } else {
-        // Direct profile update if user session exists immediately
-        if (data?.user?.id) {
+        const newUserId = data?.user?.id;
+
+        // 1. Direct profile update if user session or ID exists
+        if (newUserId) {
           try {
             await supabase.from('profiles').update({
               phone: cleanPhone,
-              full_name: fullName.trim()
-            }).eq('id', data.user.id);
+              full_name: cleanName,
+              referral_code: `SR-${cleanName.substring(0, 4).toUpperCase()}-${newUserId.substring(0, 4).toUpperCase()}`
+            }).eq('id', newUserId);
           } catch {}
         }
 
+        // 2. Track Referral in Backend System if a referral code was applied
+        if (cleanRefCode) {
+          try {
+            await fetch('/api/referrals/track-signup', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                referrerCode: cleanRefCode,
+                referredId: newUserId || `student_${Date.now()}`,
+                referredName: cleanName,
+                referredEmail: cleanEmail,
+                referredPhone: cleanPhone
+              })
+            });
+            // Clear local cached ref after successful registration
+            localStorage.removeItem('scholar_ref_code');
+          } catch (refErr) {
+            console.warn('Referral tracking network notice:', refErr);
+          }
+        }
+
         // Automatically dispatch welcome email via SMTP in background
-        sendWelcomeEmail(email.trim(), fullName.trim(), 'student').catch(e => console.warn('Welcome email error:', e));
+        sendWelcomeEmail(cleanEmail, cleanName, 'student').catch(e => console.warn('Welcome email error:', e));
 
         // If session was returned right away
         if (data.session) {
@@ -231,6 +281,30 @@ const Signup = () => {
                       />
                     </div>
                   </div>
+                </div>
+
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="referralCode" className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Gift className="w-3.5 h-3.5 text-primary" />
+                      Referral / Ambassador Code (Optional)
+                    </Label>
+                    {referralCode && (
+                      <span className="text-[11px] font-semibold text-primary bg-primary/10 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> Code Applied
+                      </span>
+                    )}
+                  </div>
+                  <Input 
+                    id="referralCode"
+                    placeholder="e.g. SR-JOH-1234" 
+                    className="font-mono text-sm uppercase tracking-wider"
+                    value={referralCode}
+                    onChange={(e) => setReferralCode(e.target.value.toUpperCase())}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    If a friend or ambassador invited you, their code will link your account to their referral rewards.
+                  </p>
                 </div>
 
                 <Button 

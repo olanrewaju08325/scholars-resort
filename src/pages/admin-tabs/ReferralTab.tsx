@@ -67,7 +67,37 @@ export const ReferralTab = () => {
   const fetchReferralData = useCallback(async () => {
     setLoading(true);
 
-    // 1. Fetch Config
+    try {
+      const res = await fetch('/api/referrals/admin/all');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          if (data.config) {
+            setConfig({
+              rewardPerPaid: Number(data.config.rewardPerPaid) || 500,
+              minWithdrawal: Number(data.config.minWithdrawal) || 2000,
+              isActive: data.config.isActive !== false,
+              programTitle: data.config.programTitle || 'UTME Student Referral & Ambassador Program',
+              programDescription: data.config.programDescription || 'Earn cash rewards for every UTME candidate you invite.'
+            });
+          }
+          if (Array.isArray(data.referrals)) {
+            setReferrals(data.referrals);
+            calculateStats(data.referrals);
+            buildLeaderboard(data.referrals);
+          }
+          if (Array.isArray(data.payoutRequests)) {
+            setPayoutRequests(data.payoutRequests);
+          }
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('Admin referral server fetch notice, falling back to direct query:', e);
+    }
+
+    // 1. Fallback: Fetch Config
     try {
       const { data: configRow } = await supabase
         .from('admin_settings')
@@ -181,6 +211,18 @@ export const ReferralTab = () => {
     setProcessingPayoutId(payoutId);
     try {
       const note = adminNoteInput[payoutId] || (status === 'approved' ? 'Disbursed via direct transfer' : 'Rejected by admin');
+      
+      const res = await fetch('/api/referrals/admin/update-payout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ payoutId, status, adminNote: note })
+      });
+
+      const resData = await res.json();
+      if (!res.ok || !resData.success) {
+        throw new Error(resData.error || 'Failed to update payout request status.');
+      }
+
       const updatedRequests = payoutRequests.map(req => {
         if (req.id === payoutId) {
           return {
@@ -192,14 +234,6 @@ export const ReferralTab = () => {
         }
         return req;
       });
-
-      await supabase
-        .from('admin_settings')
-        .upsert({
-          setting_key: 'referral_payout_requests',
-          setting_value: updatedRequests,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
 
       setPayoutRequests(updatedRequests);
       logAdminActivity('PROCESS_REFERRAL_PAYOUT', `Marked payout ${payoutId} as ${status.toUpperCase()}`, 'finance');
