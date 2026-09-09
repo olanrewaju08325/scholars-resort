@@ -998,7 +998,186 @@ app.post('/api/send-bulk-email', verifyAdminToken, async (req, res) => {
   }
 });
 
-// API Route: Manual Payment Notification (Sends emails to Admin & Student)
+const LOCAL_MANUAL_PAYMENTS_FILE = path.join(process.cwd(), '.data_manual_payments.json');
+
+function getLocalManualPayments(): any[] {
+  try {
+    if (fs.existsSync(LOCAL_MANUAL_PAYMENTS_FILE)) {
+      const raw = fs.readFileSync(LOCAL_MANUAL_PAYMENTS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalManualPayments(list: any[]) {
+  try {
+    fs.writeFileSync(LOCAL_MANUAL_PAYMENTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[Local Manual Payments Save Warning]', e);
+  }
+}
+
+// API Route: Manual Payment Submission (Handles DB insert, local backup, and email notification)
+app.post('/api/manual-payments/submit', async (req, res) => {
+  const { userId, userEmail, userName, amount, proofUrl, planId, notes, promoCode } = req.body || {};
+
+  if (!userId || !proofUrl) {
+    return res.status(400).json({ success: false, error: 'User ID and Proof of payment URL are required.' });
+  }
+
+  const paymentRecord = {
+    id: `mp_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    user_id: userId,
+    amount: Number(amount || 3000),
+    proof_image_url: proofUrl,
+    status: 'pending',
+    plan_id: planId || 'lifetime',
+    user_email: userEmail || '',
+    user_name: userName || 'Student',
+    notes: notes || (promoCode ? `Promo Code: ${promoCode}` : ''),
+    created_at: new Date().toISOString()
+  };
+
+  // 1. Save to local fallback store
+  try {
+    const existing = getLocalManualPayments();
+    existing.unshift(paymentRecord);
+    saveLocalManualPayments(existing);
+  } catch (err) {
+    console.warn('[Local Payment Store Notice]:', err);
+  }
+
+  // 2. Save to Supabase manual_payments using schema-safe insert
+  try {
+    // Attempt standard insert with user_id, amount, proof_image_url, status
+    const { error: sbErr } = await supabase.from('manual_payments').insert({
+      user_id: userId,
+      amount: Number(amount || 3000),
+      proof_image_url: proofUrl,
+      status: 'pending'
+    });
+    if (sbErr) {
+      console.warn('[Supabase manual_payments insert notice]:', sbErr.message);
+    }
+  } catch (sbEx) {
+    console.warn('[Supabase manual_payments exception]:', sbEx);
+  }
+
+  // 3. Backup in admin_settings key 'manual_payments_store'
+  try {
+    const { data: currentSettings } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'manual_payments_store')
+      .maybeSingle();
+
+    let list: any[] = [];
+    if (currentSettings?.value) {
+      try { list = typeof currentSettings.value === 'string' ? JSON.parse(currentSettings.value) : currentSettings.value; } catch {}
+    }
+    if (!Array.isArray(list)) list = [];
+    list.unshift(paymentRecord);
+    // Keep last 100
+    if (list.length > 100) list = list.slice(0, 100);
+
+    await supabase.from('admin_settings').upsert({
+      key: 'manual_payments_store',
+      value: JSON.stringify(list),
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'key' });
+  } catch (setErr) {
+    console.warn('[admin_settings manual_payments_store notice]:', setErr);
+  }
+
+  // 4. Send Notifications (Async)
+  (async () => {
+    try {
+      const config = await getSmtpConfig();
+      let transporter: nodemailer.Transporter;
+
+      if (!config.host && process.env.SMTP_HOST) {
+        config.host = process.env.SMTP_HOST;
+        config.port = Number(process.env.SMTP_PORT) || 587;
+        config.user = process.env.SMTP_USER || process.env.GMAIL_USER || '';
+        config.pass = process.env.SMTP_PASS || process.env.GMAIL_PASS || '';
+      }
+
+      if (config.host) {
+        transporter = nodemailer.createTransport({
+          host: config.host,
+          port: config.port,
+          secure: config.port === 465,
+          auth: config.user && config.pass ? { user: config.user, pass: config.pass } : undefined,
+          tls: { rejectUnauthorized: false }
+        });
+      } else {
+        transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { 
+            user: process.env.SMTP_USER || process.env.GMAIL_USER || 'admitwise2@gmail.com', 
+            pass: process.env.SMTP_PASS || process.env.GMAIL_PASS || '' 
+          }
+        });
+      }
+
+      const senderEmail = config.from || 'admitwise2@gmail.com';
+      const recipientAdmins = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+
+      // Admin Email
+      await transporter.sendMail({
+        from: `"Scholars Resort System" <${senderEmail}>`,
+        to: recipientAdmins,
+        subject: `New Manual Payment Upload - ₦${amount}`,
+        html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+                 <h2 style="color: #4F46E5;">New Manual Payment Uploaded</h2>
+                 <p><strong>Student Name:</strong> ${userName || 'Student'}</p>
+                 <p><strong>Email:</strong> ${userEmail || 'N/A'}</p>
+                 <p><strong>User ID:</strong> ${userId}</p>
+                 <p><strong>Amount:</strong> ₦${amount}</p>
+                 <p><strong>Plan:</strong> ${planId || 'Lifetime Access'}</p>
+                 <p><a href="${proofUrl}" style="background: #4F46E5; color: white; padding: 10px 18px; text-decoration: none; border-radius: 6px; display: inline-block;">View Payment Receipt</a></p>
+               </div>`
+      });
+
+      // Student Email
+      if (userEmail) {
+        await transporter.sendMail({
+          from: `"Scholars Resort" <${senderEmail}>`,
+          to: userEmail,
+          subject: 'Payment Receipt Received - Scholars Resort Access',
+          html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6;">
+                   <h2 style="color: #4F46E5;">Payment Upload Confirmation</h2>
+                   <p>Dear ${userName || 'Scholar'},</p>
+                   <p>We have received your proof of payment (<strong>₦${amount}</strong>) for <strong>Scholars Resort Full Exam Access</strong>.</p>
+                   <p>Our verification team is reviewing your transaction receipt. Your account access will be activated shortly.</p>
+                   <div style="background: #f1f5f9; padding: 12px 16px; border-radius: 8px; margin: 16px 0;">
+                     <p style="margin: 0; font-size: 13px; color: #475569;">
+                       <strong>Amount Paid:</strong> ₦${amount}<br/>
+                       <strong>Status:</strong> Pending Admin Review<br/>
+                       <strong>Date:</strong> ${new Date().toLocaleString()}
+                     </p>
+                   </div>
+                   <p>Thank you for choosing Scholars Resort!</p>
+                   <br/>
+                   <p>Best regards,<br/><strong>Scholars Resort Team</strong></p>
+                 </div>`
+        });
+      }
+    } catch (notifyErr) {
+      console.warn('[Payment Notification Dispatch Warning]:', notifyErr);
+    }
+  })();
+
+  return res.json({ 
+    success: true, 
+    message: 'Payment receipt submitted successfully and queued for review.',
+    payment: paymentRecord 
+  });
+});
+
+// API Route: Manual Payment Notification (Backwards compatibility)
 app.post('/api/payment-notification', async (req, res) => {
   const { userId, userEmail, userName, amount, proofUrl, planId } = req.body;
 
@@ -1080,6 +1259,181 @@ app.post('/api/payment-notification', async (req, res) => {
     console.error('Payment notification error:', err);
     return res.status(500).json({ success: false, error: err.message || 'Failed to dispatch payment notification emails.' });
   }
+});
+
+// API Route: Get All Manual Payments (Admin)
+app.get('/api/manual-payments/all', async (req, res) => {
+  try {
+    // 1. Get from Supabase
+    const { data: sbPayments } = await supabase
+      .from('manual_payments')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    // 2. Get from Local file
+    const localPayments = getLocalManualPayments();
+
+    // 3. Get from admin_settings
+    let settingPayments: any[] = [];
+    try {
+      const { data: currentSettings } = await supabase
+        .from('admin_settings')
+        .select('value')
+        .eq('key', 'manual_payments_store')
+        .maybeSingle();
+      if (currentSettings?.value) {
+        settingPayments = typeof currentSettings.value === 'string' ? JSON.parse(currentSettings.value) : currentSettings.value;
+      }
+    } catch {}
+
+    // Combine & Deduplicate by id or user_id + created_at
+    const combinedMap = new Map<string, any>();
+    (sbPayments || []).forEach(p => combinedMap.set(p.id || `${p.user_id}_${p.created_at}`, p));
+    (settingPayments || []).forEach(p => {
+      const key = p.id || `${p.user_id}_${p.created_at}`;
+      if (!combinedMap.has(key)) combinedMap.set(key, p);
+    });
+    (localPayments || []).forEach(p => {
+      const key = p.id || `${p.user_id}_${p.created_at}`;
+      if (!combinedMap.has(key)) combinedMap.set(key, p);
+    });
+
+    const allPayments = Array.from(combinedMap.values());
+    return res.json({ success: true, payments: allPayments });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message, payments: getLocalManualPayments() });
+  }
+});
+
+// API Route: Update Manual Payment Status (Approve / Reject)
+app.post('/api/manual-payments/update-status', verifyAdminToken, async (req, res) => {
+  const { paymentId, userId, status, amount, planType } = req.body || {};
+
+  if (!paymentId && !userId) {
+    return res.status(400).json({ success: false, error: 'Payment ID or User ID is required.' });
+  }
+
+  const newStatus = status === 'approved' ? 'approved' : 'rejected';
+  const approvedAt = newStatus === 'approved' ? new Date().toISOString() : null;
+
+  // 1. Update Supabase manual_payments
+  try {
+    if (paymentId) {
+      await supabase.from('manual_payments').update({
+        status: newStatus,
+        approved_at: approvedAt
+      }).eq('id', paymentId);
+    } else if (userId) {
+      await supabase.from('manual_payments').update({
+        status: newStatus,
+        approved_at: approvedAt
+      }).eq('user_id', userId);
+    }
+  } catch (e) {
+    console.warn('[Supabase update status notice]:', e);
+  }
+
+  // 2. Update local file
+  try {
+    const list = getLocalManualPayments();
+    let updated = false;
+    list.forEach(p => {
+      if ((paymentId && p.id === paymentId) || (userId && p.user_id === userId)) {
+        p.status = newStatus;
+        if (approvedAt) p.approved_at = approvedAt;
+        updated = true;
+      }
+    });
+    if (updated) saveLocalManualPayments(list);
+  } catch {}
+
+  // 3. Update admin_settings
+  try {
+    const { data: currentSettings } = await supabase
+      .from('admin_settings')
+      .select('value')
+      .eq('key', 'manual_payments_store')
+      .maybeSingle();
+
+    let list: any[] = [];
+    if (currentSettings?.value) {
+      try { list = typeof currentSettings.value === 'string' ? JSON.parse(currentSettings.value) : currentSettings.value; } catch {}
+    }
+    if (Array.isArray(list)) {
+      list.forEach(p => {
+        if ((paymentId && p.id === paymentId) || (userId && p.user_id === userId)) {
+          p.status = newStatus;
+          if (approvedAt) p.approved_at = approvedAt;
+        }
+      });
+      await supabase.from('admin_settings').upsert({
+        key: 'manual_payments_store',
+        value: JSON.stringify(list),
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'key' });
+    }
+  } catch {}
+
+  // 4. If approved, unlock user account
+  if (newStatus === 'approved' && userId) {
+    // a. Update Profile has_paid
+    await supabase.from('profiles').update({
+      has_paid: true,
+      updated_at: new Date().toISOString()
+    }).eq('id', userId);
+
+    // b. Update Subscriptions
+    const expiresAt = (planType === 'lifetime' || Number(amount || 0) >= 3000)
+      ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString()
+      : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+    try {
+      await supabase.from('subscriptions').upsert({
+        user_id: userId,
+        plan: planType || 'lifetime',
+        status: 'active',
+        started_at: new Date().toISOString(),
+        expires_at: expiresAt
+      }, { onConflict: 'user_id' });
+    } catch {
+      try {
+        await supabase.from('subscriptions').upsert({
+          user_id: userId,
+          plan_id: planType || 'lifetime',
+          status: 'active',
+          start_date: new Date().toISOString()
+        });
+      } catch {}
+    }
+
+    // c. Send confirmation email
+    try {
+      const { data: studentProfile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (studentProfile?.email) {
+        const planLabel = planType === 'lifetime' ? 'Lifetime Access' : 'Annual Pass';
+        sendServerSmtpEmail(
+          studentProfile.email,
+          `Payment Verified - Full Access Unlocked (${planLabel})`,
+          `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+             <h2 style="color: #4F46E5; margin-top: 0;">Payment Verified - Full Access Active!</h2>
+             <p>Dear ${studentProfile.full_name || 'Scholar'},</p>
+             <p>Your payment of <strong>₦${Number(amount || 3000).toLocaleString()}</strong> has been verified by the administrator.</p>
+             <p>Your account is now fully upgraded with unrestricted access to all UTME mock exams, question banks, study materials, and AI tutoring.</p>
+             <p style="margin-top: 24px;">
+               <a href="https://scholarsresort.com/cbt" style="background: #4F46E5; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Go to CBT Center</a>
+             </p>
+           </div>`
+        ).catch(() => {});
+      }
+    } catch {}
+  }
+
+  return res.json({ success: true, message: `Payment ${newStatus} successfully.` });
 });
 
 // API Route: Test SMTP (Supports /api/test-smtp and /api/admin/test-smtp)

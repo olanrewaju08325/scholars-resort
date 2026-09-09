@@ -235,13 +235,25 @@ export const ScholarshipTab = () => {
       `Are you sure you want to grant 100% free lifetime access to ${foundStudent.full_name}? Their account will be activated immediately.`,
       async () => {
         try {
-          await supabase.from('subscriptions').upsert({
-            user_id: foundStudent.id,
-            plan_id: 'lifetime',
-            status: 'active',
-            start_date: new Date().toISOString(),
-            end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
-          }, { onConflict: 'user_id' });
+          try {
+            await supabase.from('subscriptions').upsert({
+              user_id: foundStudent.id,
+              plan: 'lifetime',
+              status: 'active',
+              started_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 3650 * 86400000).toISOString()
+            }, { onConflict: 'user_id' });
+          } catch {
+            try {
+              await supabase.from('subscriptions').upsert({
+                user_id: foundStudent.id,
+                plan_id: 'lifetime',
+                status: 'active',
+                start_date: new Date().toISOString(),
+                end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
+              }, { onConflict: 'user_id' });
+            } catch {}
+          }
 
           await supabase.from('profiles').update({ has_paid: true }).eq('id', foundStudent.id);
           
@@ -265,13 +277,25 @@ export const ScholarshipTab = () => {
       if (status === 'approved') {
         // Activate student subscription and profile
         if (app.userId) {
-          await supabase.from('subscriptions').upsert({
-            user_id: app.userId,
-            plan_id: 'lifetime',
-            status: 'active',
-            start_date: new Date().toISOString(),
-            end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
-          }, { onConflict: 'user_id' });
+          try {
+            await supabase.from('subscriptions').upsert({
+              user_id: app.userId,
+              plan: 'lifetime',
+              status: 'active',
+              started_at: new Date().toISOString(),
+              expires_at: new Date(Date.now() + 3650 * 86400000).toISOString()
+            }, { onConflict: 'user_id' });
+          } catch {
+            try {
+              await supabase.from('subscriptions').upsert({
+                user_id: app.userId,
+                plan_id: 'lifetime',
+                status: 'active',
+                start_date: new Date().toISOString(),
+                end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
+              }, { onConflict: 'user_id' });
+            } catch {}
+          }
 
           await supabase.from('profiles').update({ has_paid: true }).eq('id', app.userId);
         }

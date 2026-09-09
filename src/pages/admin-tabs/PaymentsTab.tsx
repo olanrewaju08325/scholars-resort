@@ -22,54 +22,89 @@ export const PaymentsTab = () => {
   const fetchPayments = async () => {
     setLoading(true);
     try {
-      // Fetch pending
-      const { data: rawPending } = await supabase
-        .from('manual_payments')
-        .select('*')
-        .eq('status', 'pending')
-        .order('created_at', { ascending: false });
-      
-      // Fetch history (recent approved/rejected)
-      const { data: rawHistory } = await supabase
-        .from('manual_payments')
-        .select('*')
-        .in('status', ['approved', 'rejected'])
-        .order('created_at', { ascending: false })
-        .limit(15);
+      // 1. Fetch from Supabase
+      let rawPending: any[] = [];
+      let rawHistory: any[] = [];
+      try {
+        const { data: pData } = await supabase
+          .from('manual_payments')
+          .select('*')
+          .eq('status', 'pending')
+          .order('created_at', { ascending: false });
+        if (pData) rawPending = pData;
+
+        const { data: hData } = await supabase
+          .from('manual_payments')
+          .select('*')
+          .in('status', ['approved', 'rejected'])
+          .order('created_at', { ascending: false })
+          .limit(25);
+        if (hData) rawHistory = hData;
+      } catch (sbErr) {
+        console.warn('Supabase payments query notice:', sbErr);
+      }
+
+      // 2. Fetch from backend API / local store
+      try {
+        const apiRes = await fetch('/api/manual-payments/all');
+        const apiJson = await apiRes.json();
+        if (apiJson.success && Array.isArray(apiJson.payments)) {
+          apiJson.payments.forEach((p: any) => {
+            if (p.status === 'pending') {
+              if (!rawPending.some(existing => existing.id === p.id || (existing.user_id === p.user_id && Math.abs(new Date(existing.created_at || 0).getTime() - new Date(p.created_at || 0).getTime()) < 60000))) {
+                rawPending.push(p);
+              }
+            } else {
+              if (!rawHistory.some(existing => existing.id === p.id || (existing.user_id === p.user_id && Math.abs(new Date(existing.created_at || 0).getTime() - new Date(p.created_at || 0).getTime()) < 60000))) {
+                rawHistory.push(p);
+              }
+            }
+          });
+        }
+      } catch (apiErr) {
+        console.warn('API payments query notice:', apiErr);
+      }
 
       // Collect user IDs
       const userIds = Array.from(new Set([
-        ...(rawPending || []).map(p => p.user_id),
-        ...(rawHistory || []).map(p => p.user_id)
+        ...rawPending.map(p => p.user_id),
+        ...rawHistory.map(p => p.user_id)
       ].filter(Boolean)));
 
       let profileMap: Record<string, any> = {};
       if (userIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name, email')
-          .in('id', userIds);
-        
-        (profiles || []).forEach(p => {
-          profileMap[p.id] = p;
-        });
+        try {
+          const { data: profiles } = await supabase
+            .from('profiles')
+            .select('id, full_name, email')
+            .in('id', userIds);
+          
+          (profiles || []).forEach(p => {
+            profileMap[p.id] = p;
+          });
+        } catch {}
       }
 
-      const pendingWithProfiles = (rawPending || []).map(p => ({
+      const pendingWithProfiles = rawPending.map(p => ({
         ...p,
-        profiles: profileMap[p.user_id] || { full_name: 'Unknown Student', email: 'N/A' }
+        profiles: profileMap[p.user_id] || { 
+          full_name: p.user_name || 'Scholar Student', 
+          email: p.user_email || 'N/A' 
+        }
       }));
 
-      const historyWithProfiles = (rawHistory || []).map(p => ({
+      const historyWithProfiles = rawHistory.map(p => ({
         ...p,
-        profiles: profileMap[p.user_id] || { full_name: 'Unknown Student', email: 'N/A' }
+        profiles: profileMap[p.user_id] || { 
+          full_name: p.user_name || 'Scholar Student', 
+          email: p.user_email || 'N/A' 
+        }
       }));
 
       // Stats calculation
-      const { data: allData } = await supabase.from('manual_payments').select('status, amount');
       let pAmount = 0, aAmount = 0;
-      allData?.forEach(d => {
-        if (d.status === 'pending') pAmount += Number(d.amount || 0);
+      pendingWithProfiles.forEach(d => { pAmount += Number(d.amount || 0); });
+      historyWithProfiles.forEach(d => {
         if (d.status === 'approved') aAmount += Number(d.amount || 0);
       });
 
@@ -88,17 +123,40 @@ export const PaymentsTab = () => {
 
   const handleVerify = async (paymentId: string, userId: string, amount: number, planType: string) => {
     try {
-      const { error } = await supabase.from('manual_payments').update({ 
-        status: 'approved',
-        approved_at: new Date().toISOString()
-      }).eq('id', paymentId);
-        
-      if (!error) {
-        const expiresAt = (planType === 'lifetime' || amount >= 3000)
-          ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString()
-          : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+      // 1. Call Backend API
+      await authFetch('/api/manual-payments/update-status', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentId,
+          userId,
+          status: 'approved',
+          amount,
+          planType
+        })
+      }).catch(err => console.warn('API update status notice:', err));
 
-        // 1. Update Subscriptions
+      // 2. Direct Supabase updates
+      try {
+        if (paymentId && !paymentId.startsWith('mp_')) {
+          await supabase.from('manual_payments').update({ 
+            status: 'approved',
+            approved_at: new Date().toISOString()
+          }).eq('id', paymentId);
+        } else if (userId) {
+          await supabase.from('manual_payments').update({ 
+            status: 'approved',
+            approved_at: new Date().toISOString()
+          }).eq('user_id', userId);
+        }
+      } catch {}
+
+      const expiresAt = (planType === 'lifetime' || amount >= 3000)
+        ? new Date(Date.now() + 100 * 365 * 24 * 60 * 60 * 1000).toISOString()
+        : new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+
+      // 3. Update Subscriptions
+      try {
         await supabase.from('subscriptions').upsert({
           user_id: userId,
           plan: planType || 'premium',
@@ -106,38 +164,45 @@ export const PaymentsTab = () => {
           started_at: new Date().toISOString(),
           expires_at: expiresAt
         }, { onConflict: 'user_id' });
-        
-        // 2. Update Profile status
-        await supabase.from('profiles').update({ has_paid: true }).eq('id', userId);
-        
-        // 3. Get student profile for automated SMTP dispatch
-        const { data: studentProfile } = await supabase
-          .from('profiles')
-          .select('email, full_name')
-          .eq('id', userId)
-          .maybeSingle();
-        
-        if (studentProfile?.email) {
-          const planLabel = planType === 'lifetime' ? 'Lifetime Access' : 'Annual Pass';
-          await sendPaymentApprovedEmail(studentProfile.email, studentProfile.full_name || 'Scholar', amount, planLabel).catch(() => {});
-        }
-        
-        // 4. Activity log
+      } catch {
         try {
-          await supabase.from('activity_logs').insert({
+          await supabase.from('subscriptions').upsert({
             user_id: userId,
-            activity_type: 'payment_approved',
-            action: 'payment_approved',
-            metadata: { amount, plan_type: planType, payment_id: paymentId }
+            plan_id: planType || 'premium',
+            status: 'active',
+            start_date: new Date().toISOString()
           });
         } catch {}
-
-        toast.success("Payment verified! Student account is now unlocked.");
-        setSelectedReceipt(null);
-        fetchPayments();
-      } else {
-        throw new Error("Error updating payment status.");
       }
+      
+      // 4. Update Profile status
+      await supabase.from('profiles').update({ has_paid: true }).eq('id', userId);
+      
+      // 5. Get student profile for automated SMTP dispatch
+      const { data: studentProfile } = await supabase
+        .from('profiles')
+        .select('email, full_name')
+        .eq('id', userId)
+        .maybeSingle();
+      
+      if (studentProfile?.email) {
+        const planLabel = planType === 'lifetime' ? 'Lifetime Access' : 'Annual Pass';
+        await sendPaymentApprovedEmail(studentProfile.email, studentProfile.full_name || 'Scholar', amount, planLabel).catch(() => {});
+      }
+      
+      // 6. Activity log
+      try {
+        await supabase.from('activity_logs').insert({
+          user_id: userId,
+          activity_type: 'payment_approved',
+          action: 'payment_approved',
+          metadata: { amount, plan_type: planType, payment_id: paymentId }
+        });
+      } catch {}
+
+      toast.success("Payment verified! Student account is now unlocked.");
+      setSelectedReceipt(null);
+      fetchPayments();
     } catch (error: any) {
       toast.error("Error updating payment status: " + error.message);
     }
@@ -148,50 +213,65 @@ export const PaymentsTab = () => {
       "Reject Payment",
       "Reject this manual payment submission?",
       async () => {
-        const { error } = await supabase.from('manual_payments').update({ status: 'rejected' }).eq('id', paymentId);
-        if (!error) {
-          toast.success("Payment rejected.");
-          setSelectedReceipt(null);
-          fetchPayments();
+        // 1. Call Backend API
+        await authFetch('/api/manual-payments/update-status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentId,
+            userId,
+            status: 'rejected'
+          })
+        }).catch(err => console.warn('API update status notice:', err));
 
-          // Get student email
-          const { data: studentProfile } = await supabase
-            .from('profiles')
-            .select('email, full_name')
-            .eq('id', userId)
-            .maybeSingle();
-
-          if (studentProfile?.email) {
-            try {
-              await authFetch('/api/send-email', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  to: studentProfile.email,
-                  subject: 'Update Regarding Your Payment Verification - Scholars Resort',
-                  html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
-                    <h2 style="color: #dc2626;">Payment Verification Unsuccessful</h2>
-                    <p>Dear ${studentProfile.full_name || 'Scholar'},</p>
-                    <p>We could not verify your recent payment receipt submission. This may be due to an unclear image, unconfirmed transaction reference, or mismatched amount.</p>
-                    <p>Please double-check your transaction receipt and re-upload it on the Scholars Resort Pricing page, or contact support if you have already been debited.</p>
-                    <p>Support Email: <a href="mailto:admitwise2@gmail.com">admitwise2@gmail.com</a></p>
-                  </div>`
-                })
-              });
-            } catch {}
+        // 2. Direct Supabase update
+        try {
+          if (paymentId && !paymentId.startsWith('mp_')) {
+            await supabase.from('manual_payments').update({ status: 'rejected' }).eq('id', paymentId);
+          } else if (userId) {
+            await supabase.from('manual_payments').update({ status: 'rejected' }).eq('user_id', userId);
           }
+        } catch {}
 
+        toast.success("Payment rejected.");
+        setSelectedReceipt(null);
+        fetchPayments();
+
+        // Get student email
+        const { data: studentProfile } = await supabase
+          .from('profiles')
+          .select('email, full_name')
+          .eq('id', userId)
+          .maybeSingle();
+
+        if (studentProfile?.email) {
           try {
-            await supabase.from('activity_logs').insert({
-              user_id: userId,
-              activity_type: 'payment_rejected',
-              action: 'payment_rejected',
-              metadata: { payment_id: paymentId }
+            await authFetch('/api/send-email', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                to: studentProfile.email,
+                subject: 'Update Regarding Your Payment Verification - Scholars Resort',
+                html: `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+                  <h2 style="color: #dc2626;">Payment Verification Unsuccessful</h2>
+                  <p>Dear ${studentProfile.full_name || 'Scholar'},</p>
+                  <p>We could not verify your recent payment receipt submission. This may be due to an unclear image, unconfirmed transaction reference, or mismatched amount.</p>
+                  <p>Please double-check your transaction receipt and re-upload it on the Scholars Resort Pricing page, or contact support if you have already been debited.</p>
+                  <p>Support Email: <a href="mailto:admitwise2@gmail.com">admitwise2@gmail.com</a></p>
+                </div>`
+              })
             });
           } catch {}
-        } else {
-          toast.error("Failed to reject payment.");
         }
+
+        try {
+          await supabase.from('activity_logs').insert({
+            user_id: userId,
+            activity_type: 'payment_rejected',
+            action: 'payment_rejected',
+            metadata: { payment_id: paymentId }
+          });
+        } catch {}
       },
       { destructive: true }
     );

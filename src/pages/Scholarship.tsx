@@ -235,13 +235,25 @@ export const Scholarship = () => {
     setGrantingAccess(true);
     try {
       // 1. Activate lifetime subscription
-      await supabase.from('subscriptions').upsert({
-        user_id: user.id,
-        plan_id: 'lifetime',
-        status: 'active',
-        start_date: new Date().toISOString(),
-        end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
-      });
+      try {
+        await supabase.from('subscriptions').upsert({
+          user_id: user.id,
+          plan: 'lifetime',
+          status: 'active',
+          started_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 3650 * 86400000).toISOString()
+        }, { onConflict: 'user_id' });
+      } catch {
+        try {
+          await supabase.from('subscriptions').upsert({
+            user_id: user.id,
+            plan_id: 'lifetime',
+            status: 'active',
+            start_date: new Date().toISOString(),
+            end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
+          });
+        } catch {}
+      }
 
       // 2. Mark profile as paid/lifetime
       await supabase.from('profiles').update({
@@ -350,13 +362,25 @@ export const Scholarship = () => {
       }
 
       // Activate lifetime access
-      await supabase.from('subscriptions').upsert({
-        user_id: user.id,
-        plan_id: 'lifetime',
-        status: 'active',
-        start_date: new Date().toISOString(),
-        end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
-      });
+      try {
+        await supabase.from('subscriptions').upsert({
+          user_id: user.id,
+          plan: 'lifetime',
+          status: 'active',
+          started_at: new Date().toISOString(),
+          expires_at: new Date(Date.now() + 3650 * 86400000).toISOString()
+        }, { onConflict: 'user_id' });
+      } catch {
+        try {
+          await supabase.from('subscriptions').upsert({
+            user_id: user.id,
+            plan_id: 'lifetime',
+            status: 'active',
+            start_date: new Date().toISOString(),
+            end_date: new Date(Date.now() + 3650 * 86400000).toISOString()
+          });
+        } catch {}
+      }
 
       await supabase.from('profiles').update({
         has_paid: true
