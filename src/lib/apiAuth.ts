@@ -1,4 +1,7 @@
 import { supabase } from './supabase';
+import { getApiUrl } from './utils';
+
+export { getApiUrl };
 
 /**
  * Returns authorization headers including the current Supabase session Bearer token.
@@ -24,13 +27,14 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
  * Helper to perform an authenticated fetch with current Supabase Bearer token
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const resolvedUrl = getApiUrl(url);
   const authHeaders = await getAuthHeaders();
   const mergedHeaders = {
     ...authHeaders,
     ...(options.headers || {})
   };
 
-  return fetch(url, {
+  return fetch(resolvedUrl, {
     ...options,
     headers: mergedHeaders
   });

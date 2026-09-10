@@ -3,12 +3,31 @@ import { useAuth } from '@/context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { User, Mail, Phone, CheckCircle2, ShieldCheck, Crown, BookOpen, BatteryCharging, BatteryLow, Download, FileJson, Zap } from 'lucide-react';
+import { 
+  User, 
+  Mail, 
+  Phone, 
+  CheckCircle2, 
+  ShieldCheck, 
+  Crown, 
+  BookOpen, 
+  BatteryCharging, 
+  BatteryLow, 
+  Download, 
+  FileJson, 
+  Zap, 
+  Trash2, 
+  AlertTriangle, 
+  RotateCcw 
+} from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { Badges } from '@/components/Badges';
 import { useBatterySaver } from '@/lib/batterySaver';
 import { exportOfflineDataAsJson } from '@/lib/offlineExport';
+import { useConfirm } from '@/hooks/useConfirm';
+import { authFetch } from '@/lib/apiAuth';
+import { getApiUrl } from '@/lib/utils';
 import { 
   getAllCanonicalSubjects, 
   validateUtmeSubjectCombination, 
@@ -18,7 +37,8 @@ import {
 const CANONICAL_SUBJECTS = getAllCanonicalSubjects();
 
 export default function Profile() {
-  const { profile, user, refreshProfile } = useAuth();
+  const { profile, user, refreshProfile, signOut } = useAuth();
+  const { confirmAction, ConfirmElement } = useConfirm();
   const { isBatterySaver, toggleBatterySaver } = useBatterySaver();
   const [isEditing, setIsEditing] = useState(false);
   const [fullName, setFullName] = useState(profile?.full_name || '');
@@ -29,6 +49,80 @@ export default function Profile() {
   });
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const isMasterAdmin = Boolean(
+    profile?.email && 
+    ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(profile.email.toLowerCase().trim())
+  );
+
+  const handleClearStudyData = () => {
+    confirmAction(
+      "Reset Practice & Exam History",
+      "Are you sure you want to reset all your CBT test attempts, practice answers, and study streaks? Your account login and subscription will stay active.",
+      async () => {
+        setClearingData(true);
+        try {
+          const res = await authFetch(getApiUrl('/api/profile/clear-data'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Failed to clear data');
+          }
+
+          try {
+            localStorage.removeItem('offline_cbt_exams');
+            localStorage.removeItem('scholars_active_exam_session');
+          } catch (_) {}
+
+          await refreshProfile();
+          toast.success('Your study progress and mock exam history have been cleared.');
+        } catch (err: any) {
+          toast.error(`Failed to clear study history: ${err.message}`);
+        } finally {
+          setClearingData(false);
+        }
+      },
+      { destructive: true, confirmText: 'Reset Study History' }
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    confirmAction(
+      "Permanently Delete Account & All Data",
+      "Are you sure you want to delete your account and all associated data? This will permanently wipe your exam scores, answers, streaks, bookmarks, and profile information from Scholars Resort. This action cannot be undone.",
+      async () => {
+        setDeletingAccount(true);
+        try {
+          const res = await authFetch(getApiUrl('/api/profile/delete'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          const data = await res.json();
+          if (!res.ok || !data.success) {
+            throw new Error(data.error || 'Failed to delete account');
+          }
+
+          try {
+            localStorage.clear();
+            sessionStorage.clear();
+          } catch (_) {}
+
+          await signOut();
+          toast.success('Your account and all profile data have been permanently deleted.');
+          window.location.href = '/register';
+        } catch (err: any) {
+          toast.error(`Failed to delete account: ${err.message}`);
+        } finally {
+          setDeletingAccount(false);
+        }
+      },
+      { destructive: true, confirmText: 'Permanently Delete Account' }
+    );
+  };
 
   const handleExportBackup = async () => {
     setExporting(true);
@@ -76,6 +170,7 @@ export default function Profile() {
 
   return (
     <div className="p-4 md:p-10 w-full max-w-4xl mx-auto space-y-8 animate-in fade-in duration-500">
+      {ConfirmElement}
       
       <header className="mb-8">
         <h1 className="text-3xl font-display font-bold mb-2">My Profile</h1>
@@ -359,6 +454,56 @@ export default function Profile() {
               <p className="text-muted-foreground text-[11px] leading-relaxed">
                 Your account is active on 1 authorized device. If you ever purchase a new phone or laptop, you can submit a reset request.
               </p>
+            </CardContent>
+          </Card>
+
+          {/* Account & Data Privacy Card */}
+          <Card className="border border-red-500/25 bg-red-500/5 dark:bg-red-950/15 shadow-sm">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold flex items-center gap-2 text-red-600 dark:text-red-400">
+                <AlertTriangle className="w-4 h-4 text-red-500 shrink-0" />
+                Data & Account Privacy
+              </CardTitle>
+              <CardDescription className="text-xs text-muted-foreground">
+                Manage your stored test records, practice data, or delete your account.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              <div className="space-y-2">
+                <Button
+                  id="reset-study-history-btn"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleClearStudyData}
+                  disabled={clearingData}
+                  className="w-full text-xs font-semibold border-amber-500/30 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 justify-start"
+                >
+                  <RotateCcw className="w-3.5 h-3.5 mr-2 shrink-0 text-amber-500" />
+                  {clearingData ? 'Clearing History...' : 'Reset CBT Practice & Exam History'}
+                </Button>
+                <p className="text-[11px] text-muted-foreground px-1">
+                  Resets practice exam attempts and study streaks while keeping your login and subscription active.
+                </p>
+              </div>
+
+              <div className="pt-2 border-t border-red-500/10 space-y-2">
+                <Button
+                  id="delete-account-btn"
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleDeleteAccount}
+                  disabled={deletingAccount || isMasterAdmin}
+                  className="w-full text-xs font-semibold justify-start"
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-2 shrink-0" />
+                  {deletingAccount ? 'Deleting Account...' : 'Permanently Delete Account & Data'}
+                </Button>
+                <p className="text-[11px] text-muted-foreground px-1">
+                  {isMasterAdmin 
+                    ? 'Master administrator accounts are protected and cannot be deleted.' 
+                    : 'Permanently wipes all exam scores, answers, streaks, and personal profile from Scholars Resort.'}
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>

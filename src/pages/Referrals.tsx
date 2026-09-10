@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { getApiUrl } from '@/lib/utils';
 import {
   Users, Gift, Copy, Check, Share2, DollarSign,
   ArrowUpRight, Clock, CheckCircle2, AlertCircle,
@@ -85,7 +86,7 @@ export const Referrals = () => {
 
       try {
         // Fetch consolidated state from reliable server API
-        const res = await fetch(`/api/referrals/user/${user.id}`);
+        const res = await fetch(getApiUrl(`/api/referrals/user/${user.id}`));
         if (res.ok) {
           const data = await res.json();
           if (data.success) {
@@ -325,7 +326,7 @@ export const Referrals = () => {
 
     try {
       // 1. Submit via reliable server API
-      const response = await fetch('/api/referrals/request-payout', {
+      const response = await fetch(getApiUrl('/api/referrals/request-payout'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

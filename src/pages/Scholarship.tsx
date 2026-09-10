@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
+import { getApiUrl } from '@/lib/utils';
 import {
   GraduationCap, Award, CheckCircle2, ShieldCheck,
   BookOpen, Sparkles, AlertCircle, ArrowRight,
@@ -260,6 +261,15 @@ export const Scholarship = () => {
         has_paid: true
       }).eq('id', user.id);
 
+      // 3. Sync with backend server overrides and subscriptions
+      try {
+        await fetch(getApiUrl('/api/scholarships/claim'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, email: user.email })
+        });
+      } catch {}
+
       setGrantedSuccess(true);
       toast.success('🎉 100% Scholarship Access Activated! You now have full lifetime access to all JAMB UTME materials.');
     } catch (err: any) {
@@ -296,7 +306,7 @@ export const Scholarship = () => {
         reason: reason.trim()
       };
 
-      const res = await fetch('/api/scholarships/apply', {
+      const res = await fetch(getApiUrl('/api/scholarships/apply'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

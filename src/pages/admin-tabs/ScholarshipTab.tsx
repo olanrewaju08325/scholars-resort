@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { logAdminActivity } from '@/services/adminActivityService';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 
 interface ScholarshipConfig {
   isActive: boolean;
@@ -97,7 +98,7 @@ export const ScholarshipTab = () => {
 
     // 2. Fetch Applications (Server API + Supabase)
     try {
-      const res = await fetch('/api/scholarships/applications');
+      const res = await fetch(getApiUrl('/api/scholarships/applications'));
       if (res.ok) {
         const data = await res.json();
         if (data.success && Array.isArray(data.applications)) {
@@ -276,6 +277,19 @@ export const ScholarshipTab = () => {
           }
 
           await supabase.from('profiles').update({ has_paid: true }).eq('id', foundStudent.id);
+
+          // Notify backend API to register server overrides and trigger referral conversion if applicable
+          try {
+            await authFetch('/api/admin/subscriptions/grant', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                user_id: foundStudent.id,
+                plan_name: '100% Free Lifetime Scholarship',
+                duration_years: 100
+              })
+            });
+          } catch {}
           
           logAdminActivity('GRANT_SCHOLARSHIP', `Granted lifetime scholarship to ${foundStudent.full_name} (${foundStudent.email})`, 'scholarships');
           toast.success(`🎉 Full Scholarship successfully granted to ${foundStudent.full_name}! Account is now active.`);
@@ -294,7 +308,7 @@ export const ScholarshipTab = () => {
     if (!app) return;
 
     try {
-      const res = await fetch('/api/scholarships/review', {
+      const res = await authFetch('/api/scholarships/review', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

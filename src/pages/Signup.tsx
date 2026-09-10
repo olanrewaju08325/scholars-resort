@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { sendWelcomeEmail } from '@/services/emailService';
+import { getApiUrl } from '@/lib/utils';
 
 const Signup = () => {
   const navigate = useNavigate();
@@ -86,19 +87,49 @@ const Signup = () => {
 
         // 1. Direct profile update if user session or ID exists
         if (newUserId) {
+          let matchedReferrerId: string | null = null;
+          if (cleanRefCode) {
+            try {
+              const { data: refProf } = await supabase
+                .from('profiles')
+                .select('id')
+                .ilike('referral_code', cleanRefCode.trim())
+                .maybeSingle();
+              if (refProf?.id) matchedReferrerId = refProf.id;
+            } catch {}
+          }
+
           try {
-            await supabase.from('profiles').update({
+            const updatePayload: any = {
               phone: cleanPhone,
               full_name: cleanName,
               referral_code: `SR-${cleanName.substring(0, 4).toUpperCase()}-${newUserId.substring(0, 4).toUpperCase()}`
-            }).eq('id', newUserId);
+            };
+            if (matchedReferrerId) {
+              updatePayload.referred_by = matchedReferrerId;
+            }
+            if (cleanRefCode) {
+              updatePayload.referral_code_used = cleanRefCode;
+            }
+            await supabase.from('profiles').update(updatePayload).eq('id', newUserId);
           } catch {}
+
+          // 2. Insert into Supabase referrals table if matched
+          if (matchedReferrerId) {
+            try {
+              await supabase.from('referrals').upsert({
+                referrer_id: matchedReferrerId,
+                referred_id: newUserId,
+                converted: false
+              });
+            } catch {}
+          }
         }
 
-        // 2. Track Referral in Backend System if a referral code was applied
+        // 3. Track Referral in Backend System if a referral code was applied
         if (cleanRefCode) {
           try {
-            await fetch('/api/referrals/track-signup', {
+            await fetch(getApiUrl('/api/referrals/track-signup'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

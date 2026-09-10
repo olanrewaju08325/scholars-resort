@@ -11,6 +11,7 @@ import {
   Smartphone, Building2, ShieldCheck, RefreshCw
 } from 'lucide-react';
 import { logAdminActivity } from '@/services/adminActivityService';
+import { authFetch } from '@/lib/apiAuth';
 
 interface ReferralConfig {
   rewardPerPaid: number;
@@ -68,7 +69,7 @@ export const ReferralTab = () => {
     setLoading(true);
 
     try {
-      const res = await fetch('/api/referrals/admin/all');
+      const res = await authFetch('/api/referrals/admin/all');
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
@@ -212,7 +213,7 @@ export const ReferralTab = () => {
     try {
       const note = adminNoteInput[payoutId] || (status === 'approved' ? 'Disbursed via direct transfer' : 'Rejected by admin');
       
-      const res = await fetch('/api/referrals/admin/update-payout', {
+      const res = await authFetch('/api/referrals/admin/update-payout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payoutId, status, adminNote: note })

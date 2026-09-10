@@ -77,6 +77,12 @@ export const StudentsTab = () => {
   const fetchAllData = React.useCallback(async () => {
     setLoading(true);
     try {
+      let localDeleted: string[] = [];
+      try {
+        localDeleted = JSON.parse(localStorage.getItem('admin_deleted_user_ids') || '[]');
+      } catch (_) {}
+      const localDeletedSet = new Set(localDeleted);
+
       let profData: any[] = [];
       try {
         const res = await authFetch(getApiUrl('/api/admin/users/directory'));
@@ -84,7 +90,9 @@ export const StudentsTab = () => {
         if (json && json.success && Array.isArray(json.profiles)) {
           profData = json.profiles;
         }
-      } catch {}
+      } catch (err) {
+        console.warn('Admin user directory API fetch warning:', err);
+      }
 
       if (!profData || profData.length === 0) {
         const { data: dbProf } = await supabase
@@ -97,8 +105,12 @@ export const StudentsTab = () => {
       if (profData) {
         const ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
 
-        const enriched: Profile[] = profData.map((rawP: any) => {
-          const p = rawP;const isMasterAdmin = p.email && ADMIN_EMAILS.includes(p.email.toLowerCase().trim());
+        // Strictly exclude users that are deleted locally or marked with status === 'deleted'
+        const validProfiles = profData.filter((p: any) => p && p.id && !localDeletedSet.has(p.id) && p.status !== 'deleted');
+
+        const enriched: Profile[] = validProfiles.map((rawP: any) => {
+          const p = rawP;
+          const isMasterAdmin = p.email && ADMIN_EMAILS.includes(p.email.toLowerCase().trim());
           const effectiveRole = isMasterAdmin ? 'admin' : (p.role === 'admin' ? 'admin' : 'student');
           const effectiveStatus = p.is_banned ? 'banned' : (p.is_suspended || p.status === 'suspended' ? 'suspended' : (p.status || 'active'));
           
@@ -394,7 +406,7 @@ export const StudentsTab = () => {
   const handleDeleteUser = async (user: Profile) => {
     confirmAction(
       "Delete User",
-      `Are you sure you want to permanently delete ${user.full_name || user.email}? This action cannot be undone.`,
+      `Are you sure you want to permanently delete ${user.full_name || user.email}? This action cannot be undone and will purge all their exam sessions, practice history, and records.`,
       async () => {
         try {
           const res = await authFetch(getApiUrl('/api/admin/users/delete'), {
@@ -405,16 +417,86 @@ export const StudentsTab = () => {
           const data = await res.json();
           if (!res.ok || !data.success) throw new Error(data.error || 'Failed to delete user');
 
+          // Save into client-side deletion blacklist immediately
+          try {
+            const current: string[] = JSON.parse(localStorage.getItem('admin_deleted_user_ids') || '[]');
+            if (!current.includes(user.id)) {
+              current.push(user.id);
+              localStorage.setItem('admin_deleted_user_ids', JSON.stringify(current));
+            }
+          } catch (_) {}
+
           setProfiles(prev => prev.filter(p => p.id !== user.id));
           if (selectedUser?.id === user.id) {
             setIsDetailOpen(false);
             setSelectedUser(null);
           }
-          toast.success(`User ${user.full_name || user.email} has been deleted.`);
+          toast.success(`User ${user.full_name || user.email} has been permanently deleted.`);
         } catch (err: any) {
           toast.error(`Failed to delete user: ${err.message}`);
         }
-      }
+      },
+      { destructive: true, confirmText: 'Delete User' }
+    );
+  };
+
+  // Bulk Delete Users
+  const handleBulkDeleteUsers = async () => {
+    if (selectedIds.size === 0) return;
+
+    confirmAction(
+      "Bulk Delete Users",
+      `Are you sure you want to permanently delete all ${selectedIds.size} selected accounts? All their exam sessions, answers, and data will be wiped permanently.`,
+      async () => {
+        try {
+          const ids = Array.from(selectedIds);
+          let successCount = 0;
+
+          try {
+            const res = await authFetch(getApiUrl('/api/admin/users/bulk-delete'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_ids: ids })
+            });
+            const data = await res.json();
+            if (res.ok && data.success) {
+              successCount = data.count || ids.length;
+            }
+          } catch (_) {}
+
+          if (successCount === 0) {
+            for (const id of ids) {
+              try {
+                const res = await authFetch(getApiUrl('/api/admin/users/delete'), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ user_id: id })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                  successCount++;
+                }
+              } catch (_) {}
+            }
+          }
+
+          // Persist all deleted IDs to local storage blacklist
+          try {
+            const current: string[] = JSON.parse(localStorage.getItem('admin_deleted_user_ids') || '[]');
+            ids.forEach(id => {
+              if (!current.includes(id)) current.push(id);
+            });
+            localStorage.setItem('admin_deleted_user_ids', JSON.stringify(current));
+          } catch (_) {}
+
+          setProfiles(prev => prev.filter(p => !selectedIds.has(p.id)));
+          setSelectedIds(new Set());
+          toast.success(`Successfully deleted ${successCount} user accounts.`);
+        } catch (e: any) {
+          toast.error(`Failed bulk delete: ${e.message}`);
+        }
+      },
+      { destructive: true, confirmText: 'Delete Users' }
     );
   };
 
@@ -520,14 +602,26 @@ export const StudentsTab = () => {
           </Button>
 
           {selectedIds.size > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button onClick={handleBulkGiftAccess} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold">
-                  Bulk Grant Access ({selectedIds.size})
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Grant full lifetime premium access to all {selectedIds.size} selected accounts</TooltipContent>
-            </Tooltip>
+            <>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleBulkGiftAccess} size="sm" className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold">
+                    Bulk Grant Access ({selectedIds.size})
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Grant full lifetime premium access to all {selectedIds.size} selected accounts</TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleBulkDeleteUsers} size="sm" variant="destructive" className="text-xs font-semibold gap-1">
+                    <Trash2 className="w-3.5 h-3.5" />
+                    Bulk Delete ({selectedIds.size})
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Permanently delete all {selectedIds.size} selected accounts and wipe their records</TooltipContent>
+              </Tooltip>
+            </>
           )}
 
           <Button onClick={exportToCSV} variant="outline" size="sm" className="border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 gap-1.5 text-xs font-semibold">

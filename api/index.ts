@@ -1434,7 +1434,7 @@ app.post('/api/manual-payments/update-status', verifyAdminToken, async (req, res
 
     // d. Trigger referral conversion & credit referrer
     try {
-      await triggerReferralConversion(userId, undefined, Number(amount || 3000));
+      await triggerReferralConversion(userId, studentProfile?.email, Number(amount || 3000));
     } catch (refErr) {
       console.warn('[Referral conversion trigger notice]:', refErr);
     }
@@ -4678,8 +4678,21 @@ app.delete('/api/admin/challenges/:id', verifyAdminToken, async (req, res) => {
 const persistentUserOverrides = new Map<string, Partial<any>>();
 const deletedUserIds = new Set<string>();
 
-// Load previously deleted user IDs from admin_settings on startup
+// Load previously deleted user IDs from file system store and admin_settings on startup
 async function loadDeletedUserIds() {
+  // 1. Load from local persistent system store
+  try {
+    const store = loadSystemStore();
+    if (Array.isArray(store.deleted_user_ids)) {
+      store.deleted_user_ids.forEach((id: string) => {
+        if (id && typeof id === 'string') deletedUserIds.add(id);
+      });
+    }
+  } catch (err) {
+    console.warn('[loadDeletedUserIds File Store Warning]', err);
+  }
+
+  // 2. Load from database admin_settings
   try {
     const { data } = await supabase
       .from('admin_settings')
@@ -4688,7 +4701,7 @@ async function loadDeletedUserIds() {
       .maybeSingle();
     if (data?.setting_value && Array.isArray(data.setting_value)) {
       data.setting_value.forEach((id: string) => {
-        if (id) deletedUserIds.add(id);
+        if (id && typeof id === 'string') deletedUserIds.add(id);
       });
     }
   } catch (_) {}
@@ -4699,6 +4712,21 @@ export async function markUserAsDeleted(userId: string) {
   if (!userId) return;
   deletedUserIds.add(userId);
   persistentUserOverrides.delete(userId);
+
+  // 1. Persist to system store on disk (persists across server reboots)
+  try {
+    const store = loadSystemStore();
+    const current = Array.isArray(store.deleted_user_ids) ? store.deleted_user_ids : [];
+    if (!current.includes(userId)) {
+      current.push(userId);
+      store.deleted_user_ids = current;
+      saveSystemStore(store);
+    }
+  } catch (err) {
+    console.warn('[markUserAsDeleted File Warning]', err);
+  }
+
+  // 2. Persist to admin_settings table in database
   try {
     const arr = Array.from(deletedUserIds);
     await supabase.from('admin_settings').upsert({
@@ -4709,11 +4737,113 @@ export async function markUserAsDeleted(userId: string) {
   } catch (_) {}
 }
 
+// Master execution to permanently purge a user and all child relationships across DB & Auth
+async function executeUserPurge(userId: string, reqOrToken?: any): Promise<{ success: boolean; error?: string }> {
+  if (!userId) return { success: false, error: 'User ID is required' };
+
+  // Strict safety check: Never delete master administrator accounts
+  const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  try {
+    const { data: targetProf } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('id', userId)
+      .maybeSingle();
+    if (targetProf?.email && MASTER_ADMINS.includes(targetProf.email.toLowerCase().trim())) {
+      return { success: false, error: 'Master administrator accounts cannot be deleted.' };
+    }
+  } catch (_) {}
+
+  // 1. Immediately register in in-memory and disk deletion registry
+  await markUserAsDeleted(userId);
+
+  // 2. Create authenticated scoped client (respects admin or user RLS delete policies)
+  const scopedClient = getScopedSupabaseClient(reqOrToken);
+
+  // 3. Purge from all dependent and relation tables
+  const purgeTables = async (db: any) => {
+    return Promise.allSettled([
+      db.from('guardian_links').delete().or(`guardian_id.eq.${userId},student_id.eq.${userId}`),
+      db.from('guardian_student_relationships').delete().or(`guardian_id.eq.${userId},student_id.eq.${userId}`),
+      db.from('guardian_messages').delete().eq('student_id', userId),
+      db.from('session_answers').delete().eq('user_id', userId),
+      db.from('exam_sessions').delete().eq('user_id', userId),
+      db.from('practice_sessions').delete().eq('user_id', userId),
+      db.from('study_logs').delete().eq('user_id', userId),
+      db.from('study_plans').delete().eq('user_id', userId),
+      db.from('study_plan_tasks').delete().eq('user_id', userId),
+      db.from('study_goals').delete().eq('user_id', userId),
+      db.from('user_stats').delete().eq('user_id', userId),
+      db.from('user_badges').delete().eq('student_id', userId),
+      db.from('achievements').delete().eq('user_id', userId),
+      db.from('xp_transactions').delete().eq('user_id', userId),
+      db.from('bookmarks').delete().eq('user_id', userId),
+      db.from('flashcards').delete().eq('user_id', userId),
+      db.from('weekly_challenge_submissions').delete().eq('user_id', userId),
+      db.from('manual_payments').delete().eq('user_id', userId),
+      db.from('subscriptions').delete().eq('user_id', userId),
+      db.from('device_sessions').delete().eq('user_id', userId),
+      db.from('offline_sync_queue').delete().eq('user_id', userId),
+      db.from('activity_logs').delete().eq('user_id', userId),
+      db.from('support_tickets').delete().eq('user_id', userId),
+      db.from('study_streaks').delete().eq('user_id', userId),
+      db.from('tournament_participants').delete().eq('student_id', userId),
+      db.from('communication_logs').delete().eq('recipient_id', userId),
+      db.from('profiles').delete().eq('id', userId)
+    ]);
+  };
+
+  // Run with both scoped admin/user credentials AND server client
+  await purgeTables(scopedClient);
+  await purgeTables(supabase);
+
+  // 4. Update profiles row as backup in case database foreign keys prevented hard deletion
+  const sanitizedEmail = `deleted_${userId.slice(0, 8)}@scholarsresort.com`;
+  try {
+    await scopedClient.from('profiles').update({
+      status: 'deleted',
+      full_name: '[Deleted User]',
+      email: sanitizedEmail,
+      phone: null,
+      is_banned: true,
+      has_paid: false,
+      updated_at: new Date().toISOString()
+    }).eq('id', userId);
+  } catch (_) {}
+
+  try {
+    await supabase.from('profiles').update({
+      status: 'deleted',
+      full_name: '[Deleted User]',
+      email: sanitizedEmail,
+      phone: null,
+      is_banned: true,
+      has_paid: false,
+      updated_at: new Date().toISOString()
+    }).eq('id', userId);
+  } catch (_) {}
+
+  // 5. Delete from Supabase auth.users if service role key is available
+  try {
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY;
+    if (serviceRoleKey) {
+      const adminAuthClient = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+      });
+      await adminAuthClient.auth.admin.deleteUser(userId);
+    }
+  } catch (authErr) {
+    console.warn('[executeUserPurge Auth Delete Warning]', authErr);
+  }
+
+  return { success: true };
+}
+
 // Helper to merge DB profile with server overrides
 function mergeProfileWithOverrides(dbProfile: any, userId?: string) {
   const id = dbProfile?.id || userId;
   if (!id) return dbProfile;
-  if (deletedUserIds.has(id)) return null;
+  if (deletedUserIds.has(id) || dbProfile?.status === 'deleted') return null;
   const overrides = persistentUserOverrides.get(id) || {};
   const emailVal = (dbProfile?.email || overrides.email || '').toLowerCase().trim();
   const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
@@ -4728,10 +4858,78 @@ function mergeProfileWithOverrides(dbProfile: any, userId?: string) {
   };
 }
 
+// API Route: Delete Own Account and All Personal Data
+app.post('/api/profile/delete', verifyUserToken, async (req, res) => {
+  const authenticatedUser = (req as any).user;
+  if (!authenticatedUser || !authenticatedUser.id) {
+    return res.status(401).json({ success: false, error: 'Unauthorized.' });
+  }
+
+  try {
+    const result = await executeUserPurge(authenticatedUser.id, req);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
+    }
+    return res.json({ success: true, message: 'Your account and all associated personal data have been permanently deleted.' });
+  } catch (err: any) {
+    console.error('[API /api/profile/delete Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Reset / Clear User Study History and Exam Records
+app.post('/api/profile/clear-data', verifyUserToken, async (req, res) => {
+  const authenticatedUser = (req as any).user;
+  if (!authenticatedUser || !authenticatedUser.id) {
+    return res.status(401).json({ success: false, error: 'Unauthorized.' });
+  }
+
+  const userId = authenticatedUser.id;
+  const client = getScopedSupabaseClient(req);
+
+  try {
+    await Promise.allSettled([
+      client.from('session_answers').delete().eq('user_id', userId),
+      client.from('exam_sessions').delete().eq('user_id', userId),
+      client.from('practice_sessions').delete().eq('user_id', userId),
+      client.from('study_logs').delete().eq('user_id', userId),
+      client.from('study_plans').delete().eq('user_id', userId),
+      client.from('study_plan_tasks').delete().eq('user_id', userId),
+      client.from('study_goals').delete().eq('user_id', userId),
+      client.from('user_stats').delete().eq('user_id', userId),
+      client.from('study_streaks').delete().eq('user_id', userId),
+      client.from('weekly_challenge_submissions').delete().eq('user_id', userId),
+      supabase.from('session_answers').delete().eq('user_id', userId),
+      supabase.from('exam_sessions').delete().eq('user_id', userId),
+      supabase.from('practice_sessions').delete().eq('user_id', userId),
+      supabase.from('study_logs').delete().eq('user_id', userId),
+      supabase.from('user_stats').delete().eq('user_id', userId),
+      supabase.from('study_streaks').delete().eq('user_id', userId)
+    ]);
+
+    // Reset profile stats
+    await client.from('profiles').update({
+      xp: 0,
+      study_streak: 0,
+      streak_days: 0,
+      updated_at: new Date().toISOString()
+    }).eq('id', userId);
+
+    return res.json({ success: true, message: 'All exam sessions, practice history, and study progress have been cleared.' });
+  } catch (err: any) {
+    console.error('[API /api/profile/clear-data Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // API Route: Authoritative Profile Fetch from Supabase
 app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ success: false, error: 'User ID is required' });
+
+  if (deletedUserIds.has(id)) {
+    return res.status(404).json({ success: false, error: 'User profile not found or has been deleted.' });
+  }
 
   const authenticatedUser = (req as any).user;
   const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
@@ -4972,6 +5170,14 @@ app.post('/api/admin/subscriptions/grant', verifyAdminToken, async (req, res) =>
       }
     } catch {}
 
+    // 5. Trigger referral conversion if student was referred
+    try {
+      const { data: prof } = await supabase.from('profiles').select('email').eq('id', user_id).maybeSingle();
+      await triggerReferralConversion(user_id, prof?.email, 3000);
+    } catch (refErr) {
+      console.warn('[Admin grant referral trigger notice]:', refErr);
+    }
+
     return res.json({ 
       success: true, 
       message: 'Premium subscription granted successfully.', 
@@ -5017,10 +5223,19 @@ app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
   try {
     await loadDeletedUserIds();
 
-    const { data: dbProfiles, error } = await supabase
+    const scopedClient = getScopedSupabaseClient(req);
+    let { data: dbProfiles, error } = await scopedClient
       .from('profiles')
       .select('*')
       .order('created_at', { ascending: false });
+
+    if (!dbProfiles || dbProfiles.length === 0) {
+      const { data: baseProf } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+      dbProfiles = baseProf;
+    }
 
     if (error) {
       console.warn('[Admin User Directory DB Warning]', error.message);
@@ -5030,9 +5245,9 @@ app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
     const seenIds = new Set<string>();
 
     (dbProfiles || []).forEach((p: any) => {
-      if (p?.id && !deletedUserIds.has(p.id)) {
+      if (p?.id && !deletedUserIds.has(p.id) && p.status !== 'deleted') {
         const merged = mergeProfileWithOverrides(p, p.id);
-        if (merged) {
+        if (merged && merged.status !== 'deleted') {
           profilesList.push(merged);
           seenIds.add(p.id);
         }
@@ -5043,7 +5258,7 @@ app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
     persistentUserOverrides.forEach((override, id) => {
       if (!seenIds.has(id) && !deletedUserIds.has(id)) {
         const merged = mergeProfileWithOverrides({ id, created_at: new Date().toISOString() }, id);
-        if (merged) {
+        if (merged && merged.status !== 'deleted') {
           profilesList.push(merged);
           seenIds.add(id);
         }
@@ -5445,37 +5660,37 @@ app.post('/api/admin/users/delete', verifyAdminToken, async (req, res) => {
   }
 
   try {
-    persistentUserOverrides.delete(user_id);
-
-    // Delete user from linked tables
-    await Promise.allSettled([
-      supabase.from('guardian_links').delete().or(`guardian_id.eq.${user_id},student_id.eq.${user_id}`),
-      supabase.from('guardian_student_relationships').delete().or(`guardian_id.eq.${user_id},student_id.eq.${user_id}`),
-      supabase.from('exam_sessions').delete().eq('user_id', user_id),
-      supabase.from('manual_payments').delete().eq('user_id', user_id),
-      supabase.from('device_sessions').delete().eq('user_id', user_id),
-      supabase.from('session_answers').delete().eq('user_id', user_id),
-      supabase.from('support_tickets').delete().eq('user_id', user_id),
-      supabase.from('study_streaks').delete().eq('user_id', user_id),
-      supabase.from('profiles').delete().eq('id', user_id)
-    ]);
-
-    // Try deleting from auth.users if admin service role is available
-    try {
-      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-      if (serviceRoleKey) {
-        const adminAuthClient = createClient(supabaseUrl, serviceRoleKey, {
-          auth: { autoRefreshToken: false, persistSession: false }
-        });
-        await adminAuthClient.auth.admin.deleteUser(user_id);
-      }
-    } catch (authErr) {
-      console.warn('[Admin User Auth Delete Warning]', authErr);
+    const result = await executeUserPurge(user_id, req);
+    if (!result.success) {
+      return res.status(400).json({ success: false, error: result.error });
     }
 
-    return res.json({ success: true, message: 'User and all associated records deleted successfully.' });
+    return res.json({ success: true, message: 'User and all associated records permanently deleted.' });
   } catch (err: any) {
     console.error('[API /api/admin/users/delete Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Admin Users Bulk Deletion
+app.post('/api/admin/users/bulk-delete', verifyAdminToken, async (req, res) => {
+  const { user_ids } = req.body;
+  if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
+    return res.status(400).json({ success: false, error: 'Array of user_ids is required.' });
+  }
+
+  try {
+    let deletedCount = 0;
+    for (const id of user_ids) {
+      if (id) {
+        const res = await executeUserPurge(id, req);
+        if (res.success) deletedCount++;
+      }
+    }
+
+    return res.json({ success: true, message: `Successfully deleted ${deletedCount} users.`, count: deletedCount });
+  } catch (err: any) {
+    console.error('[API /api/admin/users/bulk-delete Error]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -5924,6 +6139,13 @@ function saveLocalReferrals(list: ReferralRecord[]) {
   try {
     fs.writeFileSync(LOCAL_REFERRALS_FILE, JSON.stringify(list, null, 2), 'utf-8');
   } catch {}
+  try {
+    supabase.from('admin_settings').upsert({
+      setting_key: 'referral_records_store',
+      setting_value: list,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'setting_key' }).catch(() => {});
+  } catch {}
 }
 
 function getLocalReferralPayouts(): ReferralPayoutRecord[] {
@@ -5991,38 +6213,65 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
       try {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('id, full_name, email, referred_by, referral_code')
+          .select('id, full_name, email, referred_by, referral_code, referral_code_used')
           .eq('id', userId)
           .maybeSingle();
 
+        let referrerProfile: any = null;
+
         if (profile?.referred_by) {
-          // Look up referrer profile
-          const { data: referrerProfile } = await supabase
+          const { data: rProf } = await supabase
             .from('profiles')
             .select('id, full_name, email, referral_code')
             .eq('id', profile.referred_by)
             .maybeSingle();
+          if (rProf) referrerProfile = rProf;
+        }
 
-          if (referrerProfile) {
-            const newRecord: ReferralRecord = {
-              id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-              referrerId: referrerProfile.id,
-              referrerCode: referrerProfile.referral_code || 'REF',
-              referrerName: referrerProfile.full_name || 'Scholar Referrer',
-              referrerEmail: referrerProfile.email || '',
-              referredId: userId,
-              referredName: profile.full_name || userEmail?.split('@')[0] || 'Scholar Student',
-              referredEmail: userEmail || profile.email || '',
-              converted: true,
-              conversionAmount: Number(amountPaid || 3000),
-              rewardEarned: reward,
-              createdAt: new Date().toISOString(),
-              convertedAt: new Date().toISOString()
-            };
-            referrals.unshift(newRecord);
-            saveLocalReferrals(referrals);
-            matchIdx = 0;
+        if (!referrerProfile && (profile as any)?.referral_code_used) {
+          const { data: rProf } = await supabase
+            .from('profiles')
+            .select('id, full_name, email, referral_code')
+            .ilike('referral_code', (profile as any).referral_code_used.trim())
+            .maybeSingle();
+          if (rProf) referrerProfile = rProf;
+        }
+
+        if (!referrerProfile) {
+          const { data: sbRef } = await supabase
+            .from('referrals')
+            .select('referrer_id')
+            .eq('referred_id', userId)
+            .maybeSingle();
+          if (sbRef?.referrer_id) {
+            const { data: rProf } = await supabase
+              .from('profiles')
+              .select('id, full_name, email, referral_code')
+              .eq('id', sbRef.referrer_id)
+              .maybeSingle();
+            if (rProf) referrerProfile = rProf;
           }
+        }
+
+        if (referrerProfile) {
+          const newRecord: ReferralRecord = {
+            id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+            referrerId: referrerProfile.id,
+            referrerCode: referrerProfile.referral_code || 'REF',
+            referrerName: referrerProfile.full_name || 'Scholar Referrer',
+            referrerEmail: referrerProfile.email || '',
+            referredId: userId,
+            referredName: profile?.full_name || userEmail?.split('@')[0] || 'Scholar Student',
+            referredEmail: userEmail || profile?.email || '',
+            converted: true,
+            conversionAmount: Number(amountPaid || 3000),
+            rewardEarned: reward,
+            createdAt: new Date().toISOString(),
+            convertedAt: new Date().toISOString()
+          };
+          referrals.unshift(newRecord);
+          saveLocalReferrals(referrals);
+          matchIdx = 0;
         }
       } catch (profErr) {
         console.warn('[Referral lookup error]:', profErr);
@@ -6037,7 +6286,7 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
       target.rewardEarned = reward;
       saveLocalReferrals(referrals);
 
-      // Sync with Supabase referrals table
+      // 1. Sync with Supabase referrals table
       try {
         await supabase.from('referrals').upsert({
           referrer_id: target.referrerId,
@@ -6046,7 +6295,31 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
         });
       } catch {}
 
-      // Notify Referrer via Email
+      // 2. Credit Referrer Wallet in Supabase profiles
+      try {
+        if (target.referrerId && !target.referrerId.startsWith('ref_usr_')) {
+          const { data: curProf } = await supabase
+            .from('profiles')
+            .select('id, referral_balance, wallet_balance')
+            .eq('id', target.referrerId)
+            .maybeSingle();
+
+          if (curProf) {
+            const newRefBal = Number(curProf.referral_balance || 0) + reward;
+            const newWalletBal = Number(curProf.wallet_balance || 0) + reward;
+
+            await supabase.from('profiles').update({
+              referral_balance: newRefBal,
+              wallet_balance: newWalletBal,
+              updated_at: new Date().toISOString()
+            }).eq('id', target.referrerId);
+          }
+        }
+      } catch (balErr) {
+        console.warn('[Referral wallet credit notice]:', balErr);
+      }
+
+      // 3. Notify Referrer via Email
       if (target.referrerEmail) {
         sendServerSmtpEmail(
           target.referrerEmail,
@@ -6247,6 +6520,76 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
       }
     } catch {}
 
+    // Auto-reconcile with database profiles: ensure any referred candidate with has_paid=true is converted
+    try {
+      const candidateIds = userReferrals.map(r => r.referredId).filter(Boolean);
+      const candidateEmails = userReferrals.map(r => r.referredEmail).filter(Boolean);
+      const paidCandidates = new Set<string>();
+
+      if (candidateIds.length > 0) {
+        const { data: profsById } = await supabase
+          .from('profiles')
+          .select('id, email, has_paid')
+          .in('id', candidateIds)
+          .eq('has_paid', true);
+        (profsById || []).forEach(p => {
+          paidCandidates.add(p.id);
+          if (p.email) paidCandidates.add(p.email.toLowerCase());
+        });
+      }
+
+      if (candidateEmails.length > 0) {
+        const { data: profsByEmail } = await supabase
+          .from('profiles')
+          .select('id, email, has_paid')
+          .in('email', candidateEmails)
+          .eq('has_paid', true);
+        (profsByEmail || []).forEach(p => {
+          paidCandidates.add(p.id);
+          if (p.email) paidCandidates.add(p.email.toLowerCase());
+        });
+      }
+
+      let stateModified = false;
+      let newlyEarnedRewards = 0;
+
+      userReferrals.forEach(r => {
+        const isPaid = (r.referredId && paidCandidates.has(r.referredId)) || 
+                       (r.referredEmail && paidCandidates.has(r.referredEmail.toLowerCase()));
+        if (isPaid && !r.converted) {
+          r.converted = true;
+          r.rewardEarned = config.rewardPerPaid;
+          r.convertedAt = new Date().toISOString();
+          newlyEarnedRewards += config.rewardPerPaid;
+          stateModified = true;
+        }
+      });
+
+      if (stateModified) {
+        saveLocalReferrals(allReferrals);
+
+        // Credit newly converted rewards into user's wallet in profiles
+        if (newlyEarnedRewards > 0) {
+          const { data: curProf } = await supabase
+            .from('profiles')
+            .select('referral_balance, wallet_balance')
+            .eq('id', userId)
+            .maybeSingle();
+
+          const updatedRefBal = Number(curProf?.referral_balance || 0) + newlyEarnedRewards;
+          const updatedWalletBal = Number(curProf?.wallet_balance || 0) + newlyEarnedRewards;
+
+          await supabase.from('profiles').update({
+            referral_balance: updatedRefBal,
+            wallet_balance: updatedWalletBal,
+            updated_at: new Date().toISOString()
+          }).eq('id', userId);
+        }
+      }
+    } catch (recErr) {
+      console.warn('[Referral auto-reconciliation notice]:', recErr);
+    }
+
     // Calculate financials
     const totalReferred = userReferrals.length;
     const convertedCount = userReferrals.filter(r => r.converted).length;
@@ -6417,6 +6760,24 @@ app.get('/api/referrals/admin/all', async (req, res) => {
               converted: sr.converted,
               createdAt: sr.created_at
             });
+          }
+        });
+      }
+    } catch {}
+
+    // Auto-reconcile all referrals against paid profiles
+    try {
+      const allReferredIds = combinedRefs.map(r => r.referredId).filter(Boolean);
+      if (allReferredIds.length > 0) {
+        const { data: paidProfs } = await supabase
+          .from('profiles')
+          .select('id, email, has_paid')
+          .in('id', allReferredIds)
+          .eq('has_paid', true);
+        const paidSet = new Set((paidProfs || []).map(p => p.id));
+        combinedRefs.forEach(r => {
+          if (r.referredId && paidSet.has(r.referredId)) {
+            r.converted = true;
           }
         });
       }
@@ -6676,6 +7037,12 @@ app.post('/api/scholarships/review', verifyAdminToken, async (req, res) => {
       }
 
       if (targetUserId) {
+        // Activate in persistent user overrides
+        const override = persistentUserOverrides.get(targetUserId) || {};
+        override.has_paid = true;
+        override.subscription_plan = '100% Free Lifetime Scholarship';
+        persistentUserOverrides.set(targetUserId, override);
+
         // Activate subscription
         try {
           await supabase.from('subscriptions').upsert({
@@ -6701,6 +7068,11 @@ app.post('/api/scholarships/review', verifyAdminToken, async (req, res) => {
         try {
           await supabase.from('profiles').update({ has_paid: true }).eq('id', targetUserId);
         } catch {}
+
+        // Trigger referral conversion if applicant was referred
+        try {
+          await triggerReferralConversion(targetUserId, target.email, 0);
+        } catch {}
       }
 
       // Send congratulations email
@@ -6722,6 +7094,47 @@ app.post('/api/scholarships/review', verifyAdminToken, async (req, res) => {
     }
 
     return res.json({ success: true, application: target, message: `Application ${status} successfully.` });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 10. Student Claim Merit Scholarship (Instant Activation)
+app.post('/api/scholarships/claim', express.json(), async (req, res) => {
+  try {
+    const { userId, email } = req.body || {};
+    if (!userId) {
+      return res.status(400).json({ success: false, error: 'User ID is required.' });
+    }
+
+    // Set server override for instant zero-latency access
+    const override = persistentUserOverrides.get(userId) || {};
+    override.has_paid = true;
+    override.subscription_plan = '100% Merit Scholarship (Lifetime)';
+    persistentUserOverrides.set(userId, override);
+
+    // Update database profile
+    try {
+      await supabase.from('profiles').update({ has_paid: true }).eq('id', userId);
+    } catch {}
+
+    // Update subscriptions table
+    try {
+      await supabase.from('subscriptions').upsert({
+        user_id: userId,
+        plan: 'lifetime',
+        status: 'active',
+        started_at: new Date().toISOString(),
+        expires_at: new Date(Date.now() + 3650 * 86400000).toISOString()
+      }, { onConflict: 'user_id' });
+    } catch {}
+
+    // Trigger referral conversion if applicant was referred
+    try {
+      await triggerReferralConversion(userId, email, 0);
+    } catch {}
+
+    return res.json({ success: true, message: 'Merit scholarship claimed and activated successfully.' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
