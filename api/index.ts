@@ -1722,7 +1722,8 @@ app.post('/api/cbt/check-answer', verifyUserToken, async (req, res) => {
   if (!questionId) return res.status(400).json({ success: false, error: 'questionId is required' });
 
   try {
-    const { data: q, error } = await supabase
+    const db = getScopedSupabaseClient(req);
+    const { data: q, error } = await db
       .from('questions')
       .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
       .eq('id', questionId)
@@ -1754,12 +1755,13 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
   }
 
   try {
+    const db = getScopedSupabaseClient(req);
     const questionIds = Object.keys(answers);
     const questionsMap: Record<string, any> = {};
     
     if (questionIds.length > 0) {
       // Securely fetch correct answers and options from the database
-      const { data: questions, error } = await supabase
+      const { data: questions, error } = await db
         .from('questions')
         .select('id, correct_answer, option_a, option_b, option_c, option_d, options')
         .in('id', questionIds);
@@ -1794,7 +1796,7 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
 
     // Persist answers securely on the server
     if (sessionAnswersInsert.length > 0) {
-      const { error: insertError } = await supabase.from('session_answers').insert(sessionAnswersInsert);
+      const { error: insertError } = await db.from('session_answers').insert(sessionAnswersInsert);
       if (insertError) {
         console.warn('[Secure Scoring] Error saving session answers:', insertError);
       }
@@ -1802,7 +1804,7 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
 
     // Update session status and score
     if (sessionId) {
-      const { error: updateError } = await supabase.from('exam_sessions').update({
+      const { error: updateError } = await db.from('exam_sessions').update({
         status: 'completed',
         score: score,
         total_questions: totalQuestions,
