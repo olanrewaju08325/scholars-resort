@@ -368,16 +368,18 @@ export const importQuestionsToDatabase = async (
     topicsCache.set(`${t.subject_id}:${t.name.trim().toLowerCase()}`, t);
   });
 
-  // 3. Prepare database payload items
-  const dbPayloads: Array<{
-    id?: string;
+  // 3. Fetch existing questions for these subjects to enable smart upsert (update-on-duplicate)
+  const subjectIdsSet = new Set<string>();
+  const preProcessedItems: Array<{
     subject_id: string;
     topic_id: string | null;
     question_text: string;
+    normalized_stem: string;
     options: string[];
     correct_answer: string;
     explanation: string;
     difficulty: 'easy' | 'medium' | 'hard';
+    year: number | null;
     is_active: boolean;
   }> = [];
 
@@ -388,7 +390,6 @@ export const importQuestionsToDatabase = async (
     // A. Resolve or safely create subject
     let currentSubject = subjectsCache.get(subKey);
     if (!currentSubject) {
-      // Create subject with ONLY valid schema columns: name, is_active
       const { data: newSubj, error: createSubErr } = await supabase
         .from('subjects')
         .insert({
@@ -409,6 +410,8 @@ export const importQuestionsToDatabase = async (
       createdSubjects.push(newSubj.name);
     }
 
+    subjectIdsSet.add(currentSubject.id);
+
     // B. Resolve or safely create topic if provided
     let topicId: string | null = null;
     if (q.topicName && q.topicName.trim() && currentSubject?.id) {
@@ -416,7 +419,6 @@ export const importQuestionsToDatabase = async (
       let currentTopic = topicsCache.get(topicKey);
 
       if (!currentTopic) {
-        // Create topic with ONLY valid schema columns: subject_id, name
         const { data: newTopic } = await supabase
           .from('topics')
           .insert({
@@ -438,11 +440,11 @@ export const importQuestionsToDatabase = async (
       }
     }
 
-    // C. Add to batch payloads
-    dbPayloads.push({
+    preProcessedItems.push({
       subject_id: currentSubject.id,
       topic_id: topicId,
       question_text: q.questionText,
+      normalized_stem: normalizeQuestionStem(q.questionText),
       options: q.options,
       correct_answer: q.correctAnswer,
       explanation: q.explanation || '',
@@ -452,13 +454,78 @@ export const importQuestionsToDatabase = async (
     });
   }
 
-  // 4. Batch Insert in chunks of 50
-  const chunkSize = 50;
-  for (let i = 0; i < dbPayloads.length; i += chunkSize) {
-    const chunk = dbPayloads.slice(i, i + chunkSize);
-    onProgress?.(i, total, `Saving questions ${i + 1} - ${Math.min(i + chunkSize, total)}...`);
+  // Fetch existing database questions for these subjects to detect existing duplicates for upsert
+  const existingQuestionsMap = new Map<string, string>(); // normalized_stem -> question id
+  if (subjectIdsSet.size > 0) {
+    try {
+      const { data: existingDbQ } = await supabase
+        .from('questions')
+        .select('id, question_text')
+        .in('subject_id', Array.from(subjectIdsSet));
 
-    // Try Supabase insert
+      if (existingDbQ) {
+        existingDbQ.forEach(eq => {
+          if (eq.question_text) {
+            existingQuestionsMap.set(normalizeQuestionStem(eq.question_text), eq.id);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Could not fetch existing questions for upsert check:', e);
+    }
+  }
+
+  // Separate into updates (already exist -> update in place) and inserts (new -> insert)
+  const toInsert: any[] = [];
+  const toUpdate: Array<{ id: string; payload: any }> = [];
+
+  for (const item of preProcessedItems) {
+    const existingId = existingQuestionsMap.get(item.normalized_stem);
+    const payload = {
+      subject_id: item.subject_id,
+      topic_id: item.topic_id,
+      question_text: item.question_text,
+      options: item.options,
+      correct_answer: item.correct_answer,
+      explanation: item.explanation,
+      difficulty: item.difficulty,
+      year: item.year,
+      is_active: item.is_active
+    };
+
+    if (existingId) {
+      toUpdate.push({ id: existingId, payload });
+    } else {
+      toInsert.push(payload);
+    }
+  }
+
+  // 4. Execute updates in place (upgrades previously uploaded questions to the new recommended format)
+  onProgress?.(0, total, `Updating ${toUpdate.length} existing questions to new format...`);
+  for (const up of toUpdate) {
+    try {
+      const { error: updateErr } = await supabase
+        .from('questions')
+        .update(up.payload)
+        .eq('id', up.id);
+
+      if (!updateErr) {
+        successCount++;
+      } else {
+        // Fallback or count failure
+        failedCount++;
+      }
+    } catch {
+      failedCount++;
+    }
+  }
+
+  // 5. Batch Insert new questions in chunks of 50
+  const chunkSize = 50;
+  for (let i = 0; i < toInsert.length; i += chunkSize) {
+    const chunk = toInsert.slice(i, i + chunkSize);
+    onProgress?.(i, total, `Inserting new questions ${i + 1} - ${Math.min(i + chunkSize, toInsert.length)}...`);
+
     let chunkSaved = false;
     const { error: batchErr } = await supabase.from('questions').insert(chunk);
 
@@ -467,7 +534,6 @@ export const importQuestionsToDatabase = async (
       chunkSaved = true;
     } else {
       console.warn('Supabase insert rejected by RLS/Database, attempting backend server proxy /api/questions/insert:', batchErr.message);
-      // Fallback 1: Try Server API endpoint
       try {
         const proxyRes = await fetch('/api/questions/insert', {
           method: 'POST',
@@ -484,14 +550,12 @@ export const importQuestionsToDatabase = async (
       }
     }
 
-    // Fallback 2: Store in local custom question store if database refused
     if (!chunkSaved) {
       try {
         const existingLocal = JSON.parse(localStorage.getItem('scholar_custom_questions') || '[]');
         const updatedLocal = [...existingLocal, ...chunk];
         localStorage.setItem('scholar_custom_questions', JSON.stringify(updatedLocal));
         successCount += chunk.length;
-        console.log(`Saved ${chunk.length} questions to custom local storage.`);
       } catch {
         failedCount += chunk.length;
         errors.push(`Failed to save chunk: Database policy restricted insert.`);
