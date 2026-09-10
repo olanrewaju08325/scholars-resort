@@ -398,10 +398,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setProfile(null);
-    setIsDeviceLocked(false);
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn('[AuthContext] SignOut notice:', err);
+    } finally {
+      setUser(null);
+      setProfile(null);
+      setIsDeviceLocked(false);
+      try {
+        localStorage.removeItem('scholars_cached_profile');
+      } catch (_) {}
+    }
   };
 
   return (

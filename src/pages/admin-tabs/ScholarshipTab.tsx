@@ -153,13 +153,15 @@ export const ScholarshipTab = () => {
     e.preventDefault();
     setSavingConfig(true);
     try {
-      await supabase
-        .from('admin_settings')
-        .upsert({
-          setting_key: 'scholarship_program_config',
-          setting_value: config,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
+      const res = await authFetch('/api/settings/scholarship_program_config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: config })
+      });
+
+      if (!res.ok) {
+        throw new Error('Server returned error while saving scholarship configuration.');
+      }
 
       logAdminActivity('UPDATE_SCHOLARSHIP_CONFIG', `Updated pass mark to ${config.passThresholdPercent}% and quota to ${config.monthlyQuota}`, 'scholarships');
       toast.success('Scholarship rules and threshold saved live!');

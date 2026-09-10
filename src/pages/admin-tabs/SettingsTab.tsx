@@ -183,48 +183,102 @@ export const SettingsTab = () => {
         platform: platformPayload
       });
 
-      // 2. Save landing page configuration and payment keys WITHOUT overwriting smtp and groq in api_keys
-      await supabase.from('admin_settings').upsert([
-        {
-          setting_key: 'landing_config',
-          setting_value: {
-            title: landingTitle,
-            subtitle: landingSubtitle,
-            hero_images: [heroImage1, heroImage2, heroImage3],
-            card1_title: card1Title,
-            card1_desc: card1Desc,
-            card2_title: card2Title,
-            card2_desc: card2Desc,
-            card3_title: card3Title,
-            card3_desc: card3Desc,
-            card4_title: card4Title,
-            card4_desc: card4Desc,
-            card5_title: card5Title,
-            card5_desc: card5Desc
+      // 2. Save landing page configuration and payment keys via server API
+      await Promise.allSettled([
+        authFetch('/api/settings/landing_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            value: {
+              title: landingTitle,
+              subtitle: landingSubtitle,
+              hero_images: [heroImage1, heroImage2, heroImage3],
+              card1_title: card1Title,
+              card1_desc: card1Desc,
+              card2_title: card2Title,
+              card2_desc: card2Desc,
+              card3_title: card3Title,
+              card3_desc: card3Desc,
+              card4_title: card4Title,
+              card4_desc: card4Desc,
+              card5_title: card5Title,
+              card5_desc: card5Desc
+            }
+          })
+        }),
+        authFetch('/api/settings/payment_keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            value: {
+              paystack: paystackKey,
+              stripe: stripeKey
+            }
+          })
+        }),
+        authFetch('/api/settings/api_keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            value: {
+              smtp_host: smtpPayload.host,
+              smtp_port: smtpPayload.port,
+              smtp_user: smtpPayload.user,
+              smtp_pass: cleanSmtpPass,
+              smtp_from: smtpPayload.from,
+              smtp_secure: smtpPayload.secure,
+              groq: groqPayload.apiKey,
+              paystack: paystackKey,
+              stripe: stripeKey
+            }
+          })
+        })
+      ]);
+
+      // Fallback Supabase write
+      try {
+        await supabase.from('admin_settings').upsert([
+          {
+            setting_key: 'landing_config',
+            setting_value: {
+              title: landingTitle,
+              subtitle: landingSubtitle,
+              hero_images: [heroImage1, heroImage2, heroImage3],
+              card1_title: card1Title,
+              card1_desc: card1Desc,
+              card2_title: card2Title,
+              card2_desc: card2Desc,
+              card3_title: card3Title,
+              card3_desc: card3Desc,
+              card4_title: card4Title,
+              card4_desc: card4Desc,
+              card5_title: card5Title,
+              card5_desc: card5Desc
+            }
+          },
+          {
+            setting_key: 'payment_keys',
+            setting_value: {
+              paystack: paystackKey,
+              stripe: stripeKey
+            }
+          },
+          {
+            setting_key: 'api_keys',
+            setting_value: {
+              smtp_host: smtpPayload.host,
+              smtp_port: smtpPayload.port,
+              smtp_user: smtpPayload.user,
+              smtp_pass: cleanSmtpPass,
+              smtp_from: smtpPayload.from,
+              smtp_secure: smtpPayload.secure,
+              groq: groqPayload.apiKey,
+              paystack: paystackKey,
+              stripe: stripeKey
+            }
           }
-        },
-        {
-          setting_key: 'payment_keys',
-          setting_value: {
-            paystack: paystackKey,
-            stripe: stripeKey
-          }
-        },
-        {
-          setting_key: 'api_keys',
-          setting_value: {
-            smtp_host: smtpPayload.host,
-            smtp_port: smtpPayload.port,
-            smtp_user: smtpPayload.user,
-            smtp_pass: cleanSmtpPass,
-            smtp_from: smtpPayload.from,
-            smtp_secure: smtpPayload.secure,
-            groq: groqPayload.apiKey,
-            paystack: paystackKey,
-            stripe: stripeKey
-          }
-        }
-      ], { onConflict: 'setting_key' });
+        ], { onConflict: 'setting_key' });
+      } catch {}
 
       if (res.success) {
         toast.success("All System Configurations, GROQ API Key & SMTP Credentials saved successfully!");

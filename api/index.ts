@@ -1406,7 +1406,9 @@ app.post('/api/manual-payments/update-status', verifyAdminToken, async (req, res
       } catch {}
     }
 
-    // c. Send confirmation email
+    // c. Send confirmation email and trigger referral conversion
+    let studentEmail = '';
+    let studentFullName = 'Scholar';
     try {
       const { data: studentProfile } = await supabase
         .from('profiles')
@@ -1414,14 +1416,19 @@ app.post('/api/manual-payments/update-status', verifyAdminToken, async (req, res
         .eq('id', userId)
         .maybeSingle();
 
-      if (studentProfile?.email) {
+      if (studentProfile) {
+        studentEmail = studentProfile.email || '';
+        studentFullName = studentProfile.full_name || 'Scholar';
+      }
+
+      if (studentEmail) {
         const planLabel = planType === 'lifetime' ? 'Lifetime Access' : 'Annual Pass';
         sendServerSmtpEmail(
-          studentProfile.email,
+          studentEmail,
           `Payment Verified - Full Access Unlocked (${planLabel})`,
           `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
              <h2 style="color: #4F46E5; margin-top: 0;">Payment Verified - Full Access Active!</h2>
-             <p>Dear ${studentProfile.full_name || 'Scholar'},</p>
+             <p>Dear ${studentFullName},</p>
              <p>Your payment of <strong>₦${Number(amount || 3000).toLocaleString()}</strong> has been verified by the administrator.</p>
              <p>Your account is now fully upgraded with unrestricted access to all UTME mock exams, question banks, study materials, and AI tutoring.</p>
              <p style="margin-top: 24px;">
@@ -1434,7 +1441,7 @@ app.post('/api/manual-payments/update-status', verifyAdminToken, async (req, res
 
     // d. Trigger referral conversion & credit referrer
     try {
-      await triggerReferralConversion(userId, studentProfile?.email, Number(amount || 3000));
+      await triggerReferralConversion(userId, studentEmail, Number(amount || 3000));
     } catch (refErr) {
       console.warn('[Referral conversion trigger notice]:', refErr);
     }
@@ -2414,7 +2421,23 @@ app.post('/api/auth/verify-otp', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Invalid or expired 6-digit OTP code.' });
     }
 
-    // 3. Log successful OTP reset
+    // 3. Attempt direct user password update in Supabase Auth if service role or admin credentials exist
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY;
+    if (serviceKey && newPassword) {
+      try {
+        const adminAuthClient = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+        const { data: userListData } = await adminAuthClient.auth.admin.listUsers();
+        const targetUser = userListData?.users?.find(u => u.email?.toLowerCase() === cleanEmail);
+        if (targetUser) {
+          await adminAuthClient.auth.admin.updateUserById(targetUser.id, { password: newPassword });
+          console.log(`[OTP VERIFY] Password successfully updated for user ${cleanEmail} (${targetUser.id})`);
+        }
+      } catch (adminPassErr: any) {
+        console.warn('[Admin password update notice]:', adminPassErr.message);
+      }
+    }
+
+    // 4. Log successful OTP reset
     try {
       await supabase.from('activity_logs').insert({
         activity_type: 'password_reset_otp',
@@ -4984,6 +5007,32 @@ export async function markUserAsDeleted(userId: string) {
   } catch (_) {}
 }
 
+export async function unmarkUserAsDeleted(userId: string) {
+  if (!userId) return;
+  deletedUserIds.delete(userId);
+
+  // 1. Remove from system store on disk
+  try {
+    const store = loadSystemStore();
+    if (Array.isArray(store.deleted_user_ids)) {
+      store.deleted_user_ids = store.deleted_user_ids.filter((id: string) => id !== userId);
+      saveSystemStore(store);
+    }
+  } catch (err) {
+    console.warn('[unmarkUserAsDeleted File Warning]', err);
+  }
+
+  // 2. Persist updated deleted_user_ids to database
+  try {
+    const arr = Array.from(deletedUserIds);
+    await supabase.from('admin_settings').upsert({
+      setting_key: 'deleted_user_ids',
+      setting_value: arr,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'setting_key' });
+  } catch (_) {}
+}
+
 // Master execution to permanently purge a user and all child relationships across DB & Auth
 async function executeUserPurge(userId: string, reqOrToken?: any): Promise<{ success: boolean; error?: string }> {
   if (!userId) return { success: false, error: 'User ID is required' };
@@ -5942,6 +5991,91 @@ app.post('/api/admin/users/bulk-delete', verifyAdminToken, async (req, res) => {
   }
 });
 
+// API Route: Reactivate Deleted Account / Fresh Profile Initialization on Re-registration
+app.post('/api/auth/reactivate-user', express.json(), async (req, res) => {
+  try {
+    const { userId, email, fullName, phone, referralCode } = req.body || {};
+    if (!userId && !email) {
+      return res.status(400).json({ success: false, error: 'User ID or email is required.' });
+    }
+
+    let targetId = userId;
+    const cleanEmail = (email || '').toLowerCase().trim();
+    const cleanName = (fullName || 'Scholar').trim();
+    const cleanPhone = (phone || '').trim();
+
+    if (!targetId && cleanEmail) {
+      const { data: prof } = await supabase.from('profiles').select('id').eq('email', cleanEmail).maybeSingle();
+      if (prof?.id) targetId = prof.id;
+    }
+
+    if (targetId) {
+      await unmarkUserAsDeleted(targetId);
+
+      const newRefCode = `SR-${cleanName.substring(0, 4).toUpperCase()}-${targetId.substring(0, 4).toUpperCase()}`;
+
+      // Recreate / update fresh profile in Supabase
+      await supabase.from('profiles').upsert({
+        id: targetId,
+        email: cleanEmail,
+        full_name: cleanName,
+        phone: cleanPhone || null,
+        role: 'student',
+        status: 'active',
+        has_paid: false,
+        is_banned: false,
+        onboarding_completed: false,
+        referral_code: newRefCode,
+        referral_code_used: referralCode ? String(referralCode).trim().toUpperCase() : null,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'id' });
+
+      // Track referral if referral code used
+      if (referralCode) {
+        try {
+          const cleanRef = String(referralCode).trim().toUpperCase();
+          const referrals = getLocalReferrals();
+          const existing = referrals.find(r => r.referredId === targetId || r.referredEmail === cleanEmail);
+          if (!existing) {
+            referrals.unshift({
+              id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+              referrerId: `ref_usr_${cleanRef}`,
+              referrerCode: cleanRef,
+              referrerName: 'Scholar Referrer',
+              referrerEmail: '',
+              referredId: targetId,
+              referredName: cleanName,
+              referredEmail: cleanEmail,
+              referredPhone: cleanPhone,
+              converted: false,
+              createdAt: new Date().toISOString()
+            });
+            saveLocalReferrals(referrals);
+          }
+        } catch {}
+      }
+    }
+
+    return res.json({ success: true, message: 'Account reactivated and fresh profile created successfully.' });
+  } catch (err: any) {
+    console.error('[API /api/auth/reactivate-user Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Unmark User as Deleted
+app.post('/api/auth/unmark-deleted', express.json(), async (req, res) => {
+  try {
+    const { userId } = req.body || {};
+    if (userId) {
+      await unmarkUserAsDeleted(userId);
+    }
+    return res.json({ success: true, message: 'User unmarked from deletion registry.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // Guardian Portal endpoints are completely disabled and removed
 app.all('/api/guardian/*all', (req, res) => {
   res.status(410).json({ success: false, error: 'Guardian Portal is disabled and no longer supported on Scholars Resort.' });
@@ -6425,6 +6559,7 @@ async function getReferralConfig() {
         ? JSON.parse(configRow.setting_value)
         : configRow.setting_value;
       return {
+        rewardPerSignup: Number(parsed.rewardPerSignup) || 0,
         rewardPerPaid: Number(parsed.rewardPerPaid) || 500,
         minWithdrawal: Number(parsed.minWithdrawal) || 2000,
         isActive: parsed.isActive !== false,
@@ -6434,6 +6569,7 @@ async function getReferralConfig() {
     }
   } catch {}
   return {
+    rewardPerSignup: 0,
     rewardPerPaid: 500,
     minWithdrawal: 2000,
     isActive: true,
@@ -6449,10 +6585,12 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
     const config = await getReferralConfig();
     const reward = config.rewardPerPaid || 500;
 
+    const cleanUserEmail = (userEmail || '').toLowerCase().trim();
+
     // Find if this student was referred
     let matchIdx = referrals.findIndex(r => 
       (userId && r.referredId === userId) || 
-      (userEmail && r.referredEmail && r.referredEmail.toLowerCase() === userEmail.toLowerCase())
+      (cleanUserEmail && r.referredEmail && r.referredEmail.toLowerCase() === cleanUserEmail)
     );
 
     // If not found in local, check Supabase profiles for referred_by or referral_code
@@ -6476,10 +6614,11 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
         }
 
         if (!referrerProfile && (profile as any)?.referral_code_used) {
+          const usedCode = String((profile as any).referral_code_used).trim().toUpperCase();
           const { data: rProf } = await supabase
             .from('profiles')
             .select('id, full_name, email, referral_code')
-            .ilike('referral_code', (profile as any).referral_code_used.trim())
+            .ilike('referral_code', usedCode)
             .maybeSingle();
           if (rProf) referrerProfile = rProf;
         }
@@ -6508,8 +6647,8 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
             referrerName: referrerProfile.full_name || 'Scholar Referrer',
             referrerEmail: referrerProfile.email || '',
             referredId: userId,
-            referredName: profile?.full_name || userEmail?.split('@')[0] || 'Scholar Student',
-            referredEmail: userEmail || profile?.email || '',
+            referredName: profile?.full_name || cleanUserEmail.split('@')[0] || 'Scholar Student',
+            referredEmail: cleanUserEmail || profile?.email || '',
             converted: true,
             conversionAmount: Number(amountPaid || 3000),
             rewardEarned: reward,
@@ -6607,18 +6746,21 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
     }
 
     const cleanCode = String(referrerCode).trim().toUpperCase();
+    const cleanReferredEmail = String(referredEmail || '').toLowerCase().trim();
+    const cleanReferredName = String(referredName || 'New Student').trim();
 
-    // Look up Referrer by code or user id
+    // Look up Referrer by code, user ID, email, or partial code
     let referrerId: string | null = null;
     let referrerName = 'Scholar Referrer';
     let referrerEmail = '';
 
     // Search in Supabase profiles
     try {
+      // 1. Search by case-insensitive referral_code or id
       const { data: refProfile } = await supabase
         .from('profiles')
         .select('id, full_name, email, referral_code')
-        .or(`referral_code.eq.${cleanCode},id.eq.${cleanCode}`)
+        .or(`referral_code.ilike.${cleanCode},id.eq.${cleanCode}`)
         .maybeSingle();
 
       if (refProfile) {
@@ -6628,10 +6770,30 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
       }
     } catch {}
 
-    // Fallback: Check local profiles or local referrals
+    // 2. Search all profiles if code contains user ID substring (e.g. SR-NAME-XXXX)
+    if (!referrerId && cleanCode.startsWith('SR-')) {
+      try {
+        const parts = cleanCode.split('-');
+        const idSuffix = parts[parts.length - 1];
+        if (idSuffix && idSuffix.length >= 3) {
+          const { data: allProfs } = await supabase.from('profiles').select('id, full_name, email, referral_code');
+          const matched = (allProfs || []).find(p => 
+            (p.id && p.id.toUpperCase().startsWith(idSuffix)) ||
+            (p.referral_code && p.referral_code.toUpperCase() === cleanCode)
+          );
+          if (matched) {
+            referrerId = matched.id;
+            referrerName = matched.full_name || 'Scholar Referrer';
+            referrerEmail = matched.email || '';
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Fallback: Check local profiles or local referrals
     if (!referrerId) {
       const existingRefs = getLocalReferrals();
-      const match = existingRefs.find(r => r.referrerCode === cleanCode);
+      const match = existingRefs.find(r => r.referrerCode === cleanCode || (r.referrerEmail && r.referrerEmail.toLowerCase() === cleanCode.toLowerCase()));
       if (match) {
         referrerId = match.referrerId;
         referrerName = match.referrerName || 'Scholar Referrer';
@@ -6647,7 +6809,7 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
     const referrals = getLocalReferrals();
     const existingEntry = referrals.find(r => 
       (referredId && r.referredId === referredId) || 
-      (referredEmail && r.referredEmail.toLowerCase() === referredEmail.toLowerCase())
+      (cleanReferredEmail && r.referredEmail.toLowerCase() === cleanReferredEmail)
     );
 
     if (!existingEntry) {
@@ -6658,8 +6820,8 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
         referrerName,
         referrerEmail,
         referredId: referredId || `student_${Date.now()}`,
-        referredName: referredName || 'New Student',
-        referredEmail: (referredEmail || '').toLowerCase(),
+        referredName: cleanReferredName,
+        referredEmail: cleanReferredEmail,
         referredPhone: referredPhone || '',
         converted: false,
         createdAt: new Date().toISOString()
@@ -6676,7 +6838,8 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
             converted: false
           });
           await supabase.from('profiles').update({
-            referred_by: referrerId
+            referred_by: referrerId,
+            referral_code_used: cleanCode
           }).eq('id', referredId);
         }
       } catch {}
@@ -6691,11 +6854,13 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
 // 2. Convert Referral on Payment Trigger
 app.post('/api/referrals/convert-payment', express.json(), async (req, res) => {
   try {
-    const { userId, userEmail, amount } = req.body || {};
-    if (!userId && !userEmail) {
+    const { userId, referredId, userEmail, email, referredEmail, amount, amountPaid } = req.body || {};
+    const targetUserId = userId || referredId;
+    const targetEmail = userEmail || email || referredEmail;
+    if (!targetUserId && !targetEmail) {
       return res.status(400).json({ success: false, error: 'User ID or email is required.' });
     }
-    const result = await triggerReferralConversion(userId, userEmail, amount);
+    const result = await triggerReferralConversion(targetUserId, targetEmail, amount || amountPaid);
     return res.json(result);
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -6713,6 +6878,7 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
     // Query user's referral code from profiles if available
     let referralCode = '';
     let userName = 'Scholar';
+    let userEmail = '';
     try {
       const { data: profile } = await supabase
         .from('profiles')
@@ -6722,7 +6888,13 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
 
       if (profile) {
         userName = profile.full_name || 'Scholar';
+        userEmail = (profile.email || '').toLowerCase().trim();
         referralCode = profile.referral_code || `SR-${(profile.full_name || 'SCHOLAR').substring(0, 4).toUpperCase()}-${userId.substring(0, 4).toUpperCase()}`;
+        
+        // Ensure referral_code is persisted to profiles
+        if (!profile.referral_code) {
+          supabase.from('profiles').update({ referral_code: referralCode }).eq('id', userId).then();
+        }
       }
     } catch {}
 
@@ -6730,8 +6902,40 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
       referralCode = `SR-${userId.substring(0, 4).toUpperCase()}`;
     }
 
+    const cleanRefCode = referralCode.toUpperCase();
+
+    // Auto-heal and claim unlinked referrals that match this user's code, user ID, or email
+    let touchedLocal = false;
+    allReferrals.forEach(r => {
+      const isCodeMatch = (r.referrerCode && (
+        r.referrerCode.toUpperCase() === cleanRefCode ||
+        r.referrerCode.toUpperCase() === userId.toUpperCase() ||
+        (referralCode && r.referrerCode.toUpperCase() === referralCode.toUpperCase())
+      ));
+      const isIdMatch = (
+        r.referrerId === userId ||
+        r.referrerId === `ref_usr_${cleanRefCode}` ||
+        r.referrerId === `ref_usr_${userId.toUpperCase()}`
+      );
+      const isEmailMatch = Boolean(userEmail && r.referrerEmail && r.referrerEmail.toLowerCase() === userEmail);
+
+      if (isCodeMatch || isIdMatch || isEmailMatch) {
+        if (r.referrerId !== userId || (userEmail && !r.referrerEmail)) {
+          r.referrerId = userId;
+          r.referrerName = userName;
+          if (userEmail) r.referrerEmail = userEmail;
+          touchedLocal = true;
+        }
+      }
+    });
+    if (touchedLocal) saveLocalReferrals(allReferrals);
+
     // Filter referrals for this user
-    let userReferrals = allReferrals.filter(r => r.referrerId === userId || r.referrerCode === referralCode);
+    let userReferrals = allReferrals.filter(r => 
+      r.referrerId === userId || 
+      r.referrerCode === cleanRefCode || 
+      (r.referrerCode && r.referrerCode.toUpperCase() === userId.toUpperCase())
+    );
 
     // Also merge from Supabase referrals table if any
     try {
@@ -6840,7 +7044,7 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
     // Calculate financials
     const totalReferred = userReferrals.length;
     const convertedCount = userReferrals.filter(r => r.converted).length;
-    const totalEarned = convertedCount * config.rewardPerPaid;
+    const totalEarned = (convertedCount * config.rewardPerPaid) + (totalReferred * (config.rewardPerSignup || 0));
 
     // Filter user's payout requests
     const userPayouts = allPayouts.filter(p => p.userId === userId);
@@ -7100,6 +7304,42 @@ app.post('/api/referrals/admin/update-payout', verifyAdminToken, async (req, res
 
     return res.json({ success: true, payout: target, message: `Payout marked as ${status}.` });
   } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 7. Admin: Update Referral Program Configuration
+app.post('/api/referrals/admin/update-config', verifyAdminToken, async (req, res) => {
+  try {
+    const configData = req.body || {};
+    const sanitizedConfig = {
+      rewardPerSignup: Number(configData.rewardPerSignup) || 0,
+      rewardPerPaid: Number(configData.rewardPerPaid) || 500,
+      minWithdrawal: Number(configData.minWithdrawal) || 2000,
+      isActive: configData.isActive !== false,
+      programTitle: configData.programTitle || 'UTME Student Referral & Ambassador Program',
+      programDescription: configData.programDescription || 'Earn cash rewards for every candidate you invite.'
+    };
+
+    // Save to admin_settings table in Supabase
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'referral_program_config',
+        setting_value: sanitizedConfig,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    // Save to disk system store
+    try {
+      const store = loadSystemStore();
+      store.referral_program_config = sanitizedConfig;
+      saveSystemStore(store);
+    } catch {}
+
+    return res.json({ success: true, config: sanitizedConfig, message: 'Referral program configuration updated successfully.' });
+  } catch (err: any) {
+    console.error('[API /api/referrals/admin/update-config Error]', err);
     return res.status(500).json({ success: false, error: err.message });
   }
 });

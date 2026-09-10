@@ -1,0 +1,47 @@
+[
+  {
+    "id": "ref_1789037871048_5i8ah",
+    "referrerId": "student-ambassador-uid-99",
+    "referrerCode": "SR-STUD",
+    "referrerName": "Scholar",
+    "referrerEmail": "",
+    "referredId": "candidate-fresh-100",
+    "referredName": "Maryam Sani",
+    "referredEmail": "maryam.sani@test.com",
+    "referredPhone": "",
+    "converted": true,
+    "createdAt": "2026-09-10T10:57:51.048Z",
+    "convertedAt": "2026-09-10T10:57:51.116Z",
+    "conversionAmount": 3000,
+    "rewardEarned": 200
+  },
+  {
+    "id": "ref_1789037847695_s9nno",
+    "referrerId": "ref_usr_SR-AMBASSADOR-01",
+    "referrerCode": "SR-AMBASSADOR-01",
+    "referrerName": "Scholar Referrer",
+    "referrerEmail": "",
+    "referredId": "fresh-candidate-uid-02",
+    "referredName": "Chinedu Eze",
+    "referredEmail": "chinedu.eze@example.com",
+    "referredPhone": "08098765432",
+    "converted": true,
+    "createdAt": "2026-09-10T10:57:27.695Z",
+    "convertedAt": "2026-09-10T10:57:45.628Z",
+    "conversionAmount": 3500,
+    "rewardEarned": 200
+  },
+  {
+    "id": "ref_1789037815912_pd9df",
+    "referrerId": "ref_usr_REF-TEST-001",
+    "referrerCode": "REF-TEST-001",
+    "referrerName": "Scholar Referrer",
+    "referrerEmail": "",
+    "referredId": "test-referred-uid-456",
+    "referredName": "David Adebayo",
+    "referredEmail": "david.adebayo@test.com",
+    "referredPhone": "08012345678",
+    "converted": false,
+    "createdAt": "2026-09-10T10:56:55.913Z"
+  }
+]

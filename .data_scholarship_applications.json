@@ -1,0 +1,32 @@
+[
+  {
+    "id": "sch_app_1789037848106_ikcs",
+    "userId": "indigent-scholar-uid-99",
+    "fullName": "Fatima Abubakar",
+    "email": "fatima.abubakar@example.com",
+    "phone": "08033221100",
+    "stateOfOrigin": "Kano",
+    "targetUniversity": "Bayero University Kano",
+    "targetCourse": "Pharmacy",
+    "reason": "Passionate student from indigent family with high academic aptitude.",
+    "parentOccupation": "",
+    "jambScore": "",
+    "status": "pending",
+    "appliedAt": "2026-09-10T10:57:28.106Z"
+  },
+  {
+    "id": "sch_app_1789037816287_nnnw",
+    "userId": "scholar-applicant-789",
+    "fullName": "Blessing Okon",
+    "email": "blessing.okon@test.com",
+    "phone": "08055443322",
+    "stateOfOrigin": "Akwa Ibom",
+    "targetUniversity": "",
+    "targetCourse": "Medicine and Surgery",
+    "reason": "First class aspiring candidate with indigent background.",
+    "parentOccupation": "",
+    "jambScore": "",
+    "status": "pending",
+    "appliedAt": "2026-09-10T10:56:56.287Z"
+  }
+]

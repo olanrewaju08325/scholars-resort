@@ -152,28 +152,54 @@ export const AIKeysTab = () => {
     try {
       const cleanKey = groqKey.trim();
 
-      // 1. Save to authoritative admin_settings table
-      await supabase.from('admin_settings').upsert([
-        {
-          setting_key: 'ai_api_keys',
-          setting_value: { groq: cleanKey, default_model: 'llama-3.3-70b-versatile' },
-          updated_at: new Date().toISOString()
-        },
-        {
-          setting_key: 'ai_limits',
-          setting_value: limits,
-          updated_at: new Date().toISOString()
-        }
-      ], { onConflict: 'setting_key' });
+      // 1. Post to Server-Side API Endpoint for persistent server storage and immediate cache update
+      await Promise.allSettled([
+        authFetch('/api/settings/ai_api_keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: { groq: cleanKey, default_model: 'llama-3.3-70b-versatile' } })
+        }),
+        authFetch('/api/settings/ai_limits', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: limits })
+        }),
+        authFetch('/api/admin/system-configs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            groq: {
+              apiKey: cleanKey,
+              defaultModel: 'llama-3.3-70b-versatile',
+              monthlyTokenLimit: limits.monthly_token_limit
+            }
+          })
+        })
+      ]);
 
-      // 2. Also save to platform_config for platform-wide persistence
-      await supabase.from('platform_config').upsert([
-        {
-          key: 'ai_limits',
-          value: limits,
-          updated_at: new Date().toISOString()
-        }
-      ], { onConflict: 'key' }).catch(() => {});
+      // 2. Direct Supabase admin_settings & platform_config fallback
+      try {
+        await supabase.from('admin_settings').upsert([
+          {
+            setting_key: 'ai_api_keys',
+            setting_value: { groq: cleanKey, default_model: 'llama-3.3-70b-versatile' },
+            updated_at: new Date().toISOString()
+          },
+          {
+            setting_key: 'ai_limits',
+            setting_value: limits,
+            updated_at: new Date().toISOString()
+          }
+        ], { onConflict: 'setting_key' });
+
+        await supabase.from('platform_config').upsert([
+          {
+            key: 'ai_limits',
+            value: limits,
+            updated_at: new Date().toISOString()
+          }
+        ], { onConflict: 'key' });
+      } catch (_) {}
 
       // 3. Save to localStorage for client caching
       if (cleanKey) {
@@ -181,20 +207,7 @@ export const AIKeysTab = () => {
       }
       localStorage.setItem('ai_limits', JSON.stringify(limits));
 
-      // 4. Post to API route for immediate runtime server cache update
-      authFetch('/api/admin/system-configs', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          groq: {
-            apiKey: cleanKey,
-            defaultModel: 'llama-3.3-70b-versatile',
-            monthlyTokenLimit: limits.monthly_token_limit
-          }
-        })
-      }).catch(() => {});
-
-      toast.success("Groq API Key and Student Usage Limits saved successfully to Supabase!");
+      toast.success("Groq API Key and Student Usage Limits saved successfully!");
       loadTelemetryData();
     } catch (err: any) {
       toast.error("Failed to save settings: " + err.message);

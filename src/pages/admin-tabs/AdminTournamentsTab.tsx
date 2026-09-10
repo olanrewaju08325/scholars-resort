@@ -146,12 +146,19 @@ async function saveTournamentAdaptive(
     }
     localStorage.setItem('scholar_tournaments', JSON.stringify(localList));
 
-    // Also persist into admin_settings
-    await supabaseClient.from('admin_settings').upsert({
-      setting_key: 'tournaments_db',
-      setting_value: localList,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'setting_key' });
+    // Also persist into admin_settings and server disk store
+    try {
+      await authFetch('/api/settings/tournaments_db', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: localList })
+      });
+      await supabaseClient.from('admin_settings').upsert({
+        setting_key: 'tournaments_db',
+        setting_value: localList,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch (_) {}
 
     savedOk = true;
   } catch (_) {}
@@ -549,6 +556,11 @@ Return STRICT JSON format:
       if (localRaw) {
         const list = JSON.parse(localRaw).map((t: any) => t.id === tournament.id ? { ...t, status: newStatus } : t);
         localStorage.setItem('scholar_tournaments', JSON.stringify(list));
+        await authFetch('/api/settings/tournaments_db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: list })
+        });
         await supabase.from('admin_settings').upsert({
           setting_key: 'tournaments_db',
           setting_value: list,
@@ -581,6 +593,11 @@ Return STRICT JSON format:
           if (localRaw) {
             const list = JSON.parse(localRaw).filter((t: any) => t.id !== id);
             localStorage.setItem('scholar_tournaments', JSON.stringify(list));
+            await authFetch('/api/settings/tournaments_db', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ value: list })
+            });
             await supabase.from('admin_settings').upsert({
               setting_key: 'tournaments_db',
               setting_value: list,

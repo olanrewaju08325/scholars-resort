@@ -14,6 +14,7 @@ import { logAdminActivity } from '@/services/adminActivityService';
 import { authFetch } from '@/lib/apiAuth';
 
 interface ReferralConfig {
+  rewardPerSignup?: number;
   rewardPerPaid: number;
   minWithdrawal: number;
   isActive: boolean;
@@ -190,13 +191,20 @@ export const ReferralTab = () => {
     e.preventDefault();
     setSavingConfig(true);
     try {
-      await supabase
-        .from('admin_settings')
-        .upsert({
-          setting_key: 'referral_program_config',
-          setting_value: config,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
+      const res = await authFetch('/api/referrals/admin/update-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(config)
+      });
+
+      if (!res.ok) {
+        // Fallback to /api/settings/referral_program_config
+        await authFetch('/api/settings/referral_program_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: config })
+        });
+      }
 
       logAdminActivity('UPDATE_REFERRAL_CONFIG', `Updated reward to ₦${config.rewardPerPaid}/friend and min withdrawal to ₦${config.minWithdrawal}`, 'finance');
       toast.success('Referral Program settings saved and updated live for all students!');

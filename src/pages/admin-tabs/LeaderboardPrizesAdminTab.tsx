@@ -204,11 +204,13 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: prizeConfig })
       });
-      await supabase.from('admin_settings').upsert({
-        setting_key: 'leaderboard_prize_config',
-        setting_value: prizeConfig,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'setting_key' });
+      try {
+        await supabase.from('admin_settings').upsert({
+          setting_key: 'leaderboard_prize_config',
+          setting_value: prizeConfig,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+      } catch (_) {}
 
       // 2. Save platform pricing
       await authFetch('/api/settings/platform_pricing', {
@@ -216,11 +218,13 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: pricingConfig })
       });
-      await supabase.from('admin_settings').upsert({
-        setting_key: 'platform_pricing',
-        setting_value: pricingConfig,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'setting_key' });
+      try {
+        await supabase.from('admin_settings').upsert({
+          setting_key: 'platform_pricing',
+          setting_value: pricingConfig,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+      } catch (_) {}
 
       // 3. Save weekly mock config
       await authFetch('/api/settings/weekly_mock_config', {
@@ -228,11 +232,13 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: mockConfig })
       });
-      await supabase.from('admin_settings').upsert({
-        setting_key: 'weekly_mock_config',
-        setting_value: mockConfig,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'setting_key' });
+      try {
+        await supabase.from('admin_settings').upsert({
+          setting_key: 'weekly_mock_config',
+          setting_value: mockConfig,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+      } catch (_) {}
 
       // 4. Also sync active mock to mock_exams table for synced events
       const { data: existingMock } = await supabase

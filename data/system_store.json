@@ -1,0 +1,50 @@
+{
+  "weekly_challenges_db": [
+    {
+      "id": "1741c27e-7f4c-4367-b7e3-45e995d8de66",
+      "title": "Weekly Physics Challenge",
+      "subject": "Physics",
+      "week_end": "2026-09-06",
+      "is_active": true,
+      "created_at": "2026-09-05T21:30:52.055Z",
+      "week_start": "2026-08-31",
+      "question_data": {
+        "source": "Real Past Question Database",
+        "options": [
+          "At the mid-point of the metre rule",
+          "40cm from the lighter mass",
+          "40cm from the heavier mass",
+          "60cm from the heavier mass / indeterminate because the metre rule is light"
+        ],
+        "question": "Two masses 40g and 60g respectively are attached firmly to the ends of a light metre rule. The centre of gravity of the system is",
+        "explanation": "Official UTME past question solution.",
+        "correct_answer": "40cm from the heavier mass",
+        "duration_minutes": 15
+      }
+    }
+  ],
+  "global_config": {
+    "jamb_date": "2026-04-15T08:00:00",
+    "telegram_support_link": "https://t.me/+6dtsZgQpwrNhZDM8",
+    "telegram_announcement_link": "https://t.me/+9WU6HrQE6DJhYTRk"
+  },
+  "referral_program_config": {
+    "isActive": true,
+    "programTitle": "UTME Student Referral & Ambassador Program",
+    "minWithdrawal": 1000,
+    "rewardPerPaid": 200,
+    "programDescription": "Earn cash rewards for every UTME candidate or friend you invite to Scholars Resort."
+  },
+  "weekly_mock_config": {
+    "title": "National JAMB UTME Grand Mock Exam (Week 1)",
+    "end_time": "2026-09-07T20:55",
+    "is_active": false,
+    "start_time": "2026-09-06T20:55",
+    "description": "Synchronized weekly mock testing student readiness under strict UTME timing. Top scorers win verified cash & airtime prizes.",
+    "question_count": 180,
+    "duration_minutes": 120,
+    "cash_prize_summary": "₦5,000 for 1st Place | ₦3,000 for 2nd Place | ₦1,000 Airtime for 3rd Place",
+    "rolling_mock_closes": "Every Sunday at 11:59 PM",
+    "contact_instructions": "Prizes disbursed every Sunday night. Winners will be contacted directly or should message Admin on WhatsApp."
+  }
+}

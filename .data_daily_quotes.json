@@ -1,0 +1,56 @@
+[
+  {
+    "focus": "Daily Discipline",
+    "quote": "Consistency is your superpower. 45 minutes of focused CBT drill today creates a 300+ score in April.",
+    "author": "Scholars Resort Academy",
+    "user_id": "aed12e7c-fff4-41e4-93cb-d41970c70213",
+    "bg_image": "https://images.unsplash.com/photo-1434030216411-0b793f4b4173?auto=format&fit=crop&w=800&q=80",
+    "category": "Discipline",
+    "created_at": "2026-09-04T22:53:54.102Z"
+  },
+  {
+    "focus": "Relentless Effort",
+    "quote": "Do not wait for extraordinary opportunities. Seize common occasions and make them great through relentless practice.",
+    "author": "UTME Merit Scholar",
+    "user_id": "aed12e7c-fff4-41e4-93cb-d41970c70213",
+    "bg_image": "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?auto=format&fit=crop&w=800&q=80",
+    "category": "Perseverance",
+    "created_at": "2026-09-04T22:53:54.102Z"
+  },
+  {
+    "focus": "Syllabus Mastery",
+    "quote": "The secret of getting ahead is getting started. Break your subject syllabus into small manageable daily topics.",
+    "author": "Scholars CBT Mentors",
+    "user_id": "aed12e7c-fff4-41e4-93cb-d41970c70213",
+    "bg_image": "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&w=800&q=80",
+    "category": "Strategy",
+    "created_at": "2026-09-04T22:53:54.102Z"
+  },
+  {
+    "focus": "Target Score Focus",
+    "quote": "Your university admission letter is being typed with every correct question you solve today. Stay locked in!",
+    "author": "Scholars AI Assistant",
+    "user_id": "aed12e7c-fff4-41e4-93cb-d41970c70213",
+    "bg_image": "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=800&q=80",
+    "category": "Focus",
+    "created_at": "2026-09-04T22:53:54.102Z"
+  },
+  {
+    "focus": "Growth Mindset",
+    "quote": "Failure is not the opposite of success; it is part of success. Review every mistake in CBT review mode.",
+    "author": "Scholars Educational Desk",
+    "user_id": "aed12e7c-fff4-41e4-93cb-d41970c70213",
+    "bg_image": "https://images.unsplash.com/photo-1501504905252-473c47e087f8?auto=format&fit=crop&w=800&q=80",
+    "category": "Mindset",
+    "created_at": "2026-09-04T22:53:54.102Z"
+  },
+  {
+    "focus": "Time Management",
+    "quote": "Accuracy in Speed: Practice timed mock sessions until quick decision-making becomes second nature.",
+    "author": "UTME Top Scorer (342)",
+    "user_id": "aed12e7c-fff4-41e4-93cb-d41970c70213",
+    "bg_image": "https://images.unsplash.com/photo-1497633762265-9d179a990aa6?auto=format&fit=crop&w=800&q=80",
+    "category": "Speed",
+    "created_at": "2026-09-04T22:53:54.102Z"
+  }
+]

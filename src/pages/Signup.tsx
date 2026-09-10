@@ -77,7 +77,59 @@ const Signup = () => {
       });
 
       if (signUpError) {
-        if (signUpError.message.includes('Failed to fetch')) {
+        if (signUpError.message.includes('User already registered') || signUpError.message.toLowerCase().includes('already exists') || signUpError.message.toLowerCase().includes('user already exists')) {
+          // Attempt automatic sign-in & account reactivation
+          try {
+            const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+              email: cleanEmail,
+              password: password
+            });
+
+            if (!signInError && signInData?.user) {
+              const activeUserId = signInData.user.id;
+
+              // Reactivate account on server and refresh profile
+              try {
+                await fetch(getApiUrl('/api/auth/reactivate-user'), {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    userId: activeUserId,
+                    email: cleanEmail,
+                    fullName: cleanName,
+                    phone: cleanPhone,
+                    referralCode: cleanRefCode
+                  })
+                });
+              } catch {}
+
+              // Track referral if referral code used
+              if (cleanRefCode) {
+                try {
+                  await fetch(getApiUrl('/api/referrals/track-signup'), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      referrerCode: cleanRefCode,
+                      referredId: activeUserId,
+                      referredName: cleanName,
+                      referredEmail: cleanEmail,
+                      referredPhone: cleanPhone
+                    })
+                  });
+                  localStorage.removeItem('scholar_ref_code');
+                } catch {}
+              }
+
+              navigate('/onboarding');
+              return;
+            } else {
+              setError("An account with this email already exists in our system. Please Sign In below or click 'Forgot Password' to access your account.");
+            }
+          } catch {
+            setError("An account with this email already exists. Please proceed to the Sign In page.");
+          }
+        } else if (signUpError.message.includes('Failed to fetch')) {
           setError("Connection failed. If you hosted on Netlify, please ensure 'VITE_SUPABASE_URL' and 'VITE_SUPABASE_ANON_KEY' environment variables are set in your Netlify Site Settings.");
         } else {
           setError(signUpError.message);

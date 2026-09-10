@@ -1,0 +1,9 @@
+{
+  "test-real-user-sim-1": {
+    "user_id": "test-real-user-sim-1",
+    "target_score": 300,
+    "exam_date": "2027-04-19",
+    "daily_study_hours": 2,
+    "updated_at": "2026-09-10T11:07:00.101Z"
+  }
+}
