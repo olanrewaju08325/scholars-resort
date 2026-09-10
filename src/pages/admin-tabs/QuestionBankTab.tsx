@@ -582,7 +582,7 @@ export const QuestionBankTab = () => {
   const [csvModalOpen, setCsvModalOpen] = useState(false);
   const [sanityScanModalOpen, setSanityScanModalOpen] = useState(false);
   const [parsedCsvResult, setParsedCsvResult] = useState<CsvParseResult | null>(null);
-  const [duplicateMode, setDuplicateMode] = useState<'skip' | 'allow'>('skip');
+  const [duplicateMode, setDuplicateMode] = useState<'skip' | 'update_existing' | 'allow'>('update_existing');
   const [activePreviewTab, setActivePreviewTab] = useState<'valid' | 'duplicates' | 'errors'>('valid');
   const [aiCheckingDuplicates, setAiCheckingDuplicates] = useState(false);
   const [aiAnalysisResults, setAiAnalysisResults] = useState<{
@@ -668,7 +668,12 @@ export const QuestionBankTab = () => {
 
     // Decide which questions to import based on duplicateMode
     let questionsToIngest = [...parsedCsvResult.validQuestions];
-    if (duplicateMode === 'allow') {
+    if (duplicateMode === 'update_existing') {
+      questionsToIngest = [
+        ...parsedCsvResult.validQuestions,
+        ...parsedCsvResult.duplicateQuestionsInDb
+      ];
+    } else if (duplicateMode === 'allow') {
       questionsToIngest = [
         ...parsedCsvResult.validQuestions,
         ...parsedCsvResult.duplicateQuestionsInFile,
@@ -1506,28 +1511,39 @@ export const QuestionBankTab = () => {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
                   <div>
                     <label className="text-slate-400 block mb-1 font-medium">Duplicate Handling Policy</label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setDuplicateMode('update_existing')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
+                          duplicateMode === 'update_existing'
+                            ? 'bg-blue-500/20 border-blue-500 text-blue-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        Update Existing & Enrich (Recommended for Re-uploads)
+                      </button>
                       <button
                         type="button"
                         onClick={() => setDuplicateMode('skip')}
-                        className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
+                        className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
                           duplicateMode === 'skip'
                             ? 'bg-primary/20 border-primary text-primary-foreground'
                             : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        Skip Duplicates (Recommended)
+                        Skip
                       </button>
                       <button
                         type="button"
                         onClick={() => setDuplicateMode('allow')}
-                        className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
+                        className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
                           duplicateMode === 'allow'
                             ? 'bg-amber-500/20 border-amber-500 text-amber-300'
                             : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
                         }`}
                       >
-                        Import All (Allow Duplicates)
+                        Allow Dupes
                       </button>
                     </div>
                   </div>
