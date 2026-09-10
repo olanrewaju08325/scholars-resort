@@ -161,7 +161,7 @@ const Results = () => {
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
     try {
-      if (mode.toLowerCase().includes('practice') || questions.length > 0) {
+      if (String(mode || '').toLowerCase().includes('practice') || questions.length > 0) {
         // Collect topic breakdown from questions array
         const topicCounts: Record<string, { total: number; correct: number; subject: string }> = {};
         questions.forEach((q) => {
@@ -274,7 +274,7 @@ const Results = () => {
   });
 
   const handleRetakeExactSession = () => {
-    if (mode.toLowerCase().includes('cbt') || mode.toLowerCase().includes('mock') || mode.toLowerCase().includes('exam')) {
+    if (String(mode || '').toLowerCase().includes('cbt') || String(mode || '').toLowerCase().includes('mock') || String(mode || '').toLowerCase().includes('exam')) {
       navigate('/exam', { state: { retakeQuestions: questions } });
     } else {
       navigate('/practice/session', { state: { retakeQuestions: questions } });
@@ -508,14 +508,15 @@ const Results = () => {
                           
                           // Check if this option is the correct one or the user's chosen one
                           const isCorrectOpt = checkIsCorrect(label, q) || checkIsCorrect(optRaw, q) || checkIsCorrect(optText, q) || (typeof opt === 'object' && checkIsCorrect(opt?.id, q));
+                          const userAnsStr = String(userAnswer || '');
                           const isUserOpt = userAnswer && (
-                            userAnswer === label || 
-                            userAnswer.toLowerCase() === label.toLowerCase() ||
-                            userAnswer === optRaw || 
-                            userAnswer.toLowerCase() === optRaw.toLowerCase() ||
-                            userAnswer === optText || 
-                            userAnswer.toLowerCase() === optText.toLowerCase() ||
-                            (typeof opt === 'object' && opt?.id && (userAnswer === opt.id || userAnswer.toLowerCase() === opt.id.toLowerCase()))
+                            userAnsStr === label || 
+                            userAnsStr.toLowerCase() === label.toLowerCase() ||
+                            userAnsStr === optRaw || 
+                            userAnsStr.toLowerCase() === optRaw.toLowerCase() ||
+                            userAnsStr === optText || 
+                            userAnsStr.toLowerCase() === optText.toLowerCase() ||
+                            (typeof opt === 'object' && opt?.id && (userAnsStr === String(opt.id) || userAnsStr.toLowerCase() === String(opt.id).toLowerCase()))
                           );
 
                           let cls = 'border-border bg-muted/20 text-foreground';

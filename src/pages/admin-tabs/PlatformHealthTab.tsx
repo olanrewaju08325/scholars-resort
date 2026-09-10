@@ -64,13 +64,13 @@ export const PlatformHealthTab = () => {
       const latency = Math.floor(performance.now() - start);
 
       const [
-        { count: totalUsers },
-        { count: activeExams },
-        { count: failedEmails },
-        { count: failedPayments },
-        aiUsage,
-        { count: failedLogs }
-      ] = await Promise.all([
+        profilesRes,
+        examsRes,
+        emailsRes,
+        paymentsRes,
+        aiRes,
+        logsRes
+      ] = await Promise.allSettled([
         supabase.from('profiles').select('id', { count: 'exact', head: true }),
         supabase.from('exam_sessions').select('id', { count: 'exact', head: true }).eq('status', 'started'),
         supabase.from('communication_logs').select('id', { count: 'exact', head: true }).in('status', ['failed', 'retrying']),
@@ -78,6 +78,13 @@ export const PlatformHealthTab = () => {
         supabase.from('ai_usage').select('total_tokens').gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString()),
         supabase.from('platform_error_logs').select('id', { count: 'exact', head: true }).gte('created_at', new Date(new Date().setHours(0,0,0,0)).toISOString())
       ]);
+
+      const totalUsers = profilesRes.status === 'fulfilled' ? profilesRes.value.count || 0 : 0;
+      const activeExams = examsRes.status === 'fulfilled' ? examsRes.value.count || 0 : 0;
+      const failedEmails = emailsRes.status === 'fulfilled' ? emailsRes.value.count || 0 : 0;
+      const failedPayments = paymentsRes.status === 'fulfilled' ? paymentsRes.value.count || 0 : 0;
+      const aiUsage = aiRes.status === 'fulfilled' ? aiRes.value : { data: [] };
+      const failedLogs = logsRes.status === 'fulfilled' ? logsRes.value.count || 0 : 0;
 
       // Measure real service latencies
       const authStart = performance.now();

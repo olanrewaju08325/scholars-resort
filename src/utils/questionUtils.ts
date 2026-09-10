@@ -59,18 +59,18 @@ export function checkIsCorrect(userAnswer: string | undefined | null, q: any): b
 
   // Find user's selected option
   const userOpt = mapped.find(m => 
-    m.id.toLowerCase() === rawUser.toLowerCase() || 
-    m.letter.toLowerCase() === rawUser.toLowerCase() ||
-    m.clean === cleanOptionText(rawUser).toLowerCase() ||
-    m.text === rawUser.toLowerCase()
+    String(m.id || '').toLowerCase() === String(rawUser).toLowerCase() || 
+    String(m.letter || '').toLowerCase() === String(rawUser).toLowerCase() ||
+    String(m.clean || '') === cleanOptionText(String(rawUser)).toLowerCase() ||
+    String(m.text || '').toLowerCase() === String(rawUser).toLowerCase()
   );
 
   // Find correct option
   const correctOpt = mapped.find(m => 
-    m.id.toLowerCase() === rawCorrect.toLowerCase() || 
-    m.letter.toLowerCase() === rawCorrect.toLowerCase() ||
-    m.clean === cleanOptionText(rawCorrect).toLowerCase() ||
-    m.text === rawCorrect.toLowerCase()
+    String(m.id || '').toLowerCase() === String(rawCorrect).toLowerCase() || 
+    String(m.letter || '').toLowerCase() === String(rawCorrect).toLowerCase() ||
+    String(m.clean || '') === cleanOptionText(String(rawCorrect)).toLowerCase() ||
+    String(m.text || '').toLowerCase() === String(rawCorrect).toLowerCase()
   );
 
   if (userOpt && correctOpt) {

@@ -37,18 +37,23 @@ export const SystemHealthTab = () => {
       const latency = Math.max(1, Math.floor(performance.now() - start));
 
       const [
-        { count: activityCount }, 
-        { count: sessionCount }, 
-        { data: aiData },
-        { count: rejectedPaymentCount },
+        activityRes, 
+        sessionRes, 
+        aiRes,
+        rejectedPaymentRes,
         usageStats
-      ] = await Promise.all([
+      ] = await Promise.allSettled([
         supabase.from('activity_logs').select('*', { count: 'exact', head: true }),
         supabase.from('exam_sessions').select('*', { count: 'exact', head: true }),
         supabase.from('ai_usage').select('total_tokens'),
         supabase.from('manual_payments').select('*', { count: 'exact', head: true }).eq('status', 'rejected'),
         SystemUsageLimitService.fetchLiveUsageStats()
       ]);
+
+      const activityCount = activityRes.status === 'fulfilled' ? activityRes.value.count || 0 : 0;
+      const sessionCount = sessionRes.status === 'fulfilled' ? sessionRes.value.count || 0 : 0;
+      const aiData = aiRes.status === 'fulfilled' ? aiRes.value.data : [];
+      const rejectedPaymentCount = rejectedPaymentRes.status === 'fulfilled' ? rejectedPaymentRes.value.count || 0 : 0;
 
       const totalAiTokens = aiData?.reduce((acc, curr) => acc + (curr.total_tokens || 0), 0) || usageStats.ai.tokensUsedThisMonth || 0;
       const failedEmailCount = usageStats.smtp.failedEmailsToday || 0;

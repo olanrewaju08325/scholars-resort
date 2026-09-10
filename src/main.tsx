@@ -46,6 +46,15 @@ if ('serviceWorker' in navigator) {
   registerSW({ immediate: true });
 }
 
+// Clean up Supabase Realtime channels when entering Back-Forward Cache
+window.addEventListener('pagehide', () => {
+  try {
+    import('./lib/supabase').then(({ supabase }) => {
+      supabase.removeAllChannels();
+    });
+  } catch {}
+});
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />

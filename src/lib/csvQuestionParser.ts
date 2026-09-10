@@ -500,23 +500,29 @@ export const importQuestionsToDatabase = async (
     }
   }
 
-  // 4. Execute updates in place (upgrades previously uploaded questions to the new recommended format)
-  onProgress?.(0, total, `Updating ${toUpdate.length} existing questions to new format...`);
-  for (const up of toUpdate) {
-    try {
-      const { error: updateErr } = await supabase
-        .from('questions')
-        .update(up.payload)
-        .eq('id', up.id);
-
-      if (!updateErr) {
-        successCount++;
+  // 4. Batch update existing questions in chunks of 100 using upsert for high performance
+  if (toUpdate.length > 0) {
+    onProgress?.(0, total, `Updating ${toUpdate.length} existing questions to new format...`);
+    const updatePayloads = toUpdate.map(u => ({ id: u.id, ...u.payload }));
+    const updateChunkSize = 100;
+    for (let i = 0; i < updatePayloads.length; i += updateChunkSize) {
+      const chunk = updatePayloads.slice(i, i + updateChunkSize);
+      const { error: upsertErr } = await supabase.from('questions').upsert(chunk);
+      if (!upsertErr) {
+        successCount += chunk.length;
       } else {
-        // Fallback or count failure
-        failedCount++;
+        // Fallback to individual updates if batch upsert fails
+        for (const up of chunk) {
+          const { error: singleErr } = await supabase.from('questions').update(up).eq('id', up.id);
+          if (!singleErr) {
+            successCount++;
+          } else {
+            failedCount++;
+            errors.push(`Failed to update question ID ${up.id}: ${singleErr.message}`);
+          }
+        }
       }
-    } catch {
-      failedCount++;
+      onProgress?.(successCount + failedCount, total, `Updated ${successCount} / ${total} questions...`);
     }
   }
 
