@@ -4,6 +4,17 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Rocket } from 'lucide-react';
 
+const Digit = ({ value, label }: { value: number; label: string }) => (
+  <div className="flex flex-col items-center">
+    <div className="bg-primary/10 border border-primary/30 rounded-xl w-16 h-16 flex items-center justify-center">
+      <span className="text-2xl font-black text-primary font-mono">
+        {String(value).padStart(2, '0')}
+      </span>
+    </div>
+    <span className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1.5">{label}</span>
+  </div>
+);
+
 export const JAMBCountdown = () => {
   const { profile } = useAuth();
   const [daysLeft, setDaysLeft] = useState(0);
@@ -74,16 +85,7 @@ export const JAMBCountdown = () => {
     return () => clearInterval(interval);
   }, [examDate, loaded]);
 
-  const Digit = ({ value, label }: { value: number; label: string }) => (
-    <div className="flex flex-col items-center">
-      <div className="bg-primary/10 border border-primary/30 rounded-xl w-16 h-16 flex items-center justify-center">
-        <span className="text-2xl font-black text-primary font-mono">
-          {String(value).padStart(2, '0')}
-        </span>
-      </div>
-      <span className="text-[10px] text-muted-foreground uppercase tracking-widest mt-1.5">{label}</span>
-    </div>
-  );
+
 
   return (
     <Card className="bg-card border-border overflow-hidden">
