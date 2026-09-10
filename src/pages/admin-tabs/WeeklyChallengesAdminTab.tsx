@@ -219,6 +219,11 @@ Return STRICT JSON format:
       // 3. Always sync to admin_settings and local storage
       try {
         const existing = [...challenges, newChallenge];
+        await authFetch('/api/settings/weekly_challenges_db', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: existing })
+        });
         await supabase.from('admin_settings').upsert({
           setting_key: 'weekly_challenges_db',
           setting_value: existing,
@@ -249,7 +254,7 @@ Return STRICT JSON format:
     const updated = challenges.map(c => c.id === id ? { ...c, is_active: !currentState } : c);
     setChallenges(updated);
     try {
-      await fetch('/api/settings/weekly_challenges_db', {
+      await authFetch('/api/settings/weekly_challenges_db', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: updated })
@@ -274,7 +279,7 @@ Return STRICT JSON format:
       const updated = challenges.filter(c => c.id !== id);
       setChallenges(updated);
       try {
-        await fetch('/api/settings/weekly_challenges_db', {
+        await authFetch('/api/settings/weekly_challenges_db', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: updated })

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/apiAuth';
 
 export interface LeaderboardPrizeConfig {
   frequency: 'weekly' | 'monthly';
@@ -198,7 +199,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
     setSaving(true);
     try {
       // 1. Save prize config
-      await fetch('/api/settings/leaderboard_prize_config', {
+      await authFetch('/api/settings/leaderboard_prize_config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: prizeConfig })
@@ -210,7 +211,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
       }, { onConflict: 'setting_key' });
 
       // 2. Save platform pricing
-      await fetch('/api/settings/platform_pricing', {
+      await authFetch('/api/settings/platform_pricing', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: pricingConfig })
@@ -222,7 +223,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
       }, { onConflict: 'setting_key' });
 
       // 3. Save weekly mock config
-      await fetch('/api/settings/weekly_mock_config', {
+      await authFetch('/api/settings/weekly_mock_config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: mockConfig })

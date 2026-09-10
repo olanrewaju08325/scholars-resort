@@ -123,7 +123,6 @@ export class DailyQuoteService {
    * Add new quote to database quote bank (admin_settings & daily_quotes table)
    */
   static async saveQuote(item: DailyQuoteItem): Promise<boolean> {
-    if (!supabase) return false;
     try {
       const newEntry: DailyQuoteItem = {
         quote: item.quote,
@@ -134,26 +133,38 @@ export class DailyQuoteService {
         created_at: new Date().toISOString()
       };
 
-      // 1. Fetch current bank and prepend
-      const { data: settingData } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'daily_quotes_bank')
-        .maybeSingle();
-
-      let currentList: DailyQuoteItem[] = Array.isArray(settingData?.setting_value) ? settingData.setting_value : [...SEED_DAILY_QUOTES];
-      currentList = [newEntry, ...currentList.filter(q => q.quote !== newEntry.quote)].slice(0, 100);
-
-      await supabase.from('admin_settings').upsert({
-        setting_key: 'daily_quotes_bank',
-        setting_value: currentList,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'setting_key' });
-
-      // 2. Also try daily_quotes table if it exists
+      // 1. Persist to server API
       try {
-        await supabase.from('daily_quotes').insert(newEntry);
+        await fetch('/api/quotes/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newEntry)
+        });
       } catch {}
+
+      // 2. Fetch current bank and prepend in Supabase if accessible
+      if (supabase) {
+        try {
+          const { data: settingData } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'daily_quotes_bank')
+            .maybeSingle();
+
+          let currentList: DailyQuoteItem[] = Array.isArray(settingData?.setting_value) ? settingData.setting_value : [...SEED_DAILY_QUOTES];
+          currentList = [newEntry, ...currentList.filter(q => q.quote !== newEntry.quote)].slice(0, 100);
+
+          await supabase.from('admin_settings').upsert({
+            setting_key: 'daily_quotes_bank',
+            setting_value: currentList,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'setting_key' });
+        } catch {}
+
+        try {
+          await supabase.from('daily_quotes').insert(newEntry);
+        } catch {}
+      }
 
       return true;
     } catch {

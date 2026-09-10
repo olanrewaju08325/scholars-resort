@@ -7,6 +7,7 @@ import { Trophy, Plus, Trash2, Edit2, Save, RefreshCw, Award, CheckCircle, Star 
 import { toast } from 'sonner';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { logAdminActivity } from '@/services/adminActivityService';
+import { authFetch } from '@/lib/apiAuth';
 
 export const BadgesAdminTab = () => {
   const [badges, setBadges] = useState<any[]>([]);
@@ -97,8 +98,13 @@ export const BadgesAdminTab = () => {
         ? badges.map(b => b.id === currentBadgeId ? { ...b, ...payload } : b)
         : [...badges, { id: crypto.randomUUID(), ...payload, created_at: new Date().toISOString() }];
 
-      // Save to Supabase admin_settings / badges table
+      // Save to Supabase admin_settings / badges table and server API
       try {
+        await authFetch('/api/settings/gamification_badges_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: updatedList })
+        });
         await supabase.from('admin_settings').upsert({
           setting_key: 'gamification_badges_config',
           setting_value: updatedList,
@@ -154,6 +160,11 @@ export const BadgesAdminTab = () => {
       localStorage.setItem('scholar_custom_badges', JSON.stringify(updatedList));
       
       try {
+        await authFetch('/api/settings/gamification_badges_config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ value: updatedList })
+        });
         await supabase.from('admin_settings').upsert({
           setting_key: 'gamification_badges_config',
           setting_value: updatedList,

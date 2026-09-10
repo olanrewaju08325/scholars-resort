@@ -89,8 +89,31 @@ export function useDailyMotivation() {
         } catch {}
       }
 
+      // 2. Fetch from server API
+      try {
+        const res = await fetch('/api/quotes/daily');
+        const json = await res.json();
+        if (json?.success && Array.isArray(json.quotes) && json.quotes.length > 0) {
+          const apiQuotes = json.quotes;
+          const mergedMap = new Map<string, MotivationQuote>();
+          [...apiQuotes, ...cachedQuotes, ...INITIAL_SEED_QUOTES].forEach(item => {
+            if (item?.quote && !mergedMap.has(item.quote.trim())) {
+              mergedMap.set(item.quote.trim(), item);
+            }
+          });
+          const merged = Array.from(mergedMap.values());
+          setDbQuotes(merged);
+          localStorage.setItem('scholars_saved_quotes', JSON.stringify(merged.slice(0, 50)));
+
+          const currentHour = new Date().getHours();
+          const selected = json.todayQuote || merged[currentHour % merged.length];
+          setMotivation(selected);
+          return merged;
+        }
+      } catch {}
+
       if (supabase && navigator.onLine) {
-        // 2. Fetch from admin_settings.daily_quotes_bank
+        // 3. Fetch from admin_settings.daily_quotes_bank
         const { data: settingData } = await supabase
           .from('admin_settings')
           .select('setting_value')
@@ -181,7 +204,16 @@ export function useDailyMotivation() {
       cachedList = [newQuote, ...cachedList.filter(q => q.quote !== newQuote.quote)].slice(0, 50);
       localStorage.setItem('scholars_saved_quotes', JSON.stringify(cachedList));
 
-      // 2. Persist to Supabase admin_settings.daily_quotes_bank
+      // 2. Persist to server API
+      try {
+        await fetch('/api/quotes/save', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newQuote)
+        });
+      } catch {}
+
+      // 3. Persist to Supabase admin_settings.daily_quotes_bank
       if (navigator.onLine && supabase) {
         const { data: settingData } = await supabase
           .from('admin_settings')

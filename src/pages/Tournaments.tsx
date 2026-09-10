@@ -15,12 +15,19 @@ import { useAuth } from '@/context/AuthContext';
 import { WeeklyChallenge } from '@/components/dashboard/WeeklyChallenge';
 
 export default function Tournaments() {
-  const { profile, refreshProfile } = useAuth();
+  const { profile, user, refreshProfile } = useAuth();
   const navigate = useNavigate();
 
   const [loading, setLoading] = useState(true);
   const [tournaments, setTournaments] = useState<any[]>([]);
-  const [registeredTournamentIds, setRegisteredTournamentIds] = useState<string[]>([]);
+  const [registeredTournamentIds, setRegisteredTournamentIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('scholar_registered_tournaments');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [registeringId, setRegisteringId] = useState<string | null>(null);
   const [enabled, setEnabled] = useState(true);
   const [now, setNow] = useState(Date.now());
@@ -47,23 +54,37 @@ export default function Tournaments() {
   const [loadingClaims, setLoadingClaims] = useState(false);
 
   const fetchMyRegistrations = useCallback(async () => {
-    if (!profile?.id) return;
+    const effectiveId = profile?.id || (user as any)?.id;
+    const effectiveEmail = profile?.email || (user as any)?.email;
+    if (!effectiveId && !effectiveEmail) return;
+
     try {
-      const res = await fetch(`/api/tournaments/my-registrations?userId=${encodeURIComponent(profile.id)}`);
+      const queryParams = new URLSearchParams();
+      if (effectiveId) queryParams.set('userId', effectiveId);
+      if (effectiveEmail) queryParams.set('email', effectiveEmail);
+
+      const res = await fetch(`/api/tournaments/my-registrations?${queryParams.toString()}`);
       const json = await res.json();
       if (json?.success && Array.isArray(json.registeredTournamentIds)) {
-        setRegisteredTournamentIds(json.registeredTournamentIds);
+        setRegisteredTournamentIds(prev => {
+          const merged = Array.from(new Set([...prev, ...json.registeredTournamentIds]));
+          try {
+            localStorage.setItem('scholar_registered_tournaments', JSON.stringify(merged));
+          } catch {}
+          return merged;
+        });
       }
     } catch (err) {
       console.warn('Could not fetch registered tournaments:', err);
     }
-  }, [profile?.id]);
+  }, [profile?.id, profile?.email, (user as any)?.id, (user as any)?.email]);
 
   const fetchMyClaims = useCallback(async () => {
-    if (!profile?.id) return;
+    const effectiveId = profile?.id || (user as any)?.id;
+    if (!effectiveId) return;
     setLoadingClaims(true);
     try {
-      const res = await fetch(`/api/tournaments/prize-claims?user_id=${encodeURIComponent(profile.id)}`);
+      const res = await fetch(`/api/tournaments/prize-claims?user_id=${encodeURIComponent(effectiveId)}`);
       const json = await res.json();
       if (json?.success && Array.isArray(json.claims)) {
         setMyClaims(json.claims);
@@ -73,7 +94,7 @@ export default function Tournaments() {
     } finally {
       setLoadingClaims(false);
     }
-  }, [profile?.id]);
+  }, [profile?.id, (user as any)?.id]);
 
   const fetchTournaments = useCallback(async () => {
     setLoading(true);
@@ -243,7 +264,13 @@ export default function Tournaments() {
       const json = await res.json();
       if (json?.success) {
         toast.success(json.message || "Successfully registered for tournament!");
-        setRegisteredTournamentIds(prev => [...prev, tournament.id, tournament.legacy_id].filter(Boolean));
+        setRegisteredTournamentIds(prev => {
+          const updated = Array.from(new Set([...prev, tournament.id, tournament.legacy_id].filter(Boolean)));
+          try {
+            localStorage.setItem('scholar_registered_tournaments', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
         setCheckoutTournament(null);
         if (refreshProfile) refreshProfile();
         fetchTournaments();

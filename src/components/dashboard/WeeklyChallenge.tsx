@@ -86,33 +86,31 @@ export const WeeklyChallenge = () => {
       if (activeChallenge) {
         setChallenge(activeChallenge);
 
-        if (profile?.id) {
+        if (profile?.id || (profile as any)?.email) {
+          const effectiveUserId = profile?.id || '';
+          const effectiveEmail = profile?.email || '';
+
           // 1. Check local storage first for immediate zero-latency feedback
-          const localSubRaw = localStorage.getItem(`wc_sub_${activeChallenge.id}_${profile.id}`);
+          const localSubRaw = localStorage.getItem(`wc_sub_${activeChallenge.id}_${effectiveUserId}`);
           let userSub = localSubRaw ? JSON.parse(localSubRaw) : null;
 
-          // 2. Fetch authoritative submissions from admin_settings
+          // 2. Fetch authoritative submissions from server API
           try {
-            const { data: subSetting } = await supabase
-              .from('admin_settings')
-              .select('setting_value')
-              .eq('setting_key', 'weekly_challenge_submissions_db')
-              .maybeSingle();
+            const queryParams = new URLSearchParams();
+            queryParams.set('challenge_id', activeChallenge.id);
+            if (effectiveUserId) queryParams.set('user_id', effectiveUserId);
+            if (effectiveEmail) queryParams.set('email', effectiveEmail);
 
-            if (subSetting?.setting_value && Array.isArray(subSetting.setting_value)) {
-              const allSubmissions = subSetting.setting_value;
-              const challengeSubs = allSubmissions.filter((s: any) => s.challenge_id === activeChallenge.id);
-              setParticipantCount(challengeSubs.length);
-
-              if (!userSub) {
-                const found = challengeSubs.find((s: any) => s.user_id === profile.id);
-                if (found) {
-                  userSub = found;
-                  localStorage.setItem(`wc_sub_${activeChallenge.id}_${profile.id}`, JSON.stringify(found));
-                }
+            const res = await fetch(`/api/challenges/submissions?${queryParams.toString()}`);
+            const json = await res.json();
+            if (json?.success) {
+              if (json.participantCount !== undefined) {
+                setParticipantCount(json.participantCount);
               }
-            } else if (userSub) {
-              setParticipantCount(1);
+              if (json.submission) {
+                userSub = json.submission;
+                localStorage.setItem(`wc_sub_${activeChallenge.id}_${effectiveUserId}`, JSON.stringify(json.submission));
+              }
             }
           } catch {
             if (userSub) setParticipantCount(1);
@@ -170,49 +168,49 @@ export const WeeklyChallenge = () => {
         (ansString.length === 1 && selectedAnswer.toUpperCase().startsWith(ansString.toUpperCase())) ||
         selectedAnswer.toLowerCase().includes(ansString.toLowerCase());
 
-      const newSub = {
-        challenge_id: challenge.id,
-        user_id: profile.id,
-        selected_answer: selectedAnswer,
-        is_correct: isCorrect,
-        submitted_at: new Date().toISOString()
-      };
+      const res = await fetch('/api/challenges/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          challenge_id: challenge.id,
+          user_id: profile.id,
+          user_name: profile.full_name || profile.email || 'Scholar',
+          user_email: profile.email || '',
+          selected_answer: selectedAnswer,
+          is_correct: isCorrect,
+          time_taken_seconds: 45
+        })
+      });
 
-      // 1. Save local submission state immediately
-      localStorage.setItem(`wc_sub_${challenge.id}_${profile.id}`, JSON.stringify(newSub));
-      setSubmission(newSub);
-      setParticipantCount(p => p + 1);
+      const json = await res.json();
+      if (json?.success) {
+        const savedSub = json.submission || {
+          challenge_id: challenge.id,
+          user_id: profile.id,
+          selected_answer: selectedAnswer,
+          is_correct: isCorrect,
+          submitted_at: new Date().toISOString()
+        };
 
-      // 2. Sync to centralized admin_settings store
-      try {
-        const { data: current } = await supabase
-          .from('admin_settings')
-          .select('setting_value')
-          .eq('setting_key', 'weekly_challenge_submissions_db')
-          .maybeSingle();
+        // 1. Save local submission state immediately
+        localStorage.setItem(`wc_sub_${challenge.id}_${profile.id}`, JSON.stringify(savedSub));
+        setSubmission(savedSub);
+        if (json.participantCount !== undefined) {
+          setParticipantCount(json.participantCount);
+        } else {
+          setParticipantCount(p => p + 1);
+        }
 
-        const currentList = Array.isArray(current?.setting_value) ? current.setting_value : [];
-        const filtered = currentList.filter((s: any) => !(s.challenge_id === challenge.id && s.user_id === profile.id));
-        filtered.push(newSub);
+        // 2. Refresh profile XP
+        if (refreshProfile) refreshProfile();
 
-        await supabase.from('admin_settings').upsert({
-          setting_key: 'weekly_challenge_submissions_db',
-          setting_value: filtered,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'setting_key' });
-      } catch (subErr) {
-        console.warn('Submission sync to admin_settings:', subErr);
-      }
-
-      // 3. Award XP if correct
-      if (isCorrect) {
-        try {
-          await supabase.from('profiles').update({ xp: (profile.xp || 0) + 50 }).eq('id', profile.id);
-          await supabase.from('xp_transactions').insert({ user_id: profile.id, amount: 50, reason: 'Weekly Challenge correct answer' });
-        } catch {}
-        toast.success('Correct! You earned +50 XP!', { duration: 4000 });
+        if (isCorrect) {
+          toast.success('Correct! You earned +50 XP!', { duration: 4000 });
+        } else {
+          toast.error('Wrong answer. Keep practicing!');
+        }
       } else {
-        toast.error('Wrong answer. Keep practicing!');
+        toast.error(json?.error || 'Failed to record answer. Please try again.');
       }
     } catch (err: any) {
       toast.error(`Submission error: ${err.message || 'Please try again'}`);

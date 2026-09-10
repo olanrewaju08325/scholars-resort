@@ -1,1 +1,18 @@
-[]
+[
+  {
+    "id": "e1b7f80b-732f-4bf6-a9e9-3a16673c7c0d",
+    "tournament_id": "t_1788696725514",
+    "legacy_id": null,
+    "user_id": "test-user-id",
+    "user_name": "Test User",
+    "user_email": "test@example.com",
+    "payment_method": "free",
+    "payment_reference": null,
+    "coins_deducted": 0,
+    "entry_fee_amount": 0,
+    "is_paid": false,
+    "joined_at": "2026-09-10T08:48:06.496Z",
+    "score": 0,
+    "time_taken_seconds": 0
+  }
+]

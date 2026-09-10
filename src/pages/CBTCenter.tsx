@@ -110,7 +110,14 @@ export default function CBTCenter() {
   ];
 
   const [tournaments, setTournaments] = useState<any[]>([]);
-  const [registeredTournamentIds, setRegisteredTournamentIds] = useState<string[]>([]);
+  const [registeredTournamentIds, setRegisteredTournamentIds] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('scholar_registered_tournaments');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
   const [registeringTournamentId, setRegisteringTournamentId] = useState<string | null>(null);
 
   const fetchTournaments = async () => {
@@ -128,12 +135,24 @@ export default function CBTCenter() {
       if (data) setTournaments(data);
     }
 
-    if (profile?.id) {
+    const effectiveId = profile?.id;
+    const effectiveEmail = profile?.email;
+    if (effectiveId || effectiveEmail) {
       try {
-        const regRes = await fetch(`/api/tournaments/my-registrations?userId=${encodeURIComponent(profile.id)}`);
+        const queryParams = new URLSearchParams();
+        if (effectiveId) queryParams.set('userId', effectiveId);
+        if (effectiveEmail) queryParams.set('email', effectiveEmail);
+
+        const regRes = await fetch(`/api/tournaments/my-registrations?${queryParams.toString()}`);
         const regJson = await regRes.json();
         if (regJson?.success && Array.isArray(regJson.registeredTournamentIds)) {
-          setRegisteredTournamentIds(regJson.registeredTournamentIds);
+          setRegisteredTournamentIds(prev => {
+            const merged = Array.from(new Set([...prev, ...regJson.registeredTournamentIds]));
+            try {
+              localStorage.setItem('scholar_registered_tournaments', JSON.stringify(merged));
+            } catch {}
+            return merged;
+          });
         }
       } catch {}
     }
@@ -141,7 +160,7 @@ export default function CBTCenter() {
 
   useEffect(() => {
     fetchTournaments();
-  }, [profile?.id]);
+  }, [profile?.id, profile?.email]);
 
   const handleRegisterTournament = async (t: any) => {
     if (!profile) {
@@ -164,7 +183,13 @@ export default function CBTCenter() {
       const json = await res.json();
       if (json?.success) {
         toast.success(json.message || 'Successfully registered for tournament!');
-        setRegisteredTournamentIds(prev => [...prev, t.id, t.legacy_id].filter(Boolean));
+        setRegisteredTournamentIds(prev => {
+          const updated = Array.from(new Set([...prev, t.id, t.legacy_id].filter(Boolean)));
+          try {
+            localStorage.setItem('scholar_registered_tournaments', JSON.stringify(updated));
+          } catch {}
+          return updated;
+        });
         fetchTournaments();
       } else {
         toast.error(json?.error || 'Registration failed.');

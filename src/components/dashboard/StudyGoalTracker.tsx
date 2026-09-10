@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,13 +19,38 @@ export const StudyGoalTracker = () => {
   const [examDate, setExamDate] = useState('2027-04-19');
   const [dailyHours, setDailyHours] = useState(2);
 
-  useEffect(() => {
-    fetchGoal();
-  }, [profile?.id]);
-
-  const fetchGoal = async () => {
+  const fetchGoal = useCallback(async () => {
     if (!profile?.id) return;
     setLoading(true);
+
+    // 1. Try local storage first for instant load
+    try {
+      const local = localStorage.getItem(`study_goal_${profile.id}`);
+      if (local) {
+        const parsed = JSON.parse(local);
+        setGoal(parsed);
+        setTargetScore(parsed.target_score || 300);
+        setExamDate(parsed.exam_date || '2027-04-19');
+        setDailyHours(parsed.daily_study_hours || 2);
+      }
+    } catch {}
+
+    // 2. Try server API
+    try {
+      const res = await fetch(`/api/user/study-goal?user_id=${encodeURIComponent(profile.id)}`);
+      const json = await res.json();
+      if (json?.success && json.goal) {
+        setGoal(json.goal);
+        setTargetScore(json.goal.target_score || 300);
+        setExamDate(json.goal.exam_date || '2027-04-19');
+        setDailyHours(json.goal.daily_study_hours || 2);
+        localStorage.setItem(`study_goal_${profile.id}`, JSON.stringify(json.goal));
+        setLoading(false);
+        return;
+      }
+    } catch {}
+
+    // 3. Try direct table
     try {
       const { data } = await supabase
         .from('study_goals')
@@ -43,22 +68,15 @@ export const StudyGoalTracker = () => {
       }
     } catch {}
 
-    try {
-      const local = localStorage.getItem(`study_goal_${profile.id}`);
-      if (local) {
-        const parsed = JSON.parse(local);
-        setGoal(parsed);
-        setTargetScore(parsed.target_score || 300);
-        setExamDate(parsed.exam_date || '2027-04-19');
-        setDailyHours(parsed.daily_study_hours || 2);
-        setLoading(false);
-        return;
-      }
-    } catch {}
-
-    setIsEditing(true); // prompt new user to set goals
+    if (!goal) {
+      setIsEditing(true); // prompt new user to set goals
+    }
     setLoading(false);
-  };
+  }, [profile?.id]);
+
+  useEffect(() => {
+    fetchGoal();
+  }, [fetchGoal]);
 
   const saveGoal = async () => {
     if (!profile?.id) return;
@@ -74,6 +92,15 @@ export const StudyGoalTracker = () => {
     localStorage.setItem(`study_goal_${profile.id}`, JSON.stringify(goalPayload));
     setGoal(goalPayload);
 
+    // Save to server API
+    try {
+      await fetch('/api/user/study-goal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(goalPayload)
+      });
+    } catch {}
+
     try {
       await supabase.from('study_goals').upsert(goalPayload, { onConflict: 'user_id' });
     } catch (err: any) {
@@ -85,9 +112,10 @@ export const StudyGoalTracker = () => {
     setSaving(false);
   };
 
-  const daysLeft = goal?.exam_date
-    ? Math.max(0, Math.ceil((new Date(goal.exam_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
-    : Math.ceil((new Date('2027-04-19').getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  const daysLeft = useMemo(() => {
+    const target = goal?.exam_date || '2027-04-19';
+    return Math.max(0, Math.ceil((new Date(target).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+  }, [goal?.exam_date]);
 
   const progressPercent = goal ? Math.min(100, Math.round(((profile?.xp || 0) / (goal.target_score * 10)) * 100)) : 0;
 

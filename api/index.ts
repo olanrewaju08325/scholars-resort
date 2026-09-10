@@ -3578,8 +3578,13 @@ app.get('/api/tournaments', async (req, res) => {
       }
     } catch {}
 
-    // Attach accurate participant counts from tournament_participants_db
-    let participantsList: any[] = [];
+    // Attach accurate participant counts from all sources
+    const allParticipantsMap = new Map<string, any>();
+    getLocalParticipants().forEach((p: any) => {
+      const key = `${p.tournament_id}_${p.user_id || p.user_email}`;
+      if (key) allParticipantsMap.set(key, p);
+    });
+
     try {
       const { data: partSetting } = await supabase
         .from('admin_settings')
@@ -3587,9 +3592,14 @@ app.get('/api/tournaments', async (req, res) => {
         .eq('setting_key', 'tournament_participants_db')
         .maybeSingle();
       if (Array.isArray(partSetting?.setting_value)) {
-        participantsList = partSetting.setting_value;
+        partSetting.setting_value.forEach((p: any) => {
+          const key = `${p.tournament_id}_${p.user_id || p.user_email}`;
+          if (key) allParticipantsMap.set(key, p);
+        });
       }
     } catch {}
+
+    const participantsList = Array.from(allParticipantsMap.values());
 
     const tournaments = Array.from(listMap.values()).map(t => {
       const enrolledCount = participantsList.filter(
@@ -3629,7 +3639,7 @@ function saveLocalParticipants(list: any[]) {
   try {
     fs.writeFileSync(LOCAL_PARTICIPANTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
   } catch (e) {
-    console.warn('[Local Participants Save Warning]', e);
+    console.warn('[Local Tournament Participants Save Warning]', e);
   }
 }
 
@@ -3680,14 +3690,14 @@ app.post('/api/tournaments/register', async (req, res) => {
         const authClient = getScopedSupabaseClient(token);
         const { data: { user } } = await authClient.auth.getUser();
         if (user) {
-          effectiveUserId = user.id;
+          effectiveUserId = user.id || effectiveUserId;
           effectiveUserEmail = user.email || effectiveUserEmail;
           effectiveUserName = user.user_metadata?.full_name || user.user_metadata?.name || effectiveUserName;
         }
       } catch {}
     }
 
-    if (!effectiveUserId) {
+    if (!effectiveUserId && !effectiveUserEmail) {
       return res.status(401).json({ success: false, error: 'Authentication required to register for this challenge' });
     }
 
@@ -3709,7 +3719,7 @@ app.post('/api/tournaments/register', async (req, res) => {
     } catch {}
 
     // If paid with coins, verify user has enough coins and deduct
-    if (payment_method === 'coins' && coins_deducted > 0) {
+    if (payment_method === 'coins' && coins_deducted > 0 && effectiveUserId) {
       try {
         const { data: userProfile } = await supabase
           .from('profiles')
@@ -3738,7 +3748,8 @@ app.post('/api/tournaments/register', async (req, res) => {
     // 2. Gather existing registrations from local disk and admin_settings
     const participantsMap = new Map<string, any>();
     getLocalParticipants().forEach(p => {
-      if (p.id) participantsMap.set(p.id, p);
+      const pKey = `${p.tournament_id}_${p.user_id || p.user_email}`;
+      if (pKey) participantsMap.set(pKey, p);
     });
 
     try {
@@ -3750,21 +3761,28 @@ app.post('/api/tournaments/register', async (req, res) => {
 
       if (Array.isArray(partSetting?.setting_value)) {
         partSetting.setting_value.forEach((p: any) => {
-          if (p.id) participantsMap.set(p.id, p);
+          const pKey = `${p.tournament_id}_${p.user_id || p.user_email}`;
+          if (pKey) participantsMap.set(pKey, p);
         });
       }
     } catch {}
 
     const participantsList = Array.from(participantsMap.values());
 
-    const alreadyRegistered = participantsList.some(
-      (p: any) => (p.tournament_id === tournament_id || (legacy_id && p.tournament_id === legacy_id)) && p.user_id === effectiveUserId
-    );
+    const isMatch = (p: any) => {
+      const matchesTourn = p.tournament_id === tournament_id || (legacy_id && p.tournament_id === legacy_id);
+      const matchesUser = (effectiveUserId && p.user_id === effectiveUserId) ||
+        (effectiveUserEmail && p.user_email && p.user_email.toLowerCase() === effectiveUserEmail.toLowerCase());
+      return matchesTourn && matchesUser;
+    };
+
+    const alreadyRegistered = participantsList.some(isMatch);
 
     if (alreadyRegistered) {
       return res.json({ 
         success: true, 
         alreadyRegistered: true, 
+        registered: true,
         message: 'You are already registered for this tournament! Get ready for battle.' 
       });
     }
@@ -3774,7 +3792,7 @@ app.post('/api/tournaments/register', async (req, res) => {
       id: crypto.randomUUID(),
       tournament_id,
       legacy_id: legacy_id || null,
-      user_id: effectiveUserId,
+      user_id: effectiveUserId || `usr_${Date.now()}`,
       user_name: effectiveUserName,
       user_email: effectiveUserEmail,
       payment_method,
@@ -3792,10 +3810,9 @@ app.post('/api/tournaments/register', async (req, res) => {
     // Save to local disk immediately (100% durable & zero RLS blockage)
     saveLocalParticipants(participantsList);
 
-    // Also attempt persist to admin_settings
+    // Persist to admin_settings using server-level client (bypasses student token RLS)
     try {
-      const scopedClient = token ? getScopedSupabaseClient(token) : supabase;
-      await scopedClient.from('admin_settings').upsert({
+      await supabase.from('admin_settings').upsert({
         setting_key: 'tournament_participants_db',
         setting_value: participantsList,
         updated_at: new Date().toISOString()
@@ -3821,8 +3838,7 @@ app.post('/api/tournaments/register', async (req, res) => {
           return t;
         });
 
-        const scopedClient = token ? getScopedSupabaseClient(token) : supabase;
-        await scopedClient.from('admin_settings').upsert({
+        await supabase.from('admin_settings').upsert({
           setting_key: 'tournaments_db',
           setting_value: updatedTournaments,
           updated_at: new Date().toISOString()
@@ -3832,21 +3848,21 @@ app.post('/api/tournaments/register', async (req, res) => {
 
     // 5. Also attempt insert to public.tournament_participants if tournament_id is valid UUID
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tournament_id);
-    if (isUUID && token) {
+    if (isUUID && effectiveUserId) {
       try {
-        const authClient = getScopedSupabaseClient(token);
-        await authClient.from('tournament_participants').insert({
+        await supabase.from('tournament_participants').insert({
           tournament_id,
           user_id: effectiveUserId
         });
       } catch (err: any) {
-        // Safe swallow: fallback database is already updated
+        // Safe swallow
       }
     }
 
     return res.json({ 
       success: true, 
       registered: true, 
+      registeredTournamentIds: [tournament_id, legacy_id].filter(Boolean),
       message: 'Successfully registered! Countdown active.' 
     });
   } catch (err: any) {
@@ -3859,24 +3875,36 @@ app.post('/api/tournaments/register', async (req, res) => {
 app.get('/api/tournaments/my-registrations', async (req, res) => {
   try {
     let effectiveUserId = (req.query.userId || req.query.user_id) as string;
+    let effectiveUserEmail = (req.query.email || req.query.user_email) as string;
+
     const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
     if (token) {
       try {
         const authClient = getScopedSupabaseClient(token);
         const { data: { user } } = await authClient.auth.getUser();
-        if (user) effectiveUserId = user.id;
+        if (user) {
+          effectiveUserId = user.id || effectiveUserId;
+          effectiveUserEmail = user.email || effectiveUserEmail;
+        }
       } catch {}
     }
 
-    if (!effectiveUserId) {
+    if (!effectiveUserId && !effectiveUserEmail) {
       return res.json({ success: true, registeredTournamentIds: [] });
     }
 
     const registeredIds = new Set<string>();
 
+    const matchesMe = (p: any) => {
+      if (effectiveUserId && p.user_id === effectiveUserId) return true;
+      if (effectiveUserEmail && p.user_email && p.user_email.toLowerCase() === effectiveUserEmail.toLowerCase()) return true;
+      if (effectiveUserId && p.id === effectiveUserId) return true;
+      return false;
+    };
+
     // 1. Check local disk persistence
     getLocalParticipants().forEach((p: any) => {
-      if (p.user_id === effectiveUserId) {
+      if (matchesMe(p)) {
         if (p.tournament_id) registeredIds.add(p.tournament_id);
         if (p.legacy_id) registeredIds.add(p.legacy_id);
       }
@@ -3892,7 +3920,7 @@ app.get('/api/tournaments/my-registrations', async (req, res) => {
 
       if (Array.isArray(partSetting?.setting_value)) {
         partSetting.setting_value.forEach((p: any) => {
-          if (p.user_id === effectiveUserId) {
+          if (matchesMe(p)) {
             if (p.tournament_id) registeredIds.add(p.tournament_id);
             if (p.legacy_id) registeredIds.add(p.legacy_id);
           }
@@ -3901,18 +3929,20 @@ app.get('/api/tournaments/my-registrations', async (req, res) => {
     } catch {}
 
     // 3. Check public.tournament_participants
-    try {
-      const { data: dbParts } = await supabase
-        .from('tournament_participants')
-        .select('tournament_id')
-        .eq('user_id', effectiveUserId);
+    if (effectiveUserId) {
+      try {
+        const { data: dbParts } = await supabase
+          .from('tournament_participants')
+          .select('tournament_id')
+          .eq('user_id', effectiveUserId);
 
-      if (dbParts && Array.isArray(dbParts)) {
-        dbParts.forEach((p: any) => {
-          if (p.tournament_id) registeredIds.add(p.tournament_id);
-        });
-      }
-    } catch {}
+        if (dbParts && Array.isArray(dbParts)) {
+          dbParts.forEach((p: any) => {
+            if (p.tournament_id) registeredIds.add(p.tournament_id);
+          });
+        }
+      } catch {}
+    }
 
     return res.json({ success: true, registeredTournamentIds: Array.from(registeredIds) });
   } catch (err: any) {
@@ -3923,20 +3953,56 @@ app.get('/api/tournaments/my-registrations', async (req, res) => {
 // API Route: Submit Tournament Arena Score
 app.post('/api/tournaments/submit-score', async (req, res) => {
   try {
-    const { tournament_id, score, time_taken_seconds, user_id } = req.body;
+    const { tournament_id, score, time_taken_seconds, user_id, user_email } = req.body;
     if (!tournament_id) return res.status(400).json({ success: false, error: 'Tournament ID is required' });
 
     let effectiveUserId = user_id;
+    let effectiveUserEmail = user_email;
     const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
     if (token) {
       try {
         const authClient = getScopedSupabaseClient(token);
         const { data: { user } } = await authClient.auth.getUser();
-        if (user) effectiveUserId = user.id;
+        if (user) {
+          effectiveUserId = user.id || effectiveUserId;
+          effectiveUserEmail = user.email || effectiveUserEmail;
+        }
       } catch {}
     }
 
-    if (!effectiveUserId) return res.status(401).json({ success: false, error: 'Unauthorized' });
+    if (!effectiveUserId && !effectiveUserEmail) return res.status(401).json({ success: false, error: 'Unauthorized' });
+
+    // Update in local participants file
+    const localList = getLocalParticipants();
+    let localFound = false;
+    const updatedLocal = localList.map((p: any) => {
+      const match = p.tournament_id === tournament_id && (
+        (effectiveUserId && p.user_id === effectiveUserId) ||
+        (effectiveUserEmail && p.user_email?.toLowerCase() === effectiveUserEmail.toLowerCase())
+      );
+      if (match) {
+        localFound = true;
+        return {
+          ...p,
+          score: Math.max(p.score || 0, Number(score) || 0),
+          time_taken_seconds: Number(time_taken_seconds) || p.time_taken_seconds,
+          completed_at: new Date().toISOString()
+        };
+      }
+      return p;
+    });
+    if (!localFound) {
+      updatedLocal.push({
+        id: crypto.randomUUID(),
+        tournament_id,
+        user_id: effectiveUserId,
+        user_email: effectiveUserEmail,
+        score: Number(score) || 0,
+        time_taken_seconds: Number(time_taken_seconds) || 0,
+        completed_at: new Date().toISOString()
+      });
+    }
+    saveLocalParticipants(updatedLocal);
 
     // Update in admin_settings.tournament_participants_db
     try {
@@ -3949,7 +4015,11 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
       let list = Array.isArray(partSetting?.setting_value) ? partSetting.setting_value : [];
       let found = false;
       list = list.map((p: any) => {
-        if (p.tournament_id === tournament_id && p.user_id === effectiveUserId) {
+        const match = p.tournament_id === tournament_id && (
+          (effectiveUserId && p.user_id === effectiveUserId) ||
+          (effectiveUserEmail && p.user_email?.toLowerCase() === effectiveUserEmail.toLowerCase())
+        );
+        if (match) {
           found = true;
           return { 
             ...p, 
@@ -3966,6 +4036,7 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
           id: crypto.randomUUID(),
           tournament_id,
           user_id: effectiveUserId,
+          user_email: effectiveUserEmail,
           score: Number(score) || 0,
           time_taken_seconds: Number(time_taken_seconds) || 0,
           completed_at: new Date().toISOString()
@@ -3982,14 +4053,16 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
     // Award XP
     try {
       const xpAmount = Math.max(50, Math.floor(Number(score) || 0) * 10);
-      const { data: prof } = await supabase.from('profiles').select('xp').eq('id', effectiveUserId).maybeSingle();
-      if (prof) {
-        await supabase.from('profiles').update({ xp: (prof.xp || 0) + xpAmount }).eq('id', effectiveUserId);
-        await supabase.from('xp_transactions').insert({
-          user_id: effectiveUserId,
-          amount: xpAmount,
-          reason: `Tournament ${tournament_id} participation score`
-        });
+      if (effectiveUserId) {
+        const { data: prof } = await supabase.from('profiles').select('xp').eq('id', effectiveUserId).maybeSingle();
+        if (prof) {
+          await supabase.from('profiles').update({ xp: (prof.xp || 0) + xpAmount }).eq('id', effectiveUserId);
+          await supabase.from('xp_transactions').insert({
+            user_id: effectiveUserId,
+            amount: xpAmount,
+            reason: `Tournament ${tournament_id} participation score`
+          });
+        }
       }
     } catch {}
 
@@ -4669,6 +4742,180 @@ app.delete('/api/admin/challenges/:id', verifyAdminToken, async (req, res) => {
     return res.json({ success: true });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+const LOCAL_CHALLENGE_SUBS_FILE = path.join(process.cwd(), '.data_weekly_challenge_submissions.json');
+
+function getLocalChallengeSubs(): any[] {
+  try {
+    if (fs.existsSync(LOCAL_CHALLENGE_SUBS_FILE)) {
+      const raw = fs.readFileSync(LOCAL_CHALLENGE_SUBS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalChallengeSubs(list: any[]) {
+  try {
+    fs.writeFileSync(LOCAL_CHALLENGE_SUBS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[Local Challenge Submissions Save Warning]', e);
+  }
+}
+
+app.post('/api/challenges/submit', async (req, res) => {
+  try {
+    const { challenge_id, user_id, user_name, user_email, selected_answer, is_correct, time_taken_seconds } = req.body;
+    if (!challenge_id) {
+      return res.status(400).json({ success: false, error: 'Challenge ID is required' });
+    }
+
+    let effectiveUserId = user_id;
+    let effectiveUserEmail = user_email;
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
+    if (token) {
+      try {
+        const authClient = getScopedSupabaseClient(token);
+        const { data: { user } } = await authClient.auth.getUser();
+        if (user) {
+          effectiveUserId = user.id || effectiveUserId;
+          effectiveUserEmail = user.email || effectiveUserEmail;
+        }
+      } catch {}
+    }
+
+    if (!effectiveUserId && !effectiveUserEmail) {
+      return res.status(401).json({ success: false, error: 'Authentication required' });
+    }
+
+    const newSub = {
+      id: crypto.randomUUID(),
+      challenge_id,
+      user_id: effectiveUserId || `usr_${Date.now()}`,
+      user_name: user_name || 'Scholar Candidate',
+      user_email: effectiveUserEmail || '',
+      selected_answer,
+      is_correct: !!is_correct,
+      time_taken_seconds: Number(time_taken_seconds) || 0,
+      submitted_at: new Date().toISOString()
+    };
+
+    // 1. Save local disk
+    const subsMap = new Map<string, any>();
+    getLocalChallengeSubs().forEach(s => {
+      const sKey = `${s.challenge_id}_${s.user_id || s.user_email}`;
+      if (sKey) subsMap.set(sKey, s);
+    });
+
+    try {
+      const { data: current } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'weekly_challenge_submissions_db')
+        .maybeSingle();
+
+      if (Array.isArray(current?.setting_value)) {
+        current.setting_value.forEach((s: any) => {
+          const sKey = `${s.challenge_id}_${s.user_id || s.user_email}`;
+          if (sKey) subsMap.set(sKey, s);
+        });
+      }
+    } catch {}
+
+    const subKey = `${challenge_id}_${effectiveUserId || effectiveUserEmail}`;
+    subsMap.set(subKey, newSub);
+    const allSubs = Array.from(subsMap.values());
+
+    saveLocalChallengeSubs(allSubs);
+
+    // 2. Persist to admin_settings
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'weekly_challenge_submissions_db',
+        setting_value: allSubs,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch (err: any) {
+      console.warn('[Weekly Challenge Submissions Save Warning]', err?.message);
+    }
+
+    // 3. Award XP if correct
+    if (is_correct && effectiveUserId) {
+      try {
+        const { data: prof } = await supabase.from('profiles').select('xp').eq('id', effectiveUserId).maybeSingle();
+        if (prof) {
+          await supabase.from('profiles').update({ xp: (prof.xp || 0) + 50 }).eq('id', effectiveUserId);
+          await supabase.from('xp_transactions').insert({
+            user_id: effectiveUserId,
+            amount: 50,
+            reason: 'Weekly Speed Challenge correct answer'
+          });
+        }
+      } catch {}
+    }
+
+    const challengeSubs = allSubs.filter((s: any) => s.challenge_id === challenge_id);
+
+    return res.json({ 
+      success: true, 
+      submission: newSub, 
+      participantCount: challengeSubs.length 
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/challenges/submissions', async (req, res) => {
+  try {
+    const { challenge_id, user_id, email } = req.query;
+
+    const subsMap = new Map<string, any>();
+    getLocalChallengeSubs().forEach(s => {
+      const sKey = `${s.challenge_id}_${s.user_id || s.user_email}`;
+      if (sKey) subsMap.set(sKey, s);
+    });
+
+    try {
+      const { data: current } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'weekly_challenge_submissions_db')
+        .maybeSingle();
+
+      if (Array.isArray(current?.setting_value)) {
+        current.setting_value.forEach((s: any) => {
+          const sKey = `${s.challenge_id}_${s.user_id || s.user_email}`;
+          if (sKey) subsMap.set(sKey, s);
+        });
+      }
+    } catch {}
+
+    let allSubs = Array.from(subsMap.values());
+
+    if (challenge_id) {
+      allSubs = allSubs.filter((s: any) => s.challenge_id === String(challenge_id));
+    }
+    if (user_id || email) {
+      const uid = user_id ? String(user_id) : '';
+      const uEmail = email ? String(email).toLowerCase() : '';
+      const userSub = allSubs.find((s: any) => 
+        (uid && s.user_id === uid) || (uEmail && s.user_email && s.user_email.toLowerCase() === uEmail)
+      );
+      return res.json({ 
+        success: true, 
+        submission: userSub || null, 
+        participantCount: allSubs.length,
+        submissions: allSubs 
+      });
+    }
+
+    return res.json({ success: true, submissions: allSubs, participantCount: allSubs.length });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message, submissions: [] });
   }
 });
 
@@ -7135,6 +7382,175 @@ app.post('/api/scholarships/claim', express.json(), async (req, res) => {
     } catch {}
 
     return res.json({ success: true, message: 'Merit scholarship claimed and activated successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── DAILY MOTIVATION QUOTES API ───
+const LOCAL_QUOTES_FILE = path.join(process.cwd(), '.data_daily_quotes.json');
+function getLocalQuotes(): any[] {
+  try {
+    if (fs.existsSync(LOCAL_QUOTES_FILE)) {
+      return JSON.parse(fs.readFileSync(LOCAL_QUOTES_FILE, 'utf-8'));
+    }
+  } catch {}
+  return [];
+}
+function saveLocalQuotes(quotes: any[]): void {
+  try {
+    fs.writeFileSync(LOCAL_QUOTES_FILE, JSON.stringify(quotes, null, 2), 'utf-8');
+  } catch {}
+}
+
+app.get('/api/quotes/daily', async (req, res) => {
+  try {
+    let quotes = getLocalQuotes();
+    if (!quotes || quotes.length === 0) {
+      try {
+        const { data: dbData } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'daily_quotes_bank')
+          .maybeSingle();
+        if (dbData?.setting_value && Array.isArray(dbData.setting_value)) {
+          quotes = dbData.setting_value;
+          saveLocalQuotes(quotes);
+        }
+      } catch {}
+    }
+
+    // Pick quote of the day based on day-of-year
+    const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0).getTime()) / (1000 * 60 * 60 * 24));
+    const todayQuote = (quotes && quotes.length > 0) ? quotes[dayOfYear % quotes.length] : null;
+
+    return res.json({ success: true, quotes, todayQuote });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/quotes/save', express.json(), async (req, res) => {
+  try {
+    const { quote, author, focus, category, bg_image } = req.body || {};
+    if (!quote) return res.status(400).json({ success: false, error: 'Quote text is required' });
+
+    const newQuote = {
+      quote,
+      author: author || 'Scholars AI Performance Coach',
+      focus: focus || 'UTME Strategy',
+      category: category || 'Daily Tip',
+      bg_image: bg_image || 'https://images.unsplash.com/photo-1519791883288-dc8bd696e667?auto=format&fit=crop&w=1200&q=80',
+      created_at: new Date().toISOString()
+    };
+
+    const current = getLocalQuotes();
+    const updated = [newQuote, ...current.filter(q => q.quote !== quote)].slice(0, 100);
+    saveLocalQuotes(updated);
+
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'daily_quotes_bank',
+        setting_value: updated,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    return res.json({ success: true, quote: newQuote });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── USER STUDY GOALS PERSISTENCE API ───
+const LOCAL_GOALS_FILE = path.join(process.cwd(), '.data_study_goals.json');
+function getLocalStudyGoals(): Record<string, any> {
+  try {
+    if (fs.existsSync(LOCAL_GOALS_FILE)) {
+      return JSON.parse(fs.readFileSync(LOCAL_GOALS_FILE, 'utf-8'));
+    }
+  } catch {}
+  return {};
+}
+function saveLocalStudyGoals(goals: Record<string, any>): void {
+  try {
+    fs.writeFileSync(LOCAL_GOALS_FILE, JSON.stringify(goals, null, 2), 'utf-8');
+  } catch {}
+}
+
+app.get('/api/user/study-goal', async (req, res) => {
+  try {
+    const userId = (req.query.user_id || req.query.userId) as string;
+    if (!userId) return res.status(400).json({ success: false, error: 'User ID is required' });
+
+    // 1. Check local file store
+    const allGoals = getLocalStudyGoals();
+    if (allGoals[userId]) {
+      return res.json({ success: true, goal: allGoals[userId] });
+    }
+
+    // 2. Check study_goals table
+    try {
+      const { data } = await supabase.from('study_goals').select('*').eq('user_id', userId).maybeSingle();
+      if (data) {
+        allGoals[userId] = data;
+        saveLocalStudyGoals(allGoals);
+        return res.json({ success: true, goal: data });
+      }
+    } catch {}
+
+    // 3. Check admin_settings.study_goals_db
+    try {
+      const { data: adminData } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'study_goals_db')
+        .maybeSingle();
+      if (adminData?.setting_value && typeof adminData.setting_value === 'object' && adminData.setting_value[userId]) {
+        return res.json({ success: true, goal: adminData.setting_value[userId] });
+      }
+    } catch {}
+
+    return res.json({ success: true, goal: null });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/user/study-goal', express.json(), async (req, res) => {
+  try {
+    const { user_id, userId, target_score, exam_date, daily_study_hours } = req.body || {};
+    const effectiveUserId = user_id || userId;
+    if (!effectiveUserId) return res.status(400).json({ success: false, error: 'User ID is required' });
+
+    const goalObj = {
+      user_id: effectiveUserId,
+      target_score: Number(target_score) || 300,
+      exam_date: exam_date || '2027-04-19',
+      daily_study_hours: Number(daily_study_hours) || 2,
+      updated_at: new Date().toISOString()
+    };
+
+    // Save to local file store
+    const allGoals = getLocalStudyGoals();
+    allGoals[effectiveUserId] = goalObj;
+    saveLocalStudyGoals(allGoals);
+
+    // Save to database table if accessible
+    try {
+      await supabase.from('study_goals').upsert(goalObj, { onConflict: 'user_id' });
+    } catch {}
+
+    // Sync to admin_settings backup
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'study_goals_db',
+        setting_value: allGoals,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
+    return res.json({ success: true, goal: goalObj });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
