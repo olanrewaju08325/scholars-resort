@@ -27,6 +27,27 @@ export class ErrorBoundary extends React.Component<
     this.setState({ errorInfo: info, errorId });
     console.error('[ErrorBoundary] Caught error:', error, info.componentStack);
 
+    // Auto-heal dynamic chunk loading errors (new deployment or network glitch)
+    const errorMsg = (error?.message || '').toLowerCase();
+    const isChunkLoadError =
+      errorMsg.includes('dynamically imported module') ||
+      errorMsg.includes('failed to fetch dynamically imported module') ||
+      errorMsg.includes('loading chunk') ||
+      errorMsg.includes('mime type') ||
+      error?.name === 'ChunkLoadError';
+
+    if (isChunkLoadError) {
+      const lastAutoReload = Number(sessionStorage.getItem('eb_last_chunk_reload') || 0);
+      if (Date.now() - lastAutoReload > 15000) {
+        sessionStorage.setItem('eb_last_chunk_reload', String(Date.now()));
+        console.warn('[ErrorBoundary] Dynamic chunk load error detected. Performing automated refresh...');
+        setTimeout(() => {
+          window.location.reload();
+        }, 300);
+        return;
+      }
+    }
+
     // Try logging to Supabase platform_error_logs safely
     try {
       Promise.resolve(
@@ -54,6 +75,13 @@ export class ErrorBoundary extends React.Component<
       if (this.props.fallback) return this.props.fallback;
 
       const errorMsg = this.state.error?.message?.toLowerCase() || '';
+      const isChunkLoadError =
+        errorMsg.includes('dynamically imported module') ||
+        errorMsg.includes('failed to fetch dynamically imported module') ||
+        errorMsg.includes('loading chunk') ||
+        errorMsg.includes('mime type') ||
+        this.state.error?.name === 'ChunkLoadError';
+
       const isConnectivityError = 
         !navigator.onLine || 
         !isSupabaseConfigured ||
@@ -61,6 +89,60 @@ export class ErrorBoundary extends React.Component<
         errorMsg.includes('network') || 
         errorMsg.includes('supabase') || 
         errorMsg.includes('offline');
+
+      if (isChunkLoadError) {
+        return (
+          <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 text-center">
+            <div className="max-w-md w-full bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="relative inline-flex mb-6">
+                <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
+                  <RefreshCw className="w-10 h-10 text-primary animate-spin" style={{ animationDuration: '4s' }} />
+                </div>
+              </div>
+
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-primary/10 text-primary border border-primary/30 mb-3 uppercase tracking-wider">
+                Application Update Available
+              </span>
+
+              <h1 className="text-2xl font-display font-bold mb-3">Updating Scholars Resort</h1>
+              <p className="text-muted-foreground mb-6 text-sm leading-relaxed">
+                A fresh version of this page is ready. Refresh to sync the latest modules and features smoothly.
+              </p>
+
+              {this.state.error && (
+                <div className="bg-muted/50 border border-border rounded-xl p-3 mb-6 text-left">
+                  <p className="text-xs font-mono text-muted-foreground break-all">
+                    {this.state.error.message}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex gap-3 justify-center">
+                <button
+                  onClick={() => {
+                    this.setState({ hasError: false, error: null, errorInfo: null, errorId: null });
+                    if ('caches' in window) {
+                      caches.keys().then((names) => {
+                        names.forEach((name) => caches.delete(name));
+                      }).catch(() => {});
+                    }
+                    window.location.reload();
+                  }}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-lg"
+                >
+                  <RefreshCw className="w-4 h-4" /> Refresh & Update Now
+                </button>
+                <a
+                  href="/"
+                  className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl font-semibold hover:bg-muted transition-colors"
+                >
+                  <Home className="w-4 h-4" /> Home
+                </a>
+              </div>
+            </div>
+          </div>
+        );
+      }
 
       if (isConnectivityError) {
         return (
