@@ -124,7 +124,7 @@ export async function generateAdaptiveLearningPath(
     const { data: topData } = await supabase
       .from('topics')
       .select('*, subjects(id, name)')
-      .order('sequence', { ascending: true });
+      .order('name');
 
     if (topData && topData.length > 0) {
       dbTopics = topData;

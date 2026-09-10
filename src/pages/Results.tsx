@@ -165,8 +165,9 @@ const Results = () => {
         // Collect topic breakdown from questions array
         const topicCounts: Record<string, { total: number; correct: number; subject: string }> = {};
         questions.forEach((q) => {
-          const tName = q.topic_name || q.topics?.name || 'UTME Core Concept';
-          const rawSName = q.subject_name || q.subjects?.name || 'Use of English';
+          const rawTopic = q.topic || q.topic_name || q.topics?.name || 'UTME Core Concept';
+          const tName = (typeof rawTopic === 'string' ? rawTopic.toLowerCase() : String(rawTopic || 'unknown')).trim();
+          const rawSName = String(q.subject_name || q.subjects?.name || 'Use of English').trim();
           const sName = normalizeToCanonicalSubjectName(rawSName);
           const userAnswer = answers[q.id];
           const isCorrect = checkIsCorrect(userAnswer, q);
@@ -490,10 +491,18 @@ const Results = () => {
                   <Card key={q.id} className={`border-l-4 ${isCorrect ? 'border-l-green-500' : wasSkipped ? 'border-l-slate-500' : 'border-l-red-500'} border-border bg-card shadow-xs`}>
                     <CardHeader className="pb-3 border-b border-border">
                       <div className="flex justify-between items-start gap-4">
-                        <CardTitle className="text-base leading-relaxed text-foreground">
-                          <span className="font-bold mr-1.5 text-primary">{originalIdx >= 0 ? originalIdx + 1 : idx + 1}.</span>
-                          <MathText text={cleanQuestionText(q.question_text || q.question)} />
-                        </CardTitle>
+                        <div className="flex-1">
+                          <CardTitle className="text-base leading-relaxed text-foreground mb-1.5">
+                            <span className="font-bold mr-1.5 text-primary">{originalIdx >= 0 ? originalIdx + 1 : idx + 1}.</span>
+                            <MathText text={cleanQuestionText(q?.question_text || q?.question || '')} />
+                          </CardTitle>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium">
+                            <span className="bg-muted px-2 py-0.5 rounded-sm capitalize">
+                              Topic: {q?.topic?.toLowerCase() || q?.topic_name?.toLowerCase() || q?.topics?.name?.toLowerCase() || 'unknown'}
+                            </span>
+                            {q?.year && <span className="bg-muted px-2 py-0.5 rounded-sm">Year: {q.year}</span>}
+                          </div>
+                        </div>
                         <span className={`shrink-0 inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-full ${isCorrect ? 'bg-green-500/20 text-green-600 dark:text-green-400' : wasSkipped ? 'bg-slate-500/20 text-slate-400' : 'bg-red-500/20 text-red-600 dark:text-red-400'}`}>
                           {isCorrect ? <><CheckCircle className="w-3.5 h-3.5" /> Correct</> : wasSkipped ? 'Skipped' : <><XCircle className="w-3.5 h-3.5" /> Incorrect</>}
                         </span>

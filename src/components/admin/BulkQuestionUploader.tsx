@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import Papa from 'papaparse';
-import { supabase } from '@/lib/supabase';
 import { parseQuestionsCsv, importQuestionsToDatabase, type CsvParseResult } from '@/lib/csvQuestionParser';
+import { useCsvValidation } from '@/hooks/useCsvValidation';
+import { ImportProgressTracker } from '@/components/admin/ImportProgressTracker';
 
 interface BulkQuestionUploaderProps {
   onSuccess?: () => void;
@@ -22,6 +22,12 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
   const [isUploading, setIsUploading] = useState(false);
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [progressText, setProgressText] = useState('');
+  
+  const [successCount, setSuccessCount] = useState(0);
+  const [failedCount, setFailedCount] = useState(0);
+  const [ingestionErrors, setIngestionErrors] = useState<string[]>([]);
+  
+  const { validateCsvContent } = useCsvValidation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const downloadTemplate = () => {
@@ -50,18 +56,30 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
 
     setFile(selectedFile);
     setIsParsing(true);
-    setProgressText('Reading and validating CSV structure...');
+    setProgressText('Running client-side row validation and header mapping...');
+    setSuccessCount(0);
+    setFailedCount(0);
+    setIngestionErrors([]);
 
     try {
       const text = await selectedFile.text();
+      
+      // Step 1: Run client-side validation hook
+      const valResult = validateCsvContent(text);
+
+      // Step 2: Full parse for database upserting
       const result = await parseQuestionsCsv(text, { checkDbDuplicates: true });
       setParseResult(result);
       setIsParsing(false);
 
+      if (valResult.invalidRows.length > 0) {
+        setIngestionErrors(valResult.invalidRows.map(r => `Row ${r.rowNumber}: ${r.reason}`));
+      }
+
       if (result.validQuestions.length > 0) {
-        toast.success(`Successfully parsed ${result.validQuestions.length} valid question(s)!`);
+        toast.success(`Validated ${result.validQuestions.length} row(s) ready for upserting!`);
       } else {
-        toast.warning('No valid questions found in CSV. Please verify required columns.');
+        toast.warning('No valid questions found in CSV. Please check column headers.');
       }
     } catch (err: any) {
       console.error('CSV Parse Error:', err);
@@ -84,28 +102,32 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
     }
 
     setIsUploading(true);
-    setProgressText('Preparing batch insert into Supabase...');
+    setProgressText('Initiating batch upserts into Supabase...');
+    setSuccessCount(0);
+    setFailedCount(0);
 
     try {
       const result = await importQuestionsToDatabase(parseResult.validQuestions, {
         publishImmediately,
         onProgress: (processed, total, status) => {
-          setProgressText(`Importing: ${processed}/${total} - ${status}`);
+          setProgressText(status);
         }
       });
 
+      setSuccessCount(result.successCount);
+      setFailedCount(result.failedCount);
+      setIngestionErrors(prev => [...prev, ...(result.errors || [])]);
       setIsUploading(false);
+
       if (result.successCount > 0) {
-        toast.success(`Successfully imported ${result.successCount} question(s) to database!`);
+        toast.success(`Successfully upserted ${result.successCount} question(s)!`);
         onSuccess?.();
-        setFile(null);
-        setParseResult(null);
       } else {
-        toast.error('Import completed with 0 successes. Check validation errors.');
+        toast.error('Batch upsert completed with 0 successes. Check error logs.');
       }
     } catch (err: any) {
       setIsUploading(false);
-      toast.error('Database import error: ' + err.message);
+      toast.error('Database upsert error: ' + err.message);
     }
   };
 
@@ -182,6 +204,17 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
                 <RefreshCw className="w-5 h-5 animate-spin" />
                 {progressText}
               </div>
+            )}
+
+            {(isUploading || successCount > 0 || failedCount > 0) && (
+              <ImportProgressTracker
+                isUploading={isUploading}
+                totalCount={parseResult?.validQuestions.length || 0}
+                successCount={successCount}
+                failedCount={failedCount}
+                currentBatchText={progressText}
+                errors={ingestionErrors}
+              />
             )}
 
             {parseResult && !isParsing && (

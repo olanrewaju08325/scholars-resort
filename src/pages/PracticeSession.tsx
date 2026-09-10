@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { callGroqAPI, stripThinkTags } from '@/services/aiService';
 import { ExplanationCacheService } from '@/services/explanationCacheService';
 import { saveCompletedOfflineSession } from '@/lib/offlineStore';
+import { recordTopicScore } from '@/services/topicProgressService';
 import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { cleanQuestionText, cleanOptionText, ContentNormalizer, checkIsCorrect } from '@/utils/questionUtils';
 import { MathText } from '@/components/MathText';
@@ -135,6 +136,16 @@ const PracticeSession = () => {
       }
       
       const percentageScore = questions.length > 0 ? (finalScore / questions.length) * 100 : 0;
+
+      if (state?.topicId && state?.subjectId) {
+        recordTopicScore(
+          state.subjectId,
+          state.topicId,
+          state.topicName || 'Topic Drill',
+          percentageScore,
+          questions.length
+        );
+      }
 
       
       saveCompletedOfflineSession({

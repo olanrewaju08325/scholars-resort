@@ -52,7 +52,7 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
   try {
     const [subRes, topRes] = await Promise.all([
       supabase.from('subjects').select('*').eq('is_active', true).order('name'),
-      supabase.from('topics').select('*, subjects(id, name)').order('sequence', { ascending: true })
+      supabase.from('topics').select('*, subjects(id, name)').order('name')
     ]);
 
     if (subRes.data && subRes.data.length > 0) {
@@ -84,12 +84,34 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
     });
   }
 
-  // 3. Collect REAL User performance statistics
-  const topicStats: Record<string, { total: number; correct: number }> = {};
+  // 3. Collect REAL User performance statistics and Supabase topic_progress records
+  const topicStats: Record<string, { total: number; correct: number; isMastered?: boolean; score?: number }> = {};
   let totalUserAnswers = 0;
 
   try {
     if (userId) {
+      // Query Supabase topic_progress table directly
+      const { data: dbProgress } = await supabase
+        .from('topic_progress')
+        .select('*')
+        .eq('user_id', userId);
+
+      if (dbProgress && dbProgress.length > 0) {
+        dbProgress.forEach((tp: any) => {
+          const tId = tp.topic_id;
+          if (tId) {
+            const attempted = tp.questions_attempted || 10;
+            const scoreVal = Number(tp.score) || 0;
+            topicStats[tId] = {
+              total: attempted,
+              correct: Math.round((scoreVal / 100) * attempted),
+              isMastered: tp.is_mastered || scoreVal >= 70,
+              score: scoreVal
+            };
+          }
+        });
+      }
+
       const { data: answers } = await supabase
         .from('session_answers')
         .select('is_correct, question_id, questions(topic_id, topics(name, id), subjects(name, id))')
@@ -195,9 +217,9 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
     // Track mastered node IDs in this subject
     const masteredIds = new Set<string>();
 
-    // Pass 1: Mark nodes that meet the authoritative mastery criteria
+    // Pass 1: Mark nodes that meet the >= 70% mastery criteria
     nodes.forEach((node) => {
-      if (node.questionsAttempted >= minAttemptsForMastery && node.accuracyPercentage >= masteryThresholdPercent) {
+      if (node.accuracyPercentage >= 70 || (node.questionsAttempted >= minAttemptsForMastery && node.accuracyPercentage >= masteryThresholdPercent)) {
         node.status = 'mastered';
         masteredIds.add(node.id);
       }
@@ -208,7 +230,7 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
       if (node.status === 'mastered') return;
 
       if (prerequisiteMode === 'advisory') {
-        // In advisory mode, all nodes are accessible; attempted ones are in_progress
+        // In advisory mode (Admin Toggle Override), all nodes are accessible
         node.status = 'in_progress';
       } else {
         // Strict Prerequisite Mode:
@@ -227,12 +249,12 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
             node.status = 'locked';
           }
         } else {
-          // If no explicit prerequisites, unlock when previous node in sequence is mastered
+          // If no explicit prerequisites, unlock when previous node in sequence is mastered (score >= 70%)
           const prevNode = nodes[index - 1];
-          if (prevNode && (prevNode.status === 'mastered' || (prevNode.questionsAttempted > 0 && node.questionsAttempted > 0))) {
+          if (prevNode && (prevNode.status === 'mastered' || prevNode.accuracyPercentage >= 70)) {
             node.status = 'in_progress';
           } else {
-            node.status = node.questionsAttempted > 0 ? 'in_progress' : 'locked';
+            node.status = 'locked';
           }
         }
       }

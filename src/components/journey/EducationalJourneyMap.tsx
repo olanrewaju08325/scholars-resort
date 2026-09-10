@@ -4,6 +4,7 @@ import { fetchEducationalJourneyProgress } from '@/services/educationalJourneySe
 import type { OverallJourneyProgress, JourneyNode, SubjectJourney } from '@/services/educationalJourneyService';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { PrerequisiteLockModal } from '@/components/PrerequisiteLockModal';
 import { 
   CheckCircle2, 
   Lock, 
@@ -32,6 +33,12 @@ export const EducationalJourneyMap: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string>('use_of_english');
   const [selectedNodeModal, setSelectedNodeModal] = useState<JourneyNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [lockModalInfo, setLockModalInfo] = useState<{
+    isOpen: boolean;
+    targetTopicName: string;
+    prerequisiteTopicName: string;
+    prerequisiteNumber: number;
+  } | null>(null);
 
   useEffect(() => {
     const loadJourney = async () => {
@@ -209,7 +216,19 @@ export const EducationalJourneyMap: React.FC = () => {
                       <motion.div
                         whileHover={{ scale: isLocked ? 1 : 1.03 }}
                         whileTap={{ scale: isLocked ? 1 : 0.97 }}
-                        onClick={() => setSelectedNodeModal(node)}
+                        onClick={() => {
+                          if (isLocked) {
+                            const prevNode = index > 0 ? currentSubjectJourney.nodes[index - 1] : null;
+                            setLockModalInfo({
+                              isOpen: true,
+                              targetTopicName: node.topicName,
+                              prerequisiteTopicName: prevNode ? prevNode.topicName : 'Core Fundamentals',
+                              prerequisiteNumber: index
+                            });
+                          } else {
+                            setSelectedNodeModal(node);
+                          }
+                        }}
                         className={`cursor-pointer p-4 rounded-2xl border transition-all duration-300 w-full max-w-sm relative z-10 shadow-sm ${
                           isMastered
                             ? 'bg-emerald-500/10 border-emerald-500/40 hover:border-emerald-500 shadow-emerald-500/10'
@@ -385,6 +404,22 @@ export const EducationalJourneyMap: React.FC = () => {
           </div>
         )}
       </AnimatePresence>
+
+      {lockModalInfo && (
+        <PrerequisiteLockModal
+          isOpen={lockModalInfo.isOpen}
+          onClose={() => setLockModalInfo(null)}
+          targetTopicName={lockModalInfo.targetTopicName}
+          prerequisiteTopicName={lockModalInfo.prerequisiteTopicName}
+          prerequisiteNumber={lockModalInfo.prerequisiteNumber}
+          onStartPrerequisiteDrill={() => {
+            const currentSubName = currentSubjectJourney?.subjectName || 'Use of English';
+            const prereqTopic = lockModalInfo.prerequisiteTopicName;
+            setLockModalInfo(null);
+            navigate(`/practice?subject=${encodeURIComponent(currentSubName)}&topic=${encodeURIComponent(prereqTopic)}`);
+          }}
+        />
+      )}
     </div>
   );
 };

@@ -1723,21 +1723,40 @@ app.post('/api/cbt/check-answer', verifyUserToken, async (req, res) => {
 
   try {
     const db = getScopedSupabaseClient(req);
-    const { data: q, error } = await db
+    let q: any = null;
+    
+    // Primary query
+    const { data } = await db
       .from('questions')
       .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
       .eq('id', questionId)
-      .single();
+      .maybeSingle();
+
+    if (data) {
+      q = data;
+    } else {
+      // Fallback query matching by id string or text
+      const { data: fallbackData } = await db
+        .from('questions')
+        .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
+        .or(`id.eq.${questionId}`)
+        .limit(1);
+      if (fallbackData && fallbackData.length > 0) {
+        q = fallbackData[0];
+      }
+    }
       
-    if (error || !q) throw new Error('Question not found');
+    if (!q) {
+      return res.status(404).json({ success: false, error: 'Question not found' });
+    }
     
     const isCorrect = backendCheckIsCorrect(selectedAnswer, q);
     
     return res.json({
       success: true,
       isCorrect,
-      correctAnswer: q.correct_answer,
-      explanation: q.explanation
+      correctAnswer: q.correct_answer || '',
+      explanation: q.explanation || ''
     });
   } catch (err: any) {
     console.error('[API /api/cbt/check-answer Error]', err);
@@ -2664,7 +2683,8 @@ app.post('/api/admin/test-groq', verifyAdminToken, async (req, res) => {
 // API Route: Get real-time accurate counts of active questions grouped by subject_id
 app.get('/api/admin/subject-counts', async (req, res) => {
   try {
-    const { data: subjects, error: subError } = await supabase
+    const db = getScopedSupabaseClient(req);
+    const { data: subjects, error: subError } = await db
       .from('subjects')
       .select('id, name')
       .order('name');
@@ -2694,7 +2714,7 @@ app.get('/api/admin/subject-counts', async (req, res) => {
     let qErr: any = null;
 
     while (true) {
-      const { data: chunk, error: err } = await supabase
+      const { data: chunk, error: err } = await db
         .from('questions')
         .select('subject_id, year, is_active')
         .range(from, from + pageSize - 1);
@@ -5588,6 +5608,30 @@ app.post('/api/questions/insert', verifyAdminToken, async (req, res) => {
   } catch (err: any) {
     console.error('[Server Questions Insert Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server insert failed.' });
+  }
+});
+
+// API Route: Question Bank - Bulk & Single Upsert (Server Admin Client)
+app.post('/api/questions/upsert', verifyAdminToken, async (req, res) => {
+  const { questions, onConflict } = req.body;
+  if (!questions || !Array.isArray(questions) || questions.length === 0) {
+    return res.status(400).json({ success: false, error: 'Array of questions is required.' });
+  }
+
+  try {
+    const db = getScopedSupabaseClient(req);
+    const options: any = {};
+    if (onConflict) options.onConflict = onConflict;
+
+    const { data, error } = await db.from('questions').upsert(questions, options).select();
+    if (error) {
+      console.warn('[Server Questions Upsert Warn]', error.message);
+      return res.status(200).json({ success: false, error: error.message, count: 0 });
+    }
+    return res.json({ success: true, count: data?.length || questions.length, data });
+  } catch (err: any) {
+    console.error('[Server Questions Upsert Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Server upsert failed.' });
   }
 });
 

@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
+import { setSequenceLockEnabled } from '@/services/topicProgressService';
 import { authFetch } from '@/lib/apiAuth';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { logAdminActivity } from '@/services/adminActivityService';
@@ -373,7 +374,12 @@ export const SyllabusAdminTab = () => {
                 <select
                   className="w-full h-9 px-3 rounded-md border border-input bg-background text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-primary"
                   value={rules.prerequisiteMode}
-                  onChange={e => setRules({ ...rules, prerequisiteMode: e.target.value as 'strict' | 'advisory' })}
+                  onChange={e => {
+                    const mode = e.target.value as 'strict' | 'advisory';
+                    setRules({ ...rules, prerequisiteMode: mode });
+                    setSequenceLockEnabled(mode === 'strict');
+                    toast.success(`Sequential Topic Lock: ${mode === 'strict' ? 'Strict Mode (Locked)' : 'Open Access Mode'}`);
+                  }}
                 >
                   <option value="strict">Strict (Locked until prereq mastered)</option>
                   <option value="advisory">Advisory (Accessible with warning)</option>
