@@ -5576,7 +5576,8 @@ app.post('/api/questions/insert', verifyAdminToken, async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.from('questions').insert(questions).select();
+    const db = getScopedSupabaseClient(req);
+    const { data, error } = await db.from('questions').insert(questions).select();
     if (error) {
       console.warn('[Server Questions Insert Warn]', error.message);
       return res.status(200).json({ success: false, error: error.message, count: 0 });
