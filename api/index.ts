@@ -6851,6 +6851,16 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
   }
 });
 
+// 1.5. Get Referral Config
+app.get('/api/referrals/config', async (req, res) => {
+  try {
+    const config = await getReferralConfig();
+    return res.json({ success: true, config });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // 2. Convert Referral on Payment Trigger
 app.post('/api/referrals/convert-payment', express.json(), async (req, res) => {
   try {
