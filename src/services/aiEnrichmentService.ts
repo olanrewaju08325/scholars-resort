@@ -53,7 +53,7 @@ Output MUST be a JSON array with objects matching:
 ]
 Return ONLY valid JSON.`;
 
-      const aiRes = await callGroqAPI(prompt, 0.3);
+      const aiRes = await callGroqAPI([{ role: 'user', content: prompt }], 'openai/gpt-oss-120b', 0.3);
       const parsed = safeParseAIJSON<Array<{ row: number; explanation?: string; year?: number; topicName?: string; difficulty?: string }>>(aiRes, []);
 
       if (Array.isArray(parsed)) {

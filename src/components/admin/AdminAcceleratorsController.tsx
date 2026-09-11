@@ -24,10 +24,36 @@ export const AdminAcceleratorsController: React.FC<AdminAcceleratorsControllerPr
     }
     setTaggingLoading(true);
     try {
+      // Fetch up to 50 unassigned or general questions first
+      const { data: targetQuestions, error: fetchErr } = await supabase
+        .from('questions')
+        .select('id')
+        .or('subject_id.is.null,subject_id.eq.')
+        .limit(50);
+
+      if (fetchErr) throw fetchErr;
+
+      let ids: string[] = [];
+      if (targetQuestions && targetQuestions.length > 0) {
+        ids = targetQuestions.map(q => q.id);
+      } else {
+        // Fallback to first 50 questions if none have null subject_id
+        const { data: anyQuestions, error: anyErr } = await supabase
+          .from('questions')
+          .select('id')
+          .limit(50);
+        if (anyErr) throw anyErr;
+        if (!anyQuestions || anyQuestions.length === 0) {
+          throw new Error('No questions found in repository to tag.');
+        }
+        ids = anyQuestions.map(q => q.id);
+      }
+
       const { error } = await supabase
         .from('questions')
         .update({ subject_id: taggingSubject })
-        .limit(50); // bulk tag batch
+        .in('id', ids);
+
       if (error) throw error;
       toast.success('Successfully applied bulk syllabus tagging to questions!');
       if (onRefresh) onRefresh();
