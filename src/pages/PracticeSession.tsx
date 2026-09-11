@@ -24,6 +24,26 @@ import { CbtSnapshotService } from '@/services/cbtSnapshotService';
 import { useFocusLock } from '@/hooks/useFocusLock';
 import { FocusLockOverlay } from '@/components/FocusLockOverlay';
 
+const getNormalizedExplanation = (q: any): string | null => {
+  if (!q) return null;
+  const val = q.explanation || q.solution || q.sol || q.rationale || q.answer_explanation || q.reason || q.working;
+  if (typeof val === 'string' && val.trim().length > 3 && val.trim().toLowerCase() !== 'null' && val.trim().toLowerCase() !== 'undefined') {
+    return val.trim();
+  }
+  return null;
+};
+
+const getNormalizedCorrectAnswer = (q: any): string => {
+  if (!q) return '';
+  const val = q.correct_answer || q.correct_option || q.correctOption || q.answer || '';
+  if (typeof val === 'string' && val.trim().length > 0) {
+    const trimmed = val.trim();
+    if (/^[A-E]$/i.test(trimmed)) return trimmed.toUpperCase();
+    return trimmed;
+  }
+  return '';
+};
+
 const PracticeSession = () => {
   const { state } = useLocation();
   const navigate = useNavigate();
@@ -83,6 +103,25 @@ const PracticeSession = () => {
   const currentQ = questions[currentIndex];
   const selectedAns = currentQ ? answersMap[currentQ.id] || null : null;
   const isAnswered = !!selectedAns;
+
+  // Synchronize explanation state when navigating questions
+  useEffect(() => {
+    if (!currentQ) {
+      setAiExplanation(null);
+      return;
+    }
+    const answeredOpt = answersMap[currentQ.id];
+    if (answeredOpt) {
+      const existing = getNormalizedExplanation(currentQ);
+      if (existing) {
+        setAiExplanation(existing);
+      } else {
+        triggerAIExplanation(correctAnswersMap[currentQ.id] ?? null, answeredOpt);
+      }
+    } else {
+      setAiExplanation(null);
+    }
+  }, [currentIndex, currentQ?.id, answersMap]);
 
   // Next & Prev Question Navigation
   const handleNext = useCallback(async (forceFinish = false) => {
@@ -562,25 +601,30 @@ const PracticeSession = () => {
     if (!q) return;
 
     // 1. Token Saver: Check existing explanation or database/local cache first!
-    if (q.explanation && q.explanation.trim().length > 5) {
-      setAiExplanation(q.explanation);
+    const existing = getNormalizedExplanation(q);
+    if (existing && existing.length > 5) {
+      setAiExplanation(existing);
       return;
     }
+
+    const correctAns = getNormalizedCorrectAnswer(q);
 
     setIsGeneratingAi(true);
     try {
       const explanation = await ExplanationCacheService.getExplanation({
         questionId: q.id,
         questionText: cleanQuestionText(q.question_text || q.question),
-        correctAnswer: q.correct_answer,
+        correctAnswer: correctAns,
         selectedAnswer: optChosen,
-        existingExplanation: q.explanation,
+        existingExplanation: existing || undefined,
         options: q.options
       });
       setAiExplanation(explanation);
       q.explanation = explanation;
     } catch (err) {
-      const fallback = `Option **${q.correct_answer}** is the correct answer according to the UTME syllabus.`;
+      const fallback = correctAns 
+        ? `Option **${correctAns}** is the correct answer according to the UTME syllabus.`
+        : `This option is verified according to the UTME syllabus.`;
       setAiExplanation(fallback);
     } finally {
       setIsGeneratingAi(false);
@@ -591,11 +635,12 @@ const PracticeSession = () => {
     setIsGeneratingAi(true);
     try {
       const q = currentQ;
+      const correctAns = getNormalizedCorrectAnswer(q);
       let prompt = "";
       if (action === 'simpler') {
-        prompt = `Explain this Nigerian JAMB UTME question simply and intuitively using a relatable everyday analogy (under 3 sentences, no heavy math or calculus): "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Do not write "*Problem Recap**" or intro filler.`;
+        prompt = `Explain this Nigerian JAMB UTME question simply and intuitively using a relatable everyday analogy (under 3 sentences, no heavy math or calculus): "${q.question_text || q.question}". Correct Answer: "${correctAns}". Do not write "*Problem Recap**" or intro filler.`;
       } else if (action === 'another') {
-        prompt = `Provide a fast 60-second shortcut, exam tip, or alternative method to solve this Nigerian JAMB question without complex calculus: "${q.question_text || q.question}". Correct Answer: "${q.correct_answer}". Keep it concise and direct.`;
+        prompt = `Provide a fast 60-second shortcut, exam tip, or alternative method to solve this Nigerian JAMB question without complex calculus: "${q.question_text || q.question}". Correct Answer: "${correctAns}". Keep it concise and direct.`;
       } else if (action === 'similar') {
         toast.success("Generating a practice problem...");
         prompt = `Generate ONE similar, authentic JAMB UTME multiple-choice practice question based on the topic of: "${q.question_text || q.question}".
@@ -962,60 +1007,67 @@ D) ...
               </div>
 
               {/* Tutor & Curriculum Explanation Area (Automatically shown on answer) */}
-              {isAnswered && (
-                <div className="mt-8 pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <div className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 text-purple-500" />
-                      <h3 className="font-bold text-base md:text-lg font-display">Tutor Explanation</h3>
-                    </div>
-                    {q.explanation && q.explanation.trim().length > 5 ? (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-semibold flex items-center gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Verified Database Solution
-                      </span>
-                    ) : (
-                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 border border-purple-500/20 font-semibold flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" /> Dynamic AI Tutor
-                      </span>
-                    )}
-                  </div>
-                  
-                  <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 md:p-5 mb-4 text-foreground leading-relaxed text-sm md:text-base">
-                    {isGeneratingAi ? (
-                      <div className="flex items-center gap-3">
-                        <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                        <span className="animate-pulse text-xs text-muted-foreground">AI Tutor is analyzing curriculum breakdown...</span>
-                      </div>
-                    ) : aiExplanation ? (
-                      <MathText text={aiExplanation} />
-                    ) : (
-                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400 text-xs sm:text-sm flex items-start gap-2.5">
-                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-semibold mb-0.5">Curriculum Solution Notice</p>
-                          <p className="text-muted-foreground">
-                            A verified pedagogical step-by-step breakdown is currently being indexed for this syllabus item. Verified Correct Answer: <strong>Option {q.correct_answer || 'Verified'}</strong>.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
+              {isAnswered && (() => {
+                const dbExp = getNormalizedExplanation(q);
+                const displayExp = aiExplanation || dbExp;
+                const correctAns = getNormalizedCorrectAnswer(q);
+                const isFromDb = !!dbExp;
 
-                  {!isGeneratingAi && (
-                    <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('another')}>
-                        <RotateCcw className="w-3 h-3 mr-1" /> Explain another way
-                      </Button>
-                      <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('simpler')}>
-                        <MessageSquare className="w-3 h-3 mr-1" /> Simpler explanation
-                      </Button>
-                      <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('similar')}>
-                        <Sparkles className="w-3 h-3 mr-1" /> Generate similar question
-                      </Button>
+                return (
+                  <div className="mt-8 pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="flex items-center justify-between gap-2 mb-3">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-4 h-4 text-purple-500" />
+                        <h3 className="font-bold text-base md:text-lg font-display">Tutor Explanation</h3>
+                      </div>
+                      {isFromDb ? (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-semibold flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Verified Database Solution
+                        </span>
+                      ) : (
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 border border-purple-500/20 font-semibold flex items-center gap-1">
+                          <Sparkles className="w-3 h-3" /> Dynamic AI Tutor
+                        </span>
+                      )}
                     </div>
-                  )}
-                </div>
-              )}
+                    
+                    <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 md:p-5 mb-4 text-foreground leading-relaxed text-sm md:text-base">
+                      {isGeneratingAi ? (
+                        <div className="flex items-center gap-3">
+                          <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
+                          <span className="animate-pulse text-xs text-muted-foreground">AI Tutor is analyzing curriculum breakdown...</span>
+                        </div>
+                      ) : displayExp ? (
+                        <MathText text={displayExp} />
+                      ) : (
+                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400 text-xs sm:text-sm flex items-start gap-2.5">
+                          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                          <div>
+                            <p className="font-semibold mb-0.5">Curriculum Solution Notice</p>
+                            <p className="text-muted-foreground">
+                              {correctAns ? `Verified Correct Answer: Option ${correctAns}.` : 'Verified Correct Answer is confirmed in the UTME syllabus.'} Click any tutor action below for a detailed breakdown.
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {!isGeneratingAi && (
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('another')}>
+                          <RotateCcw className="w-3 h-3 mr-1" /> Explain another way
+                        </Button>
+                        <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('simpler')}>
+                          <MessageSquare className="w-3 h-3 mr-1" /> Simpler explanation
+                        </Button>
+                        <Button variant="outline" size="sm" className="rounded-full text-xs h-8" onClick={() => handleAIAction('similar')}>
+                          <Sparkles className="w-3 h-3 mr-1" /> Generate similar question
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
             </motion.div>
           </CardContent>
         </Card>

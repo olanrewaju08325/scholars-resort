@@ -6,7 +6,7 @@ import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from '@/comp
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { 
-  Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, 
+  Sparkles, Plus, Edit2, Trash2, CheckCircle, CheckCircle2, PlusCircle, XCircle, Upload, Loader2, 
   ShieldCheck, History, Search, Download, FileSpreadsheet, AlertTriangle, 
   Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info, BookOpen, Send,
   CheckSquare, Square, ListFilter, Zap, Database
