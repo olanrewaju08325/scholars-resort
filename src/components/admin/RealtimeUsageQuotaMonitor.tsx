@@ -298,7 +298,7 @@ export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ cl
                   {stats?.smtp.emailsSentToday || 0} <span className="text-xs font-sans text-muted-foreground font-normal">/ {limits.smtpDailyLimit} today</span>
                 </div>
                 <p className="text-[11px] text-purple-600 dark:text-purple-400 font-medium mt-0.5">
-                  <strong>{stats?.smtp.emailsLeftToday || limits.smtpDailyLimit} emails</strong> left today
+                  <strong>{stats?.smtp.emailsLeftToday ?? limits.smtpDailyLimit} emails</strong> left today
                 </p>
               </div>
             </div>
@@ -312,7 +312,11 @@ export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ cl
               </div>
               <div className="flex justify-between items-center text-[10px] text-muted-foreground mt-1.5 font-mono">
                 <span>{stats?.smtp.emailsSentThisMonth || 0} sent this month</span>
-                <span className="text-emerald-500">Live Health 100%</span>
+                <span className={((stats?.smtp.failedToday || 0) > 0) ? "text-amber-500 font-medium" : "text-emerald-500 font-medium"}>
+                  {((stats?.smtp.failedToday || 0) > 0) 
+                    ? `${stats?.smtp.failedToday} failed today`
+                    : "Live Health 100%"}
+                </span>
               </div>
             </div>
           </div>

@@ -1,15 +1,24 @@
 import React, { useState, useRef } from 'react';
 import { 
   Upload, FileText, CheckCircle2, AlertCircle, RefreshCw, X, Play, 
-  FileSpreadsheet, Download, Check, ShieldCheck, Layers 
+  FileSpreadsheet, Download, Check, ShieldCheck, Layers, Copy, Code2, Database, AlertTriangle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { parseQuestionsCsv, importQuestionsToDatabase, type CsvParseResult } from '@/lib/csvQuestionParser';
+import { 
+  parseQuestionsCsv, 
+  importQuestionsToDatabase, 
+  convertFailedRowToErrorItem,
+  translateErrorToHumanReadable,
+  type CsvParseResult, 
+  type DiagnosticReport,
+  type QuestionUploadErrorItem 
+} from '@/lib/csvQuestionParser';
 import { useCsvValidation } from '@/hooks/useCsvValidation';
 import { ImportProgressTracker } from '@/components/admin/ImportProgressTracker';
+import { BulkUploadErrorDisplay } from '@/components/admin/BulkUploadErrorDisplay';
 
 interface BulkQuestionUploaderProps {
   onSuccess?: () => void;
@@ -26,6 +35,9 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
   const [successCount, setSuccessCount] = useState(0);
   const [failedCount, setFailedCount] = useState(0);
   const [ingestionErrors, setIngestionErrors] = useState<string[]>([]);
+  const [detailedErrors, setDetailedErrors] = useState<QuestionUploadErrorItem[]>([]);
+  const [diagnosticReport, setDiagnosticReport] = useState<DiagnosticReport | null>(null);
+  const [copiedSql, setCopiedSql] = useState(false);
   
   const { validateCsvContent } = useCsvValidation();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -48,6 +60,13 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
     toast.success('Sample CSV template downloaded successfully!');
   };
 
+  const handleCopySql = (sql: string) => {
+    navigator.clipboard.writeText(sql);
+    setCopiedSql(true);
+    toast.success('Migration SQL copied to clipboard!');
+    setTimeout(() => setCopiedSql(false), 3000);
+  };
+
   const handleFileSelect = async (selectedFile: File) => {
     if (!selectedFile.name.endsWith('.csv') && !selectedFile.type.includes('csv')) {
       toast.error('Please upload a valid CSV file.');
@@ -60,6 +79,8 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
     setSuccessCount(0);
     setFailedCount(0);
     setIngestionErrors([]);
+    setDetailedErrors([]);
+    setDiagnosticReport(null);
 
     try {
       const text = await selectedFile.text();
@@ -72,8 +93,27 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
       setParseResult(result);
       setIsParsing(false);
 
+      const detectedErrors: QuestionUploadErrorItem[] = [];
+
       if (valResult.invalidRows.length > 0) {
+        valResult.invalidRows.forEach(r => {
+          detectedErrors.push(convertFailedRowToErrorItem({
+            rowNumber: r.rowNumber,
+            raw: r.raw,
+            reason: r.reason
+          }));
+        });
         setIngestionErrors(valResult.invalidRows.map(r => `Row ${r.rowNumber}: ${r.reason}`));
+      }
+
+      if (result.failedRows.length > 0) {
+        result.failedRows.forEach(f => {
+          detectedErrors.push(convertFailedRowToErrorItem(f));
+        });
+      }
+
+      if (detectedErrors.length > 0) {
+        setDetailedErrors(detectedErrors);
       }
 
       if (result.validQuestions.length > 0) {
@@ -85,6 +125,7 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
       console.error('CSV Parse Error:', err);
       toast.error('Failed to parse CSV file: ' + err.message);
       setIsParsing(false);
+      setDetailedErrors([translateErrorToHumanReadable(err)]);
     }
   };
 
@@ -102,9 +143,10 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
     }
 
     setIsUploading(true);
-    setProgressText('Initiating batch upserts into Supabase...');
+    setProgressText('Initiating verified batch upsert into Supabase...');
     setSuccessCount(0);
     setFailedCount(0);
+    setDiagnosticReport(null);
 
     try {
       const result = await importQuestionsToDatabase(parseResult.validQuestions, {
@@ -117,17 +159,30 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
       setSuccessCount(result.successCount);
       setFailedCount(result.failedCount);
       setIngestionErrors(prev => [...prev, ...(result.errors || [])]);
+      
+      if (result.detailedErrors && result.detailedErrors.length > 0) {
+        setDetailedErrors(prev => [...prev, ...result.detailedErrors]);
+      }
+      if (result.diagnosticReport) {
+        setDiagnosticReport(result.diagnosticReport);
+      }
       setIsUploading(false);
 
       if (result.successCount > 0) {
-        toast.success(`Successfully upserted ${result.successCount} question(s)!`);
+        toast.success(`Successfully processed ${result.successCount} question(s)!`);
         onSuccess?.();
       } else {
-        toast.error('Batch upsert completed with 0 successes. Check error logs.');
+        toast.error('Batch upload completed with 0 successes. See error diagnostic below.');
       }
     } catch (err: any) {
       setIsUploading(false);
       toast.error('Database upsert error: ' + err.message);
+      const translated = translateErrorToHumanReadable(err);
+      setDetailedErrors(prev => [...prev, translated]);
+      setDiagnosticReport({
+        summary: 'Database connection or request error: ' + err.message,
+        details: [err.stack || err.message]
+      });
     }
   };
 
@@ -191,7 +246,7 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => { setFile(null); setParseResult(null); }}
+                onClick={() => { setFile(null); setParseResult(null); setDiagnosticReport(null); }}
                 disabled={isUploading || isParsing}
                 className="text-slate-500 hover:text-red-600"
               >
@@ -214,6 +269,14 @@ export const BulkQuestionUploader: React.FC<BulkQuestionUploaderProps> = ({ onSu
                 failedCount={failedCount}
                 currentBatchText={progressText}
                 errors={ingestionErrors}
+              />
+            )}
+
+            {/* Dedicated Human-Readable Error Display Component */}
+            {(detailedErrors.length > 0 || diagnosticReport?.suggestedSql) && (
+              <BulkUploadErrorDisplay 
+                errors={detailedErrors} 
+                suggestedSql={diagnosticReport?.suggestedSql} 
               />
             )}
 

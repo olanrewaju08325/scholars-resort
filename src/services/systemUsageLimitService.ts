@@ -184,17 +184,52 @@ export class SystemUsageLimitService {
     }
 
     try {
-      // 2. SMTP Real Usage - derived from activity_logs
-      const { data: emailLogsData } = await supabase
-        .from('activity_logs')
-        .select('action, created_at')
-        .ilike('action', '%email%')
-        .gte('created_at', monthIso);
+      // 2. SMTP Real Usage - Authoritative sync with communication_logs and server API
+      let serverSmtpLoaded = false;
+      try {
+        const res = await fetch('/api/system-usage');
+        if (res.ok) {
+          const sData = await res.json();
+          if (sData?.smtp) {
+            emailsSentToday = sData.smtp.emailsSentToday || 0;
+            emailsSentMonth = sData.smtp.emailsSentThisMonth || 0;
+            failedEmailsToday = sData.smtp.failedToday || 0;
+            serverSmtpLoaded = true;
+          }
+        }
+      } catch (_) {}
 
-      if (emailLogsData) {
-        emailsSentMonth = emailLogsData.filter(l => l.action.includes('sent') || l.action.includes('approved')).length;
-        emailsSentToday = emailLogsData.filter(l => (l.action.includes('sent') || l.action.includes('approved')) && new Date(l.created_at) >= startOfToday).length;
-        failedEmailsToday = emailLogsData.filter(l => l.action.includes('fail') && new Date(l.created_at) >= startOfToday).length;
+      if (!serverSmtpLoaded) {
+        // Query Supabase communication_logs directly
+        const { data: commData } = await supabase
+          .from('communication_logs')
+          .select('status, created_at, sent_at')
+          .or(`created_at.gte.${monthIso},sent_at.gte.${monthIso}`);
+
+        if (commData && commData.length > 0) {
+          emailsSentMonth = commData.filter(l => l.status === 'delivered' || l.status === 'sent' || l.status === 'pending').length;
+          emailsSentToday = commData.filter(l => {
+            const time = new Date(l.sent_at || l.created_at);
+            return time >= startOfToday && (l.status === 'delivered' || l.status === 'sent' || l.status === 'pending');
+          }).length;
+          failedEmailsToday = commData.filter(l => {
+            const time = new Date(l.sent_at || l.created_at);
+            return time >= startOfToday && l.status === 'failed';
+          }).length;
+        } else {
+          // Fallback to activity_logs
+          const { data: emailLogsData } = await supabase
+            .from('activity_logs')
+            .select('action, created_at')
+            .ilike('action', '%email%')
+            .gte('created_at', monthIso);
+
+          if (emailLogsData) {
+            emailsSentMonth = emailLogsData.filter(l => l.action.includes('sent') || l.action.includes('approved')).length;
+            emailsSentToday = emailLogsData.filter(l => (l.action.includes('sent') || l.action.includes('approved')) && new Date(l.created_at) >= startOfToday).length;
+            failedEmailsToday = emailLogsData.filter(l => l.action.includes('fail') && new Date(l.created_at) >= startOfToday).length;
+          }
+        }
       }
     } catch (smtpErr) {
       console.warn('[SystemUsageLimitService] SMTP counts notice:', smtpErr);
