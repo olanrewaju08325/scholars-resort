@@ -9,7 +9,7 @@ import {
   Sparkles, Plus, Edit2, Trash2, CheckCircle, CheckCircle2, PlusCircle, XCircle, Upload, Loader2, 
   ShieldCheck, History, Search, Download, FileSpreadsheet, AlertTriangle, 
   Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info, BookOpen, Send,
-  CheckSquare, Square, ListFilter, Zap, Database
+  CheckSquare, Square, ListFilter, Zap, Database, PlayCircle
 } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { SanityScanModal } from "@/components/admin/SanityScanModal";

@@ -60,21 +60,42 @@ export const SubjectCoverageDashboard: React.FC = () => {
       const { data: dbSubjects } = await supabase.from('subjects').select('id, name, is_active').order('name');
       const subjectsList = dbSubjects || [];
 
-      // 2. Fetch question distribution grouped by subject
-      const { data: qData } = await supabase
-        .from('questions')
-        .select('subject_id')
-        .limit(20000);
+      // 2. Fetch all questions using paginated queries to bypass 1000-row limit
+      let qData: any[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: qBatch, error: qErr } = await supabase
+          .from('questions')
+          .select('subject_id, subjects!questions_subject_id_fkey(id, name)')
+          .range(from, from + pageSize - 1);
+
+        if (qErr || !qBatch || qBatch.length === 0) break;
+        qData = qData.concat(qBatch);
+        if (qBatch.length < pageSize) break;
+        from += pageSize;
+      }
 
       const countsMap: Record<string, number> = {};
+      const countsByNameMap: Record<string, number> = {};
+      
       subjectsList.forEach(s => {
         countsMap[s.id] = 0;
+        countsByNameMap[normalizeSubjectName(s.name)] = 0;
       });
 
       if (qData) {
         qData.forEach((q: any) => {
           if (q.subject_id && countsMap[q.subject_id] !== undefined) {
             countsMap[q.subject_id] += 1;
+          } else if (q.subjects?.id && countsMap[q.subjects.id] !== undefined) {
+            countsMap[q.subjects.id] += 1;
+          } else if (q.subjects?.name) {
+            const canonical = normalizeSubjectName(q.subjects.name);
+            countsByNameMap[canonical] = (countsByNameMap[canonical] || 0) + 1;
+          } else if (typeof q.subject_id === 'string') {
+            const canonical = normalizeSubjectName(q.subject_id);
+            countsByNameMap[canonical] = (countsByNameMap[canonical] || 0) + 1;
           }
         });
       }
@@ -83,14 +104,15 @@ export const SubjectCoverageDashboard: React.FC = () => {
       const combinedMap = new Map<string, SubjectCoverageItem>();
 
       subjectsList.forEach(s => {
+        const canonicalName = normalizeSubjectName(s.name);
+        const count = (countsMap[s.id] || 0) + (countsByNameMap[canonicalName] || 0);
         const target = getTargetForSubject(s.name);
-        const count = countsMap[s.id] || 0;
         const coverage = Math.min(100, Math.round((count / target) * 100));
         let status: SubjectCoverageItem['status'] = 'critical';
         if (coverage >= 90) status = 'optimal';
         else if (coverage >= 40) status = 'moderate';
 
-        combinedMap.set(normalizeSubjectName(s.name), {
+        combinedMap.set(canonicalName, {
           id: s.id,
           name: s.name,
           category: getCategoryForSubject(s.name),
