@@ -14,6 +14,8 @@ import {
 import { generateAIQuestion } from '@/services/aiService';
 import { SanityScanModal } from "@/components/admin/SanityScanModal";
 import { DuplicateInspectionModal } from "@/components/admin/DuplicateInspectionModal";
+import { AdminAcceleratorsController } from "@/components/admin/AdminAcceleratorsController";
+import { InstantCBTSimulatorModal } from "@/components/admin/InstantCBTSimulatorModal";
 import { QuestionClassificationService, type DuplicatePair } from "@/services/questionClassificationService";
 import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
@@ -30,6 +32,7 @@ import {
   type ParsedQuestionItem, 
   type CsvParseResult 
 } from '@/lib/csvQuestionParser';
+import { enrichQuestionsBatchWithAI } from '@/services/aiEnrichmentService';
 import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 import { 
   normalizeToCanonicalSubjectName, 
@@ -614,7 +617,9 @@ export const QuestionBankTab = () => {
     flaggedDuplicates: Array<{ rowNumber: number; reason: string; similarityToRow?: number }>;
     qualitySuggestions: Array<{ rowNumber: number; suggestion: string }>;
   } | null>(null);
-  const [importStatusDetail, setImportStatusDetail] = useState<string>('');
+  const [acceleratorsModalOpen, setAcceleratorsModalOpen] = useState(false);
+  const [simulatorModalOpen, setSimulatorModalOpen] = useState(false);
+  const [simulatorQuestion, setSimulatorQuestion] = useState<any | null>(null);
 
   const downloadSampleCsv = () => {
     const sampleHeaders = "subject,topic,question,option_a,option_b,option_c,option_d,correct_answer,explanation,difficulty\n";
@@ -695,6 +700,85 @@ export const QuestionBankTab = () => {
     }
   };
 
+  const [aiEnriching, setAiEnriching] = useState(false);
+  const [enrichmentStatusText, setEnrichmentStatusText] = useState('');
+
+  const handleRunAiBatchEnrichment = async () => {
+    if (!parsedCsvResult || parsedCsvResult.validQuestions.length === 0) return;
+    setAiEnriching(true);
+    setEnrichmentStatusText('Initializing AI batch enrichment (20 questions/batch)...');
+    try {
+      const enriched = await enrichQuestionsBatchWithAI(parsedCsvResult.validQuestions, 20, (processed, total, msg) => {
+        setEnrichmentStatusText(msg);
+      });
+      setParsedCsvResult({
+        ...parsedCsvResult,
+        validQuestions: enriched
+      });
+      toast.success('AI Batch Enrichment completed successfully! Missing explanations, years, and topics have been generated.');
+    } catch (err: any) {
+      toast.error('AI Enrichment error: ' + (err?.message || err));
+    } finally {
+      setAiEnriching(false);
+      setEnrichmentStatusText('');
+    }
+  };
+
+  const [globalAiEnriching, setGlobalAiEnriching] = useState(false);
+
+  const handleGlobalAiEnrich = async () => {
+    if (!questions || questions.length === 0) {
+      toast.error('No questions loaded in repository');
+      return;
+    }
+    const incomplete = questions.filter(q => !q.explanation || !q.year || !q.topic_id);
+    if (incomplete.length === 0) {
+      toast.success('All questions in repository already have complete metadata!');
+      return;
+    }
+    setGlobalAiEnriching(true);
+    toast.loading(`Starting AI enrichment for ${incomplete.length} incomplete questions (20/batch)...`, { id: 'global-enrich' });
+    try {
+      const parsedItems = incomplete.map((q, idx) => ({
+        rowNumber: idx + 1,
+        subjectName: q.subject_id || 'General',
+        topicName: '',
+        questionText: q.question_text,
+        options: Array.isArray(q.options) ? q.options : [],
+        correctAnswer: q.correct_answer || 'A',
+        explanation: q.explanation || '',
+        year: q.year || 2023,
+        difficulty: q.difficulty || 'medium'
+      }));
+
+      const enriched = await enrichQuestionsBatchWithAI(parsedItems, 20, (processed, total, msg) => {
+        toast.loading(`${msg} (${processed}/${total})`, { id: 'global-enrich' });
+      });
+      toast.dismiss('global-enrich');
+
+      let updatedCount = 0;
+      for (const item of enriched) {
+        const orig = incomplete[item.rowNumber - 1];
+        if (orig && orig.id) {
+          const { error } = await supabase.from('questions').update({
+            explanation: item.explanation,
+            year: item.year,
+            difficulty: item.difficulty
+          }).eq('id', orig.id);
+          if (!error) updatedCount++;
+        }
+      }
+
+      toast.success(`Successfully enriched ${updatedCount} repository questions with AI explanations and years!`);
+      fetchData();
+    } catch (err: any) {
+      toast.dismiss('global-enrich');
+      toast.error('AI repository enrichment error: ' + (err?.message || err));
+    } finally {
+      setGlobalAiEnriching(false);
+    }
+  };
+
   const handleConfirmAndImport = async () => {
     if (!parsedCsvResult) return;
 
@@ -772,11 +856,25 @@ export const QuestionBankTab = () => {
           <Button onClick={() => setCsvModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
             <FileSpreadsheet className="w-4 h-4 mr-2 text-emerald-400" /> Bulk CSV Import
           </Button>
+          <Button onClick={() => setAcceleratorsModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
+            <Sparkles className="w-4 h-4 mr-2 text-purple-400" /> Admin Accelerators
+          </Button>
+          <Button onClick={() => {
+            if (questions.length > 0) {
+              setSimulatorQuestion(questions[0]);
+              setSimulatorModalOpen(true);
+            } else {
+              toast.error('No questions available in repository to simulate');
+            }
+          }} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
+            <PlayCircle className="w-4 h-4 mr-2 text-amber-400" /> CBT Simulator
+          </Button>
+          <Button onClick={handleGlobalAiEnrich} disabled={globalAiEnriching} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
+            {globalAiEnriching ? <Loader2 className="w-4 h-4 mr-2 animate-spin text-emerald-400" /> : <Sparkles className="w-4 h-4 mr-2 text-emerald-400" />} 
+            {globalAiEnriching ? 'AI Enriching...' : 'AI Batch Auto-Enrich'}
+          </Button>
           <Button onClick={() => setSanityScanModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
             <ShieldCheck className="w-4 h-4 mr-2 text-rose-400" /> Sanity Scan
-          </Button>
-          <Button onClick={handlePublishAllDrafts} disabled={publishing} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
-            <Send className="w-4 h-4 mr-2 text-blue-400" /> Publish All Drafts
           </Button>
         </div>
       </div>
@@ -1676,21 +1774,39 @@ export const QuestionBankTab = () => {
                     </div>
                   </div>
 
-                  <Button 
-                    type="button" 
-                    size="sm" 
-                    variant="outline" 
-                    disabled={aiCheckingDuplicates || parsedCsvResult.validQuestions.length === 0} 
-                    onClick={handleRunAiDuplicateCheck}
-                    className="bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border-purple-800/60 text-xs shrink-0 gap-1.5 h-8"
-                  >
-                    {aiCheckingDuplicates ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                    )}
-                    AI Duplicate Deep Scan
-                  </Button>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Button 
+                      type="button" 
+                      size="sm" 
+                      variant="outline" 
+                      disabled={aiEnriching || parsedCsvResult.validQuestions.length === 0} 
+                      onClick={handleRunAiBatchEnrichment}
+                      className="bg-emerald-950/40 hover:bg-emerald-900/60 text-emerald-300 border-emerald-800/60 text-xs shrink-0 gap-1.5 h-8"
+                    >
+                      {aiEnriching ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-emerald-400" />
+                      )}
+                      {aiEnriching ? enrichmentStatusText : '✨ AI Batch Auto-Enrich (20/batch)'}
+                    </Button>
+
+                    <Button 
+                      type="button" 
+                      size="sm" 
+                      variant="outline" 
+                      disabled={aiCheckingDuplicates || parsedCsvResult.validQuestions.length === 0} 
+                      onClick={handleRunAiDuplicateCheck}
+                      className="bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border-purple-800/60 text-xs shrink-0 gap-1.5 h-8"
+                    >
+                      {aiCheckingDuplicates ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                      )}
+                      AI Duplicate Deep Scan
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Subjects Status Cards */}
@@ -2133,6 +2249,16 @@ export const QuestionBankTab = () => {
         onClose={() => setDuplicateModalOpen(false)}
         duplicatePairs={duplicatePairs}
         onRefresh={fetchData}
+      />
+      <AdminAcceleratorsController
+        isOpen={acceleratorsModalOpen}
+        onClose={() => setAcceleratorsModalOpen(false)}
+        onRefresh={fetchData}
+      />
+      <InstantCBTSimulatorModal
+        isOpen={simulatorModalOpen}
+        onClose={() => setSimulatorModalOpen(false)}
+        question={simulatorQuestion}
       />
     </div>
   );
