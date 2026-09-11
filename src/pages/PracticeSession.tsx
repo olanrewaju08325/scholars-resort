@@ -493,54 +493,64 @@ const PracticeSession = () => {
     setAnswersMap(prev => ({ ...prev, [currentQ.id]: option }));
     
     let isCorrect = false;
-    let actualCorrectAnswer = currentQ.correct_answer;
+    const rawAnswer = currentQ.correct_answer || (currentQ as any).correctAnswer || (currentQ as any).correct_option || (currentQ as any).answer;
+    let actualCorrectAnswer = rawAnswer ? String(rawAnswer).trim() : '';
     
     try {
       if (actualCorrectAnswer) {
-        // We are offline, or the question object already has it (fallback)
+        // Direct zero-latency validation using universal normalizer
         isCorrect = checkIsCorrect(option, currentQ);
       } else {
-        // Secure server-side check
-        const { data: { session } } = await supabase.auth.getSession();
-        const res = await fetch('/api/cbt/check-answer', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session?.access_token}` },
-          body: JSON.stringify({ questionId: currentQ.id, selectedAnswer: option })
-        });
-        const result = await res.json();
-        if (result.success) {
-          isCorrect = result.isCorrect;
-          actualCorrectAnswer = result.correctAnswer;
-          currentQ.correct_answer = actualCorrectAnswer; // mutate for immediate UI use
-          if (result.explanation) {
-             currentQ.explanation = result.explanation;
+        // Secure server-side check with fallback
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch('/api/cbt/check-answer', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json', 
+              'Authorization': session?.access_token ? `Bearer ${session.access_token}` : '' 
+            },
+            body: JSON.stringify({ questionId: currentQ.id, selectedAnswer: option })
+          });
+          if (res.ok) {
+            const result = await res.json();
+            if (result.success) {
+              isCorrect = result.isCorrect;
+              actualCorrectAnswer = result.correctAnswer;
+              currentQ.correct_answer = actualCorrectAnswer; // mutate for immediate UI use
+              if (result.explanation) {
+                currentQ.explanation = result.explanation;
+              }
+            } else {
+              isCorrect = checkIsCorrect(option, currentQ);
+            }
+          } else {
+            isCorrect = checkIsCorrect(option, currentQ);
           }
-        } else {
-          throw new Error(result.error);
+        } catch {
+          isCorrect = checkIsCorrect(option, currentQ);
         }
       }
-    } catch (err) {
-      console.error('Failed to securely check answer', err);
-      // Fallback: If network fails, and we don't have correct_answer, we can't reliably show correctness
-      // But we must fail gracefully.
+    } catch {
+      isCorrect = checkIsCorrect(option, currentQ);
     }
     
     setCorrectAnswersMap(prev => ({ ...prev, [currentQ.id]: isCorrect }));
     if (isCorrect) setScore(s => s + 1);
 
     // Save answer to DB (optimistic local save, authoritative final score will be recalculated on submit anyway)
-    if (sessionId) {
+    if (sessionId && isUUID(sessionId)) {
       try {
         await supabase.from('session_answers').insert({
-          user_id: profile?.id,
+          user_id: profile?.id || null,
           practice_session_id: sessionId,
           question_id: currentQ.id,
           selected_answer: option,
           is_correct: isCorrect,
           time_spent_seconds: timeSpent
         });
-      } catch (err) {
-        console.warn('Silent insert error:', err);
+      } catch {
+        // Silent fail for guest mode or duplicate optimistic click
       }
     }
     

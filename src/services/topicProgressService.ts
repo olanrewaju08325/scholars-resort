@@ -110,8 +110,8 @@ export const recordTopicScore = async (
         updated_at: new Date().toISOString()
       }, { onConflict: 'user_id,topic_id' });
     }
-  } catch (err) {
-    console.warn('Supabase topic_progress sync notice:', err);
+  } catch {
+    // Graceful offline and un-migrated schema fallback
   }
 
   return progress;

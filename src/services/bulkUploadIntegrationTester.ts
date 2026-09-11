@@ -243,7 +243,7 @@ Economics,"A market situation characterized by a single seller and no close subs
     // --- STEP 7: Live Exam Session Creation & Schema Integrity Check ---
     const step7Start = Date.now();
     try {
-      // Test payload for exam session creation (using valid status 'in_progress')
+      // Test payload for exam session creation (using valid status 'in_progress' and supported columns)
       const testSessionPayload = {
         title: `Test Simulation (${targetSubject})`,
         mode: 'subject_practice',
@@ -251,8 +251,7 @@ Economics,"A market situation characterized by a single seller and no close subs
         subject_id: resolvedSubjectId,
         total_questions: 10,
         time_allocated_minutes: 15,
-        status: 'in_progress', // ensures valid constraint
-        current_question_index: 0
+        status: 'in_progress'
       };
 
       // Verify user session or fallback

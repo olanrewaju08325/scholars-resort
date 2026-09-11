@@ -32,6 +32,8 @@ import {
 } from '@/lib/csvQuestionParser';
 import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 import { BulkUploadIntegrationTesterComponent } from '@/components/admin/BulkUploadIntegrationTester';
+import { BulkUploadSchemaGuide } from '@/components/admin/BulkUploadSchemaGuide';
+import { DataHealthReportCard } from '@/components/admin/DataHealthReportCard';
 
 const isUUID = (str: any): boolean => 
   typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
@@ -41,6 +43,7 @@ export const QuestionBankTab = () => {
   const [subjects, setSubjects] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
   const [subjectCounts, setSubjectCounts] = useState<Record<string, number>>({});
+  const [expandedQuestionId, setExpandedQuestionId] = useState<string | null>(null);
   
   const [loading, setLoading] = useState(true);
   const [publishing, setPublishing] = useState(false);
@@ -644,9 +647,16 @@ export const QuestionBankTab = () => {
       }
 
       setParsedCsvResult(result);
+      const totalDuplicates = result.duplicateQuestionsInFile.length + result.duplicateQuestionsInDb.length;
+      if (result.validQuestions.length === 0 && totalDuplicates > 0) {
+        setActivePreviewTab('duplicates');
+      } else if (result.validQuestions.length === 0 && result.failedRows.length > 0) {
+        setActivePreviewTab('errors');
+      } else {
+        setActivePreviewTab('valid');
+      }
       setCsvModalOpen(true);
       
-      const totalDuplicates = result.duplicateQuestionsInFile.length + result.duplicateQuestionsInDb.length;
       if (totalDuplicates > 0) {
         toast.info(`CSV parsed: ${result.validQuestions.length} unique questions, ${totalDuplicates} duplicates identified.`);
       } else {
@@ -763,6 +773,10 @@ export const QuestionBankTab = () => {
           </Button>
         </div>
       </div>
+
+      {/* Proactive Data Health Report & Diagnostic Audit Card */}
+      <DataHealthReportCard onRefetchQuestions={fetchData} />
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0 w-full">
         
         {/* Editor Form */}
@@ -894,6 +908,11 @@ export const QuestionBankTab = () => {
             </form>
           </CardContent>
         </Card>
+
+        {/* Database Schema Guide & Field Mapping Documentation */}
+        <div className="lg:col-span-3">
+          <BulkUploadSchemaGuide />
+        </div>
 
         {/* Bulk Import Panel */}
         <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden lg:col-span-3">
@@ -1335,83 +1354,210 @@ export const QuestionBankTab = () => {
                   </tr>
                 ) : filteredQuestions.map(q => {
                   const isSelected = selectedIds.includes(q.id);
+                  const isExpanded = expandedQuestionId === q.id;
+                  const qTopic = topics.find(t => t.id === q.topic_id);
+
+                  let parsedOpts: string[] = [];
+                  if (Array.isArray(q.options)) {
+                    parsedOpts = q.options;
+                  } else if (typeof q.options === 'string') {
+                    try { parsedOpts = JSON.parse(q.options); } catch { parsedOpts = []; }
+                  }
+
                   return (
-                    <tr key={q.id} className={`hover:bg-muted/50 transition-colors ${isSelected ? 'bg-primary/10' : ''}`}>
-                      <td className="px-3 py-3 text-center">
-                        <input 
-                          type="checkbox" 
-                          checked={isSelected} 
-                          onChange={() => handleSelectOneToggle(q.id)}
-                          className="rounded border-border text-primary focus:ring-primary h-4 w-4"
-                        />
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-foreground">
-                        {q.subjects?.name || q.subject_name || subjects.find(s => s.id === q.subject_id)?.name || 'General'}
-                      </td>
-                      <td className="px-4 py-3 truncate max-w-[250px]" title={q.question_text}>{q.question_text}</td>
-                      <td className="px-4 py-3">
-                        {q.quality_score ? (
-                          <div className="flex items-center gap-2">
-                            <span className={`font-mono ${q.quality_score >= 90 ? 'text-green-500' : 'text-amber-500'}`}>{q.quality_score}</span>
-                            {q.quality_score >= 90 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                    <React.Fragment key={q.id}>
+                      <tr className={`hover:bg-muted/50 transition-colors ${isSelected ? 'bg-primary/10' : ''}`}>
+                        <td className="px-3 py-3 text-center">
+                          <input 
+                            type="checkbox" 
+                            checked={isSelected} 
+                            onChange={() => handleSelectOneToggle(q.id)}
+                            className="rounded border-border text-primary focus:ring-primary h-4 w-4"
+                          />
+                        </td>
+                        <td className="px-4 py-3 font-semibold text-foreground">
+                          <div>
+                            {q.subjects?.name || q.subject_name || subjects.find(s => s.id === q.subject_id)?.name || 'General'}
+                            {qTopic && (
+                              <span className="block text-[11px] font-normal text-muted-foreground truncate max-w-[140px]">
+                                {qTopic.name}
+                              </span>
+                            )}
                           </div>
-                        ) : (
-                          <span className="text-muted-foreground text-xs">Unrated</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-mono text-muted-foreground">v{q.version_number || 1}</td>
-                      <td className="px-4 py-3">
-                         <span className={`px-2 py-1 text-xs rounded-full ${q.is_active ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
-                           {q.is_active ? 'Published' : 'Draft'}
-                         </span>
-                      </td>
-                      <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="icon" variant="ghost" className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id}>
-                              {validatingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Run AI quality audit & accuracy score check</TooltipContent>
-                        </Tooltip>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedQuestionId(isExpanded ? null : q.id)}
+                              className="text-primary hover:text-primary/80 shrink-0 p-1 rounded hover:bg-primary/10 transition-colors"
+                              title={isExpanded ? 'Collapse details' : 'Expand full question, options & explanation'}
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                            <span className="truncate max-w-[240px] block" title={q.question_text}>
+                              {q.question_text}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {q.quality_score ? (
+                            <div className="flex items-center gap-2">
+                              <span className={`font-mono ${q.quality_score >= 90 ? 'text-green-500' : 'text-amber-500'}`}>{q.quality_score}</span>
+                              {q.quality_score >= 90 && <ShieldCheck className="w-4 h-4 text-green-500" />}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-xs">Unrated</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-muted-foreground">v{q.version_number || 1}</td>
+                        <td className="px-4 py-3">
+                           <span className={`px-2 py-1 text-xs rounded-full ${q.is_active ? 'bg-green-500/20 text-green-500' : 'bg-muted text-muted-foreground'}`}>
+                             {q.is_active ? 'Published' : 'Draft'}
+                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-right space-x-2 whitespace-nowrap">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button 
+                                size="icon" 
+                                variant="ghost" 
+                                className="text-slate-400 hover:text-primary" 
+                                onClick={() => setExpandedQuestionId(isExpanded ? null : q.id)}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{isExpanded ? 'Hide explanation & choices' : 'View full explanation & choices'}</TooltipContent>
+                          </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)}>
-                              <History className="w-4 h-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>View revision history & audit trail</TooltipContent>
-                        </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="text-purple-500 hover:text-purple-600 hover:bg-purple-500/10" onClick={() => handleValidateQuality(q)} disabled={validatingId === q.id}>
+                                {validatingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Run AI quality audit & accuracy score check</TooltipContent>
+                          </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="sm" variant="outline" onClick={() => toggleStatus(q.id, q.is_active)}>
-                              {q.is_active ? 'Unpublish' : 'Publish'}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>{q.is_active ? 'Switch to Draft mode' : 'Make live in student CBT exams'}</TooltipContent>
-                        </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="ghost" className="text-blue-500 hover:text-blue-600 hover:bg-blue-500/10" onClick={() => viewHistory(q.id)}>
+                                <History className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>View revision history & audit trail</TooltipContent>
+                          </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="icon" variant="secondary" onClick={() => handleEdit(q)}>
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Edit question, options & explanation</TooltipContent>
-                        </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="sm" variant="outline" onClick={() => toggleStatus(q.id, q.is_active)}>
+                                {q.is_active ? 'Unpublish' : 'Publish'}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>{q.is_active ? 'Switch to Draft mode' : 'Make live in student CBT exams'}</TooltipContent>
+                          </Tooltip>
 
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button size="icon" variant="destructive" onClick={() => handleDeleteQuestion(q.id)}>
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>Delete question permanently</TooltipContent>
-                        </Tooltip>
-                      </td>
-                    </tr>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="secondary" onClick={() => handleEdit(q)}>
+                                <Edit2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Edit question, options & explanation</TooltipContent>
+                          </Tooltip>
+
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button size="icon" variant="destructive" onClick={() => handleDeleteQuestion(q.id)}>
+                                <Trash2 className="w-4 h-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Delete question permanently</TooltipContent>
+                          </Tooltip>
+                        </td>
+                      </tr>
+
+                      {/* Expanded Question Details & Explanation Drawer */}
+                      {isExpanded && (
+                        <tr className="bg-muted/30 border-b border-border">
+                          <td colSpan={7} className="p-4 space-y-3">
+                            <div className="p-4 rounded-xl bg-card border border-border/80 shadow-sm space-y-3">
+                              <div className="flex items-center justify-between border-b border-border/60 pb-2">
+                                <span className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                                  <BookOpen className="w-4 h-4 text-primary" /> Full Question Inspection & Explanation
+                                </span>
+                                <div className="flex items-center gap-2">
+                                  {qTopic ? (
+                                    <span className="text-xs px-2 py-0.5 rounded bg-primary/10 text-primary font-medium">
+                                      Topic: {qTopic.name}
+                                    </span>
+                                  ) : (
+                                    <span className="text-xs px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 font-medium">
+                                      ⚠️ No parent topic linked
+                                    </span>
+                                  )}
+                                  {q.year && (
+                                    <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+                                      Year: {q.year}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="text-sm font-medium text-foreground">
+                                <MathText text={q.question_text} />
+                              </div>
+
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                                {parsedOpts.map((opt, oIdx) => {
+                                  const optLetter = String.fromCharCode(65 + oIdx);
+                                  const isCorrect = opt === q.correct_answer || q.correct_answer === optLetter;
+                                  return (
+                                    <div 
+                                      key={oIdx} 
+                                      className={`p-2.5 rounded-lg border text-xs flex items-center justify-between ${
+                                        isCorrect 
+                                          ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 font-semibold' 
+                                          : 'bg-muted/40 border-border/60 text-foreground'
+                                      }`}
+                                    >
+                                      <span><strong>{optLetter})</strong> {opt}</span>
+                                      {isCorrect && <CheckCircle className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {/* Explanation Section */}
+                              <div className="pt-2 border-t border-border/60">
+                                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5 mb-1.5">
+                                  <Sparkles className="w-3.5 h-3.5 text-purple-400" /> Question Pedagogical Explanation:
+                                </span>
+
+                                {q.explanation && String(q.explanation).trim().length > 0 ? (
+                                  <div className="p-3 rounded-lg bg-purple-950/20 border border-purple-800/30 text-xs text-purple-200 leading-relaxed">
+                                    <MathText text={q.explanation} />
+                                  </div>
+                                ) : (
+                                  <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-xs text-amber-400 flex items-center justify-between">
+                                    <span>⚠️ No explanation recorded in database. Students will see fallback AI assistance.</span>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="text-xs h-7 border-purple-800/50 text-purple-300 hover:bg-purple-900/40"
+                                      onClick={() => handleEdit(q)}
+                                    >
+                                      <Sparkles className="w-3 h-3 mr-1" /> Add Explanation
+                                    </Button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
               </tbody>
@@ -1483,32 +1629,96 @@ export const QuestionBankTab = () => {
                 </div>
               </div>
 
-              {/* Detected Subjects & Auto Registration Alert */}
-              <div className="p-3 bg-blue-950/30 border border-blue-800/40 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2">
-                  <Info className="w-4 h-4 text-blue-400 shrink-0" />
-                  <div>
-                    <span className="text-slate-300 font-medium">Subjects Detected: </span>
-                    <span className="text-blue-300 font-semibold">{parsedCsvResult.detectedSubjects.join(', ')}</span>
-                    <p className="text-slate-400 text-[11px]">Unregistered subjects and topics will be automatically provisioned in database schema.</p>
+              {/* Detected Subjects & Auto Registration Detailed Inspector */}
+              <div className="p-3.5 bg-slate-950/80 border border-slate-800 rounded-xl space-y-2.5 text-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800/80 pb-2">
+                  <div className="flex items-center gap-2">
+                    <Database className="w-4 h-4 text-blue-400 shrink-0" />
+                    <div>
+                      <span className="text-slate-200 font-semibold">Curriculum & Database Linkage Analysis</span>
+                      <p className="text-slate-400 text-[11px]">Review which subjects and topics are already in Supabase vs. newly created.</p>
+                    </div>
                   </div>
+
+                  <Button 
+                    type="button" 
+                    size="sm" 
+                    variant="outline" 
+                    disabled={aiCheckingDuplicates || parsedCsvResult.validQuestions.length === 0} 
+                    onClick={handleRunAiDuplicateCheck}
+                    className="bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border-purple-800/60 text-xs shrink-0 gap-1.5 h-8"
+                  >
+                    {aiCheckingDuplicates ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 text-purple-400" />
+                    )}
+                    AI Duplicate Deep Scan
+                  </Button>
                 </div>
 
-                <Button 
-                  type="button" 
-                  size="sm" 
-                  variant="outline" 
-                  disabled={aiCheckingDuplicates || parsedCsvResult.validQuestions.length === 0} 
-                  onClick={handleRunAiDuplicateCheck}
-                  className="bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border-purple-800/60 text-xs shrink-0 gap-1.5 h-8"
-                >
-                  {aiCheckingDuplicates ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5 text-purple-400" />
-                  )}
-                  AI Duplicate Deep Scan
-                </Button>
+                {/* Subjects Status Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {parsedCsvResult.detectedSubjects.map(subName => {
+                    const matchedSub = subjects.find(s => s.name.trim().toLowerCase() === subName.trim().toLowerCase());
+                    const subQuestionsCount = parsedCsvResult.validQuestions.filter(q => q.subjectName.trim().toLowerCase() === subName.trim().toLowerCase()).length;
+                    
+                    // Collect topics for this subject in CSV
+                    const subTopicsInCsv = Array.from(new Set(
+                      parsedCsvResult.validQuestions
+                        .filter(q => q.subjectName.trim().toLowerCase() === subName.trim().toLowerCase() && (q.topicName || q.topic))
+                        .map(q => String(q.topicName || q.topic).trim())
+                    ));
+
+                    return (
+                      <div key={subName} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
+                        <div className="flex items-center justify-between gap-1">
+                          <span className="font-bold text-slate-100">{subName}</span>
+                          {matchedSub ? (
+                            <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-medium flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3" /> Existing Subject
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-medium flex items-center gap-1">
+                              <PlusCircle className="w-3 h-3" /> New Subject (Auto-Create)
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="text-[11px] text-slate-400 flex items-center justify-between">
+                          <span>{subQuestionsCount} questions in CSV</span>
+                          {matchedSub && <span className="font-mono text-[10px] text-slate-500">ID: {matchedSub.id.slice(0, 8)}...</span>}
+                        </div>
+
+                        {subTopicsInCsv.length > 0 && (
+                          <div className="pt-1 border-t border-slate-800/60">
+                            <span className="text-[10px] uppercase font-semibold text-slate-400 block mb-1">
+                              Topics ({subTopicsInCsv.length}):
+                            </span>
+                            <div className="flex flex-wrap gap-1 max-h-24 overflow-y-auto">
+                              {subTopicsInCsv.map(tName => {
+                                const isExistingTopic = matchedSub && topics.some(t => t.name.trim().toLowerCase() === tName.toLowerCase() && t.subject_id === matchedSub.id);
+                                return (
+                                  <span 
+                                    key={tName} 
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-mono ${
+                                      isExistingTopic 
+                                        ? 'bg-slate-800 text-slate-300' 
+                                        : 'bg-blue-950/60 text-blue-300 border border-blue-800/40'
+                                    }`}
+                                    title={isExistingTopic ? 'Existing topic in database' : 'New topic - will be auto-created'}
+                                  >
+                                    {isExistingTopic ? '✓ ' : '+ '}{tName}
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* AI Deep Scan Feedback */}
@@ -1660,6 +1870,17 @@ export const QuestionBankTab = () => {
                               </div>
                             ))}
                           </div>
+                          {q.explanation ? (
+                            <div className="p-2 rounded bg-purple-950/30 border border-purple-800/40 text-purple-200 text-[11px] flex items-start gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-semibold text-purple-300">Explanation: </span>
+                                {q.explanation}
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="text-[10px] text-slate-500 italic">No explanation provided in CSV (will use AI fallback)</div>
+                          )}
                         </div>
                       ))
                     )}
@@ -1678,12 +1899,25 @@ export const QuestionBankTab = () => {
                             <span className="text-amber-400 font-semibold text-[11px]">
                               {q.isDuplicateInFile ? '⚠️ Duplicate in File' : '⚠️ Already Exists in Database'}
                             </span>
-                            <span className="text-slate-400 text-[11px]">Row {q.rowNumber}</span>
+                            <span className="text-slate-400 text-[11px]">Row {q.rowNumber} • {q.subjectName} {q.topicName ? `(${q.topicName})` : ''}</span>
                           </div>
-                          <p className="text-slate-300 font-medium">{q.questionText}</p>
-                          <div className="text-[11px] text-slate-400">
-                            Answer: <span className="text-emerald-400">{q.correctAnswer}</span>
+                          <p className="text-slate-200 font-medium">{q.questionText}</p>
+                          <div className="grid grid-cols-2 gap-1.5 text-[11px] text-slate-400 pt-1">
+                            {q.options?.map((opt, oIdx) => (
+                              <div key={oIdx} className={`px-2 py-1 rounded ${opt === q.correctAnswer ? 'bg-emerald-500/10 text-emerald-400 font-semibold border border-emerald-500/20' : 'bg-slate-900/70'}`}>
+                                {String.fromCharCode(65 + oIdx)}) {opt}
+                              </div>
+                            ))}
                           </div>
+                          {q.explanation && (
+                            <div className="p-2 rounded bg-purple-950/30 border border-purple-800/40 text-purple-200 text-[11px] flex items-start gap-1.5">
+                              <Sparkles className="w-3.5 h-3.5 text-purple-400 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-semibold text-purple-300">Explanation: </span>
+                                {q.explanation}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ))
                     )}

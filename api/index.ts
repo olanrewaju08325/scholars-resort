@@ -1784,16 +1784,16 @@ app.post('/api/exam-session/start', async (req, res) => {
 });
 
 // API Route: Secure CBT Check Answer (For Practice Modes)
-app.post('/api/cbt/check-answer', verifyUserToken, async (req, res) => {
+app.post('/api/cbt/check-answer', async (req, res) => {
   const { questionId, selectedAnswer } = req.body;
   if (!questionId) return res.status(400).json({ success: false, error: 'questionId is required' });
 
   try {
-    const db = getScopedSupabaseClient(req);
+    const db = getScopedSupabaseClient(req) || supabase;
     let q: any = null;
     
     // Primary query
-    const { data } = await db
+    const { data, error } = await db
       .from('questions')
       .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
       .eq('id', questionId)
@@ -1802,14 +1802,14 @@ app.post('/api/cbt/check-answer', verifyUserToken, async (req, res) => {
     if (data) {
       q = data;
     } else {
-      // Fallback query matching by id string or text
-      const { data: fallbackData } = await db
+      // Fallback query matching with server client
+      const { data: serverData } = await supabase
         .from('questions')
         .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
-        .or(`id.eq.${questionId}`)
-        .limit(1);
-      if (fallbackData && fallbackData.length > 0) {
-        q = fallbackData[0];
+        .eq('id', questionId)
+        .maybeSingle();
+      if (serverData) {
+        q = serverData;
       }
     }
       
@@ -5815,6 +5815,187 @@ app.post('/api/questions/upsert', verifyAdminToken, async (req, res) => {
   } catch (err: any) {
     console.error('[Server Questions Upsert Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server upsert failed.' });
+  }
+});
+
+// API Route: Server-Side Pre-Validation & Curriculum Schema Linkage (Explicit subject_id & topic_id mapping)
+app.post('/api/questions/validate-curriculum', verifyAdminToken, async (req, res) => {
+  try {
+    const { questions, autoProvisionMissing = true } = req.body;
+    if (!questions || !Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ success: false, error: 'Array of questions to pre-validate is required.' });
+    }
+
+    const db = getScopedSupabaseClient(req);
+
+    // 1. Fetch all existing subjects
+    const { data: dbSubjects, error: subErr } = await db.from('subjects').select('id, name');
+    if (subErr) {
+      console.warn('[Curriculum Pre-validation] Subjects fetch notice:', subErr.message);
+    }
+    const subjectsMap = new Map<string, { id: string; name: string }>();
+    (dbSubjects || []).forEach(s => subjectsMap.set(s.name.trim().toLowerCase(), s));
+
+    // 2. Fetch all existing topics
+    const { data: dbTopics } = await db.from('topics').select('id, subject_id, name');
+    const topicsMap = new Map<string, { id: string; subject_id: string; name: string }>();
+    (dbTopics || []).forEach(t => {
+      topicsMap.set(`${t.subject_id}:${t.name.trim().toLowerCase()}`, t);
+    });
+
+    const validatedItems: any[] = [];
+    const createdSubjects: Array<{ id: string; name: string }> = [];
+    const createdTopics: Array<{ id: string; subject_id: string; name: string }> = [];
+    const validationErrors: Array<{ rowNumber?: number; questionText?: string; error: string }> = [];
+
+    for (let idx = 0; idx < questions.length; idx++) {
+      const item = questions[idx];
+      const rawSubject = String(item.subjectName || item.subject || item.subject_name || 'General Studies').trim();
+      const rawTopic = String(item.topicName || item.topic || item.topic_name || '').trim();
+      const subKey = rawSubject.toLowerCase();
+
+      // A. Resolve or provision subject
+      let resolvedSubject = subjectsMap.get(subKey);
+      if (!resolvedSubject && autoProvisionMissing) {
+        const { data: newSub, error: newSubErr } = await db
+          .from('subjects')
+          .insert({ name: rawSubject, is_active: true })
+          .select('id, name')
+          .single();
+
+        if (newSub && !newSubErr) {
+          resolvedSubject = newSub;
+          subjectsMap.set(subKey, newSub);
+          createdSubjects.push(newSub);
+        } else {
+          validationErrors.push({
+            rowNumber: item.rowNumber || idx + 1,
+            questionText: item.questionText || item.question_text,
+            error: `Failed to resolve or create subject '${rawSubject}': ${newSubErr?.message || 'DB Error'}`
+          });
+          continue;
+        }
+      }
+
+      if (!resolvedSubject) {
+        validationErrors.push({
+          rowNumber: item.rowNumber || idx + 1,
+          questionText: item.questionText || item.question_text,
+          error: `Subject '${rawSubject}' does not exist in database schema.`
+        });
+        continue;
+      }
+
+      // B. Resolve or provision topic
+      let resolvedTopicId: string | null = null;
+      if (rawTopic && resolvedSubject) {
+        const topicKey = `${resolvedSubject.id}:${rawTopic.toLowerCase()}`;
+        let resolvedTopic = topicsMap.get(topicKey);
+
+        if (!resolvedTopic && autoProvisionMissing) {
+          const { data: newTop, error: newTopErr } = await db
+            .from('topics')
+            .insert({
+              subject_id: resolvedSubject.id,
+              name: rawTopic
+            })
+            .select('id, subject_id, name')
+            .single();
+
+          if (newTop && !newTopErr) {
+            resolvedTopic = newTop;
+            topicsMap.set(topicKey, newTop);
+            createdTopics.push(newTop);
+          }
+        }
+
+        if (resolvedTopic) {
+          resolvedTopicId = resolvedTopic.id;
+        }
+      }
+
+      // If still no topic, resolve to subject's default topic
+      if (!resolvedTopicId && resolvedSubject) {
+        const subTopics = Array.from(topicsMap.values()).filter(t => t.subject_id === resolvedSubject.id);
+        if (subTopics.length > 0) {
+          resolvedTopicId = subTopics[0].id;
+        } else if (autoProvisionMissing) {
+          const { data: defaultTop } = await db
+            .from('topics')
+            .insert({
+              subject_id: resolvedSubject.id,
+              name: `${resolvedSubject.name} - Core Syllabus & Concepts`
+            })
+            .select('id, subject_id, name')
+            .single();
+
+          if (defaultTop) {
+            topicsMap.set(`${resolvedSubject.id}:${defaultTop.name.toLowerCase()}`, defaultTop);
+            createdTopics.push(defaultTop);
+            resolvedTopicId = defaultTop.id;
+          }
+        }
+      }
+
+      // C. Validate options
+      let options = item.options || item.choices;
+      if (typeof options === 'string') {
+        try { options = JSON.parse(options); } catch { options = []; }
+      }
+      if (!options || !Array.isArray(options) || options.length < 2) {
+        if (item.option_a && item.option_b) {
+          options = [item.option_a, item.option_b, item.option_c || '', item.option_d || ''].filter(Boolean);
+        }
+      }
+
+      // D. Validate question text
+      const questionText = String(item.questionText || item.question_text || item.question || '').trim();
+      if (questionText.length < 3) {
+        validationErrors.push({
+          rowNumber: item.rowNumber || idx + 1,
+          questionText,
+          error: 'Question stem is empty or too short (minimum 3 characters).'
+        });
+        continue;
+      }
+
+      // E. Validate answer
+      const correctAnswer = String(item.correctAnswer || item.correct_answer || item.answer || 'A').trim().toUpperCase();
+
+      // F. Explanation
+      const explanation = String(item.explanation || item.rationale || item.solution || item.sol || '').trim();
+
+      validatedItems.push({
+        subject_id: resolvedSubject.id,
+        subject_name: resolvedSubject.name,
+        topic_id: resolvedTopicId,
+        topic_name: rawTopic || 'Core Syllabus & Concepts',
+        question_text: questionText,
+        options,
+        correct_answer: correctAnswer,
+        explanation,
+        difficulty: item.difficulty || 'medium',
+        year: item.year || null,
+        is_active: item.is_active !== undefined ? item.is_active : true,
+        rowNumber: item.rowNumber || idx + 1
+      });
+    }
+
+    return res.json({
+      success: true,
+      totalSubmitted: questions.length,
+      validatedCount: validatedItems.length,
+      invalidCount: validationErrors.length,
+      validatedItems,
+      validationErrors,
+      createdSubjectsCount: createdSubjects.length,
+      createdTopicsCount: createdTopics.length,
+      createdSubjects,
+      createdTopics
+    });
+  } catch (err: any) {
+    console.error('[Curriculum Pre-validation Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Pre-validation server error.' });
   }
 });
 

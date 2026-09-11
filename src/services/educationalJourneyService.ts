@@ -90,26 +90,30 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
 
   try {
     if (userId) {
-      // Query Supabase topic_progress table directly
-      const { data: dbProgress } = await supabase
-        .from('topic_progress')
-        .select('*')
-        .eq('user_id', userId);
+      // Query local topic progress or Supabase if available
+      try {
+        const { data: dbProgress, error: tpErr } = await supabase
+          .from('topic_progress')
+          .select('*')
+          .eq('user_id', userId);
 
-      if (dbProgress && dbProgress.length > 0) {
-        dbProgress.forEach((tp: any) => {
-          const tId = tp.topic_id;
-          if (tId) {
-            const attempted = tp.questions_attempted || 10;
-            const scoreVal = Number(tp.score) || 0;
-            topicStats[tId] = {
-              total: attempted,
-              correct: Math.round((scoreVal / 100) * attempted),
-              isMastered: tp.is_mastered || scoreVal >= 70,
-              score: scoreVal
-            };
-          }
-        });
+        if (!tpErr && dbProgress && dbProgress.length > 0) {
+          dbProgress.forEach((tp: any) => {
+            const tId = tp.topic_id;
+            if (tId) {
+              const attempted = tp.questions_attempted || 10;
+              const scoreVal = Number(tp.score) || 0;
+              topicStats[tId] = {
+                total: attempted,
+                correct: Math.round((scoreVal / 100) * attempted),
+                isMastered: tp.is_mastered || scoreVal >= 70,
+                score: scoreVal
+              };
+            }
+          });
+        }
+      } catch {
+        // Safe fallback if topic_progress table is not provisioned
       }
 
       const { data: answers } = await supabase

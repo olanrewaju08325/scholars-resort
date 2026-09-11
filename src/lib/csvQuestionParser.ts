@@ -334,7 +334,7 @@ export const parseQuestionsCsv = async (
             const optD = getFieldValue(raw, ['option_d', 'optiond', 'option 4', 'opt_d', 'optd', 'd', 'choice_d', 'choiced']);
 
             const rawCorrect = getFieldValue(raw, ['correct_answer', 'correctanswer', 'correct_option', 'correctoption', 'answer', 'correct', 'key']);
-            const explanation = getFieldValue(raw, ['explanation', 'solution', 'rationale', 'reason', 'working']);
+            const explanation = getFieldValue(raw, ['explanation', 'solution', 'rationale', 'reason', 'working', 'expl', 'explanations', 'answer_explanation', 'answerexplanation', 'detailed_solution', 'detailed_explanation', 'hint', 'notes']);
             const rawDiff = getFieldValue(raw, ['difficulty', 'level', 'diff']).toLowerCase();
 
             if (!subjectName) {
@@ -609,6 +609,30 @@ export const importQuestionsToDatabase = async (
 
       if (currentTopic) {
         topicId = currentTopic.id;
+      }
+    }
+
+    // Default Topic Fallback: Ensure no orphaned questions (topic_id is never left unmapped)
+    if (!topicId && currentSubject?.id) {
+      const existingSubTopics = Array.from(topicsCache.values()).filter(t => t.subject_id === currentSubject.id);
+      if (existingSubTopics.length > 0) {
+        topicId = existingSubTopics[0].id;
+      } else {
+        const defaultTopicName = `${currentSubject.name} - Core Syllabus & Concepts`;
+        const { data: defaultTopic } = await supabase
+          .from('topics')
+          .insert({
+            subject_id: currentSubject.id,
+            name: defaultTopicName
+          })
+          .select('id, subject_id, name')
+          .single();
+
+        if (defaultTopic) {
+          topicsCache.set(`${currentSubject.id}:${defaultTopicName.toLowerCase()}`, defaultTopic);
+          createdTopics.push(defaultTopic.name);
+          topicId = defaultTopic.id;
+        }
       }
     }
 
