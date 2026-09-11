@@ -31,6 +31,7 @@ import {
   type CsvParseResult 
 } from '@/lib/csvQuestionParser';
 import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
+import { BulkUploadIntegrationTesterComponent } from '@/components/admin/BulkUploadIntegrationTester';
 
 const isUUID = (str: any): boolean => 
   typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
@@ -84,6 +85,7 @@ export const QuestionBankTab = () => {
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicatePairs, setDuplicatePairs] = useState<DuplicatePair[]>([]);
   const [classifying, setClassifying] = useState(false);
+  const [showIntegrationTester, setShowIntegrationTester] = useState(false);
   const [bulkDeleteDialogConfig, setBulkDeleteDialogConfig] = useState({
     isOpen: false,
     isDeleting: false
@@ -118,16 +120,29 @@ export const QuestionBankTab = () => {
       let from = 0;
       const pageSize = 1000;
       while (true) {
-        const { data: chunk, error } = await supabase
+        let chunk: any[] | null = null;
+        const { data, error } = await supabase
           .from('questions')
-          .select('*, subjects(name), topics(name)')
+          .select('*, subjects!questions_subject_id_fkey(name), topics(name)')
           .order('created_at', { ascending: false })
           .range(from, from + pageSize - 1);
 
         if (error) {
-          console.warn('DB Question fetch notice:', error);
-          break;
+          console.warn('DB Question fetch join notice, trying flat query:', error.message);
+          const flatRes = await supabase
+            .from('questions')
+            .select('*, topics(name)')
+            .order('created_at', { ascending: false })
+            .range(from, from + pageSize - 1);
+          if (flatRes.error) {
+            console.warn('DB Question flat fetch error:', flatRes.error);
+            break;
+          }
+          chunk = flatRes.data;
+        } else {
+          chunk = data;
         }
+
         if (!chunk || chunk.length === 0) break;
         dbQuestions = dbQuestions.concat(chunk);
         if (chunk.length < pageSize) break;
@@ -892,18 +907,35 @@ export const QuestionBankTab = () => {
                 Upload CSV files with questions. Automatic subject/topic auto-registration, flexible column mapping, and AI duplicate detection.
               </CardDescription>
             </div>
-            <Button 
-              type="button" 
-              variant="outline" 
-              size="sm" 
-              onClick={downloadSampleCsv}
-              className="text-xs font-semibold gap-1.5 shrink-0"
-            >
-              <Download className="w-3.5 h-3.5" />
-              Download Sample CSV
-            </Button>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button 
+                type="button" 
+                variant={showIntegrationTester ? "default" : "outline"} 
+                size="sm" 
+                onClick={() => setShowIntegrationTester(prev => !prev)}
+                className={`text-xs font-semibold gap-1.5 ${showIntegrationTester ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : 'text-emerald-500 border-emerald-500/30 hover:bg-emerald-500/10'}`}
+              >
+                <ShieldCheck className="w-3.5 h-3.5" />
+                {showIntegrationTester ? 'Hide E2E Test Suite' : 'Run E2E Bulk Test'}
+              </Button>
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                onClick={downloadSampleCsv}
+                className="text-xs font-semibold gap-1.5 shrink-0"
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download Sample CSV
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="space-y-4 min-w-0 w-full">
+            {showIntegrationTester && (
+              <div className="mb-4">
+                <BulkUploadIntegrationTesterComponent />
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3 bg-muted/30 rounded-xl border border-border">
               <div className="flex items-center gap-2">
                 <input 

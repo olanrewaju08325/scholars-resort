@@ -22,6 +22,7 @@ import { FlowValidatorDashboard } from '@/components/admin/FlowValidatorDashboar
 import { AISimulationTester } from '@/components/admin/AISimulationTester';
 import { AIBrandingAuditTester } from '@/components/admin/AIBrandingAuditTester';
 import { SubjectCoverageDashboard } from '@/components/admin/SubjectCoverageDashboard';
+import { BulkUploadIntegrationTesterComponent } from '@/components/admin/BulkUploadIntegrationTester';
 import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 
@@ -29,7 +30,7 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
   const [report, setReport] = useState<DatabaseDiagnosticReport | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [repairing, setRepairing] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'issues' | 'tables' | 'breakdown' | 'coverage' | 'literature' | 'modes' | 'schema_migration' | 'flow_validator' | 'ai_branding_audit' | 'ai_simulation' | 'question_audit'>('question_audit');
+  const [activeTab, setActiveTab] = useState<'issues' | 'tables' | 'breakdown' | 'coverage' | 'literature' | 'modes' | 'schema_migration' | 'flow_validator' | 'ai_branding_audit' | 'ai_simulation' | 'question_audit' | 'e2e_bulk_test'>('e2e_bulk_test');
   const [issueFilter, setIssueFilter] = useState<'all' | 'critical' | 'warning' | 'info'>('all');
   
   // Question Bank QA state
@@ -396,6 +397,10 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
           {/* Tabbed Section */}
           <Tabs value={activeTab} onValueChange={(v: any) => setActiveTab(v)} className="w-full">
             <TabsList className="bg-card/60 border border-border/50 p-1 flex flex-wrap gap-1">
+              <TabsTrigger value="e2e_bulk_test" className="gap-2 text-xs text-emerald-400 font-bold">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                E2E Bulk Import Suite
+              </TabsTrigger>
               <TabsTrigger value="question_audit" className="gap-2 text-xs">
                 <ShieldCheck className="w-4 h-4 text-rose-400" />
                 Question Integrity QA
@@ -441,6 +446,11 @@ export const DatabaseDiagnosticsTab: React.FC = () => {
                 Literature & Novels
               </TabsTrigger>
             </TabsList>
+
+            {/* E2E Bulk Import Integration Suite Tab */}
+            <TabsContent value="e2e_bulk_test" className="mt-6 space-y-4">
+              <BulkUploadIntegrationTesterComponent />
+            </TabsContent>
 
             {/* Diagnostic Issues Tab */}
             <TabsContent value="issues" className="mt-6 space-y-4">

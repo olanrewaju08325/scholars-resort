@@ -122,12 +122,14 @@ const PracticeSession = () => {
         } catch (e) {
           console.warn('Secure server submission failed, using local score.', e);
           // Fallback to local score update
-          await supabase.from('practice_sessions').update({ // Fallback to exam_sessions if table was wrong earlier
-            score: finalScore,
-            total_questions: questions.length,
-            status: 'submitted',
-            submitted_at: new Date().toISOString()
-          }).eq('id', sessionId);
+          if (sessionId) {
+            await supabase.from('exam_sessions').update({
+              score: finalScore,
+              total_questions: questions.length,
+              status: 'submitted',
+              submitted_at: new Date().toISOString()
+            }).eq('id', sessionId);
+          }
         }
         
         if (questions.length >= 5 || finalScore > 0) {
@@ -368,14 +370,22 @@ const PracticeSession = () => {
       }
 
       // 1. Create Practice Session Record in exam_sessions
-      const { data: sessionData } = await supabase.from('exam_sessions').insert({
-        user_id: profile?.id,
-        status: 'started',
-        started_at: new Date().toISOString(),
-        total_questions: state.questionCount || 20
-      }).select().maybeSingle();
-      
-      if (sessionData) setSessionId(sessionData.id);
+      if (profile?.id) {
+        try {
+          const { data: sessionData, error: sessionErr } = await supabase.from('exam_sessions').insert({
+            user_id: profile.id,
+            status: 'in_progress',
+            started_at: new Date().toISOString(),
+            total_questions: state.questionCount || 20
+          }).select().maybeSingle();
+          
+          if (!sessionErr && sessionData) {
+            setSessionId(sessionData.id);
+          }
+        } catch (sessErr) {
+          console.warn('[PracticeSession] Session record creation notice:', sessErr);
+        }
+      }
 
       // 2. Fetch Questions dynamically using QuestionFlowService directly from Supabase
       const count = state.questionCount || 20;

@@ -237,10 +237,18 @@ export const SubjectsTab = () => {
     try {
       // Find all matching question IDs for this subject
       const canonical = normalizeSubjectName(selectedSubjectForYear.name);
-      const { data: qList } = await supabase
+      let qList: any[] | null = null;
+      const { data: rawQList, error: qErr } = await supabase
         .from('questions')
-        .select('id, subject_id, subjects(id, name)')
+        .select('id, subject_id, subjects!questions_subject_id_fkey(id, name)')
         .limit(50000);
+
+      if (qErr) {
+        const { data: flatQ } = await supabase.from('questions').select('id, subject_id').limit(50000);
+        qList = flatQ;
+      } else {
+        qList = rawQList;
+      }
 
       const targetIds: string[] = [];
       if (qList) {
@@ -304,10 +312,18 @@ export const SubjectsTab = () => {
         try {
           // 1. Remap questions
           const sourceCanonical = normalizeSubjectName(sourceObj.name);
-          const { data: qList } = await supabase
+          let qList: any[] | null = null;
+          const { data: rawQList, error: qErr } = await supabase
             .from('questions')
-            .select('id, subject_id, subjects(id, name)')
+            .select('id, subject_id, subjects!questions_subject_id_fkey(id, name)')
             .limit(50000);
+
+          if (qErr) {
+            const { data: flatQ } = await supabase.from('questions').select('id, subject_id').limit(50000);
+            qList = flatQ;
+          } else {
+            qList = rawQList;
+          }
 
           const qToUpdate: string[] = [];
           if (qList) {

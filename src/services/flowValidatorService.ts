@@ -169,7 +169,7 @@ export class FlowValidator {
             const ids = await resolveSubjectIdsByNameOrAlias(subj);
             const uuids = ids.filter(isUUID);
             uuids.forEach(u => distinctSubjectIds.add(u));
-            let q = supabase.from('questions').select('*, subjects(name), topics(name)').eq('is_active', true);
+            let q = supabase.from('questions').select('*, subjects!questions_subject_id_fkey(name), topics(name)').eq('is_active', true);
             if (uuids.length > 0) q = q.in('subject_id', uuids);
             const { data, error } = await q.limit(limit);
             if (error) throw error;
@@ -178,7 +178,7 @@ export class FlowValidator {
           const batched = await Promise.all(queries);
           return batched.flat();
         } else {
-          let query = supabase.from('questions').select('*, subjects(name), topics(name)').eq('is_active', true);
+          let query = supabase.from('questions').select('*, subjects!questions_subject_id_fkey(name), topics(name)').eq('is_active', true);
           const matchedIds = await resolveSubjectIdsByNameOrAlias(subjectName);
           const uuids = matchedIds.filter(isUUID);
           uuids.forEach(u => distinctSubjectIds.add(u));

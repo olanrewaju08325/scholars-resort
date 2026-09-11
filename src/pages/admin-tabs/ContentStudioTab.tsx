@@ -98,10 +98,19 @@ export const ContentStudioTab = () => {
       const { count: totalCount } = await supabase.from('questions').select('id', { count: 'exact', head: true });
       setTotalQuestionsCount(totalCount || 0);
 
-      const { data: allQuestions } = await supabase
+      let allQuestions: any[] | null = null;
+      const { data: qData, error: qErr } = await supabase
         .from('questions')
-        .select('id, subject_id, subjects(id, name)')
+        .select('id, subject_id, subjects!questions_subject_id_fkey(id, name)')
         .limit(50000);
+
+      if (qErr) {
+        console.warn('ContentStudioTab questions join notice, using flat fetch:', qErr.message);
+        const { data: flatQ } = await supabase.from('questions').select('id, subject_id').limit(50000);
+        allQuestions = flatQ;
+      } else {
+        allQuestions = qData;
+      }
 
       const counts: { [id: string]: { name: string; count: number } } = {};
       loadedSubjects.forEach((s: any) => {

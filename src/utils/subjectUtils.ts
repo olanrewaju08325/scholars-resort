@@ -246,12 +246,25 @@ export const fetchQuestionsForSubject = async (subjectNameOrId: string, limitCou
     const validUuids = matchedSubjectIds.filter(isUUID);
 
     if (validUuids.length > 0) {
-      const { data: qData } = await supabase
+      let qData: any[] | null = null;
+      const { data: rawQ, error: qErr } = await supabase
         .from('questions')
-        .select('*, subjects(name)')
+        .select('*, subjects!questions_subject_id_fkey(name)')
         .eq('is_active', true)
         .in('subject_id', validUuids)
         .limit(limitCount);
+
+      if (qErr) {
+        const { data: flatQ } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('is_active', true)
+          .in('subject_id', validUuids)
+          .limit(limitCount);
+        qData = flatQ;
+      } else {
+        qData = rawQ;
+      }
 
       if (qData && qData.length > 0) return qData;
     }
@@ -261,11 +274,23 @@ export const fetchQuestionsForSubject = async (subjectNameOrId: string, limitCou
 
   // Fallback 1: Query active questions and filter client side
   try {
-    const { data: allQ } = await supabase
+    let allQ: any[] | null = null;
+    const { data: rawAll, error: allErr } = await supabase
       .from('questions')
-      .select('*, subjects(name)')
+      .select('*, subjects!questions_subject_id_fkey(name)')
       .eq('is_active', true)
       .limit(300);
+
+    if (allErr) {
+      const { data: flatAll } = await supabase
+        .from('questions')
+        .select('*')
+        .eq('is_active', true)
+        .limit(300);
+      allQ = flatAll;
+    } else {
+      allQ = rawAll;
+    }
 
     if (allQ && allQ.length > 0) {
       const filtered = allQ.filter(q => {

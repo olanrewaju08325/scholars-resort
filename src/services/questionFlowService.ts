@@ -8,6 +8,9 @@ import {
   isUUID 
 } from '@/utils/subjectUtils';
 
+export const QUESTION_SELECT_FIELDS = 'id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_active, year, created_at, subjects!questions_subject_id_fkey(id, name), topics(id, name)';
+export const QUESTION_FLAT_FIELDS = 'id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_active, year, created_at';
+
 export type ExamMode = 
   | 'subject_practice' 
   | 'topic_drill' 
@@ -114,7 +117,7 @@ export class QuestionFlowService {
             if (failedQIds.length > 0) {
               let query = supabase
                 .from('questions')
-                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .select(QUESTION_SELECT_FIELDS)
                 .in('id', failedQIds);
               
               if (config.subjectId && config.subjectId !== 'all') {
@@ -188,7 +191,7 @@ export class QuestionFlowService {
                 if (weakTopicIds.length > 0) {
                   let query = supabase
                     .from('questions')
-                    .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                    .select(QUESTION_SELECT_FIELDS)
                     .eq('is_active', true)
                     .in('topic_id', weakTopicIds.slice(0, 5));
 
@@ -241,7 +244,7 @@ export class QuestionFlowService {
 
             let query = supabase
               .from('questions')
-              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+              .select(QUESTION_SELECT_FIELDS)
               .eq('is_active', true);
 
             if (validUuids.length > 0) {
@@ -262,7 +265,7 @@ export class QuestionFlowService {
               // If selected difficulty has insufficient questions, fall back to general subject questions
               let generalQuery = supabase
                 .from('questions')
-                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .select(QUESTION_SELECT_FIELDS)
                 .eq('is_active', true);
 
               if (validUuids.length > 0) {
@@ -291,7 +294,7 @@ export class QuestionFlowService {
             if (config.topicId && config.topicId !== 'all' && isUUID(config.topicId)) {
               let query = supabase
                 .from('questions')
-                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .select(QUESTION_SELECT_FIELDS)
                 .eq('is_active', true)
                 .eq('topic_id', config.topicId);
 
@@ -320,7 +323,7 @@ export class QuestionFlowService {
               // Fetch questions for this subject
               let subjectQuery = supabase
                 .from('questions')
-                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .select(QUESTION_SELECT_FIELDS)
                 .eq('is_active', true);
 
               if (validSubUuids.length > 0) {
@@ -368,7 +371,7 @@ export class QuestionFlowService {
             const subId = config.subjectId || 'all';
             let query = supabase
               .from('questions')
-              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+              .select(QUESTION_SELECT_FIELDS)
               .eq('is_active', true);
 
             if (subId !== 'all') {
@@ -429,7 +432,7 @@ export class QuestionFlowService {
 
               let subQuery = supabase
                 .from('questions')
-                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .select(QUESTION_SELECT_FIELDS)
                 .eq('is_active', true);
 
               if (validUuids.length > 0) {
@@ -458,7 +461,7 @@ export class QuestionFlowService {
             subjectsQueried.push('Daily Challenge');
             const { data, error } = await supabase
               .from('questions')
-              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+              .select(QUESTION_SELECT_FIELDS)
               .eq('is_active', true)
               .limit(45);
 
@@ -480,7 +483,7 @@ export class QuestionFlowService {
 
             let query = supabase
               .from('questions')
-              .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+              .select(QUESTION_SELECT_FIELDS)
               .eq('is_active', true);
 
             if (validUuids.length > 0) {
@@ -500,7 +503,7 @@ export class QuestionFlowService {
               // If selected year has no questions yet, retrieve authentic UTME questions for this subject
               let fallbackQuery = supabase
                 .from('questions')
-                .select('id, subject_id, topic_id, question_text, options, difficulty, is_active, year, created_at, subjects(id, name), topics(id, name)')
+                .select(QUESTION_SELECT_FIELDS)
                 .eq('is_active', true);
 
               if (validUuids.length > 0) {
@@ -527,7 +530,12 @@ export class QuestionFlowService {
       });
 
       // Process and Normalize Questions through ContentNormalizer (strips extraneous tags, numbers, headers)
-      const normalizedList = ContentNormalizer.normalizeStream(uniqueRawQuestions);
+      const normalizedList = ContentNormalizer.normalizeStream(uniqueRawQuestions).map(q => {
+        if (!q.subject_name && subjectsQueried.length > 0) {
+          q.subject_name = subjectsQueried[0];
+        }
+        return q;
+      });
       
       // Shuffle and slice to target count (unless empty)
       const finalQuestions = (config.mode === 'full_mock' || config.mode === 'ai_generated_mock')
