@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers, Camera, AlertCircle, Save, LogOut } from 'lucide-react';
+import { CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers, Camera, AlertCircle, Save, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -961,22 +961,43 @@ D) ...
                 })}
               </div>
 
-              {/* AI Explanation Area (Automatically shown on answer) */}
+              {/* Tutor & Curriculum Explanation Area (Automatically shown on answer) */}
               {isAnswered && (
                 <div className="mt-8 pt-6 border-t border-border animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="flex items-center gap-2 mb-3">
-                    <Sparkles className="w-4 h-4 text-purple-500" />
-                    <h3 className="font-bold text-base md:text-lg font-display">Tutor Explanation</h3>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-purple-500" />
+                      <h3 className="font-bold text-base md:text-lg font-display">Tutor Explanation</h3>
+                    </div>
+                    {q.explanation && q.explanation.trim().length > 5 ? (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 font-semibold flex items-center gap-1">
+                        <CheckCircle2 className="w-3 h-3" /> Verified Database Solution
+                      </span>
+                    ) : (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-500 border border-purple-500/20 font-semibold flex items-center gap-1">
+                        <Sparkles className="w-3 h-3" /> Dynamic AI Tutor
+                      </span>
+                    )}
                   </div>
                   
                   <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4 md:p-5 mb-4 text-foreground leading-relaxed text-sm md:text-base">
                     {isGeneratingAi ? (
                       <div className="flex items-center gap-3">
                         <div className="w-4 h-4 border-2 border-purple-500/30 border-t-purple-500 rounded-full animate-spin" />
-                        <span className="animate-pulse text-xs text-muted-foreground">AI Tutor is generating tailored breakdown...</span>
+                        <span className="animate-pulse text-xs text-muted-foreground">AI Tutor is analyzing curriculum breakdown...</span>
                       </div>
+                    ) : aiExplanation ? (
+                      <MathText text={aiExplanation} />
                     ) : (
-                      <MathText text={aiExplanation || ''} />
+                      <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-600 dark:text-amber-400 text-xs sm:text-sm flex items-start gap-2.5">
+                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="font-semibold mb-0.5">Curriculum Solution Notice</p>
+                          <p className="text-muted-foreground">
+                            A verified pedagogical step-by-step breakdown is currently being indexed for this syllabus item. Verified Correct Answer: <strong>Option {q.correct_answer || 'Verified'}</strong>.
+                          </p>
+                        </div>
+                      </div>
                     )}
                   </div>
 

@@ -72,17 +72,31 @@ export class DataHealthAuditService {
       topicsBySubject.set(t.subject_id, existing);
     });
 
-    // 3. Query all questions (up to 10,000 for deep audit)
-    const { data: qData, error: qErr } = await supabase
-      .from('questions')
-      .select('id, question_text, subject_id, topic_id, correct_answer, explanation, options, is_active, year')
-      .limit(10000);
+    // 3. Query all questions across full database using paginated ranges (bypassing PostgREST 1000 limit)
+    let questions: any[] = [];
+    try {
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: chunk, error: qErr } = await supabase
+          .from('questions')
+          .select('id, question_text, subject_id, topic_id, correct_answer, explanation, options, is_active, year')
+          .range(from, from + pageSize - 1);
 
-    if (qErr) {
-      console.warn('[DataHealthAuditService] Query error:', qErr.message);
+        if (qErr) {
+          console.warn('[DataHealthAuditService] Query batch error:', qErr.message);
+          break;
+        }
+
+        if (!chunk || chunk.length === 0) break;
+        questions = questions.concat(chunk);
+        if (chunk.length < pageSize) break;
+        from += pageSize;
+      }
+    } catch (err) {
+      console.warn('[DataHealthAuditService] Error fetching questions:', err);
     }
 
-    const questions = qData || [];
     const totalQuestions = questions.length;
 
     // Issue Trackers

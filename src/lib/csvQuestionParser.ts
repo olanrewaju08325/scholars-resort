@@ -522,11 +522,16 @@ export const importQuestionsToDatabase = async (
     return { successCount: 0, failedCount: 0, createdSubjects: [], createdTopics: [], errors: [] };
   }
 
+  // =========================================================================
+  // PASS 1: VALIDATE EXISTENCE OF ALL TARGET SUBJECTS AND TOPICS
+  // =========================================================================
+  onProgress?.(0, total, 'Pass 1: Validating subjects and topics schema...');
+  console.log(`[Bulk Ingest Pass 1] Starting validation for ${total} rows...`);
+
   // 1. Fetch fresh subjects & build cache
-  onProgress?.(0, total, 'Resolving subjects in database...');
   const { data: dbSubjects, error: subFetchErr } = await supabase.from('subjects').select('id, name');
   if (subFetchErr) {
-    console.warn('Could not fetch subjects:', subFetchErr.message);
+    console.warn('[Bulk Ingest Pass 1] Could not fetch subjects:', subFetchErr.message);
   }
 
   const subjectsCache = new Map<string, { id: string; name: string }>();
@@ -539,7 +544,7 @@ export const importQuestionsToDatabase = async (
     topicsCache.set(`${t.subject_id}:${t.name.trim().toLowerCase()}`, t);
   });
 
-  // 3. Fetch existing questions for these subjects to enable smart upsert (update-on-duplicate)
+  // 3. Pre-process items and verify foreign keys
   const subjectIdsSet = new Set<string>();
   const preProcessedItems: Array<{
     subject_id: string;
@@ -552,6 +557,7 @@ export const importQuestionsToDatabase = async (
     difficulty: 'easy' | 'medium' | 'hard';
     year: number | null;
     is_active: boolean;
+    rawItem: ParsedQuestionItem;
   }> = [];
 
   for (let idx = 0; idx < questionsToImport.length; idx++) {
@@ -573,6 +579,7 @@ export const importQuestionsToDatabase = async (
       if (createSubErr || !newSubj) {
         failedCount++;
         errors.push(`Row ${q.rowNumber}: Failed to register subject '${q.subjectName}' (${createSubErr?.message || 'DB error'})`);
+        console.error(`[Pass 1 FK Error] Failed subject creation for row ${q.rowNumber}:`, createSubErr);
         continue;
       }
 
@@ -585,13 +592,13 @@ export const importQuestionsToDatabase = async (
 
     // B. Resolve or safely create topic if provided
     let topicId: string | null = null;
-    const safeTopicName = String(q.topicName || q.topic || '').trim();
+    const safeTopicName = String(q.topicName || (q as any).topic || '').trim();
     if (safeTopicName && currentSubject?.id) {
       const topicKey = `${currentSubject.id}:${safeTopicName.toLowerCase()}`;
       let currentTopic = topicsCache.get(topicKey);
 
       if (!currentTopic) {
-        const { data: newTopic } = await supabase
+        const { data: newTopic, error: createTopErr } = await supabase
           .from('topics')
           .insert({
             subject_id: currentSubject.id,
@@ -604,6 +611,8 @@ export const importQuestionsToDatabase = async (
           currentTopic = newTopic;
           topicsCache.set(topicKey, newTopic);
           createdTopics.push(newTopic.name);
+        } else if (createTopErr) {
+          console.warn(`[Pass 1 FK Warning] Topic insert notice for '${safeTopicName}':`, createTopErr.message);
         }
       }
 
@@ -651,16 +660,27 @@ export const importQuestionsToDatabase = async (
     });
   }
 
+  console.log(`[Bulk Ingest Pass 1 Complete] Validated ${preProcessedItems.length} items with resolved Subject & Topic FKs.`);
+
+  // =========================================================================
+  // PASS 2: BATCHED INSERT & UPSERT WITH EXPLICIT FOREIGN KEY LOGGING
+  // =========================================================================
+
   // Fetch existing database questions for these subjects to detect existing duplicates for upsert based on (question_text, subject_id, exam_year)
   const existingQuestionsMap = new Map<string, string>(); // composite key -> question id
   if (subjectIdsSet.size > 0) {
     try {
-      const { data: existingDbQ } = await supabase
-        .from('questions')
-        .select('id, question_text, subject_id, year')
-        .in('subject_id', Array.from(subjectIdsSet));
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: existingDbQ, error } = await supabase
+          .from('questions')
+          .select('id, question_text, subject_id, year')
+          .in('subject_id', Array.from(subjectIdsSet))
+          .range(from, from + pageSize - 1);
 
-      if (existingDbQ) {
+        if (error || !existingDbQ || existingDbQ.length === 0) break;
+
         existingDbQ.forEach(eq => {
           if (eq.question_text && eq.subject_id) {
             const stem = normalizeQuestionStem(eq.question_text);
@@ -669,6 +689,9 @@ export const importQuestionsToDatabase = async (
             existingQuestionsMap.set(`${eq.subject_id}:${stem}:0`, eq.id);
           }
         });
+
+        if (existingDbQ.length < pageSize) break;
+        from += pageSize;
       }
     } catch (e) {
       console.warn('Could not fetch existing questions for upsert check:', e);
@@ -837,7 +860,12 @@ export const importQuestionsToDatabase = async (
     for (let i = 0; i < toInsert.length; i += insertChunkSize) {
       const chunkEntries = toInsert.slice(i, i + insertChunkSize);
       const chunkPayloads = chunkEntries.map(e => e.payload);
-      onProgress?.(successCount + failedCount, total, `Inserting ${i + 1} - ${Math.min(i + insertChunkSize, toInsert.length)} of ${toInsert.length} new questions...`);
+      onProgress?.(successCount + failedCount, total, `Pass 2 Ingestion: Inserting ${i + 1} - ${Math.min(i + insertChunkSize, toInsert.length)} of ${toInsert.length} new questions...`);
+
+      // Explicit Foreign Key Diagnostic Logging
+      const sampleFk = chunkEntries[0]?.payload;
+      const explanationCount = chunkEntries.filter(e => e.payload.explanation && e.payload.explanation.trim().length > 0).length;
+      console.log(`[Pass 2 Batched Insert] Chunk ${Math.floor(i / insertChunkSize) + 1} (size: ${chunkEntries.length}): Sample Subject FK=${sampleFk?.subject_id}, Topic FK=${sampleFk?.topic_id}, Explanations=${explanationCount}/${chunkEntries.length}`);
 
       let chunkSaved = false;
       const { error: insertErr } = await supabase.from('questions').insert(chunkPayloads);
@@ -846,6 +874,7 @@ export const importQuestionsToDatabase = async (
         successCount += chunkEntries.length;
         chunkSaved = true;
       } else {
+        console.warn(`[Pass 2 Batched Insert Warning] Direct insert error on chunk ${Math.floor(i / insertChunkSize) + 1}:`, insertErr.message);
         if (insertErr.code === '42P10' || insertErr.message?.includes('ON CONFLICT') || insertErr.message?.includes('constraint')) {
           diagnosticReport.isConstraintMissing = true;
         }
@@ -889,6 +918,7 @@ export const importQuestionsToDatabase = async (
             successCount++;
           } else {
             failedCount++;
+            console.error(`[Pass 2 Row Failure] Row ${inEntry.item.rawItem?.rowNumber} (Subject FK: ${inEntry.payload.subject_id}, Topic FK: ${inEntry.payload.topic_id}):`, singleErr.message);
             const errItem = translateErrorToHumanReadable(singleErr, {
               rowNumber: inEntry.item.rawItem?.rowNumber,
               questionText: inEntry.item.question_text,
@@ -897,7 +927,7 @@ export const importQuestionsToDatabase = async (
               examYear: inEntry.item.year || undefined
             });
             detailedErrors.push(errItem);
-            errors.push(`Row insert failed (Row ${inEntry.item.rawItem?.rowNumber || '?'}): ${singleErr.message}`);
+            errors.push(`Row insert failed (Row ${inEntry.item.rawItem?.rowNumber || '?'}, Subject FK: ${inEntry.payload.subject_id}): ${singleErr.message}`);
           }
         }
       }

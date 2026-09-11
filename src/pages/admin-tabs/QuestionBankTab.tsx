@@ -9,7 +9,7 @@ import {
   Sparkles, Plus, Edit2, Trash2, CheckCircle, XCircle, Upload, Loader2, 
   ShieldCheck, History, Search, Download, FileSpreadsheet, AlertTriangle, 
   Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info, BookOpen, Send,
-  CheckSquare, Square, ListFilter, Zap
+  CheckSquare, Square, ListFilter, Zap, Database
 } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { SanityScanModal } from "@/components/admin/SanityScanModal";
@@ -34,6 +34,7 @@ import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 import { BulkUploadIntegrationTesterComponent } from '@/components/admin/BulkUploadIntegrationTester';
 import { BulkUploadSchemaGuide } from '@/components/admin/BulkUploadSchemaGuide';
 import { DataHealthReportCard } from '@/components/admin/DataHealthReportCard';
+import { DataHealthDashboard } from '@/components/admin/DataHealthDashboard';
 
 const isUUID = (str: any): boolean => 
   typeof str === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str.trim());
@@ -87,6 +88,7 @@ export const QuestionBankTab = () => {
   const [isVirtualView, setIsVirtualView] = useState(true);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
   const [duplicatePairs, setDuplicatePairs] = useState<DuplicatePair[]>([]);
+  const [activeHealthView, setActiveHealthView] = useState<'overview' | 'detailed_dashboard'>('detailed_dashboard');
   const [classifying, setClassifying] = useState(false);
   const [showIntegrationTester, setShowIntegrationTester] = useState(false);
   const [bulkDeleteDialogConfig, setBulkDeleteDialogConfig] = useState({
@@ -774,8 +776,37 @@ export const QuestionBankTab = () => {
         </div>
       </div>
 
-      {/* Proactive Data Health Report & Diagnostic Audit Card */}
-      <DataHealthReportCard onRefetchQuestions={fetchData} />
+      {/* Proactive Data Health & Curriculum Topic Consistency Audit Dashboard */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between border-b border-border/60 pb-2">
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant={activeHealthView === 'detailed_dashboard' ? 'default' : 'ghost'}
+              onClick={() => setActiveHealthView('detailed_dashboard')}
+              className="text-xs h-8 gap-1.5"
+            >
+              <Database className="w-3.5 h-3.5" />
+              Subject & 23+ Topics Consistency Audit
+            </Button>
+            <Button
+              size="sm"
+              variant={activeHealthView === 'overview' ? 'default' : 'ghost'}
+              onClick={() => setActiveHealthView('overview')}
+              className="text-xs h-8 gap-1.5"
+            >
+              <ShieldCheck className="w-3.5 h-3.5" />
+              Quick Diagnostics & Orphan Fixer
+            </Button>
+          </div>
+        </div>
+
+        {activeHealthView === 'detailed_dashboard' ? (
+          <DataHealthDashboard />
+        ) : (
+          <DataHealthReportCard onRefetchQuestions={fetchData} />
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 min-w-0 w-full">
         
