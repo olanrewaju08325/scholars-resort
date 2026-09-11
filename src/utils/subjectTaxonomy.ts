@@ -161,7 +161,11 @@ export const CANONICAL_UTME_SUBJECTS: CanonicalSubject[] = [
       'crk',
       'christian religious knowledge',
       'crs / irs',
-      'christian studies'
+      'christian studies',
+      'christian r.s.',
+      'christian r.k.',
+      'christian r s',
+      'christian r k'
     ]
   },
   {

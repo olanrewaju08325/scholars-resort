@@ -9,6 +9,7 @@ import {
   CANONICAL_UTME_SUBJECTS
 } from '../utils/subjectTaxonomy';
 import { isUUID } from '../utils/subjectUtils';
+import { logAdminActivity } from '../services/adminActivityService';
 
 export interface ParsedQuestionItem {
   rowNumber: number;
@@ -250,6 +251,48 @@ export const calculateTextSimilarity = (textA: string, textB: string): number =>
   const union = new Set([...setA, ...setB]);
 
   return intersection.size / union.size;
+};
+
+/**
+ * Calculates Levenshtein distance between two strings for typo/near-duplicate detection.
+ */
+export const calculateLevenshteinDistance = (a: string, b: string): number => {
+  const an = a ? a.length : 0;
+  const bn = b ? b.length : 0;
+  if (an === 0) return bn;
+  if (bn === 0) return an;
+
+  const matrix: number[][] = Array.from({ length: an + 1 }, () => Array(bn + 1).fill(0));
+
+  for (let i = 0; i <= an; i++) matrix[i][0] = i;
+  for (let j = 0; j <= bn; j++) matrix[0][j] = j;
+
+  for (let i = 1; i <= an; i++) {
+    for (let j = 1; j <= bn; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      matrix[i][j] = Math.min(
+        matrix[i - 1][j] + 1,
+        matrix[i][j - 1] + 1,
+        matrix[i - 1][j - 1] + cost
+      );
+    }
+  }
+
+  return matrix[an][bn];
+};
+
+/**
+ * Calculates Levenshtein similarity score between 0.0 and 1.0.
+ */
+export const calculateLevenshteinSimilarity = (textA: string, textB: string): number => {
+  const normA = normalizeQuestionStem(textA);
+  const normB = normalizeQuestionStem(textB);
+  if (normA === normB) return 1.0;
+  if (!normA || !normB) return 0.0;
+  const maxLen = Math.max(normA.length, normB.length);
+  if (maxLen === 0) return 1.0;
+  const dist = calculateLevenshteinDistance(normA, normB);
+  return 1.0 - (dist / maxLen);
 };
 
 /**
@@ -776,6 +819,7 @@ export const importQuestionsToDatabase = async (
   // Separate into updates (already exist -> update in place) and inserts (new -> insert)
   const toInsert: Array<{ payload: any; item: typeof preProcessedItems[0] }> = [];
   const toUpdate: Array<{ id: string; payload: any; item: typeof preProcessedItems[0] }> = [];
+  let skippedCount = 0;
 
   for (const item of preProcessedItems) {
     const itemYear = item.year || 0;
@@ -797,7 +841,7 @@ export const importQuestionsToDatabase = async (
 
     if (existingId) {
       if (duplicateHandling === 'skip') {
-        // Safe fallback: skip inserting or updating duplicate question
+        skippedCount++;
         continue;
       }
       if (duplicateHandling === 'allow') {
@@ -1027,6 +1071,26 @@ ALTER TABLE public.questions ADD COLUMN IF NOT EXISTS year INTEGER DEFAULT 0;
 UPDATE public.questions SET year = 0 WHERE year IS NULL;
 ALTER TABLE public.questions DROP CONSTRAINT IF EXISTS uq_questions_subject_text_year;
 ALTER TABLE public.questions ADD CONSTRAINT uq_questions_subject_text_year UNIQUE (subject_id, question_text, year);`;
+  }
+
+  try {
+    await logAdminActivity(
+      'CSV_QUESTION_IMPORT',
+      `Imported ${successCount} questions (${toUpdate.length} updated, ${toInsert.length} inserted, ${skippedCount} skipped, ${failedCount} failed out of ${total} total rows)`,
+      'question_bank',
+      {
+        totalRows: total,
+        successCount,
+        insertedCount: toInsert.length,
+        updatedCount: toUpdate.length,
+        skippedCount,
+        failedCount,
+        duplicateHandling,
+        timestamp: new Date().toISOString()
+      }
+    );
+  } catch (auditErr) {
+    console.warn('Audit logging error:', auditErr);
   }
 
   return {
