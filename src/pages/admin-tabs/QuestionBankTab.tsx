@@ -31,6 +31,11 @@ import {
   type CsvParseResult 
 } from '@/lib/csvQuestionParser';
 import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
+import { 
+  normalizeToCanonicalSubjectName, 
+  getSubjectAliases, 
+  getCanonicalSubjectId 
+} from '@/utils/subjectTaxonomy';
 import { BulkUploadIntegrationTesterComponent } from '@/components/admin/BulkUploadIntegrationTester';
 import { BulkUploadSchemaGuide } from '@/components/admin/BulkUploadSchemaGuide';
 import { DataHealthReportCard } from '@/components/admin/DataHealthReportCard';
@@ -1691,33 +1696,64 @@ export const QuestionBankTab = () => {
                 {/* Subjects Status Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {parsedCsvResult.detectedSubjects.map(subName => {
-                    const matchedSub = subjects.find(s => s.name.trim().toLowerCase() === subName.trim().toLowerCase());
-                    const subQuestionsCount = parsedCsvResult.validQuestions.filter(q => q.subjectName.trim().toLowerCase() === subName.trim().toLowerCase()).length;
+                    const canonicalName = normalizeToCanonicalSubjectName(subName);
+                    const aliases = getSubjectAliases(canonicalName).map(a => a.toLowerCase().trim());
+                    const cId = getCanonicalSubjectId(canonicalName);
+
+                    const matchedSub = subjects.find(s => {
+                      const sNorm = normalizeToCanonicalSubjectName(s.name);
+                      const sLower = s.name.trim().toLowerCase();
+                      return (
+                        sNorm.toLowerCase() === canonicalName.toLowerCase() ||
+                        sLower === subName.trim().toLowerCase() ||
+                        aliases.includes(sLower) ||
+                        aliases.includes(sNorm.toLowerCase()) ||
+                        (cId && s.id === cId)
+                      );
+                    });
+
+                    const subQuestionsCount = [
+                      ...parsedCsvResult.validQuestions,
+                      ...parsedCsvResult.duplicateQuestionsInFile,
+                      ...parsedCsvResult.duplicateQuestionsInDb
+                    ].filter(q => normalizeToCanonicalSubjectName(q.subjectName).toLowerCase() === canonicalName.toLowerCase()).length;
+
+                    const subValidCount = parsedCsvResult.validQuestions.filter(q => normalizeToCanonicalSubjectName(q.subjectName).toLowerCase() === canonicalName.toLowerCase()).length;
+                    const subDbDupeCount = parsedCsvResult.duplicateQuestionsInDb.filter(q => normalizeToCanonicalSubjectName(q.subjectName).toLowerCase() === canonicalName.toLowerCase()).length;
                     
                     // Collect topics for this subject in CSV
                     const subTopicsInCsv = Array.from(new Set(
-                      parsedCsvResult.validQuestions
-                        .filter(q => q.subjectName.trim().toLowerCase() === subName.trim().toLowerCase() && (q.topicName || q.topic))
-                        .map(q => String(q.topicName || q.topic).trim())
+                      [...parsedCsvResult.validQuestions, ...parsedCsvResult.duplicateQuestionsInDb]
+                        .filter(q => normalizeToCanonicalSubjectName(q.subjectName).toLowerCase() === canonicalName.toLowerCase() && (q.topicName || (q as any).topic))
+                        .map(q => String(q.topicName || (q as any).topic).trim())
                     ));
 
                     return (
                       <div key={subName} className="p-2.5 rounded-lg bg-slate-900 border border-slate-800 space-y-1.5">
-                        <div className="flex items-center justify-between gap-1">
-                          <span className="font-bold text-slate-100">{subName}</span>
+                        <div className="flex items-center justify-between gap-1 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-slate-100">{canonicalName}</span>
+                            {canonicalName.toLowerCase() !== subName.toLowerCase() && (
+                              <span className="text-[10px] text-slate-400 font-mono bg-slate-800 px-1.5 py-0.5 rounded">
+                                Alias: {subName}
+                              </span>
+                            )}
+                          </div>
                           {matchedSub ? (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-medium flex items-center gap-1">
-                              <CheckCircle2 className="w-3 h-3" /> Existing Subject
+                              <CheckCircle2 className="w-3 h-3" /> Existing Subject ({matchedSub.name})
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 text-[10px] font-medium flex items-center gap-1">
-                              <PlusCircle className="w-3 h-3" /> New Subject (Auto-Create)
+                              <PlusCircle className="w-3 h-3" /> New Subject (Will create {canonicalName})
                             </span>
                           )}
                         </div>
 
-                        <div className="text-[11px] text-slate-400 flex items-center justify-between">
-                          <span>{subQuestionsCount} questions in CSV</span>
+                        <div className="text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-1">
+                          <span>
+                            {subQuestionsCount} row(s) in CSV ({subValidCount} new, {subDbDupeCount} already in DB)
+                          </span>
                           {matchedSub && <span className="font-mono text-[10px] text-slate-500">ID: {matchedSub.id.slice(0, 8)}...</span>}
                         </div>
 
@@ -1787,25 +1823,27 @@ export const QuestionBankTab = () => {
                     <div className="flex flex-col sm:flex-row gap-2">
                       <button
                         type="button"
+                        onClick={() => setDuplicateMode('skip')}
+                        className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
+                          duplicateMode === 'skip'
+                            ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300'
+                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
+                        }`}
+                        title="Ignores duplicate questions that already exist in the database and only imports new items"
+                      >
+                        Skip DB Duplicates (Recommended)
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setDuplicateMode('update_existing')}
                         className={`flex-1 py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
                           duplicateMode === 'update_existing'
                             ? 'bg-blue-500/20 border-blue-500 text-blue-300'
                             : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
                         }`}
+                        title="Updates existing database questions in-place with new explanations or options without duplicating rows"
                       >
-                        Update Existing & Enrich (Recommended for Re-uploads)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDuplicateMode('skip')}
-                        className={`py-1.5 px-3 rounded-lg border text-xs font-medium transition-all ${
-                          duplicateMode === 'skip'
-                            ? 'bg-primary/20 border-primary text-primary-foreground'
-                            : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                        }`}
-                      >
-                        Skip
+                        Update & Enrich
                       </button>
                       <button
                         type="button"
@@ -1815,8 +1853,9 @@ export const QuestionBankTab = () => {
                             ? 'bg-amber-500/20 border-amber-500 text-amber-300'
                             : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
                         }`}
+                        title="Force inserts all rows as new records"
                       >
-                        Allow Dupes
+                        Allow All
                       </button>
                     </div>
                   </div>
@@ -1974,9 +2013,22 @@ export const QuestionBankTab = () => {
             <div className="border-t border-slate-800 p-4 bg-slate-900 flex flex-col sm:flex-row items-center justify-between gap-3">
               <div className="text-xs text-slate-400">
                 {duplicateMode === 'skip' ? (
-                  <span>Will ingest <strong className="text-emerald-400">{parsedCsvResult.validQuestions.length}</strong> unique questions.</span>
+                  <span>
+                    Will ingest <strong className="text-emerald-400">{parsedCsvResult.validQuestions.length}</strong> new unique questions{' '}
+                    {parsedCsvResult.duplicateQuestionsInDb.length > 0 && (
+                      <span className="text-slate-400">
+                        (safely skipping <strong className="text-amber-400">{parsedCsvResult.duplicateQuestionsInDb.length}</strong> existing DB duplicates)
+                      </span>
+                    )}.
+                  </span>
+                ) : duplicateMode === 'update_existing' ? (
+                  <span>
+                    Will update and enrich <strong className="text-blue-400">{parsedCsvResult.duplicateQuestionsInDb.length}</strong> existing database questions and insert <strong className="text-emerald-400">{parsedCsvResult.validQuestions.length}</strong> new questions (0 duplicate rows created).
+                  </span>
                 ) : (
-                  <span>Will ingest <strong className="text-amber-400">{parsedCsvResult.validQuestions.length + parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length}</strong> questions (all).</span>
+                  <span>
+                    Will force insert <strong className="text-amber-400">{parsedCsvResult.validQuestions.length + parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length}</strong> questions into database.
+                  </span>
                 )}
               </div>
 
@@ -1995,17 +2047,30 @@ export const QuestionBankTab = () => {
                   type="button" 
                   size="sm" 
                   onClick={handleConfirmAndImport} 
-                  disabled={csvLoading || (duplicateMode === 'skip' && parsedCsvResult.validQuestions.length === 0)}
+                  disabled={
+                    csvLoading || 
+                    (duplicateMode === 'skip' && parsedCsvResult.validQuestions.length === 0)
+                  }
                   className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold flex-1 sm:flex-none gap-2"
                 >
                   {csvLoading ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" /> Ingesting ({importProgress}/{importTotal})...
                     </>
+                  ) : duplicateMode === 'skip' && parsedCsvResult.validQuestions.length === 0 ? (
+                    <>
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      All {parsedCsvResult.duplicateQuestionsInDb.length} Questions Already in DB (Skipped)
+                    </>
                   ) : (
                     <>
                       <CheckCheck className="w-4 h-4" /> 
-                      Confirm & Ingest ({duplicateMode === 'skip' ? parsedCsvResult.validQuestions.length : (parsedCsvResult.validQuestions.length + parsedCsvResult.duplicateQuestionsInFile.length + parsedCsvResult.duplicateQuestionsInDb.length)})
+                      {duplicateMode === 'update_existing'
+                        ? `Confirm & Update (${parsedCsvResult.validQuestions.length + parsedCsvResult.duplicateQuestionsInDb.length})`
+                        : duplicateMode === 'skip'
+                        ? `Confirm & Ingest (${parsedCsvResult.validQuestions.length} New)`
+                        : `Confirm & Ingest All (${parsedCsvResult.totalRows})`
+                      }
                     </>
                   )}
                 </Button>

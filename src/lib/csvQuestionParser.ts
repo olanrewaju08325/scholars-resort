@@ -2,10 +2,18 @@ import Papa from 'papaparse';
 import { supabase } from './supabase';
 import { callGroqAPI } from '../services/aiService';
 import { cleanQuestionText, cleanOptionText } from '../utils/questionUtils';
+import { 
+  normalizeToCanonicalSubjectName, 
+  getSubjectAliases, 
+  getCanonicalSubjectId,
+  CANONICAL_UTME_SUBJECTS
+} from '../utils/subjectTaxonomy';
+import { isUUID } from '../utils/subjectUtils';
 
 export interface ParsedQuestionItem {
   rowNumber: number;
   subjectName: string;
+  originalSubjectName?: string;
   topicName?: string;
   year?: number;
   questionText: string;
@@ -393,14 +401,16 @@ export const parseQuestionsCsv = async (
             const difficulty: 'easy' | 'medium' | 'hard' = 
               rawDiff === 'easy' ? 'easy' : rawDiff === 'hard' ? 'hard' : 'medium';
 
-            detectedSubjectsSet.add(subjectName);
+            const canonicalSubjectName = normalizeToCanonicalSubjectName(subjectName);
+            detectedSubjectsSet.add(canonicalSubjectName);
 
             const normalizedStem = normalizeQuestionStem(cleanedStem);
             const isDuplicateInFile = seenStemsInFile.has(normalizedStem);
 
             const parsedItem: ParsedQuestionItem = {
               rowNumber,
-              subjectName,
+              subjectName: canonicalSubjectName,
+              originalSubjectName: subjectName,
               topicName: topicName || undefined,
               year: (parsedYear && !isNaN(parsedYear)) ? parsedYear : undefined,
               questionText: cleanedStem,
@@ -426,24 +436,52 @@ export const parseQuestionsCsv = async (
             try {
               // Fetch existing subjects to match IDs
               const { data: existingSubjects } = await supabase.from('subjects').select('id, name');
-              const subjectMap = new Map<string, string>();
-              (existingSubjects || []).forEach(s => subjectMap.set(s.name.toLowerCase().trim(), s.id));
-
-              // Find matching subject IDs
+              
+              // Map all detected canonical subjects to matching DB subject IDs (including alias matching and canonical IDs)
               const targetSubjectIds: string[] = [];
-              result.detectedSubjects.forEach(name => {
-                const sId = subjectMap.get(name.toLowerCase().trim());
-                if (sId) targetSubjectIds.push(sId);
+              result.detectedSubjects.forEach(canonName => {
+                const aliases = getSubjectAliases(canonName).map(a => a.toLowerCase().trim());
+                const cId = getCanonicalSubjectId(canonName);
+
+                (existingSubjects || []).forEach(s => {
+                  const sNorm = normalizeToCanonicalSubjectName(s.name).toLowerCase();
+                  const sLower = (s.name || '').toLowerCase().trim();
+                  if (
+                    sNorm === canonName.toLowerCase() ||
+                    aliases.includes(sLower) ||
+                    aliases.includes(sNorm) ||
+                    (cId && s.id === cId)
+                  ) {
+                    if (s.id) targetSubjectIds.push(s.id);
+                  }
+                });
+
+                if (cId && isUUID(cId)) {
+                  targetSubjectIds.push(cId);
+                }
               });
 
-              if (targetSubjectIds.length > 0) {
-                // Fetch existing questions for these subjects
-                const { data: existingDbQuestions } = await supabase
-                  .from('questions')
-                  .select('id, subject_id, question_text')
-                  .in('subject_id', targetSubjectIds);
+              const uniqueTargetSubjectIds = Array.from(new Set(targetSubjectIds));
 
-                if (existingDbQuestions && existingDbQuestions.length > 0) {
+              if (uniqueTargetSubjectIds.length > 0) {
+                // Fetch all existing questions for these subjects with pagination to avoid truncation
+                let existingDbQuestions: Array<{ id: string; subject_id: string; question_text: string }> = [];
+                let from = 0;
+                const pageSize = 1000;
+                while (true) {
+                  const { data: batch, error: batchErr } = await supabase
+                    .from('questions')
+                    .select('id, subject_id, question_text')
+                    .in('subject_id', uniqueTargetSubjectIds)
+                    .range(from, from + pageSize - 1);
+
+                  if (batchErr || !batch || batch.length === 0) break;
+                  existingDbQuestions.push(...batch);
+                  if (batch.length < pageSize) break;
+                  from += pageSize;
+                }
+
+                if (existingDbQuestions.length > 0) {
                   const dbStems = existingDbQuestions.map(q => ({
                     id: q.id,
                     subjectId: q.subject_id,
@@ -456,11 +494,15 @@ export const parseQuestionsCsv = async (
                   for (const q of result.validQuestions) {
                     const qStem = normalizeQuestionStem(q.questionText);
                     
-                    // Check exact or high similarity in DB
+                    // Match against DB questions:
+                    // 1. Exact normalized stem match
+                    // 2. High token similarity (>= 0.85)
                     const matchedDb = dbStems.find(dbQ => {
                       if (dbQ.stem === qStem) return true;
-                      // High token overlap check
-                      return calculateTextSimilarity(q.questionText, dbQ.rawText) >= 0.88;
+                      if (qStem.length > 10 && dbQ.stem.length > 10) {
+                        return calculateTextSimilarity(q.questionText, dbQ.rawText) >= 0.85;
+                      }
+                      return false;
                     });
 
                     if (matchedDb) {
@@ -508,6 +550,7 @@ export const importQuestionsToDatabase = async (
 }> => {
   const {
     publishImmediately = true,
+    duplicateHandling = 'skip',
     onProgress
   } = options;
 
@@ -535,7 +578,13 @@ export const importQuestionsToDatabase = async (
   }
 
   const subjectsCache = new Map<string, { id: string; name: string }>();
-  (dbSubjects || []).forEach(s => subjectsCache.set(s.name.trim().toLowerCase(), s));
+  (dbSubjects || []).forEach(s => {
+    subjectsCache.set(s.name.trim().toLowerCase(), s);
+    const norm = normalizeToCanonicalSubjectName(s.name).toLowerCase();
+    if (!subjectsCache.has(norm)) {
+      subjectsCache.set(norm, s);
+    }
+  });
 
   // 2. Fetch fresh topics & build cache
   const { data: dbTopics } = await supabase.from('topics').select('id, subject_id, name');
@@ -562,15 +611,40 @@ export const importQuestionsToDatabase = async (
 
   for (let idx = 0; idx < questionsToImport.length; idx++) {
     const q = questionsToImport[idx];
+    const canonicalName = normalizeToCanonicalSubjectName(q.subjectName);
     const subKey = q.subjectName.trim().toLowerCase();
+    const canonicalKey = canonicalName.trim().toLowerCase();
 
-    // A. Resolve or safely create subject
-    let currentSubject = subjectsCache.get(subKey);
+    // A. Resolve or safely create subject using canonical mappings & aliases
+    let currentSubject = subjectsCache.get(canonicalKey) || subjectsCache.get(subKey);
+    
+    if (!currentSubject) {
+      const aliases = getSubjectAliases(canonicalName).map(a => a.toLowerCase().trim());
+      for (const [key, s] of subjectsCache.entries()) {
+        if (aliases.includes(key) || aliases.includes(s.name.toLowerCase().trim()) || normalizeToCanonicalSubjectName(s.name).toLowerCase() === canonicalKey) {
+          currentSubject = s;
+          break;
+        }
+      }
+    }
+
+    if (!currentSubject) {
+      const canonicalId = getCanonicalSubjectId(canonicalName);
+      if (canonicalId) {
+        for (const s of subjectsCache.values()) {
+          if (s.id === canonicalId) {
+            currentSubject = s;
+            break;
+          }
+        }
+      }
+    }
+
     if (!currentSubject) {
       const { data: newSubj, error: createSubErr } = await supabase
         .from('subjects')
         .insert({
-          name: q.subjectName.trim(),
+          name: canonicalName,
           is_active: true
         })
         .select('id, name')
@@ -578,12 +652,13 @@ export const importQuestionsToDatabase = async (
 
       if (createSubErr || !newSubj) {
         failedCount++;
-        errors.push(`Row ${q.rowNumber}: Failed to register subject '${q.subjectName}' (${createSubErr?.message || 'DB error'})`);
+        errors.push(`Row ${q.rowNumber}: Failed to register subject '${canonicalName}' (${createSubErr?.message || 'DB error'})`);
         console.error(`[Pass 1 FK Error] Failed subject creation for row ${q.rowNumber}:`, createSubErr);
         continue;
       }
 
       currentSubject = newSubj;
+      subjectsCache.set(canonicalKey, newSubj);
       subjectsCache.set(subKey, newSubj);
       createdSubjects.push(newSubj.name);
     }
@@ -721,7 +796,16 @@ export const importQuestionsToDatabase = async (
     };
 
     if (existingId) {
-      toUpdate.push({ id: existingId, payload, item });
+      if (duplicateHandling === 'skip') {
+        // Safe fallback: skip inserting or updating duplicate question
+        continue;
+      }
+      if (duplicateHandling === 'allow') {
+        toInsert.push({ payload, item });
+      } else {
+        // 'update_existing' or 'overwrite'
+        toUpdate.push({ id: existingId, payload, item });
+      }
     } else {
       toInsert.push({ payload, item });
     }

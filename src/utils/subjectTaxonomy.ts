@@ -320,6 +320,14 @@ export function getCanonicalSubjectByName(name: string | null | undefined): Cano
 }
 
 /**
+ * Returns all aliases for a canonical subject name or alias.
+ */
+export function getSubjectAliases(nameOrAlias: string | null | undefined): string[] {
+  const subj = getCanonicalSubjectByName(nameOrAlias);
+  return subj ? subj.aliases : (nameOrAlias ? [nameOrAlias] : []);
+}
+
+/**
  * Retrieves the full canonical subject definition by UUID.
  */
 export function getCanonicalSubjectById(id: string | null | undefined): CanonicalSubject | undefined {
