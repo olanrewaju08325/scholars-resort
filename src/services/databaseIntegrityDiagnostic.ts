@@ -651,7 +651,7 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
     }
 
     const { data: dbProgress, error: progErr } = await supabase
-      .from('user_progress')
+      .from('study_logs')
       .select('id, user_id, subject_id');
       
     if (!progErr && dbProgress) {
@@ -660,21 +660,21 @@ export const runDatabaseDiagnostics = async (): Promise<DatabaseDiagnosticReport
       if (orphanedProg > 0) {
         issues.push({
           id: 'prog-orphaned',
-          table: 'user_progress',
+          table: 'study_logs',
           severity: 'warning',
           category: 'Data Link Defect',
-          message: `Found ${orphanedProg} practice progress logs with broken links to users or subjects.`,
-          recommendation: 'Prune orphaned progress logs with broken foreign keys.',
+          message: `Found ${orphanedProg} practice study logs with broken links to users or subjects.`,
+          recommendation: 'Prune orphaned study logs with broken foreign keys.',
         });
         warningCount++;
       }
       
       tableSummaries.push({
-        tableName: 'user_progress',
+        tableName: 'study_logs',
         totalRecords: dbProgress.length,
         status: orphanedProg === 0 ? 'passed' : 'warning',
         issuesCount: orphanedProg,
-        details: `${dbProgress.length} user practice state and mastery records loaded.`,
+        details: `${dbProgress.length} user practice state and study log records loaded.`,
       });
     }
   } catch (err) {

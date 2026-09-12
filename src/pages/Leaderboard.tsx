@@ -102,16 +102,16 @@ const Leaderboard = () => {
       // 2. Direct Supabase query fallback (100% Real verified data)
       let query = supabase
         .from('exam_sessions')
-        .select('user_id, score, total_questions, status, created_at')
+        .select('user_id, score, total_questions, status, started_at')
         .gt('score', 0);
 
       // Period filter
       if (filterPeriod === 'weekly') {
         const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('created_at', oneWeekAgo);
+        query = query.gte('started_at', oneWeekAgo);
       } else if (filterPeriod === 'monthly') {
         const oneMonthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        query = query.gte('created_at', oneMonthAgo);
+        query = query.gte('started_at', oneMonthAgo);
       }
 
       const { data: exams } = await query

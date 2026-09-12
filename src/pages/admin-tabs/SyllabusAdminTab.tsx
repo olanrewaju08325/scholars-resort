@@ -28,6 +28,7 @@ import { authFetch } from '@/lib/apiAuth';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { logAdminActivity } from '@/services/adminActivityService';
 import { QuestionClassificationService } from '@/services/questionClassificationService';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { fetchAcademicLearningRules, saveAcademicLearningRules, type AcademicLearningRules, DEFAULT_ACADEMIC_LEARNING_RULES } from '@/services/academicLearningRulesService';
 import { fetchJambBooks } from '@/services/novelService';
 
@@ -57,6 +58,7 @@ export const SyllabusAdminTab = () => {
   const [learningObjectives, setLearningObjectives] = useState('');
   const [studyTasks, setStudyTasks] = useState('');
   const [recommendedReading, setRecommendedReading] = useState('');
+  const [topicModalOpen, setTopicModalOpen] = useState(false);
 
   const { confirmAction, ConfirmElement } = useConfirm();
   const [deleteDialog, setDeleteDialog] = useState<{ isOpen: boolean; id: string | null; title: string }>({
@@ -185,6 +187,8 @@ export const SyllabusAdminTab = () => {
       return;
     }
 
+    console.info('[TaxonomyAudit] Saving topic with state:', { isEditing, currentTopicId, topicTitle, selectedSubjectId });
+
     setSaving(true);
     try {
       const payload: any = {
@@ -203,11 +207,15 @@ export const SyllabusAdminTab = () => {
         updated_at: new Date().toISOString()
       };
 
+      console.info('[TaxonomyAudit] Topic save payload:', payload);
+
       const response = await authFetch('/api/admin/topics', {
         method: 'POST',
         body: JSON.stringify(payload)
       });
       const resData = await response.json();
+
+      console.info('[TaxonomyAudit] Topic save response:', resData);
 
       if (!resData.success) {
         throw new Error(resData.error || 'Server rejected topic save');
@@ -218,6 +226,7 @@ export const SyllabusAdminTab = () => {
       resetForm();
       await fetchTopicsForSubject(selectedSubjectId);
     } catch (err: any) {
+      console.error('[TaxonomyAudit] Failed to save topic:', err);
       toast.error(`Failed to save topic: ${err.message || err}`);
     } finally {
       setSaving(false);
@@ -226,6 +235,7 @@ export const SyllabusAdminTab = () => {
 
   const resetForm = () => {
     setIsEditing(false);
+    setTopicModalOpen(false);
     setCurrentTopicId(null);
     setTopicTitle('');
     setTopicDescription('');
@@ -240,6 +250,7 @@ export const SyllabusAdminTab = () => {
   };
 
   const handleEdit = (topic: any) => {
+    console.info('[TaxonomyAudit] Opening topic editor for topic:', topic);
     setIsEditing(true);
     setCurrentTopicId(topic.id);
     setTopicTitle(topic.name || topic.title || '');
@@ -252,6 +263,8 @@ export const SyllabusAdminTab = () => {
     setRecommendedReading(topic.recommended_reading || topic.prescribed_book || topic.reading_material || '');
     setLearningObjectives(Array.isArray(topic.learning_objectives) ? topic.learning_objectives.join('\n') : (topic.learning_objectives || ''));
     setStudyTasks(Array.isArray(topic.recommended_tasks) ? topic.recommended_tasks.join('\n') : (topic.recommended_tasks || ''));
+    setTopicModalOpen(true);
+    toast.info(`Editing topic: ${topic.name || topic.title}`);
   };
 
   const confirmDelete = (id: string, name: string) => {
@@ -476,18 +489,30 @@ export const SyllabusAdminTab = () => {
         </CardContent>
       </Card>
 
-      {/* Subject selector pills */}
-      <div className="flex flex-wrap gap-2 pb-2 border-b border-border">
-        {subjects.map(sub => (
-          <Button
-            key={sub.id}
-            variant={selectedSubjectId === sub.id ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => { setSelectedSubjectId(sub.id); resetForm(); }}
-          >
-            {sub.name}
-          </Button>
-        ))}
+      {/* Subject selector pills and Add Topic action */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-2 border-b border-border">
+        <div className="flex flex-wrap gap-2">
+          {subjects.map(sub => (
+            <Button
+              key={sub.id}
+              variant={selectedSubjectId === sub.id ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => { setSelectedSubjectId(sub.id); resetForm(); }}
+            >
+              {sub.name}
+            </Button>
+          ))}
+        </div>
+        <Button 
+          size="sm" 
+          className="bg-primary text-primary-foreground gap-1.5 font-bold shrink-0"
+          onClick={() => {
+            resetForm();
+            setTopicModalOpen(true);
+          }}
+        >
+          <Plus className="w-4 h-4" /> Add Topic to {selectedSubjectObj?.name || 'Subject'}
+        </Button>
       </div>
 
       {isEditing && (
@@ -724,6 +749,169 @@ export const SyllabusAdminTab = () => {
         description={`Are you sure you want to delete "${deleteDialog.title}"? Students will no longer see this topic in their syllabus tracker.`}
         isDeleting={false}
       />
+
+      {/* Responsive Topic Editor Modal */}
+      <Dialog open={topicModalOpen} onOpenChange={setTopicModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-slate-900 border-slate-800 text-slate-100 p-6">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-primary">
+              <Layers className="w-5 h-5" />
+              {currentTopicId ? 'Edit Syllabus Topic' : 'Add New Syllabus Topic'}
+            </DialogTitle>
+            <DialogDescription className="text-slate-400">
+              Configure curriculum sequencing, difficulty, UTME weight, and learning objectives for {selectedSubjectObj?.name || 'Selected Subject'}.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveTopic} className="space-y-4 pt-2">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">Topic Title</label>
+                <Input 
+                  value={topicTitle} 
+                  onChange={e => setTopicTitle(e.target.value)} 
+                  placeholder="e.g. Differentiation and Integration of Algebraic Functions" 
+                  className="bg-slate-950 border-slate-800 text-sm"
+                  required 
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">Brief Description</label>
+                <Input 
+                  value={topicDescription} 
+                  onChange={e => setTopicDescription(e.target.value)} 
+                  placeholder="Short summary of what this topic covers" 
+                  className="bg-slate-950 border-slate-800 text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Sequence Number</label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  max="100" 
+                  value={topicSequence} 
+                  onChange={e => setTopicSequence(Number(e.target.value) || 1)} 
+                  className="bg-slate-950 border-slate-800 text-sm"
+                  required 
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Difficulty Level</label>
+                <select 
+                  className="w-full h-9 px-3 rounded-md border border-slate-800 bg-slate-950 text-slate-200 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  value={topicLevel}
+                  onChange={e => setTopicLevel(Number(e.target.value) || 1)}
+                >
+                  <option value={1}>Level 1: Foundation</option>
+                  <option value={2}>Level 2: Core Intermediate</option>
+                  <option value={3}>Level 3: Advanced Mastery</option>
+                </select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">JAMB Weight (%)</label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  max="50" 
+                  value={topicWeight} 
+                  onChange={e => setTopicWeight(Number(e.target.value) || 15)} 
+                  className="bg-slate-950 border-slate-800 text-sm"
+                  required 
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-400">Recommended Action</label>
+                <Input 
+                  value={recommendedAction} 
+                  onChange={e => setRecommendedAction(e.target.value)} 
+                  placeholder="e.g. Solve 15 Targeted Drills" 
+                  className="bg-slate-950 border-slate-800 text-sm"
+                />
+              </div>
+            </div>
+
+            {/* Prerequisites Selector */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">Prerequisite Topics</label>
+              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-slate-950 border border-slate-800 rounded-lg">
+                {topics
+                  .filter(t => t.id !== currentTopicId)
+                  .map(t => {
+                    const isSelected = selectedPrereqs.includes(t.id);
+                    return (
+                      <Badge
+                        key={t.id}
+                        variant={isSelected ? 'default' : 'outline'}
+                        className={`cursor-pointer transition-colors ${
+                          isSelected ? 'bg-primary text-primary-foreground' : 'hover:bg-slate-800 text-slate-400'
+                        }`}
+                        onClick={() => {
+                          setSelectedPrereqs(prev =>
+                            isSelected ? prev.filter(id => id !== t.id) : [...prev, t.id]
+                          );
+                        }}
+                      >
+                        {isSelected && <CheckCircle className="w-3 h-3 mr-1" />}
+                        {t.name || t.title}
+                      </Badge>
+                    );
+                  })}
+                {topics.filter(t => t.id !== currentTopicId).length === 0 && (
+                  <span className="text-xs text-slate-500 py-1 px-2">No other topics in this subject yet.</span>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">Prescribed Reading / Textbook Chapter</label>
+              <Input 
+                value={recommendedReading} 
+                onChange={e => setRecommendedReading(e.target.value)} 
+                placeholder="e.g. Lambert Comprehensive Physics Chapter 4, Official JAMB Syllabus" 
+                className="bg-slate-950 border-slate-800 text-sm"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">Learning Objectives (One per line)</label>
+                <textarea 
+                  className="w-full min-h-[85px] p-2.5 rounded-md border border-slate-800 bg-slate-950 text-slate-200 text-xs resize-y focus:outline-none focus:ring-1 focus:ring-primary"
+                  value={learningObjectives} 
+                  onChange={e => setLearningObjectives(e.target.value)} 
+                  placeholder="Understand core principles&#10;Apply equations in numerical problems"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">Recommended Study Tasks (One per line)</label>
+                <textarea 
+                  className="w-full min-h-[85px] p-2.5 rounded-md border border-slate-800 bg-slate-950 text-slate-200 text-xs resize-y focus:outline-none focus:ring-1 focus:ring-primary"
+                  value={studyTasks} 
+                  onChange={e => setStudyTasks(e.target.value)} 
+                  placeholder="Solve 20 past JAMB questions&#10;Review topic summary notes"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
+              <Button type="button" variant="ghost" size="sm" onClick={() => setTopicModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={saving} size="sm" className="bg-primary text-primary-foreground font-bold gap-1.5">
+                {saving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                {saving ? 'Saving...' : (currentTopicId ? 'Save Topic Changes' : 'Create Topic')}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

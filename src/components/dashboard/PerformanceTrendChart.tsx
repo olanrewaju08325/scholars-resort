@@ -40,10 +40,10 @@ export const PerformanceTrendChart: React.FC<PerformanceTrendChartProps> = ({ hi
       if (user?.id) {
         const { data: sessionsData } = await supabase
           .from('exam_sessions')
-          .select('id, score, total_questions, created_at, status')
+          .select('id, score, total_questions, started_at, status')
           .eq('user_id', user.id)
-          .gte('created_at', startDate.toISOString())
-          .order('created_at', { ascending: true });
+          .gte('started_at', startDate.toISOString())
+          .order('started_at', { ascending: true });
 
         if (sessionsData) dbSessions = sessionsData;
       }
@@ -56,12 +56,15 @@ export const PerformanceTrendChart: React.FC<PerformanceTrendChartProps> = ({ hi
 
       // Combine both sources
       const allSessions = [
-        ...dbSessions.map(s => ({
-          date: new Date(s.created_at),
-          dateStr: new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-          scorePct: s.total_questions ? Math.round((s.score / s.total_questions) * 100) : (s.score || 0),
-          isOffline: false
-        })),
+        ...dbSessions.map(s => {
+          const timestamp = s.started_at || s.created_at || new Date().toISOString();
+          return {
+            date: new Date(timestamp),
+            dateStr: new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            scorePct: s.total_questions ? Math.round((s.score / s.total_questions) * 100) : (s.score || 0),
+            isOffline: false
+          };
+        }),
         ...offlineSessions.map(s => ({
           date: new Date(s.completedAt),
           dateStr: new Date(s.completedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),

@@ -4,11 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { 
   BookOpen, BarChart, Plus, CheckCircle, XCircle, Sparkles, RefreshCw, 
-  Trash2, Award, Calendar, Check, ShieldCheck, GitMerge, Pencil
+  Trash2, Award, Calendar, Check, ShieldCheck, GitMerge, Pencil, Layers, Edit2
 } from 'lucide-react';
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { authFetch } from '@/lib/apiAuth';
 import { 
   ensureAllJambSubjectsInDatabase, 
   normalizeSubjectName, 
@@ -48,6 +49,22 @@ export const SubjectsTab = () => {
   const [editName, setEditName] = useState('');
   const [editIcon, setEditIcon] = useState('');
   const [renaming, setRenaming] = useState(false);
+
+  // Topic Management State for Academic Taxonomy
+  const [topicManagerOpen, setTopicManagerOpen] = useState(false);
+  const [selectedSubjectForTopics, setSelectedSubjectForTopics] = useState<{ id: string; name: string } | null>(null);
+  const [subjectTopics, setSubjectTopics] = useState<any[]>([]);
+  const [loadingTopics, setLoadingTopics] = useState(false);
+
+  // Topic Edit/Create Modal State
+  const [topicEditorOpen, setTopicEditorOpen] = useState(false);
+  const [editingTopicId, setEditingTopicId] = useState<string | null>(null);
+  const [topicName, setTopicName] = useState('');
+  const [topicDescription, setTopicDescription] = useState('');
+  const [topicSequence, setTopicSequence] = useState<number>(1);
+  const [topicLevel, setTopicLevel] = useState<number>(1);
+  const [topicWeight, setTopicWeight] = useState<number>(15);
+  const [savingTopic, setSavingTopic] = useState(false);
 
   const fetchSubjects = useCallback(async () => {
     setLoading(true);
@@ -425,6 +442,103 @@ export const SubjectsTab = () => {
     } finally {
       setRenaming(false);
     }
+  };
+
+  const handleOpenTopicManager = async (sub: { id: string; name: string }) => {
+    setSelectedSubjectForTopics(sub);
+    setTopicManagerOpen(true);
+    setLoadingTopics(true);
+    try {
+      const res = await authFetch(`/api/admin/topics?subject_id=${sub.id}`);
+      const data = await res.json();
+      if (data.success && Array.isArray(data.topics)) {
+        setSubjectTopics(data.topics);
+      } else {
+        setSubjectTopics([]);
+      }
+    } catch {
+      setSubjectTopics([]);
+    } finally {
+      setLoadingTopics(false);
+    }
+  };
+
+  const handleOpenEditTopic = (topic?: any) => {
+    if (topic) {
+      setEditingTopicId(topic.id);
+      setTopicName(topic.name || topic.title || '');
+      setTopicDescription(topic.description || '');
+      setTopicSequence(topic.sequence || 1);
+      setTopicLevel(topic.level || 1);
+      setTopicWeight(topic.jamb_weight || 15);
+    } else {
+      setEditingTopicId(null);
+      setTopicName('');
+      setTopicDescription('');
+      setTopicSequence(subjectTopics.length + 1);
+      setTopicLevel(1);
+      setTopicWeight(15);
+    }
+    setTopicEditorOpen(true);
+  };
+
+  const handleSaveTopic = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSubjectForTopics || !topicName.trim()) {
+      toast.error('Topic name is required');
+      return;
+    }
+    setSavingTopic(true);
+    try {
+      const payload = {
+        id: editingTopicId || crypto.randomUUID(),
+        subject_id: selectedSubjectForTopics.id,
+        name: topicName.trim(),
+        description: topicDescription.trim(),
+        sequence: Number(topicSequence) || 1,
+        level: Number(topicLevel) || 1,
+        jamb_weight: Number(topicWeight) || 15,
+        updated_at: new Date().toISOString()
+      };
+      const res = await authFetch('/api/admin/topics', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error || 'Failed to save topic');
+
+      toast.success(editingTopicId ? 'Topic updated successfully!' : 'Topic created successfully!');
+      setTopicEditorOpen(false);
+      // Refresh topics
+      const refreshRes = await authFetch(`/api/admin/topics?subject_id=${selectedSubjectForTopics.id}`);
+      const refreshData = await refreshRes.json();
+      if (refreshData.success) setSubjectTopics(refreshData.topics);
+    } catch (err: any) {
+      toast.error(`Topic save error: ${err.message}`);
+    } finally {
+      setSavingTopic(false);
+    }
+  };
+
+  const handleDeleteTopic = async (topicId: string, title: string) => {
+    confirmAction(
+      'Delete Topic',
+      `Are you sure you want to delete topic "${title}"?`,
+      async () => {
+        try {
+          const res = await authFetch(`/api/admin/topics/${topicId}`, { method: 'DELETE' });
+          const data = await res.json();
+          if (data.success) {
+            toast.success('Topic deleted successfully');
+            setSubjectTopics(prev => prev.filter(t => t.id !== topicId));
+          } else {
+            toast.error(data.error || 'Failed to delete topic');
+          }
+        } catch (err: any) {
+          toast.error(`Delete error: ${err.message}`);
+        }
+      }
+    );
   };
 
   return (

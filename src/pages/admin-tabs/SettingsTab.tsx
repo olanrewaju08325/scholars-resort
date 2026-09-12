@@ -20,6 +20,7 @@ import {
 } from '@/services/systemConfigService';
 import { ApiKeyManager } from '@/lib/apiKeyManager';
 import { getSecureGroqKey, setSecureGroqKey } from '@/lib/secureStorage';
+import { authFetch } from '@/lib/apiAuth';
 
 export const SettingsTab = () => {
   // Platform & Feature Toggles

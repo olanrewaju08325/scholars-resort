@@ -138,12 +138,9 @@ class SupabaseConnectionManager {
       // Standard page load / reload (not bfcache)
       this.isBfCached = false;
       this.needsFreshCheckAfterBfCache = false;
-      if (document.visibilityState === 'visible' && !document.hidden) {
-        this.scheduleReconnection(150);
-      }
     };
 
-    // 3. Tab Visibility & Focus Change gating: Force fresh connection check ONLY when tab becomes active
+    // 3. Tab Visibility & Focus Change gating: Force fresh connection check ONLY when tab becomes active after bfcache
     const handleVisibilityOrFocus = () => {
       if (document.visibilityState === 'hidden') {
         this.setState('SUSPENDED_BFCACHE');
@@ -156,7 +153,11 @@ class SupabaseConnectionManager {
           this.forceFreshConnectionCheck();
         } else {
           this.isBfCached = false;
-          this.scheduleReconnection(200);
+          // Only reconnect if socket is actually disconnected
+          const rt = (supabase as any)?.realtime;
+          if (rt && !rt.isConnected?.() && rt.conn?.readyState !== 0) {
+            this.scheduleReconnection(300);
+          }
         }
       }
     };
@@ -180,11 +181,6 @@ class SupabaseConnectionManager {
     window.addEventListener('focus', handleVisibilityOrFocus);
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
-
-    // Initial connection state setup
-    if (document.visibilityState === 'visible' && navigator.onLine !== false) {
-      this.scheduleReconnection(100);
-    }
   }
 
   /**
@@ -200,7 +196,7 @@ class SupabaseConnectionManager {
     }
 
     this.teardownSocketGracefully();
-    this.scheduleReconnection(80);
+    this.scheduleReconnection(100);
   }
 
   /**
@@ -215,6 +211,21 @@ class SupabaseConnectionManager {
 
     try {
       if (supabase && supabase.realtime) {
+        const rt = supabase.realtime as any;
+        const socket = rt?.conn;
+        if (socket) {
+          // If socket is in CONNECTING state (readyState === 0), do NOT call .close() or .disconnect() immediately!
+          // Calling close() while CONNECTING triggers browser console error:
+          // "WebSocket is closed before the connection is established"
+          if (socket.readyState === 0) { // WebSocket.CONNECTING
+            socket.onopen = () => {
+              try {
+                supabase.realtime.disconnect();
+              } catch {}
+            };
+            return;
+          }
+        }
         supabase.realtime.disconnect();
       }
     } catch {}
@@ -247,16 +258,25 @@ class SupabaseConnectionManager {
       return;
     }
 
+    if (supabase && supabase.realtime) {
+      const rt = supabase.realtime as any;
+      // If already connected, no-op
+      if (rt.isConnected && rt.isConnected()) {
+        this.setState('CONNECTED');
+        return;
+      }
+      // If currently in CONNECTING state, allow it to complete
+      if (rt.conn && rt.conn.readyState === 0) {
+        this.setState('CONNECTING');
+        return;
+      }
+    }
+
     this.isConnecting = true;
     this.setState('CONNECTING');
 
     try {
       if (supabase && supabase.realtime) {
-        // Ensure clean prior state before connecting
-        try {
-          supabase.realtime.disconnect();
-        } catch {}
-
         supabase.realtime.connect();
         this.setState('CONNECTED');
       }

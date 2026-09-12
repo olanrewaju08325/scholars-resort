@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { db } from '@/lib/db';
+import { authFetch } from '@/lib/apiAuth';
 
 export interface CleanupFilterOptions {
   purgePlaceholderQuestions: boolean;
@@ -41,6 +42,20 @@ const DEFAULT_KEYWORDS = ['mock question', 'sample question', 'lorem ipsum', 'te
 export const previewEnvironmentCleanup = async (
   options: CleanupFilterOptions
 ): Promise<CleanupPreviewResult> => {
+  // 1. Try server-side brain engine first
+  try {
+    const res = await authFetch('/api/admin/cleanup/preview', {
+      method: 'POST',
+      body: JSON.stringify({ options })
+    });
+    const json = await res.json();
+    if (json.success && Array.isArray(json.tablePreviews)) {
+      return json;
+    }
+  } catch (apiErr) {
+    console.warn('[CleanupService] Server-side preview notice, using local scanner:', apiErr);
+  }
+
   const previews: TableCleanupPreview[] = [];
   let totalCount = 0;
 
@@ -189,6 +204,27 @@ export const executeEnvironmentCleanup = async (
       details: [],
       message: 'Invalid confirmation token. Cleanup aborted for safety.',
     };
+  }
+
+  // 1. Try server brain engine with administrative bypass
+  try {
+    const res = await authFetch('/api/admin/cleanup/execute', {
+      method: 'POST',
+      body: JSON.stringify({ options, confirmationToken })
+    });
+    const json = await res.json();
+    if (json.success) {
+      // Also purge local IndexedDB if requested
+      if (options.purgeLocalIndexedDB) {
+        try {
+          await db.delete();
+          await db.open();
+        } catch (_) {}
+      }
+      return json;
+    }
+  } catch (apiErr) {
+    console.warn('[CleanupService] Server-side execute notice, falling back to direct:', apiErr);
   }
 
   const executionDetails: { table: string; deletedCount: number; status: 'success' | 'failed'; error?: string }[] = [];

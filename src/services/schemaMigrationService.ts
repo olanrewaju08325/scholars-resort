@@ -249,9 +249,9 @@ export class SchemaMigrationService {
       issues: questionIssues
     };
 
-    // 4. Inspect 'user_progress' table
+    // 4. Inspect 'study_logs' table (holds user study progress)
     let userProgressCount = 0;
-    const { data: upData, count: upCount } = await supabase.from('user_progress').select('id, user_id, subject_id', { count: 'exact' }).limit(500);
+    const { data: upData, count: upCount } = await supabase.from('study_logs').select('id, user_id, subject_id', { count: 'exact' }).limit(500);
     userProgressCount = upCount || upData?.length || 0;
     const upIssues: TableInspectionResult['issues'] = [];
 
@@ -263,15 +263,15 @@ export class SchemaMigrationService {
           severity: 'warning',
           field: 'subject_id',
           count: invalidSubjProgress.length,
-          description: `${invalidSubjProgress.length} progress records have unlinked subject_id`,
+          description: `${invalidSubjProgress.length} study logs have unlinked subject_id`,
           canAutoRepair: true
         });
         warningCount += invalidSubjProgress.length;
       }
     }
 
-    tableResults['user_progress'] = {
-      tableName: 'user_progress',
+    tableResults['study_logs'] = {
+      tableName: 'study_logs',
       totalRecords: userProgressCount,
       healthyRecords: userProgressCount - upIssues.reduce((a, b) => a + b.count, 0),
       flaggedRecords: upIssues.reduce((a, b) => a + b.count, 0),

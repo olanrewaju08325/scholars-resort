@@ -565,7 +565,6 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           score: scaledScore,
           total_questions: questions.length,
           status: compromised ? 'compromised' : 'submitted',
-          is_ai_tutor_locked: false,
           submitted_at: new Date().toISOString()
         });
 

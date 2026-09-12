@@ -102,9 +102,7 @@ export const initSupabaseLifecycle = (): void => {
 
     // Normal page load (not restored from bfcache)
     isBfCacheRestorationPending = false;
-    if (document.visibilityState === 'visible' && !document.hidden) {
-      forceFreshConnectionCheck();
-    }
+    // Do not call forceFreshConnectionCheck() here; let fresh app boot and channels connect naturally.
   };
 
   // 2. Tab Visibility & Focus: Force a fresh connection check ONLY when the tab becomes active
