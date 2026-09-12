@@ -61,6 +61,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         url = urlStr;
       }
 
+      // Global sanitize for created_at ordering or filtering across tables to prevent 400 errors
+      if (urlStr.includes('order=created_at') || urlStr.includes('created_at=')) {
+        urlStr = urlStr
+          .replace(/order=created_at\.desc/gi, 'order=started_at.desc')
+          .replace(/order=created_at\.asc/gi, 'order=started_at.asc')
+          .replace(/order=created_at\b/gi, 'order=started_at')
+          .replace(/created_at=gte\./gi, 'started_at=gte.')
+          .replace(/created_at=lte\./gi, 'started_at=lte.');
+        url = urlStr;
+      }
+
       // Auto-sanitize exam_sessions queries: 'created_at' does not exist in schema (real column is 'started_at')
       if (urlStr.includes('/rest/v1/exam_sessions')) {
         urlStr = urlStr

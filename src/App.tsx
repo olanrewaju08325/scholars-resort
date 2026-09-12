@@ -43,6 +43,7 @@ const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'), 'Onboarding
 const JambNovelHub = lazyWithRetry(() => import('./pages/JambNovelHub').then(m => ({ default: m.JambNovelHub })), 'JambNovelHub');
 const CourseEligibilityChecker = lazyWithRetry(() => import('./pages/CourseEligibilityChecker').then(m => ({ default: m.CourseEligibilityChecker })), 'CourseEligibilityChecker');
 const OfflinePackManager = lazyWithRetry(() => import('./pages/OfflinePackManager').then(m => ({ default: m.OfflinePackManager })), 'OfflinePackManager');
+const HealthCheck = lazyWithRetry(() => import('./pages/HealthCheck'), 'HealthCheck');
 const EducationalJourneyMapPage = lazyWithRetry(() => import('./pages/EducationalJourneyMapPage'), 'EducationalJourneyMapPage');
 const AdaptiveLearningPathPage = lazyWithRetry(() => import('./pages/AdaptiveLearningPathPage'), 'AdaptiveLearningPathPage');
 const PeerStudyRoomPage = lazyWithRetry(() => import('./pages/PeerStudyRoomPage'), 'PeerStudyRoomPage');
@@ -131,6 +132,7 @@ function AppContent() {
               <Route path="/ai-tutor" element={<WeaknessDrill />} />
               <Route path="/referrals" element={<Referrals />} />
               <Route path="/scholarship" element={<Scholarship />} />
+              <Route path="/health-check" element={<HealthCheck />} />
             </Route>
 
             {/* Fullscreen / Immersive Pages (No Navigation) */}

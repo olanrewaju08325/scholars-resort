@@ -87,11 +87,7 @@ export const AdminLiteratureTab = () => {
     isDeleting: false
   });
 
-  useEffect(() => {
-    loadBooks();
-  }, []);
-
-  const loadBooks = async () => {
+  async function loadBooks() {
     setLoading(true);
     try {
       // Fetch lock status
@@ -108,12 +104,16 @@ export const AdminLiteratureTab = () => {
           setEditingChapter({ ...data[0].chapters[0] });
         }
       }
-    } catch (err) {
+    } catch {
       toast.error('Failed to load literature books');
     } finally {
       setLoading(false);
     }
-  };
+  }
+
+  useEffect(() => {
+    loadBooks();
+  }, []);
 
   const handleSaveLockStatus = async (targetLockedState: boolean) => {
     setLockingInFlight(true);

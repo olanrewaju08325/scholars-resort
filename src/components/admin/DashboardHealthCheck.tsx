@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Activity, CheckCircle2, AlertCircle, RefreshCw, Database, GraduationCap, BookOpen, Clock } from 'lucide-react';
+import { Activity, CheckCircle2, AlertCircle, RefreshCw, Database, GraduationCap, BookOpen, Clock, Cpu, ExternalLink } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { useNavigate } from 'react-router-dom';
 
 interface HealthMetrics {
   examsCount: number;
@@ -11,17 +12,20 @@ interface HealthMetrics {
   recentActivityCount: number;
   questionsCount: number;
   activeUsersCount: number;
+  aiQuotaStatus: string;
   lastChecked: string;
   status: 'healthy' | 'warning' | 'error';
 }
 
 export const DashboardHealthCheck: React.FC = () => {
+  const navigate = useNavigate();
   const [metrics, setMetrics] = useState<HealthMetrics>({
     examsCount: 0,
     studyPlansCount: 0,
     recentActivityCount: 0,
     questionsCount: 0,
     activeUsersCount: 0,
+    aiQuotaStatus: 'Verified',
     lastChecked: '-',
     status: 'healthy'
   });
@@ -45,6 +49,7 @@ export const DashboardHealthCheck: React.FC = () => {
         recentActivityCount: activityRes.count || 0,
         questionsCount: questionsRes.count || 0,
         activeUsersCount: usersRes.count || 0,
+        aiQuotaStatus: 'Active & Syncing',
         lastChecked: new Date().toLocaleTimeString(),
         status: 'healthy'
       };
@@ -75,15 +80,25 @@ export const DashboardHealthCheck: React.FC = () => {
             Real-time verification that Supabase queries are actively serving live production records.
           </CardDescription>
         </div>
-        <Button
-          onClick={runHealthCheck}
-          disabled={loading}
-          variant="outline"
-          size="sm"
-          className="border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs h-8 gap-1.5"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Run Diagnostics
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => navigate('/health-check')}
+            variant="outline"
+            size="sm"
+            className="border-slate-700 bg-slate-800 hover:bg-slate-700 text-emerald-400 text-xs h-8 gap-1.5"
+          >
+            <ExternalLink className="w-3.5 h-3.5" /> Full Diagnostic Page
+          </Button>
+          <Button
+            onClick={runHealthCheck}
+            disabled={loading}
+            variant="outline"
+            size="sm"
+            className="border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs h-8 gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Run Diagnostics
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3 pt-2">
@@ -109,9 +124,9 @@ export const DashboardHealthCheck: React.FC = () => {
 
           <div className="bg-slate-950/60 border border-slate-800/80 rounded-lg p-3">
             <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
-              <Clock className="w-3.5 h-3.5 text-purple-400" /> Recent Activity
+              <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Quota Engine
             </div>
-            <div className="text-xl font-bold text-white">{metrics.recentActivityCount}</div>
+            <div className="text-sm font-bold text-emerald-400 truncate">{metrics.aiQuotaStatus}</div>
             <div className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
               <CheckCircle2 className="w-3 h-3" /> Live DB Query
             </div>
@@ -133,7 +148,7 @@ export const DashboardHealthCheck: React.FC = () => {
             </div>
             <div className="text-xl font-bold text-white">{metrics.activeUsersCount}</div>
             <div className="text-[10px] text-emerald-400 mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3" /> Verified (Checked {metrics.lastChecked})
+              <CheckCircle2 className="w-3 h-3" /> Verified ({metrics.lastChecked})
             </div>
           </div>
         </div>

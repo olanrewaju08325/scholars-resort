@@ -21,10 +21,6 @@ export const AnnouncementsTab = () => {
   const [target, setTarget] = useState('all');
   const [isPinned, setIsPinned] = useState(false);
 
-  useEffect(() => {
-    fetchAnnouncements();
-  }, []);
-
   const fetchAnnouncements = async () => {
     setLoading(true);
     try {
@@ -39,7 +35,7 @@ export const AnnouncementsTab = () => {
         return;
       }
       throw new Error('Fallback to direct Supabase query');
-    } catch (e) {
+    } catch (_e) {
       try {
         const { data, error } = await supabase
           .from('announcements')
@@ -58,6 +54,10 @@ export const AnnouncementsTab = () => {
     }
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
 
   const resetForm = () => {
     setTitle('');

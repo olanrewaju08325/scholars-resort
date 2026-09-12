@@ -43,6 +43,13 @@ export function sanitizeAndRepairMathLatex(expr: string): string {
   if (!expr) return '';
   let s = String(expr).trim();
 
+  // Fix glued words from bad OCR/AI generation (e.g., correcttotwodecimalplaces -> correct to two decimal places)
+  s = s
+    .replace(/correcttotwodecimalplaces/gi, 'correct to two decimal places')
+    .replace(/decimalplaces/gi, 'decimal places')
+    .replace(/Find,/gi, 'Find, ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2');
+
   // Strip OCR artifacts & disclaimers
   s = s.replace(/\[\s*Note:?\s*original equation formatting is unclear[^\]]*\]/gi, '');
   s = s.replace(/\(\s*Note:?\s*original equation formatting is unclear[^\)]*\)/gi, '');
@@ -168,11 +175,13 @@ export function processAcademicContent(rawText: string): string {
   text = text.replace(/\$([^\$\n]+?)\$/g, (_, math) => addSlot(math, false));
   text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => addSlot(math, false));
 
-  // 2. Pure algebraic options (e.g. "4a+6b", "4a^2-9b^2", "x^2+5x+6", "1/2 mv^2")
+  // 2. Pure algebraic options (e.g. "4a+6b", "4a^2-9b^2", "x^2+5x+6", "1/2 mv^2") - strict check so English sentences are never treated as pure math
   const trimmed = text.trim();
-  const isPureAlgebraic = /^[0-9a-zA-Z^_/*().,\s+-]+$/.test(trimmed) && 
+  const englishWordCount = (trimmed.match(/\b[a-zA-Z]{3,}\b/g) || []).length;
+  const isPureAlgebraic = englishWordCount <= 1 && 
+    /^[0-9a-zA-Z^_/*().,\s+-]+$/.test(trimmed) && 
     /[+*/^-]/.test(trimmed) && 
-    !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both|because|since|when|with)\b/i.test(trimmed);
+    !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both|because|since|when|with|find|correct|decimal|places)\b/i.test(trimmed);
 
   if (isPureAlgebraic) {
     const formatted = formatRawMathToLatex(trimmed);
