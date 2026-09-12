@@ -236,11 +236,23 @@ export class SystemUsageLimitService {
     }
 
     try {
-      // 3. AI Real Usage
+      // 3. AI Real Usage - respect key rotation timestamp if updated
+      let sinceTime = monthIso;
+      try {
+        const { data: rotData } = await supabase
+          .from('admin_settings')
+          .select('setting_value')
+          .eq('setting_key', 'ai_key_rotated_at')
+          .maybeSingle();
+        if (rotData?.setting_value?.timestamp) {
+          sinceTime = rotData.setting_value.timestamp;
+        }
+      } catch {}
+
       const { data: aiMonthData } = await supabase
         .from('ai_usage')
         .select('total_tokens, created_at')
-        .gte('created_at', monthIso);
+        .gte('created_at', sinceTime);
 
       if (aiMonthData) {
         aiTokensMonth = aiMonthData.reduce((acc, curr) => acc + (curr.total_tokens || 0), 0);

@@ -181,18 +181,24 @@ export const AIKeysTab = () => {
         })
       ]);
 
-      // 2. Direct Supabase admin_settings & platform_config fallback
+      // 2. Direct Supabase admin_settings & platform_config fallback (and reset ai_key_rotated_at for new key cycle)
+      const nowIso = new Date().toISOString();
       try {
         await supabase.from('admin_settings').upsert([
           {
             setting_key: 'ai_api_keys',
             setting_value: { groq: cleanKey, default_model: 'llama-3.3-70b-versatile' },
-            updated_at: new Date().toISOString()
+            updated_at: nowIso
           },
           {
             setting_key: 'ai_limits',
             setting_value: limits,
-            updated_at: new Date().toISOString()
+            updated_at: nowIso
+          },
+          {
+            setting_key: 'ai_key_rotated_at',
+            setting_value: { timestamp: nowIso },
+            updated_at: nowIso
           }
         ], { onConflict: 'setting_key' });
 
@@ -200,7 +206,7 @@ export const AIKeysTab = () => {
           {
             key: 'ai_limits',
             value: limits,
-            updated_at: new Date().toISOString()
+            updated_at: nowIso
           }
         ], { onConflict: 'key' });
       } catch (_) {}
@@ -211,8 +217,9 @@ export const AIKeysTab = () => {
         localStorage.setItem('groq_api_key', cleanKey);
       }
       localStorage.setItem('ai_limits', JSON.stringify(limits));
+      localStorage.setItem('ai_key_rotated_at', nowIso);
 
-      toast.success("Groq API Key and Student Usage Limits saved successfully!");
+      toast.success("Groq API Key updated! Token usage telemetry reset for the new key cycle.");
       loadTelemetryData();
     } catch (err: any) {
       toast.error("Failed to save settings: " + err.message);
