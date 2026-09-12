@@ -32,7 +32,7 @@ import {
   type ParsedQuestionItem, 
   type CsvParseResult 
 } from '@/lib/csvQuestionParser';
-import { enrichQuestionsBatchWithAI } from '@/services/aiEnrichmentService';
+import { enrichQuestionsBatchWithAI, getAiUsageHealthStatus, type AiUsageHealth } from '@/services/aiEnrichmentService';
 import { getSubjectQuestionCountsAggregation } from '@/utils/subjectUtils';
 import { 
   normalizeToCanonicalSubjectName, 
@@ -1042,6 +1042,99 @@ export const QuestionBankTab = () => {
               </Button>
             </form>
           </CardContent>
+        </Card>
+
+        {/* AI Auto-Enrichment & Quota Health Sidebar Module */}
+        <Card className="bg-card text-card-foreground border-border min-w-0 w-full overflow-hidden flex flex-col justify-between">
+          <div>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-emerald-400 shrink-0" />
+                  AI Question Enrichment & Quota
+                </CardTitle>
+                <Badge variant="outline" className={`text-[10px] uppercase font-bold ${
+                  getAiUsageHealthStatus().isOperational ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                }`}>
+                  {getAiUsageHealthStatus().circuitState === 'OPEN' ? 'Rate Limited' : 'Online'}
+                </Badge>
+              </div>
+              <CardDescription className="text-xs text-muted-foreground">
+                Automatic generation of explanations (including Mathematics formulas & step-by-step calculations), exam years, and syllabus topics.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Quota Health Monitor */}
+              <div className="p-3 bg-muted/30 border border-border/80 rounded-xl space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-foreground flex items-center gap-1.5">
+                    <Zap className="w-3.5 h-3.5 text-amber-400" /> Daily AI Usage Budget
+                  </span>
+                  <span className="font-mono text-muted-foreground text-[11px]">
+                    {getAiUsageHealthStatus().totalCallsMade} calls used
+                  </span>
+                </div>
+                <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full transition-all duration-300 ${
+                      getAiUsageHealthStatus().isLowQuota ? 'bg-rose-500' : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${getAiUsageHealthStatus().usagePercentage}%` }}
+                  />
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-tight">
+                  {getAiUsageHealthStatus().statusMessage}
+                </p>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-1">
+                <Button
+                  type="button"
+                  onClick={handleGlobalAiEnrich}
+                  disabled={globalAiEnriching}
+                  className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-9 gap-2 shadow-sm"
+                >
+                  {globalAiEnriching ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5" />
+                  )}
+                  {globalAiEnriching ? 'AI Enriching Repository...' : '✨ Run AI Auto-Enrich (All Incomplete)'}
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setCsvModalOpen(true)}
+                  className="w-full border-border hover:bg-muted text-xs h-9 gap-2"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5 text-blue-400" />
+                  Open Bulk CSV Importer
+                </Button>
+
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setSanityScanModalOpen(true)}
+                  className="w-full border-border hover:bg-muted text-xs h-9 gap-2"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+                  Curriculum Sanity & Duplicate Scan
+                </Button>
+              </div>
+            </CardContent>
+          </div>
+
+          <div className="p-4 border-t border-border/60 bg-muted/10 text-[11px] text-muted-foreground flex items-center justify-between">
+            <span>Repository count: <strong className="text-foreground">{questions.length}</strong></span>
+            <button
+              onClick={fetchData}
+              className="text-primary font-semibold hover:underline flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" /> Refresh
+            </button>
+          </div>
         </Card>
 
         {/* Database Schema Guide & Field Mapping Documentation */}

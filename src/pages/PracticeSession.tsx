@@ -23,6 +23,7 @@ import { useSwipeGesture } from '@/hooks/useSwipeGesture';
 import { CbtSnapshotService } from '@/services/cbtSnapshotService';
 import { useFocusLock } from '@/hooks/useFocusLock';
 import { FocusLockOverlay } from '@/components/FocusLockOverlay';
+import { PracticeSessionCounter } from '@/utils/practiceSessionCounter';
 
 const getNormalizedExplanation = (q: any): string | null => {
   if (!q) return null;
@@ -138,7 +139,16 @@ const PracticeSession = () => {
       // End of session
       sessionStorage.removeItem('practice_session_state');
       
-      let finalScore = score;
+      // Authoritatively calculate correct answers from questions & student choices
+      const localComputedScore = questions.reduce((acc, q) => {
+        const studentAns = answersMap[q.id];
+        if (studentAns && checkIsCorrect(studentAns, q)) {
+          return acc + 1;
+        }
+        return acc;
+      }, 0);
+
+      let finalScore = Math.max(score, localComputedScore);
       
       if (sessionId) {
         try {
@@ -155,8 +165,8 @@ const PracticeSession = () => {
             })
           });
           const result = await res.json();
-          if (result.success) {
-            finalScore = result.score;
+          if (result && result.success && typeof result.score === 'number' && result.score >= 0) {
+            finalScore = Math.max(finalScore, result.score);
           }
         } catch (e) {
           console.warn('Secure server submission failed, using local score.', e);
@@ -742,6 +752,13 @@ D) ...
     }
   };
 
+  const counterState = PracticeSessionCounter.calculate(
+    questions,
+    currentIndex,
+    answersMap,
+    correctAnswersMap
+  );
+
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col select-none">
       <FocusLockOverlay
@@ -769,8 +786,16 @@ D) ...
             className="h-8 px-2 text-xs font-bold text-primary hover:bg-primary/10 flex items-center gap-1 border border-primary/20 rounded-lg"
           >
             <Grid3X3 className="w-3.5 h-3.5" />
-            <span>Q{currentIndex + 1}/{questions.length}</span>
+            <span>Q{counterState.currentQuestionNumber}/{counterState.totalActiveQuestions}</span>
           </Button>
+          <div className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+            <span>Score:</span>
+            <span>{counterState.correctCount}/{counterState.totalActiveQuestions}</span>
+          </div>
+          <div className="hidden lg:flex items-center gap-1 px-2 py-1 rounded-md text-xs font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+            <span>Answered:</span>
+            <span>{counterState.answeredCount}/{counterState.totalActiveQuestions}</span>
+          </div>
         </div>
         
         <div className="flex items-center gap-2 md:gap-3">
@@ -812,6 +837,14 @@ D) ...
           </Button>
         </div>
       </header>
+
+      {/* Real-time Session Progress Bar */}
+      <div className="w-full bg-muted/60 h-1.5 relative overflow-hidden shrink-0">
+        <div 
+          className="h-full bg-gradient-to-r from-primary via-emerald-500 to-teal-400 transition-all duration-300 ease-out" 
+          style={{ width: `${counterState.progressPercentage}%` }}
+        />
+      </div>
 
       {/* Exit Confirmation Modal */}
       {showExitConfirm && (

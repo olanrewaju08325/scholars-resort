@@ -1,6 +1,7 @@
 import { supabase } from '@/lib/supabase';
 import { ContentNormalizer, type NormalizedQuestion } from '@/utils/ContentNormalizer';
 import { CBTPerformanceAuditService } from '@/services/cbtPerformanceAuditService';
+import { ExplanationCacheService } from '@/services/explanationCacheService';
 import { 
   normalizeSubjectName, 
   resolveSubjectIdsByNameOrAlias, 
@@ -541,6 +542,12 @@ export class QuestionFlowService {
       const finalQuestions = (config.mode === 'full_mock' || config.mode === 'ai_generated_mock')
         ? normalizedList // Keep subject-ordered grouping for mocks
         : normalizedList.sort(() => Math.random() - 0.5).slice(0, targetCount);
+
+      // Preload available explanations and automatically route questions without detailed explanations to AI enrichment
+      if (finalQuestions.length > 0) {
+        ExplanationCacheService.preloadExplanations(finalQuestions);
+        ExplanationCacheService.autoEnrichRetrievedQuestions(finalQuestions, subjectsQueried[0]);
+      }
 
       const queryLatencyMs = Date.now() - startTime;
 

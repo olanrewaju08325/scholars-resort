@@ -162,6 +162,7 @@ function AppContent() {
 
 import { MaintenanceGuard } from './components/MaintenanceGuard';
 import { InterruptedExamPrompt } from './components/InterruptedExamPrompt';
+import { AiQuotaStatusModal } from './components/AiQuotaStatusModal';
 
 function App() {
   return (
@@ -178,6 +179,7 @@ function App() {
               <GlobalShortcutsHandler />
               <InstallPrompt />
               <OfflineIndicator />
+              <AiQuotaStatusModal />
             </MaintenanceGuard>
           </AuthProvider>
         </ErrorBoundary>

@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { callGroqAPI, stripThinkTags } from './aiService';
+import { AiUsageMonitoringService } from './aiUsageMonitoringService';
 
 // In-memory cache for ultra-fast instant lookups during the session
 const memCache = new Map<string, string>();
@@ -47,7 +48,7 @@ export function getQuestionKey(questionId?: string, questionText?: string): stri
 export class ExplanationCacheService {
   /**
    * Retrieves an explanation with 0 AI tokens whenever available.
-   * If not cached anywhere, generates it once via AI and permanently persists it to the database.
+   * If not cached anywhere, generates it once via AI with LaTeX math derivations and permanently persists it to the database.
    */
   public static async getExplanation(params: {
     questionId?: string;
@@ -55,9 +56,10 @@ export class ExplanationCacheService {
     correctAnswer: string;
     selectedAnswer?: string;
     existingExplanation?: string;
+    subjectName?: string;
     options?: string[];
   }): Promise<string> {
-    const { questionId, questionText, correctAnswer, selectedAnswer, existingExplanation } = params;
+    const { questionId, questionText, correctAnswer, selectedAnswer, existingExplanation, subjectName } = params;
 
     // 1. Check existing explanation on object
     if (existingExplanation && existingExplanation.trim().length > 6 && !existingExplanation.includes('undefined')) {
@@ -78,7 +80,7 @@ export class ExplanationCacheService {
       return localStore[key];
     }
 
-    // 4. Check database questions table or admin_settings
+    // 4. Check database questions table
     if (questionId) {
       try {
         const { data } = await supabase
@@ -96,9 +98,34 @@ export class ExplanationCacheService {
       }
     }
 
-    // 5. Not found in any cache -> Generate via AI Tutor ONCE
+    // 5. Check if it is a Mathematics/Science question to format LaTeX derivations
+    const isMathOrScience = Boolean(
+      (subjectName && (
+        subjectName.toLowerCase().includes('math') || 
+        subjectName.toLowerCase().includes('physic') || 
+        subjectName.toLowerCase().includes('chem') ||
+        subjectName.toLowerCase().includes('further')
+      )) ||
+      /[=+\-*/^√∑∫πθλΔ\(\)]|\d+[a-z]|\b(solve|calculate|evaluate|derivative|integral|matrix|probability|velocity|acceleration|moles)\b/i.test(questionText)
+    );
+
+    // 6. Not found in any cache -> Generate via AI Tutor ONCE
     try {
-      const prompt = `You are an expert Nigerian JAMB UTME academic tutor.
+      AiUsageMonitoringService.recordUsage(isMathOrScience ? 450 : 250, 1);
+
+      const prompt = isMathOrScience
+        ? `You are a master Nigerian JAMB UTME Mathematics & Science curriculum specialist.
+Question: "${questionText}"
+Correct Option: "${correctAnswer}"
+${selectedAnswer && selectedAnswer !== correctAnswer ? `Student Option: "${selectedAnswer}"` : ''}
+
+Provide a rigorous, step-by-step mathematical derivation and pedagogical proof explaining why option "${correctAnswer}" is mathematically correct.
+STRICT GUIDELINES:
+- Format all mathematical equations, fractions, and variables in clean LaTeX ($...$ for inline or $$...$$ for display formulas).
+- Clearly state the relevant formula/principle used (e.g. Quadratic formula, Integration by parts, Newton's laws).
+- Show step-by-step algebraic substitutions and workings.
+- Strictly NO filler preambles (do NOT write "Problem Recap", "Here is the explanation").`
+        : `You are an expert Nigerian JAMB UTME academic tutor.
 Question: "${questionText}"
 Correct Option: "${correctAnswer}"
 ${selectedAnswer && selectedAnswer !== correctAnswer ? `Student Option: "${selectedAnswer}"` : ''}
@@ -106,9 +133,9 @@ ${selectedAnswer && selectedAnswer !== correctAnswer ? `Student Option: "${selec
 Explain clearly and concisely why option "${correctAnswer}" is the correct answer.
 STRICT GUIDELINES:
 - Target Standard Nigerian Senior Secondary School (SS3) / UTME syllabus.
-- Write a direct 2-3 sentence explanation with mathematical or scientific rationale.
-- If relevant formulas apply, format them clearly.
-- Strictly NO introductory fluff or preambles (do NOT write "Problem Recap", "Here is the explanation").`;
+- Write a direct 2-3 sentence explanation with conceptual or scientific rationale.
+- If relevant formulas apply, format them cleanly with LaTeX ($...$).
+- Strictly NO introductory fluff or preambles.`;
 
       const aiResponse = await callGroqAPI([{ role: 'user', content: prompt }]);
       const cleaned = aiResponse ? stripThinkTags(aiResponse).replace(/^\s*\**Problem Recap\**\s*:?/i, '').trim() : '';
@@ -130,14 +157,14 @@ STRICT GUIDELINES:
       return finalExplanation;
     } catch (err) {
       console.warn('AI Explanation generation error:', err);
-      const fallback = `Option ${correctAnswer} is the correct answer.`;
+      const fallback = `Option ${correctAnswer} is the correct answer according to the UTME syllabus.`;
       saveToLocalStore(key, fallback);
       return fallback;
     }
   }
 
   /**
-   * Pre-loads explanations for a batch of questions
+   * Pre-loads explanations for a batch of questions and initiates background enrichment for math questions
    */
   public static preloadExplanations(questions: any[]) {
     if (!Array.isArray(questions)) return;
@@ -152,5 +179,44 @@ STRICT GUIDELINES:
     try {
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(store));
     } catch {}
+  }
+
+  /**
+   * Automatically scans retrieved questions upon loading; if any Mathematics or Science questions lack
+   * explanations, routes them through the AI enrichment service in the background to ensure LaTeX consistency.
+   */
+  public static autoEnrichRetrievedQuestions(questions: any[], subjectName?: string): void {
+    if (!Array.isArray(questions) || questions.length === 0) return;
+
+    // Filter questions needing explanation (prioritizing math/science or missing explanations)
+    const missingExpQuestions = questions.filter(q => {
+      const exp = q.explanation || (q as any).explanation_text;
+      return !exp || exp.trim().length <= 6;
+    });
+
+    if (missingExpQuestions.length === 0) return;
+
+    // Trigger asynchronous enrichment in the background for the first few un-enriched questions
+    setTimeout(async () => {
+      for (const q of missingExpQuestions.slice(0, 5)) {
+        try {
+          const correctAns = q.correct_answer || q.correct_option || q.answer || 'A';
+          const qText = q.question_text || q.question || '';
+          if (qText) {
+            const exp = await this.getExplanation({
+              questionId: q.id,
+              questionText: qText,
+              correctAnswer: correctAns,
+              subjectName: subjectName || q.subject_name
+            });
+            if (exp) {
+              q.explanation = exp;
+            }
+          }
+        } catch {
+          // background non-blocking
+        }
+      }
+    }, 500);
   }
 }
