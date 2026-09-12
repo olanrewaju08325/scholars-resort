@@ -16,6 +16,8 @@ import { SanityScanModal } from "@/components/admin/SanityScanModal";
 import { DuplicateInspectionModal } from "@/components/admin/DuplicateInspectionModal";
 import { AdminAcceleratorsController } from "@/components/admin/AdminAcceleratorsController";
 import { InstantCBTSimulatorModal } from "@/components/admin/InstantCBTSimulatorModal";
+import { DashboardHealthCheck } from "@/components/admin/DashboardHealthCheck";
+import { UnifiedAiEnrichmentModal } from "@/components/admin/UnifiedAiEnrichmentModal";
 import { QuestionClassificationService, type DuplicatePair } from "@/services/questionClassificationService";
 import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
@@ -621,6 +623,7 @@ export const QuestionBankTab = () => {
   const [acceleratorsModalOpen, setAcceleratorsModalOpen] = useState(false);
   const [simulatorModalOpen, setSimulatorModalOpen] = useState(false);
   const [simulatorQuestion, setSimulatorQuestion] = useState<any | null>(null);
+  const [unifiedEnrichmentModalOpen, setUnifiedEnrichmentModalOpen] = useState(false);
 
   const downloadSampleCsv = () => {
     const sampleHeaders = "subject,topic,question,option_a,option_b,option_c,option_d,correct_answer,explanation,difficulty\n";
@@ -870,15 +873,17 @@ export const QuestionBankTab = () => {
           }} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
             <PlayCircle className="w-4 h-4 mr-2 text-amber-400" /> CBT Simulator
           </Button>
-          <Button onClick={handleGlobalAiEnrich} disabled={globalAiEnriching} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
-            {globalAiEnriching ? <Loader2 className="w-4 h-4 mr-2 animate-spin text-emerald-400" /> : <Sparkles className="w-4 h-4 mr-2 text-emerald-400" />} 
-            {globalAiEnriching ? 'AI Enriching...' : 'AI Batch Auto-Enrich'}
+          <Button onClick={() => setUnifiedEnrichmentModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
+            <Sparkles className="w-4 h-4 mr-2 text-emerald-400" /> AI Batch Auto-Enrich
           </Button>
           <Button onClick={() => setSanityScanModalOpen(true)} variant="outline" className="border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200">
             <ShieldCheck className="w-4 h-4 mr-2 text-rose-400" /> Sanity Scan
           </Button>
         </div>
       </div>
+
+      {/* Live Data Integrity Diagnostics */}
+      <DashboardHealthCheck />
 
       {/* Proactive Data Health & Curriculum Topic Consistency Audit Dashboard */}
       <div className="space-y-4">
@@ -2353,6 +2358,11 @@ export const QuestionBankTab = () => {
         isOpen={simulatorModalOpen}
         onClose={() => setSimulatorModalOpen(false)}
         question={simulatorQuestion}
+      />
+      <UnifiedAiEnrichmentModal
+        isOpen={unifiedEnrichmentModalOpen}
+        onClose={() => setUnifiedEnrichmentModalOpen(false)}
+        onComplete={fetchData}
       />
     </div>
   );
