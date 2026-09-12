@@ -61,6 +61,13 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
     if (topRes.data && topRes.data.length > 0) {
       topicsList = topRes.data;
     }
+
+    console.log('[Academy Taxonomy / Educational Journey DB Response]', {
+      subjectsRetrieved: subjectsList.length,
+      topicsRetrieved: topicsList.length,
+      sampleSubjects: subjectsList.slice(0, 3).map(s => s.name),
+      timestamp: new Date().toISOString()
+    });
   } catch (err) {
     console.warn('[EducationalJourney] Error fetching subjects/topics from Supabase:', err);
   }

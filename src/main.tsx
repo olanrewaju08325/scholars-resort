@@ -7,11 +7,16 @@ import { registerSW } from 'virtual:pwa-register';
 import { perfMonitor } from './lib/perfMonitor';
 import { initBatterySaver } from './lib/batterySaver';
 
+import { initSupabaseLifecycle } from './lib/supabaseLifecycle';
+
 // Initialize dev-mode performance & API latency monitor (flags requests >2s)
 perfMonitor.init();
 
 // Initialize battery saver state
 initBatterySaver();
+
+// Initialize centralized Supabase WebSocket lifecycle hook (manages bfcache, pagehide, and navigation cleanup)
+initSupabaseLifecycle();
 
 // Handle Vite dynamic import chunk reload events gracefully
 window.addEventListener('vite:preloadError', (event: any) => {
@@ -46,31 +51,7 @@ if ('serviceWorker' in navigator) {
   registerSW({ immediate: true });
 }
 
-// Robust Supabase Realtime & WebSocket Connection Lifecycle Manager for Back-Forward Cache navigation
-const handlePageUnloadOrHide = () => {
-  try {
-    import('./lib/supabase').then(({ supabase }) => {
-      if (supabase && typeof supabase.removeAllChannels === 'function') {
-        supabase.removeAllChannels();
-      }
-    });
-  } catch {}
-};
-
-window.addEventListener('pagehide', (event) => {
-  if (event.persisted) {
-    console.warn('[Supabase Realtime] Page entering Back-Forward Cache (bfcache). Unsubscribing active channels to prevent WebSocket leaks.');
-  }
-  handlePageUnloadOrHide();
-});
-
-window.addEventListener('beforeunload', handlePageUnloadOrHide);
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    handlePageUnloadOrHide();
-  }
-});
+// Centralized Supabase Realtime & WebSocket Connection Lifecycle is managed via initSupabaseLifecycle()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

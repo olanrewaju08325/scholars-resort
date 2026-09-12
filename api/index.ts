@@ -7150,7 +7150,9 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
 // 1. Track New User Signup with Referral Code / Link
 app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
   try {
-    const { referrerCode, referredId, referredName, referredEmail, referredPhone } = req.body || {};
+    const rawBody = req.body || {};
+    const referrerCode = rawBody.referrerCode || rawBody.referralCode || rawBody.refCode || rawBody.ref;
+    const { referredId, referredName, referredEmail, referredPhone } = rawBody;
 
     if (!referrerCode || (!referredId && !referredEmail)) {
       return res.status(400).json({ success: false, error: 'Referrer code and student details are required.' });

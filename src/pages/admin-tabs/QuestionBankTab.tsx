@@ -60,6 +60,7 @@ export const QuestionBankTab = () => {
   const [csvLoading, setCsvLoading] = useState(false);
   const [importProgress, setImportProgress] = useState(0);
   const [importTotal, setImportTotal] = useState(0);
+  const [importStatusDetail, setImportStatusDetail] = useState('');
   const [statusMsg, setStatusMsg] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
   // Form states

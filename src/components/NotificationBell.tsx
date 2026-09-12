@@ -3,6 +3,7 @@ import { Bell, CheckCheck, Sparkles, Trophy, Zap, BookOpen, TrendingUp, X } from
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { Button } from '@/components/ui/button';
+import { registerRealtimeChannel, unregisterRealtimeChannel } from '@/lib/supabaseLifecycle';
 
 interface Notification {
   id: string;
