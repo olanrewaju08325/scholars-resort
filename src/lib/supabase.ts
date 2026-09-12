@@ -25,6 +25,13 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
   },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+    timeout: 20000,
+    heartbeatIntervalMs: 30000,
+  },
   global: {
     fetch: async (url, options) => {
       // 1. If unconfigured or placeholder URL, prevent actual network fetch and return empty mock response
@@ -135,13 +142,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
 export { verifySupabaseConnection, type SupabaseDiagnosticResult } from './supabaseDiagnostic';
 
-// Gracefully tear down Realtime channels when browser tab enters bfcache
-if (typeof window !== 'undefined') {
-  window.addEventListener('pagehide', () => {
-    try {
-      supabase.removeAllChannels();
-    } catch {}
-  });
-}
+// Realtime & WebSocket Connection Lifecycle is authoritatively managed in lib/supabaseLifecycle.ts
+
 
 

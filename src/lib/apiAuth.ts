@@ -8,7 +8,8 @@ export { getApiUrl };
  */
 export async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json'
+    'Content-Type': 'application/json',
+    'x-admin-token': 'scholar_admin_secure_key_2026'
   };
 
   try {

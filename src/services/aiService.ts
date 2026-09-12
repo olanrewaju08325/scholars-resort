@@ -68,76 +68,22 @@ export function safeParseAIJSON<T = any>(rawText: string, fallbackValue?: T): T 
   throw new Error(`Failed to parse JSON from AI output: ${rawText.substring(0, 100)}...`);
 }
 
-// In-memory Cached API Key (never saved to localStorage for security)
-let cachedGroqKey: string | null = null;
-
-// Purge any legacy credentials from localStorage
-try {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('groq_api_key');
-    localStorage.removeItem('groq_key');
-    localStorage.removeItem('gemini_api_key');
-  }
-} catch (_) {}
+import { ApiKeyManager, getGroqApiKey as fetchGroqKeyFromManager, setGroqApiKey as saveGroqKeyToManager } from '@/lib/apiKeyManager';
 
 export const setLocalGroqApiKey = (key: string) => {
   if (key && key.trim()) {
-    cachedGroqKey = key.trim();
+    saveGroqKeyToManager(key.trim()).catch(() => {});
     return true;
   }
   return false;
 };
 
+/**
+ * Dynamically retrieves Groq API key from browser IndexedDB (via ApiKeyManager)
+ * removing the dependency on problematic build-time environment variables.
+ */
 export const getGroqApiKey = async (): Promise<string> => {
-  // 1. Check local environment variable or in-memory session cache
-  const envKey = (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GROQ_API_KEY || import.meta.env?.GROQ_API_KEY)) || 
-                 (typeof process !== 'undefined' && (process.env?.GROQ_API_KEY || process.env?.VITE_GROQ_API_KEY));
-                 
-  if (envKey && envKey.trim().length > 10 && !envKey.includes('placeholder')) {
-    return envKey.trim();
-  }
-
-  if (cachedGroqKey) return cachedGroqKey;
-
-  try {
-    // 2. Query admin_settings in Supabase for any saved Groq key
-    const { data } = await supabase
-      .from('admin_settings')
-      .select('setting_key, setting_value')
-      .in('setting_key', ['ai_api_keys', 'ai_api_settings', 'api_keys', 'groq_api_key', 'ai_config', 'global_config']);
-
-    if (data) {
-      for (const row of data) {
-        const val = row.setting_value?.groq || row.setting_value?.groq_key || row.setting_value?.groq_api_key || row.setting_value?.apiKey || (typeof row.setting_value === 'string' ? row.setting_value : '');
-        if (typeof val === 'string' && val.trim().length > 10 && !val.includes('placeholder')) {
-          cachedGroqKey = val.trim();
-          return cachedGroqKey;
-        }
-      }
-    }
-  } catch (err) {
-    console.warn('Could not fetch Groq key from admin_settings:', err);
-  }
-
-  try {
-    // 3. Check platform_config in Supabase
-    const { data: pConfig } = await supabase
-      .from('platform_config')
-      .select('value')
-      .eq('key', 'ai_settings')
-      .maybeSingle();
-
-    if (pConfig?.value?.groq_api_key || pConfig?.value?.groq) {
-      const val = pConfig.value.groq_api_key || pConfig.value.groq;
-      if (typeof val === 'string' && val.trim().length > 10) {
-        cachedGroqKey = val.trim();
-        return cachedGroqKey;
-      }
-    }
-  } catch {}
-
-  // Fallback
-  return (typeof import.meta !== 'undefined' && (import.meta.env?.VITE_GROQ_API_KEY || import.meta.env?.GROQ_API_KEY)) || '';
+  return await fetchGroqKeyFromManager();
 };
 
 let cachedGeminiKey: string | null = null;

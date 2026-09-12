@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input';
 import { supabase } from '@/lib/supabase';
 import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
+import { ApiKeyManager } from '@/lib/apiKeyManager';
+import { getSecureGroqKey, setSecureGroqKey } from '@/lib/secureStorage';
 import { 
   Key, ShieldCheck, RefreshCw, Zap, Activity, CheckCircle2, XCircle, 
   AlertTriangle, Server, Clock, Terminal, Cpu, Search, Wifi, Eye, EyeOff, Users, Sliders
@@ -66,8 +68,10 @@ export const AIKeysTab = () => {
 
       if (foundKey) {
         setGroqKey(foundKey);
+        await ApiKeyManager.setGroqApiKey(foundKey);
       } else {
-        const local = localStorage.getItem('groq_api_key') || import.meta.env.VITE_GROQ_API_KEY || '';
+        const keyFromIdb = await ApiKeyManager.getGroqApiKey();
+        const local = keyFromIdb || localStorage.getItem('groq_api_key') || import.meta.env.VITE_GROQ_API_KEY || '';
         setGroqKey(local);
       }
 
@@ -201,8 +205,9 @@ export const AIKeysTab = () => {
         ], { onConflict: 'key' });
       } catch (_) {}
 
-      // 3. Save to localStorage for client caching
+      // 3. Save to Secure IndexedDB via ApiKeyManager
       if (cleanKey) {
+        await ApiKeyManager.setGroqApiKey(cleanKey);
         localStorage.setItem('groq_api_key', cleanKey);
       }
       localStorage.setItem('ai_limits', JSON.stringify(limits));

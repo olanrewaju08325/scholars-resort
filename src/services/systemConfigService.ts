@@ -1,13 +1,8 @@
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { authFetch } from '@/lib/apiAuth';
-
-// Security Cleanup: Purge any legacy API keys from localStorage
-try {
-  if (typeof localStorage !== 'undefined') {
-    localStorage.removeItem('groq_api_key');
-  }
-} catch (_) {}
+import { ApiKeyManager } from '@/lib/apiKeyManager';
+import { getSecureGroqKey, setSecureGroqKey } from '@/lib/secureStorage';
 
 export interface GroqSystemConfig {
   apiKey: string;
@@ -148,6 +143,16 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
     console.warn('[SystemConfigService] Notice loading configs:', err);
   }
 
+  // Check Secure Storage (IndexedDB via ApiKeyManager) if not loaded from database
+  if (!result.groq.apiKey) {
+    try {
+      const secKey = await ApiKeyManager.getGroqApiKey();
+      if (secKey) {
+        result.groq.apiKey = secKey;
+      }
+    } catch {}
+  }
+
   // Fallback to environment variable if set
   if (!result.groq.apiKey) {
     result.groq.apiKey = import.meta.env.VITE_GROQ_API_KEY || '';
@@ -161,18 +166,33 @@ export async function fetchAllSystemConfigs(): Promise<FullSystemConfig> {
  */
 export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{ success: boolean; error?: string }> {
   try {
-    // 1. Post to Server-Side API Endpoint for immediate runtime synchronization
-    const apiRes = await authFetch('/api/admin/system-configs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(configs)
-    });
-
-    if (apiRes.ok) {
-      const data = await apiRes.json();
-      if (data.success) {
-        return { success: true };
+    // 0. Cache to Secure IndexedDB via ApiKeyManager for instantaneous client access
+    try {
+      if (configs.groq?.apiKey) {
+        await ApiKeyManager.setGroqApiKey(configs.groq.apiKey.trim());
       }
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('system_config', JSON.stringify(configs));
+      }
+    } catch {}
+
+    // 1. Post to Server-Side API Endpoint for immediate runtime synchronization
+    let apiSuccess = false;
+    try {
+      const apiRes = await authFetch('/api/admin/system-configs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(configs)
+      });
+
+      if (apiRes.ok) {
+        const data = await apiRes.json().catch(() => ({}));
+        if (data.success) {
+          apiSuccess = true;
+        }
+      }
+    } catch (apiErr) {
+      console.warn('[SystemConfigService] API save notice:', apiErr);
     }
 
     // 2. Direct admin_settings table upserts

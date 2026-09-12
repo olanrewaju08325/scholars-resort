@@ -1,24 +1,52 @@
 import { useEffect } from 'react';
-import { supabase } from './supabase';
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { supabase } from './supabase';
+import { supabaseConnectionManager, type ConnectionState } from './supabaseConnectionManager';
 
-// Global registry of active realtime channels for centralized cleanup
-const activeRealtimeChannels = new Set<RealtimeChannel>();
+export { supabaseConnectionManager, type ConnectionState };
 
-export const registerRealtimeChannel = (channel: RealtimeChannel): RealtimeChannel => {
-  if (channel) {
-    activeRealtimeChannels.add(channel);
-  }
-  return channel;
+// Internal bfcache state tracking
+let isBfCacheRestorationPending = false;
+let lifecycleInitialized = false;
+
+/**
+ * Returns true if the page was restored from bfcache and is awaiting an active tab connection check
+ */
+export const isBfCacheState = (): boolean => {
+  return isBfCacheRestorationPending || supabaseConnectionManager.isRestoredFromBfCachePending();
 };
 
-export const unregisterRealtimeChannel = (channel: RealtimeChannel): void => {
-  if (channel) {
-    activeRealtimeChannels.delete(channel);
-    try {
-      supabase.removeChannel(channel);
-    } catch {}
+/**
+ * Forces a fresh, clean connection check, purging any stale socket references.
+ * Only executes when the tab is actively visible.
+ */
+export const forceFreshConnectionCheck = async (): Promise<void> => {
+  if (typeof window === 'undefined') return;
+  
+  // Guard: strictly execute only when tab is actively visible
+  if (document.visibilityState !== 'visible' || document.hidden) {
+    return;
   }
+
+  // Clear bfcache restoration flag as fresh check is underway
+  isBfCacheRestorationPending = false;
+
+  // Delegate to the connection manager's fresh verification pipeline
+  await supabaseConnectionManager.forceFreshConnectionCheck();
+};
+
+/**
+ * Register an active Realtime channel for global tracking and automatic cleanup.
+ */
+export const registerRealtimeChannel = (channel: RealtimeChannel): RealtimeChannel => {
+  return supabaseConnectionManager.registerChannel(channel);
+};
+
+/**
+ * Unregister a channel cleanly on component unmount.
+ */
+export const unregisterRealtimeChannel = (channel: RealtimeChannel | string): void => {
+  supabaseConnectionManager.unregisterChannel(channel);
 };
 
 /**
@@ -27,27 +55,7 @@ export const unregisterRealtimeChannel = (channel: RealtimeChannel): void => {
  * browser warnings and subsequent 400 Bad Request handshake errors.
  */
 export const teardownSupabaseRealtimeConnections = (): void => {
-  try {
-    // 1. Unsubscribe each tracked channel
-    activeRealtimeChannels.forEach((channel) => {
-      try {
-        channel.unsubscribe();
-      } catch {}
-    });
-    activeRealtimeChannels.clear();
-
-    // 2. Clear all channels registered in Supabase client instance
-    if (supabase && typeof supabase.removeAllChannels === 'function') {
-      supabase.removeAllChannels();
-    }
-
-    // 3. Disconnect the underlying WebSocket client
-    if (supabase && supabase.realtime && typeof supabase.realtime.disconnect === 'function') {
-      supabase.realtime.disconnect();
-    }
-  } catch (err) {
-    // Silent catch during page teardown
-  }
+  supabaseConnectionManager.clearAll();
 };
 
 /**
@@ -55,61 +63,77 @@ export const teardownSupabaseRealtimeConnections = (): void => {
  * from the browser Back-Forward Cache (bfcache).
  */
 export const reconnectSupabaseRealtime = (): void => {
-  try {
-    if (supabase && supabase.realtime && typeof supabase.realtime.connect === 'function') {
-      supabase.realtime.connect();
-    }
-  } catch {}
+  supabaseConnectionManager.scheduleReconnection(100);
 };
-
-let lifecycleInitialized = false;
 
 /**
  * Initializes the centralized Supabase connection lifecycle listeners on the window object.
+ * 
+ * Specifically detects 'bfcache' state via the 'pageshow' event (event.persisted === true).
+ * Ensures that on restoration, it does NOT attempt to resume stale WebSocket connections,
+ * but forces a fresh connection check ONLY when the tab becomes active.
  */
 export const initSupabaseLifecycle = (): void => {
   if (lifecycleInitialized || typeof window === 'undefined') return;
   lifecycleInitialized = true;
 
-  // 1. Handle pagehide - critical for Back-Forward Cache (bfcache)
-  window.addEventListener('pagehide', (event: PageTransitionEvent) => {
+  // Initialize lower-level connection manager lifecycle
+  supabaseConnectionManager.initLifecycle();
+
+  // 1. Detect 'bfcache' state via 'pageshow' event
+  const handlePageShow = (event: PageTransitionEvent) => {
     if (event.persisted) {
-      console.log('[Supabase Lifecycle] Page entering Back-Forward Cache. Tearing down active WebSockets to prevent connection leakage.');
+      // Detected restoration from Back-Forward Cache (bfcache)
+      isBfCacheRestorationPending = true;
+
+      // CRITICAL: Ensure that on restoration, we do NOT attempt to resume stale
+      // WebSocket connections. Stale connections trigger "WebSocket is closed" and
+      // 400 Bad Request handshake failures.
+      try {
+        if (supabase && supabase.realtime) {
+          supabase.realtime.disconnect();
+        }
+      } catch {}
+
+      // Do NOT call reconnect or scheduleReconnection here!
+      // We wait strictly until the tab becomes active.
+      return;
     }
-    teardownSupabaseRealtimeConnections();
-  });
 
-  // 2. Handle pageshow - reconnect when restored from bfcache
-  window.addEventListener('pageshow', (event: PageTransitionEvent) => {
-    if (event.persisted) {
-      console.log('[Supabase Lifecycle] Page restored from Back-Forward Cache. Re-establishing clean Realtime connection state.');
-      reconnectSupabaseRealtime();
+    // Normal page load (not restored from bfcache)
+    isBfCacheRestorationPending = false;
+    if (document.visibilityState === 'visible' && !document.hidden) {
+      forceFreshConnectionCheck();
     }
-  });
+  };
 
-  // 3. Handle beforeunload
-  window.addEventListener('beforeunload', () => {
-    teardownSupabaseRealtimeConnections();
-  });
+  // 2. Tab Visibility & Focus: Force a fresh connection check ONLY when the tab becomes active
+  const handleTabBecameActive = () => {
+    if (typeof document === 'undefined') return;
 
-  // 4. Handle visibilitychange
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') {
-      teardownSupabaseRealtimeConnections();
-    } else if (document.visibilityState === 'visible') {
-      reconnectSupabaseRealtime();
+    if (document.visibilityState === 'visible' && !document.hidden) {
+      if (isBfCacheRestorationPending || supabaseConnectionManager.isRestoredFromBfCachePending()) {
+        // Tab is actively visible and focused after bfcache restoration.
+        // Now force a fresh connection check!
+        forceFreshConnectionCheck();
+      }
     }
-  });
+  };
 
-  // 5. Handle browser back/forward history navigation
-  window.addEventListener('popstate', () => {
-    // Ensure any stale channels from the previous view are safely unmounted
+  // 3. Clean teardown on pagehide & freeze before entering bfcache
+  const handlePageHide = () => {
     try {
-      if (supabase && typeof supabase.removeAllChannels === 'function') {
-        supabase.removeAllChannels();
+      if (supabase && supabase.realtime) {
+        supabase.realtime.disconnect();
       }
     } catch {}
-  });
+  };
+
+  window.addEventListener('pageshow', handlePageShow);
+  window.addEventListener('pagehide', handlePageHide);
+  window.addEventListener('freeze', handlePageHide);
+  document.addEventListener('visibilitychange', handleTabBecameActive);
+  window.addEventListener('focus', handleTabBecameActive);
 };
 
 /**
@@ -131,3 +155,4 @@ export const useSupabaseRealtimeLifecycle = (channelFactory?: () => RealtimeChan
     };
   }, deps);
 };
+

@@ -2625,6 +2625,11 @@ app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
     const { groq, smtp, platform } = req.body;
 
     // 1. Update in-memory runtime caches immediately
+    if (groq && groq.apiKey) {
+      process.env.GROQ_API_KEY = groq.apiKey.trim();
+      await setStoredSetting('ai_api_keys', { groq: groq.apiKey.trim(), default_model: groq.defaultModel || 'openai/gpt-oss-120b' });
+    }
+
     if (smtp && smtp.host) {
       cachedWorkingSmtpConfig = {
         host: smtp.host,
@@ -2633,7 +2638,18 @@ app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
         pass: smtp.pass || '',
         from: smtp.from || smtp.user || 'admitwise2@gmail.com'
       };
+      await setStoredSetting('api_keys', {
+        smtp_host: smtp.host,
+        smtp_port: smtp.port,
+        smtp_user: smtp.user,
+        smtp_pass: smtp.pass,
+        smtp_from: smtp.from,
+        smtp_secure: smtp.secure,
+        groq: groq?.apiKey || process.env.GROQ_API_KEY || ''
+      });
     }
+
+    await setStoredSetting('system_config', { groq, smtp, platform });
 
     // 2. Persist to authoritative admin_settings table
     try {

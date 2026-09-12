@@ -43,6 +43,7 @@ export const NotificationBell = () => {
     const cleanChannel = () => {
       if (channel) {
         try {
+          unregisterRealtimeChannel(channel);
           supabase.removeChannel(channel);
         } catch {}
         channel = null;
@@ -51,17 +52,20 @@ export const NotificationBell = () => {
 
     try {
       const channelId = `notif_${user.id}_${Math.random().toString(36).substring(2, 9)}_${Date.now()}`;
-      channel = supabase.channel(channelId)
+      channel = supabase.channel(channelId);
+      registerRealtimeChannel(channel);
+
+      channel
         .on('postgres_changes', {
           event: 'INSERT',
           schema: 'public',
           table: 'activity_logs',
           filter: `user_id=eq.${user.id}`
-        }, (payload) => {
+        }, (payload: any) => {
           setNotifications(prev => [payload.new as Notification, ...prev].slice(0, 20));
           setUnreadCount(c => c + 1);
         })
-        .subscribe((status) => {
+        .subscribe((status: string) => {
           if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
             cleanChannel();
           }

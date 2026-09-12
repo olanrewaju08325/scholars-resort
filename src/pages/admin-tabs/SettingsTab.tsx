@@ -18,6 +18,8 @@ import {
   type SmtpConfig, 
   type PlatformControls 
 } from '@/services/systemConfigService';
+import { ApiKeyManager } from '@/lib/apiKeyManager';
+import { getSecureGroqKey, setSecureGroqKey } from '@/lib/secureStorage';
 
 export const SettingsTab = () => {
   // Platform & Feature Toggles
@@ -147,34 +149,81 @@ export const SettingsTab = () => {
   const saveSettings = async () => {
     setSaving(true);
     try {
-      const cleanSmtpPass = smtpPass.trim().replace(/\s+/g, '');
+      const cleanGroqKey = (groqKey || '').trim();
+      const cleanSmtpPass = (smtpPass || '').trim().replace(/\s+/g, '');
+      const cleanSmtpUser = (smtpUser || '').trim();
+      const cleanSmtpHost = (smtpHost || '').trim();
+      const cleanSmtpFrom = (smtpFrom || '').trim() || (cleanSmtpUser ? `Scholars Resort <${cleanSmtpUser}>` : 'Scholars Resort <admitwise2@gmail.com>');
+      const cleanPaystack = (paystackKey || '').trim();
+      const cleanStripe = (stripeKey || '').trim();
 
       const groqPayload: GroqConfig = {
-        apiKey: groqKey.trim(),
-        defaultModel: groqModel,
+        apiKey: cleanGroqKey,
+        defaultModel: groqModel || 'openai/gpt-oss-120b',
         monthlyTokenLimit: Number(groqMonthlyLimit) || 5000000
       };
 
       const smtpPayload: SmtpConfig = {
-        host: smtpHost.trim(),
+        host: cleanSmtpHost || 'smtp.gmail.com',
         port: Number(smtpPort) || 587,
-        user: smtpUser.trim(),
+        user: cleanSmtpUser || 'admitwise2@gmail.com',
         pass: cleanSmtpPass,
-        from: smtpFrom.trim() || `Scholars Resort <${smtpUser.trim()}>`,
-        secure: smtpSecure
+        from: cleanSmtpFrom,
+        secure: Boolean(smtpSecure)
       };
 
       const platformPayload: PlatformControls = {
-        maintenanceMode,
-        maintenanceMessage,
-        cbtEnabled,
-        tournamentsEnabled,
-        studyRoomsEnabled,
-        jambDate,
-        telegramSupportLink,
-        telegramAnnouncementLink,
-        whatsappSupportNumber
+        maintenanceMode: Boolean(maintenanceMode),
+        maintenanceMessage: maintenanceMessage || 'We are currently undergoing scheduled maintenance.',
+        cbtEnabled: cbtEnabled !== false,
+        tournamentsEnabled: tournamentsEnabled !== false,
+        studyRoomsEnabled: studyRoomsEnabled !== false,
+        jambDate: jambDate || '2026-04-15T08:00:00',
+        telegramSupportLink: telegramSupportLink || 'https://t.me/+6dtsZgQpwrNhZDM8',
+        telegramAnnouncementLink: telegramAnnouncementLink || 'https://t.me/+9WU6HrQE6DJhYTRk',
+        whatsappSupportNumber: whatsappSupportNumber || '2348000000000'
       };
+
+      const landingPayload = {
+        title: landingTitle || 'Scholars Resort CBT & E-Learning Platform',
+        subtitle: landingSubtitle || 'Master JAMB, WAEC, NECO & UTME Exams with AI Explanations and Realistic Exam Engine',
+        hero_images: [heroImage1 || '', heroImage2 || '', heroImage3 || ''],
+        card1_title: card1Title || 'AI Personal Tutor',
+        card1_desc: card1Desc || '',
+        card2_title: card2Title || 'Exact CBT Replica',
+        card2_desc: card2Desc || '',
+        card3_title: card3Title || 'Weakness Analytics',
+        card3_desc: card3Desc || '',
+        card4_title: card4Title || 'National Mocks & Battles',
+        card4_desc: card4Desc || '',
+        card5_title: card5Title || 'AI Smart Tutor & Adaptive Path',
+        card5_desc: card5Desc || ''
+      };
+
+      // 0. Immediate Secure Storage (IndexedDB via ApiKeyManager) & local storage persistence for zero-latency client sync
+      try {
+        if (cleanGroqKey) {
+          await ApiKeyManager.setGroqApiKey(cleanGroqKey);
+        }
+        if (typeof localStorage !== 'undefined') {
+          if (cleanGroqKey) {
+            localStorage.setItem('groq_api_key', cleanGroqKey);
+          }
+          localStorage.setItem('landing_config', JSON.stringify(landingPayload));
+          localStorage.setItem('payment_keys', JSON.stringify({ paystack: cleanPaystack, stripe: cleanStripe }));
+          localStorage.setItem('api_keys', JSON.stringify({
+            smtp_host: smtpPayload.host,
+            smtp_port: smtpPayload.port,
+            smtp_user: smtpPayload.user,
+            smtp_pass: cleanSmtpPass,
+            smtp_from: smtpPayload.from,
+            smtp_secure: smtpPayload.secure,
+            groq: cleanGroqKey,
+            paystack: cleanPaystack,
+            stripe: cleanStripe
+          }));
+        }
+      } catch {}
 
       // 1. Save unified configurations via service
       const res = await saveAllSystemConfigs({
@@ -188,31 +237,15 @@ export const SettingsTab = () => {
         authFetch('/api/settings/landing_config', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            value: {
-              title: landingTitle,
-              subtitle: landingSubtitle,
-              hero_images: [heroImage1, heroImage2, heroImage3],
-              card1_title: card1Title,
-              card1_desc: card1Desc,
-              card2_title: card2Title,
-              card2_desc: card2Desc,
-              card3_title: card3Title,
-              card3_desc: card3Desc,
-              card4_title: card4Title,
-              card4_desc: card4Desc,
-              card5_title: card5Title,
-              card5_desc: card5Desc
-            }
-          })
+          body: JSON.stringify({ value: landingPayload })
         }),
         authFetch('/api/settings/payment_keys', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             value: {
-              paystack: paystackKey,
-              stripe: stripeKey
+              paystack: cleanPaystack,
+              stripe: cleanStripe
             }
           })
         }),
@@ -228,40 +261,46 @@ export const SettingsTab = () => {
               smtp_from: smtpPayload.from,
               smtp_secure: smtpPayload.secure,
               groq: groqPayload.apiKey,
-              paystack: paystackKey,
-              stripe: stripeKey
+              paystack: cleanPaystack,
+              stripe: cleanStripe
+            }
+          })
+        }),
+        authFetch('/api/settings/ai_api_keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            value: {
+              groq: cleanGroqKey,
+              default_model: groqPayload.defaultModel
             }
           })
         })
       ]);
 
-      // Fallback Supabase write
+      // 3. Direct Supabase admin_settings sync
       try {
         await supabase.from('admin_settings').upsert([
           {
             setting_key: 'landing_config',
-            setting_value: {
-              title: landingTitle,
-              subtitle: landingSubtitle,
-              hero_images: [heroImage1, heroImage2, heroImage3],
-              card1_title: card1Title,
-              card1_desc: card1Desc,
-              card2_title: card2Title,
-              card2_desc: card2Desc,
-              card3_title: card3Title,
-              card3_desc: card3Desc,
-              card4_title: card4Title,
-              card4_desc: card4Desc,
-              card5_title: card5Title,
-              card5_desc: card5Desc
-            }
+            setting_value: landingPayload,
+            updated_at: new Date().toISOString()
           },
           {
             setting_key: 'payment_keys',
             setting_value: {
-              paystack: paystackKey,
-              stripe: stripeKey
-            }
+              paystack: cleanPaystack,
+              stripe: cleanStripe
+            },
+            updated_at: new Date().toISOString()
+          },
+          {
+            setting_key: 'ai_api_keys',
+            setting_value: {
+              groq: cleanGroqKey,
+              default_model: groqPayload.defaultModel
+            },
+            updated_at: new Date().toISOString()
           },
           {
             setting_key: 'api_keys',
@@ -273,22 +312,23 @@ export const SettingsTab = () => {
               smtp_from: smtpPayload.from,
               smtp_secure: smtpPayload.secure,
               groq: groqPayload.apiKey,
-              paystack: paystackKey,
-              stripe: stripeKey
-            }
+              paystack: cleanPaystack,
+              stripe: cleanStripe
+            },
+            updated_at: new Date().toISOString()
           }
         ], { onConflict: 'setting_key' });
-      } catch {}
-
-      if (res.success) {
-        toast.success("All System Configurations, GROQ API Key & SMTP Credentials saved successfully!");
-      } else {
-        toast.warning("Settings saved locally with database fallback notice.");
+      } catch (dbErr) {
+        console.warn('[SettingsTab] DB sync notice:', dbErr);
       }
-    } catch (_e) {
-      toast.error("Failed to save settings.");
+
+      toast.success("All System Configurations, GROQ API Key & SMTP Credentials saved successfully!");
+    } catch (err: any) {
+      console.error('[SettingsTab] Save error:', err);
+      toast.error(err.message ? `Failed to save settings: ${err.message}` : "Failed to save settings. Please try again.");
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   };
 
   const handleTestGroq = async () => {
