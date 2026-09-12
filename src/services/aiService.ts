@@ -319,6 +319,23 @@ class AICircuitBreaker {
     }
     return true;
   }
+
+  public getState(): 'CLOSED' | 'OPEN' | 'HALF_OPEN' {
+    if (this.state === 'OPEN' && Date.now() - this.lastFailureTime > this.recoveryTimeoutMs) {
+      return 'HALF_OPEN';
+    }
+    return this.state || 'CLOSED';
+  }
+
+  public getFailureCount(): number {
+    return this.failureCount;
+  }
+
+  public reset(): void {
+    this.failureCount = 0;
+    this.lastFailureTime = 0;
+    this.state = 'CLOSED';
+  }
 }
 
 export const aiCircuitBreaker = new AICircuitBreaker();

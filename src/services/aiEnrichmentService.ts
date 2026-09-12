@@ -237,8 +237,8 @@ export function getAiUsageHealthStatus(): AiUsageHealth {
     storedCalls = Number(sessionStorage.getItem('ai_session_calls_count') || aiSessionCallsCount);
   } catch {}
 
-  const canAttempt = aiCircuitBreaker.canAttempt();
-  const state = aiCircuitBreaker.getState();
+  const canAttempt = typeof aiCircuitBreaker?.canAttempt === 'function' ? aiCircuitBreaker.canAttempt() : true;
+  const state = typeof aiCircuitBreaker?.getState === 'function' ? aiCircuitBreaker.getState() : 'CLOSED';
   const remaining = Math.max(0, ESTIMATED_DAILY_QUOTA - storedCalls);
   const usagePercentage = Math.min(100, Math.round((storedCalls / ESTIMATED_DAILY_QUOTA) * 100));
   const isLowQuota = remaining <= 50 || usagePercentage >= 90;

@@ -1054,9 +1054,9 @@ export const QuestionBankTab = () => {
                   AI Question Enrichment & Quota
                 </CardTitle>
                 <Badge variant="outline" className={`text-[10px] uppercase font-bold ${
-                  getAiUsageHealthStatus().isOperational ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
+                  (typeof getAiUsageHealthStatus === 'function' ? getAiUsageHealthStatus().isOperational : true) ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'
                 }`}>
-                  {getAiUsageHealthStatus().circuitState === 'OPEN' ? 'Rate Limited' : 'Online'}
+                  {(typeof getAiUsageHealthStatus === 'function' && getAiUsageHealthStatus().circuitState === 'OPEN') ? 'Rate Limited' : 'Online'}
                 </Badge>
               </div>
               <CardDescription className="text-xs text-muted-foreground">
@@ -1071,19 +1071,19 @@ export const QuestionBankTab = () => {
                     <Zap className="w-3.5 h-3.5 text-amber-400" /> Daily AI Usage Budget
                   </span>
                   <span className="font-mono text-muted-foreground text-[11px]">
-                    {getAiUsageHealthStatus().totalCallsMade} calls used
+                    {typeof getAiUsageHealthStatus === 'function' ? getAiUsageHealthStatus().totalCallsMade : 0} calls used
                   </span>
                 </div>
                 <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
                   <div 
                     className={`h-full transition-all duration-300 ${
-                      getAiUsageHealthStatus().isLowQuota ? 'bg-rose-500' : 'bg-emerald-500'
+                      (typeof getAiUsageHealthStatus === 'function' && getAiUsageHealthStatus().isLowQuota) ? 'bg-rose-500' : 'bg-emerald-500'
                     }`}
-                    style={{ width: `${getAiUsageHealthStatus().usagePercentage}%` }}
+                    style={{ width: `${typeof getAiUsageHealthStatus === 'function' ? getAiUsageHealthStatus().usagePercentage : 0}%` }}
                   />
                 </div>
                 <p className="text-[11px] text-muted-foreground leading-tight">
-                  {getAiUsageHealthStatus().statusMessage}
+                  {typeof getAiUsageHealthStatus === 'function' ? getAiUsageHealthStatus().statusMessage : 'AI Engine Ready'}
                 </p>
               </div>
 
