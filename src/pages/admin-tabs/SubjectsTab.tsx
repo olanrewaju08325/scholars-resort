@@ -166,6 +166,18 @@ export const SubjectsTab = () => {
 
   useEffect(() => {
     fetchSubjects();
+
+    const handleRefresh = () => {
+      fetchSubjects();
+    };
+
+    window.addEventListener('scholar:reset-admin-state', handleRefresh);
+    window.addEventListener('scholar:refresh-taxonomy', handleRefresh);
+
+    return () => {
+      window.removeEventListener('scholar:reset-admin-state', handleRefresh);
+      window.removeEventListener('scholar:refresh-taxonomy', handleRefresh);
+    };
   }, [fetchSubjects]);
 
   const handleAddSubject = async (e: React.FormEvent) => {

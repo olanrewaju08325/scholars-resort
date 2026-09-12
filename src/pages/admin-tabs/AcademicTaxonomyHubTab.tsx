@@ -4,6 +4,7 @@ import { SubjectsTab } from './SubjectsTab';
 import { SyllabusAdminTab } from './SyllabusAdminTab';
 import { CareerGuideAdminTab } from './CareerGuideAdminTab';
 import { CourseEligibilityAdminTab } from './CourseEligibilityAdminTab';
+import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 
 type SubView = 'taxonomy' | 'syllabus' | 'career' | 'eligibility';
 
@@ -68,12 +69,28 @@ export function AcademicTaxonomyHubTab() {
         </div>
       </div>
 
-      {/* Render Active Sub-Module */}
+      {/* Render Active Sub-Module with Granular Error Boundaries */}
       <div className="min-w-0 w-full">
-        {activeTab === 'taxonomy' && <SubjectsTab />}
-        {activeTab === 'syllabus' && <SyllabusAdminTab />}
-        {activeTab === 'career' && <CareerGuideAdminTab />}
-        {activeTab === 'eligibility' && <CourseEligibilityAdminTab />}
+        {activeTab === 'taxonomy' && (
+          <AdminErrorBoundary fallbackTitle="Subjects & Topics Taxonomy" moduleKey="subjects-taxonomy">
+            <SubjectsTab />
+          </AdminErrorBoundary>
+        )}
+        {activeTab === 'syllabus' && (
+          <AdminErrorBoundary fallbackTitle="Dynamic Syllabus & Learning Rules" moduleKey="syllabus-admin">
+            <SyllabusAdminTab />
+          </AdminErrorBoundary>
+        )}
+        {activeTab === 'career' && (
+          <AdminErrorBoundary fallbackTitle="Career Guide Database" moduleKey="career-guide">
+            <CareerGuideAdminTab />
+          </AdminErrorBoundary>
+        )}
+        {activeTab === 'eligibility' && (
+          <AdminErrorBoundary fallbackTitle="Course Eligibility Database" moduleKey="course-eligibility">
+            <CourseEligibilityAdminTab />
+          </AdminErrorBoundary>
+        )}
       </div>
     </div>
   );

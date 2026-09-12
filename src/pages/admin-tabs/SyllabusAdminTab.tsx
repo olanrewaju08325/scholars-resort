@@ -38,6 +38,7 @@ export const SyllabusAdminTab = () => {
   const [availableNovels, setAvailableNovels] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [syncingSyllabus, setSyncingSyllabus] = useState(false);
 
   // Learning Rules State
   const [rules, setRules] = useState<AcademicLearningRules>(DEFAULT_ACADEMIC_LEARNING_RULES);
@@ -68,7 +69,20 @@ export const SyllabusAdminTab = () => {
     fetchSubjects();
     loadLearningRules();
     loadNovels();
-  }, []);
+
+    const handleRefreshEvent = () => {
+      fetchSubjects();
+      if (selectedSubjectId) fetchTopicsForSubject(selectedSubjectId);
+    };
+
+    window.addEventListener('scholar:reset-admin-state', handleRefreshEvent);
+    window.addEventListener('scholar:refresh-taxonomy', handleRefreshEvent);
+
+    return () => {
+      window.removeEventListener('scholar:reset-admin-state', handleRefreshEvent);
+      window.removeEventListener('scholar:refresh-taxonomy', handleRefreshEvent);
+    };
+  }, [selectedSubjectId]);
 
   useEffect(() => {
     if (selectedSubjectId) {
@@ -277,19 +291,38 @@ export const SyllabusAdminTab = () => {
         <div className="flex flex-wrap items-center gap-3">
           <Button 
             variant="outline" 
+            disabled={syncingSyllabus}
             onClick={async () => {
-              toast.info('Synchronizing canonical 20-subject syllabus hierarchy to database...');
-              const res = await QuestionClassificationService.syncCanonicalSyllabusToDatabase();
-              if (res.success) {
-                toast.success(res.message);
-                fetchTopicsForSubject(selectedSubjectId);
-              } else {
-                toast.error(res.message);
+              setSyncingSyllabus(true);
+              toast.info('Synchronizing canonical 20-subject syllabus hierarchy to Supabase database...');
+              try {
+                const res = await QuestionClassificationService.syncCanonicalSyllabusToDatabase();
+                if (res.success) {
+                  toast.success(res.message);
+                  await fetchSubjects();
+                  if (selectedSubjectId) {
+                    await fetchTopicsForSubject(selectedSubjectId);
+                  }
+                } else {
+                  toast.error(res.message);
+                }
+              } catch (err: any) {
+                toast.error(`Syllabus sync failed: ${err.message || 'Unknown error'}`);
+              } finally {
+                setSyncingSyllabus(false);
               }
             }}
             className="border-purple-500/30 text-purple-400 hover:bg-purple-500/10"
           >
-            <BookOpen className="w-4 h-4 mr-2 text-purple-400" /> Sync 20-Subject Syllabus
+            {syncingSyllabus ? (
+              <>
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin text-purple-400" /> Syncing Syllabus...
+              </>
+            ) : (
+              <>
+                <BookOpen className="w-4 h-4 mr-2 text-purple-400" /> Sync 20-Subject Syllabus
+              </>
+            )}
           </Button>
           <Button variant="outline" onClick={fetchSubjects}>
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh Subjects

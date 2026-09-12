@@ -96,13 +96,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       isFetchingProfile.current = true;
       
-      // 1. Fetch authoritatively from backend API (which merges database and server-side persistent overrides)
+      // 0. Verify that a valid user session is active before making network calls
+      const { data: sessionData } = await supabase.auth.getSession();
+      const currentSession = sessionData?.session;
+      const sessionUser = currentSession?.user;
+
+      if (!currentSession || !sessionUser || sessionUser.id !== userId) {
+        console.warn('[AuthContext] No active session found for userId:', userId);
+        if (isMounted.current) {
+          setLoading(false);
+        }
+        return;
+      }
+
+      // 1. Fetch authoritatively from backend API with verified Bearer token
       let loadedProfile: Profile | null = null;
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
         const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-        if (sessionData?.session?.access_token) {
-          headers['Authorization'] = `Bearer ${sessionData.session.access_token}`;
+        if (currentSession.access_token) {
+          headers['Authorization'] = `Bearer ${currentSession.access_token}`;
         }
         const apiRes = await fetch(getApiUrl(`/api/profile/${userId}`), { headers });
         if (apiRes.ok) {
@@ -137,14 +149,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (loadedProfile) {
         // Ensure phone from auth metadata is synced if missing in profile
-        const userMetaPhone = user?.user_metadata?.phone_number || user?.user_metadata?.phone;
+        const userMetaPhone = sessionUser.user_metadata?.phone_number || sessionUser.user_metadata?.phone;
         if (!loadedProfile.phone && userMetaPhone) {
           loadedProfile.phone = userMetaPhone;
           supabase.from('profiles').update({ phone: userMetaPhone }).eq('id', userId).then();
         }
 
         // Master admin auto-elevation check using both profile and authenticated user email sources
-        const currentEmail = (user?.email || loadedProfile.email || '').toLowerCase().trim();
+        const currentEmail = (sessionUser.email || loadedProfile.email || '').toLowerCase().trim();
         const isMasterAdmin = currentEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === currentEmail);
         
         if (isMasterAdmin) {
@@ -163,18 +175,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         commitProfile(loadedProfile);
         setLoading(false);
       } else {
-        // Profile row does not exist yet. Auto-create in DB to ensure foreign key constraints pass
+        // Profile row does not exist yet. Verify active session before upserting
+        const { data: verifyAuthSession } = await supabase.auth.getSession();
+        if (!verifyAuthSession?.session?.user || verifyAuthSession.session.user.id !== userId) {
+          console.warn('[AuthContext] Session invalid or expired during profile creation for', userId);
+          if (isMounted.current) setLoading(false);
+          return;
+        }
+
         console.warn(`[AuthContext] No profile record found for user ${userId}. Creating default profile...`);
-        const userEmail = (user?.email || '').toLowerCase().trim();
+        const userEmail = (sessionUser.email || '').toLowerCase().trim();
         const isAdminEmail = userEmail && AUTHORIZED_ADMIN_EMAILS.some(adminEmail => adminEmail.toLowerCase() === userEmail);
         const assignedRole: Profile['role'] = isAdminEmail ? 'admin' : 'student';
-        const userMetaPhone = user?.user_metadata?.phone_number || user?.user_metadata?.phone || '';
+        const userMetaPhone = sessionUser.user_metadata?.phone_number || sessionUser.user_metadata?.phone || '';
 
         const newProfile: Partial<Profile> = {
           id: userId,
           role: assignedRole,
-          full_name: user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Scholar Student',
-          email: user?.email || '',
+          full_name: sessionUser.user_metadata?.full_name || sessionUser.email?.split('@')[0] || 'Scholar Student',
+          email: sessionUser.email || '',
           phone: userMetaPhone,
           has_paid: isAdminEmail ? true : false,
           onboarding_completed: isAdminEmail ? true : false,
@@ -184,11 +203,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         };
 
         try {
-          const { data: upsertData } = await supabase
+          const { data: upsertData, error: upsertErr } = await supabase
             .from('profiles')
             .upsert(newProfile, { onConflict: 'id' })
             .select('*')
             .maybeSingle();
+
+          if (upsertErr) {
+            console.warn('[AuthContext] Profile upsert notice:', upsertErr.message);
+          }
 
           if (isMounted.current) {
             commitProfile((upsertData as Profile) || (newProfile as Profile));
