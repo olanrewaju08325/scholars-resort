@@ -79,6 +79,13 @@ export const SubjectCoverageDashboard: React.FC = () => {
       const countsMap: Record<string, number> = {};
       const countsByNameMap: Record<string, number> = {};
       
+      console.log('[Academy Taxonomy Raw Supabase Response]', {
+        subjectsCount: subjectsList.length,
+        subjects: subjectsList,
+        totalQuestionsFetched: qData.length,
+        sampleQuestion: qData[0] || null
+      });
+      
       subjectsList.forEach(s => {
         countsMap[s.id] = 0;
         countsByNameMap[normalizeSubjectName(s.name)] = 0;

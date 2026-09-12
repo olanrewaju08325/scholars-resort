@@ -46,13 +46,30 @@ if ('serviceWorker' in navigator) {
   registerSW({ immediate: true });
 }
 
-// Clean up Supabase Realtime channels when entering Back-Forward Cache
-window.addEventListener('pagehide', () => {
+// Robust Supabase Realtime & WebSocket Connection Lifecycle Manager for Back-Forward Cache navigation
+const handlePageUnloadOrHide = () => {
   try {
     import('./lib/supabase').then(({ supabase }) => {
-      supabase.removeAllChannels();
+      if (supabase && typeof supabase.removeAllChannels === 'function') {
+        supabase.removeAllChannels();
+      }
     });
   } catch {}
+};
+
+window.addEventListener('pagehide', (event) => {
+  if (event.persisted) {
+    console.warn('[Supabase Realtime] Page entering Back-Forward Cache (bfcache). Unsubscribing active channels to prevent WebSocket leaks.');
+  }
+  handlePageUnloadOrHide();
+});
+
+window.addEventListener('beforeunload', handlePageUnloadOrHide);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') {
+    handlePageUnloadOrHide();
+  }
 });
 
 createRoot(document.getElementById('root')!).render(

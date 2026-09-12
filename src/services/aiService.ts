@@ -400,7 +400,24 @@ export function stripThinkTags(text: string): string {
   return cleaned;
 }
 
-export const callGroqAPI = async (messages: Array<{ role: string; content: string }>, model = 'openai/gpt-oss-120b', temperature = 0.7): Promise<string> => {
+export const callGroqAPI = async (messages: any, model = 'openai/gpt-oss-120b', temperature = 0.7): Promise<string> => {
+  if (!aiCircuitBreaker.canAttempt()) {
+    console.warn('[AI Circuit Breaker] Currently OPEN. Waiting for recovery timeout.');
+  }
+
+  let messageList: Array<{ role: string; content: string }> = [];
+  if (typeof messages === 'string') {
+    messageList = [{ role: 'user', content: messages }];
+  } else if (Array.isArray(messages)) {
+    messageList = messages;
+  } else if (messages && typeof messages === 'object' && messages.content) {
+    messageList = [messages];
+  } else if (messages && typeof messages === 'object') {
+    messageList = Array.isArray(messages.messages) ? messages.messages : [{ role: 'user', content: String(messages.prompt || JSON.stringify(messages)) }];
+  } else {
+    messageList = [{ role: 'user', content: String(messages || '') }];
+  }
+
   const rawKey = await getGroqApiKey();
   const apiKey = (rawKey || '').trim().replace(/^["']|["']$/g, '').trim();
 
@@ -424,9 +441,9 @@ export const callGroqAPI = async (messages: Array<{ role: string; content: strin
 
   // 1. Primary: Server Proxy (/api/groq-chat) which uses Server env or Supabase DB keys securely
   try {
-    const sanitizedMessages = messages.map(m => ({
-      role: m.role === 'tutor' ? 'assistant' : (m.role || 'user'),
-      content: String(m.content || '').trim()
+    const sanitizedMessages = messageList.map(m => ({
+      role: m?.role === 'tutor' ? 'assistant' : (m?.role || 'user'),
+      content: String(m?.content || '').trim()
     })).filter(m => m.content.length > 0);
 
     const hasSystemMsg = sanitizedMessages.some(m => m.role === 'system');
