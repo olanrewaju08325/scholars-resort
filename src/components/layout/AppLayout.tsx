@@ -3,7 +3,8 @@ import {
   Home, PlayCircle, Trophy, BookOpen, CalendarDays, Search, WifiOff, Download, 
   Timer, GraduationCap, HardDrive, LogOut, Users, ShieldAlert, CloudUpload, 
   RefreshCw, MapPin, GitMerge, Video, Menu, X, Compass, Zap, HelpCircle, 
-  Layers, Swords, Sparkles, User, ChevronRight, CheckCircle2, Gift, DollarSign
+  Layers, Swords, Sparkles, User, ChevronRight, CheckCircle2, Gift, DollarSign,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -160,6 +161,7 @@ export const AppLayout = () => {
       groupTitle: 'ACCOUNT',
       items: [
         { label: 'Profile', icon: User, path: '/profile' },
+        { label: 'System Health', icon: ShieldCheck, path: '/health-check' },
         { label: 'Support', icon: HelpCircle, path: '/support' },
       ]
     }

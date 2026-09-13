@@ -89,8 +89,6 @@ export const SyllabusAdminTab = () => {
   useEffect(() => {
     if (selectedSubjectId) {
       fetchTopicsForSubject(selectedSubjectId);
-    } else {
-      setTopics([]);
     }
   }, [selectedSubjectId]);
 
