@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
 import { supabase } from './supabase';
+import { authFetch } from './apiAuth';
 import { callGroqAPI } from '../services/aiService';
 import { cleanQuestionText, cleanOptionText } from '../utils/questionUtils';
 import { 
@@ -932,9 +933,8 @@ export const importQuestionsToDatabase = async (
 
         // Fallback via server API
         try {
-          const proxyRes = await fetch('/api/questions/upsert', {
+          const proxyRes = await authFetch('/api/questions/upsert', {
             method: 'POST',
-            headers: commonHeaders,
             body: JSON.stringify({ questions: chunkPayloads })
           });
           const proxyData = await proxyRes.json();
@@ -1012,9 +1012,8 @@ export const importQuestionsToDatabase = async (
 
         // Fallback via server API
         try {
-          const proxyRes = await fetch('/api/questions/insert', {
+          const proxyRes = await authFetch('/api/questions/insert', {
             method: 'POST',
-            headers: commonHeaders,
             body: JSON.stringify({ questions: chunkPayloads })
           });
           const proxyData = await proxyRes.json();

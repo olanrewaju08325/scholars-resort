@@ -20,7 +20,11 @@ interface AILimitsConfig {
   student_daily_token_limit: number;
 }
 
-export const AIKeysTab = () => {
+interface AIKeysTabProps {
+  onNavigateDiagnostics?: () => void;
+}
+
+export const AIKeysTab: React.FC<AIKeysTabProps> = ({ onNavigateDiagnostics }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [groqKey, setGroqKey] = useState('');
@@ -281,14 +285,27 @@ export const AIKeysTab = () => {
           </p>
         </div>
 
-        {/* Real-time Status Badge */}
-        <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono">
-          <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-          </span>
-          <span className="text-emerald-400 font-bold uppercase tracking-wider text-[11px]">Live Telemetry</span>
-          {lastRefreshedAt && <span className="text-slate-500 text-[10px]">({lastRefreshedAt})</span>}
+        {/* Header Actions & Real-time Status Badge */}
+        <div className="flex flex-wrap items-center gap-2">
+          {onNavigateDiagnostics && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onNavigateDiagnostics}
+              className="h-8 gap-1.5 text-xs bg-primary/10 hover:bg-primary/20 border-primary/30 text-primary font-medium"
+            >
+              <Activity className="w-3.5 h-3.5" /> AI Enrichment Diagnostics
+            </Button>
+          )}
+
+          <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1.5 rounded-lg text-xs font-mono">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-emerald-400 font-bold uppercase tracking-wider text-[11px]">Live Telemetry</span>
+            {lastRefreshedAt && <span className="text-slate-500 text-[10px]">({lastRefreshedAt})</span>}
+          </div>
         </div>
       </div>
 

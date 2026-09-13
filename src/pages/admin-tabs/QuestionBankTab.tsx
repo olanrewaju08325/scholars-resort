@@ -9,7 +9,7 @@ import {
   Sparkles, Plus, Edit2, Trash2, CheckCircle, CheckCircle2, PlusCircle, XCircle, Upload, Loader2, 
   ShieldCheck, History, Search, Download, FileSpreadsheet, AlertTriangle, 
   Check, Layers, Copy, Eye, RefreshCw, FileText, CheckCheck, Info, BookOpen, Send,
-  CheckSquare, Square, ListFilter, Zap, Database, PlayCircle
+  CheckSquare, Square, ListFilter, Zap, Database, PlayCircle, Activity
 } from 'lucide-react';
 import { generateAIQuestion } from '@/services/aiService';
 import { SanityScanModal } from "@/components/admin/SanityScanModal";
@@ -18,6 +18,7 @@ import { AdminAcceleratorsController } from "@/components/admin/AdminAccelerator
 import { InstantCBTSimulatorModal } from "@/components/admin/InstantCBTSimulatorModal";
 import { DashboardHealthCheck } from "@/components/admin/DashboardHealthCheck";
 import { UnifiedAiEnrichmentModal } from "@/components/admin/UnifiedAiEnrichmentModal";
+import { AIEnrichmentDiagnosticModal } from "@/components/admin/AIEnrichmentDiagnosticModal";
 import { QuestionClassificationService, type DuplicatePair } from "@/services/questionClassificationService";
 import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
@@ -296,9 +297,8 @@ export const QuestionBankTab = () => {
     try {
       if (isEditing && currentId) {
         // Use Server Proxy
-        const proxyRes = await fetch(`/api/questions/${currentId}`, {
+        const proxyRes = await authFetch(`/api/questions/${currentId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
         if (!proxyRes.ok) throw new Error('Failed to update question via API');
@@ -307,16 +307,15 @@ export const QuestionBankTab = () => {
         // New insert
         const newUuid = crypto.randomUUID();
         const fullPayload = { id: newUuid, ...payload, created_at: new Date().toISOString() };
-        const proxyRes = await fetch('/api/questions/insert', {
+        const proxyRes = await authFetch('/api/questions/insert', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ questions: [fullPayload] })
         });
         if (!proxyRes.ok) throw new Error('Failed to insert question via API');
         toast.success('Question added successfully.');
       }
       resetForm();
-      fetchQuestions();
+      await fetchData();
     } catch (err: any) {
       console.error(err);
       setStatusMsg({ type: 'error', text: err.message || 'Failed to save question' });
@@ -338,11 +337,11 @@ export const QuestionBankTab = () => {
           if (isUUID(id)) {
             const { error } = await supabase.from('questions').delete().eq('id', id);
             if (error) {
-              await fetch(`/api/questions/${id}`, { method: 'DELETE' }).catch(() => null);
+              await authFetch(`/api/questions/${id}`, { method: 'DELETE' }).catch(() => null);
             }
           } else {
             // Delete locally-only custom question
-            await fetch(`/api/questions/${id}`, { method: 'DELETE' }).catch(() => null);
+            await authFetch(`/api/questions/${id}`, { method: 'DELETE' }).catch(() => null);
           }
           toast.success('Question deleted successfully.');
           await fetchData();
@@ -625,6 +624,7 @@ export const QuestionBankTab = () => {
   const [simulatorModalOpen, setSimulatorModalOpen] = useState(false);
   const [simulatorQuestion, setSimulatorQuestion] = useState<any | null>(null);
   const [unifiedEnrichmentModalOpen, setUnifiedEnrichmentModalOpen] = useState(false);
+  const [diagnosticModalOpen, setDiagnosticModalOpen] = useState(false);
 
   const downloadSampleCsv = () => {
     const sampleHeaders = "subject,topic,question,option_a,option_b,option_c,option_d,correct_answer,explanation,difficulty\n";
@@ -2405,6 +2405,10 @@ export const QuestionBankTab = () => {
         isOpen={unifiedEnrichmentModalOpen}
         onClose={() => setUnifiedEnrichmentModalOpen(false)}
         onComplete={fetchData}
+      />
+      <AIEnrichmentDiagnosticModal
+        isOpen={diagnosticModalOpen}
+        onClose={() => setDiagnosticModalOpen(false)}
       />
     </div>
   );

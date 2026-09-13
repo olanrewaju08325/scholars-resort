@@ -19,6 +19,7 @@ import type {
 import { toast } from 'sonner';
 import { sendEmailMessage } from '@/services/emailService';
 import { authFetch } from '@/lib/apiAuth';
+import { AIEnrichmentDiagnosticModal } from './AIEnrichmentDiagnosticModal';
 
 export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [stats, setStats] = useState<ResourceUsageStats | null>(null);
@@ -31,6 +32,7 @@ export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ cl
   const [isAuditing, setIsAuditing] = useState(false);
   const [auditData, setAuditData] = useState<any | null>(null);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
+  const [isDiagnosticModalOpen, setIsDiagnosticModalOpen] = useState(false);
 
   // Form states
   const [formDbLimit, setFormDbLimit] = useState(500);
@@ -392,15 +394,26 @@ export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ cl
                   <p className="text-[11px] text-muted-foreground font-medium">
                     Used on key: <span className="font-mono text-foreground font-semibold">{(stats?.ai.tokensUsedThisMonth || 0).toLocaleString()}</span> / {(limits.aiMonthlyTokensLimit / 1000).toFixed(0)}k
                   </p>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    onClick={handleRunAiAudit}
-                    disabled={isAuditing}
-                    className="h-5 p-0 text-[10px] text-primary hover:underline"
-                  >
-                    {isAuditing ? 'Auditing...' : 'Run Audit Proof'}
-                  </Button>
+                  <div className="flex items-center gap-1.5">
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={() => setIsDiagnosticModalOpen(true)}
+                      className="h-5 p-0 text-[10px] text-primary hover:underline font-semibold"
+                    >
+                      Diagnostics Tool
+                    </Button>
+                    <span className="text-muted-foreground text-[10px]">•</span>
+                    <Button
+                      variant="link"
+                      size="sm"
+                      onClick={handleRunAiAudit}
+                      disabled={isAuditing}
+                      className="h-5 p-0 text-[10px] text-muted-foreground hover:text-foreground hover:underline"
+                    >
+                      {isAuditing ? 'Auditing...' : 'Quick Audit'}
+                    </Button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -658,6 +671,12 @@ export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ cl
           </div>
         </div>
       )}
+
+      {/* Full AI Usage Telemetry Diagnostic Modal */}
+      <AIEnrichmentDiagnosticModal
+        isOpen={isDiagnosticModalOpen}
+        onClose={() => setIsDiagnosticModalOpen(false)}
+      />
     </Card>
   );
 };

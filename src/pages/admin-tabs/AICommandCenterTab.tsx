@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { Sparkles, Brain, Key } from 'lucide-react';
+import { Sparkles, Brain, Key, Activity } from 'lucide-react';
 import { AdminAITab } from './AdminAITab';
 import { AIPromptStudioTab } from './AIPromptStudioTab';
 import { AIKeysTab } from './AIKeysTab';
+import { AIEnrichmentDiagnostic } from '@/components/admin/AIEnrichmentDiagnostic';
 
-type SubView = 'assistants' | 'prompt-studio' | 'keys';
+type SubView = 'assistants' | 'prompt-studio' | 'keys' | 'diagnostics';
 
 export function AICommandCenterTab() {
   const [activeTab, setActiveTab] = useState<SubView>('assistants');
@@ -18,12 +19,12 @@ export function AICommandCenterTab() {
             <Sparkles className="w-7 h-7 text-primary" /> AI Command Center
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Configure AI Assistants, prompt engineering studio, model parameters, and API provider keys.
+            Configure AI Assistants, prompt engineering studio, model parameters, API keys, and live telemetry deduction diagnostics.
           </p>
         </div>
 
         {/* Sub-Tabs Pills */}
-        <div className="flex items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border">
+        <div className="flex flex-wrap items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border">
           <button
             onClick={() => setActiveTab('assistants')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
@@ -54,6 +55,16 @@ export function AICommandCenterTab() {
           >
             <Key className="w-4 h-4" /> Provider Keys & Secrets
           </button>
+          <button
+            onClick={() => setActiveTab('diagnostics')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'diagnostics'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+            }`}
+          >
+            <Activity className="w-4 h-4" /> Enrichment Diagnostics
+          </button>
         </div>
       </div>
 
@@ -61,7 +72,8 @@ export function AICommandCenterTab() {
       <div className="min-w-0 w-full">
         {activeTab === 'assistants' && <AdminAITab />}
         {activeTab === 'prompt-studio' && <AIPromptStudioTab />}
-        {activeTab === 'keys' && <AIKeysTab />}
+        {activeTab === 'keys' && <AIKeysTab onNavigateDiagnostics={() => setActiveTab('diagnostics')} />}
+        {activeTab === 'diagnostics' && <AIEnrichmentDiagnostic />}
       </div>
     </div>
   );
