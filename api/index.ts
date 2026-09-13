@@ -3215,6 +3215,69 @@ app.post('/api/admin/system-configs', verifyAdminToken, async (req, res) => {
   }
 });
 
+// =======================================================
+// --- AI MOCK EXAM CONFIGURATION ENDPOINTS ---
+// =======================================================
+
+const DEFAULT_AI_MOCK_CONFIG = {
+  templateName: '2025 Standard JAMB UTME Prediction Mock',
+  presetName: '2025 Standard JAMB UTME Prediction Mock',
+  description: 'Official 4-subject UTME mock dynamically balanced across historical past questions and AI weak-point synthesis.',
+  databaseVsAiRatio: 70,
+  hybridRatio: {
+    databasePastQsPercent: 70,
+    aiSyntheticQsPercent: 30
+  },
+  difficultyDistribution: {
+    easyPercent: 20,
+    mediumPercent: 50,
+    hardPercent: 30,
+    easy: 20,
+    medium: 50,
+    hard: 30
+  },
+  aiProvider: 'groq',
+  aiModel: 'llama-3.3-70b-versatile',
+  temperature: 0.3,
+  enableWeaknessTargeting: true,
+  enableWeaknessWeighting: true,
+  maxTokenSpendPerSession: 5000,
+  maxTokensPerMock: 5000,
+  isLockedForStudents: false,
+  allowCustomSubjectSelect: true,
+  targetSubjectsCount: 4,
+  customPromptInstructions: 'Generate authentic JAMB UTME past-question style options and comprehensive explanations based on official Nigerian secondary syllabus.',
+  updatedAt: new Date().toISOString()
+};
+
+app.get(['/api/admin/ai-mock-config', '/api/cbt/ai-mock-config/active', '/api/cbt/ai-mock-config'], async (req, res) => {
+  try {
+    const stored = await getStoredSetting('ai_mock_config', DEFAULT_AI_MOCK_CONFIG);
+    const config = typeof stored === 'object' && stored !== null ? { ...DEFAULT_AI_MOCK_CONFIG, ...stored } : DEFAULT_AI_MOCK_CONFIG;
+    return res.json({ success: true, config });
+  } catch (err: any) {
+    return res.json({ success: true, config: DEFAULT_AI_MOCK_CONFIG });
+  }
+});
+
+app.post('/api/admin/ai-mock-config', verifyAdminToken, async (req, res) => {
+  try {
+    const incoming = req.body || {};
+    const existing = await getStoredSetting('ai_mock_config', DEFAULT_AI_MOCK_CONFIG);
+    const mergedConfig = {
+      ...DEFAULT_AI_MOCK_CONFIG,
+      ...(typeof existing === 'object' ? existing : {}),
+      ...incoming,
+      updatedAt: new Date().toISOString()
+    };
+
+    await setStoredSetting('ai_mock_config', mergedConfig);
+    return res.json({ success: true, message: 'AI Mock Engine configuration saved successfully!', config: mergedConfig });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message || 'Failed to save AI Mock configuration' });
+  }
+});
+
 // API Route: Test Groq API Key connectivity
 app.post('/api/admin/test-groq', verifyAdminToken, async (req, res) => {
   const startTime = Date.now();
