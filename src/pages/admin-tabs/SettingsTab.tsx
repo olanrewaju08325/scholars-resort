@@ -52,7 +52,7 @@ export const SettingsTab = () => {
   const [showSmtpPass, setShowSmtpPass] = useState(false);
 
   // Payment Gateways
-  const [paystackKey, setPaystackKey] = useState('');
+  const [flutterwaveKey, setFlutterwaveKey] = useState('');
   const [stripeKey, setStripeKey] = useState('');
 
   // Landing Customization
@@ -133,7 +133,7 @@ export const SettingsTab = () => {
 
         const keys = adminRows.find(s => s.setting_key === 'api_keys')?.setting_value;
         if (keys) {
-          if (keys.paystack) setPaystackKey(keys.paystack);
+          if (keys.flutterwave) setFlutterwaveKey(keys.flutterwave);
           if (keys.stripe) setStripeKey(keys.stripe);
         }
       }
@@ -155,7 +155,7 @@ export const SettingsTab = () => {
       const cleanSmtpUser = (smtpUser || '').trim();
       const cleanSmtpHost = (smtpHost || '').trim();
       const cleanSmtpFrom = (smtpFrom || '').trim() || (cleanSmtpUser ? `Scholars Resort <${cleanSmtpUser}>` : 'Scholars Resort <admitwise2@gmail.com>');
-      const cleanPaystack = (paystackKey || '').trim();
+      const cleanFlutterwave = (flutterwaveKey || '').trim();
       const cleanStripe = (stripeKey || '').trim();
 
       const groqPayload: GroqConfig = {
@@ -211,7 +211,7 @@ export const SettingsTab = () => {
             localStorage.setItem('groq_api_key', cleanGroqKey);
           }
           localStorage.setItem('landing_config', JSON.stringify(landingPayload));
-          localStorage.setItem('payment_keys', JSON.stringify({ paystack: cleanPaystack, stripe: cleanStripe }));
+          localStorage.setItem('payment_keys', JSON.stringify({ flutterwave: cleanFlutterwave, stripe: cleanStripe }));
           localStorage.setItem('api_keys', JSON.stringify({
             smtp_host: smtpPayload.host,
             smtp_port: smtpPayload.port,
@@ -220,7 +220,7 @@ export const SettingsTab = () => {
             smtp_from: smtpPayload.from,
             smtp_secure: smtpPayload.secure,
             groq: cleanGroqKey,
-            paystack: cleanPaystack,
+            flutterwave: cleanFlutterwave,
             stripe: cleanStripe
           }));
         }
@@ -245,7 +245,7 @@ export const SettingsTab = () => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             value: {
-              paystack: cleanPaystack,
+              flutterwave: cleanFlutterwave,
               stripe: cleanStripe
             }
           })
@@ -262,7 +262,7 @@ export const SettingsTab = () => {
               smtp_from: smtpPayload.from,
               smtp_secure: smtpPayload.secure,
               groq: groqPayload.apiKey,
-              paystack: cleanPaystack,
+              flutterwave: cleanFlutterwave,
               stripe: cleanStripe
             }
           })
@@ -290,7 +290,7 @@ export const SettingsTab = () => {
           {
             setting_key: 'payment_keys',
             setting_value: {
-              paystack: cleanPaystack,
+              flutterwave: cleanFlutterwave,
               stripe: cleanStripe
             },
             updated_at: new Date().toISOString()
@@ -313,7 +313,7 @@ export const SettingsTab = () => {
               smtp_from: smtpPayload.from,
               smtp_secure: smtpPayload.secure,
               groq: groqPayload.apiKey,
-              paystack: cleanPaystack,
+              flutterwave: cleanFlutterwave,
               stripe: cleanStripe
             },
             updated_at: new Date().toISOString()
@@ -845,8 +845,8 @@ export const SettingsTab = () => {
                 <label className="text-sm font-medium text-foreground">Flutterwave Public / Secret Key</label>
                 <Input 
                   type="password"
-                  value={paystackKey} 
-                  onChange={e => setPaystackKey(e.target.value)} 
+                  value={flutterwaveKey} 
+                  onChange={e => setFlutterwaveKey(e.target.value)} 
                   placeholder="FLWPUBK_TEST-... or FLWSECK_TEST-..." 
                 />
               </div>

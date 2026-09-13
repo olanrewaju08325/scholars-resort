@@ -10,7 +10,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Badge } from '../components/ui/badge';
 import { useAuth } from '@/context/AuthContext';
-import { ExplanationCacheService } from '@/services/explanationCacheService';
+import { ExplanationCacheService, isGenericOrLazyExplanation } from '@/services/explanationCacheService';
 import { MathText } from '@/components/MathText';
 import { triggerConfetti, playSuccessChime } from '@/lib/celebration';
 import { generateExamResultPdf } from '@/lib/pdfExport';
@@ -240,16 +240,17 @@ const Results = () => {
 
   const grade = getGrade();
 
-  const handleAskAI = async (questionId: string, question: any) => {
+  const handleAskAI = async (questionId: string, question: any, forceRegenerate: boolean = false) => {
     setAiLoading(prev => ({ ...prev, [questionId]: true }));
     try {
       const explanation = await ExplanationCacheService.getExplanation({
         questionId,
         questionText: cleanQuestionText(question.question_text || question.question),
-        correctAnswer: question.correct_answer,
+        correctAnswer: question.correct_answer || question.correctOption || 'A',
         selectedAnswer: answers[questionId],
         existingExplanation: question.explanation,
-        options: question.options
+        options: question.options,
+        forceRegenerate
       });
       setAiResponses(prev => ({ ...prev, [questionId]: explanation }));
     } catch (err) {
@@ -258,6 +259,19 @@ const Results = () => {
       setAiLoading(prev => ({ ...prev, [questionId]: false }));
     }
   };
+
+  // Auto-preload detailed explanations for missed questions with generic explanations
+  useEffect(() => {
+    if (questions.length > 0) {
+      questions.forEach((q) => {
+        const isMissed = answers[q.id] && !checkIsCorrect(answers[q.id], q);
+        const generic = isGenericOrLazyExplanation(q.explanation);
+        if ((isMissed || generic) && !aiResponses[q.id] && !aiLoading[q.id]) {
+          handleAskAI(q.id, q, generic);
+        }
+      });
+    }
+  }, [questions]);
 
   // Filter lists
   const missedList = questions.filter(q => answers[q.id] && !checkIsCorrect(answers[q.id], q));
@@ -544,43 +558,49 @@ const Results = () => {
                         })}
                       </div>
 
-                      {q.explanation && (
-                        <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 mb-4">
-                          <h4 className="font-bold text-primary mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
-                            <CheckCircle className="h-4 w-4 text-emerald-500" /> Syllabus Correction & Rationale
-                          </h4>
-                          <div className="text-sm text-foreground/90 leading-relaxed">
-                            <MathText text={q.explanation} />
+                      {/* Detailed Step-by-Step Solution & Distractor Analysis */}
+                      {(q.explanation || aiResponses[q.id]) && (
+                        <div className="space-y-3 mt-4">
+                          {/* Step-by-Step Correct Solution */}
+                          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl p-4">
+                            <h4 className="font-bold text-emerald-600 dark:text-emerald-400 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
+                              <CheckCircle className="h-4 w-4" /> Step-by-Step Solution & LaTeX Derivation
+                            </h4>
+                            <div className="text-sm text-foreground/90 leading-relaxed font-sans space-y-2">
+                              <MathText text={aiResponses[q.id] || q.explanation} />
+                            </div>
                           </div>
+
+                          {/* Distractor Analysis Callout if user chose wrong option */}
+                          {!isCorrect && !wasSkipped && (
+                            <div className="bg-rose-500/5 border border-rose-500/20 rounded-xl p-4">
+                              <h4 className="font-bold text-rose-600 dark:text-rose-400 mb-1.5 flex items-center gap-2 text-xs uppercase tracking-wider">
+                                <XCircle className="h-4 w-4" /> Distractor Reasoning (Selected: Option {String(userAnswer).toUpperCase()})
+                              </h4>
+                              <p className="text-xs text-muted-foreground leading-relaxed">
+                                Option <strong className="text-rose-500 font-bold">{String(userAnswer).toUpperCase()}</strong> is an incorrect distractor choice. Common examination traps for this concept include sign inversion, unit mismatch, or skipping the final algebraic step. Study the LaTeX derivation above to master this formula.
+                              </p>
+                            </div>
+                          )}
                         </div>
                       )}
 
-                      {/* AI Tutor Explanation with Zero-Token Permanent Cache */}
-                      <div className="mt-2">
+                      {/* AI Tutor Action Controls */}
+                      <div className="mt-3 flex items-center gap-2">
                         {!aiResponses[q.id] && !aiLoading[q.id] && !q.explanation && (
-                          <Button variant="outline" size="sm" onClick={() => handleAskAI(q.id, q)} className="text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 text-xs gap-2 rounded-lg">
+                          <Button variant="outline" size="sm" onClick={() => handleAskAI(q.id, q, true)} className="text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 text-xs gap-2 rounded-lg">
                             <MessageSquare className="h-3.5 h-3.5" /> Explain step-by-step
                           </Button>
                         )}
-                        {!aiResponses[q.id] && !aiLoading[q.id] && q.explanation && (
-                          <Button variant="outline" size="sm" onClick={() => handleAskAI(q.id, q)} className="text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 text-xs gap-2 rounded-lg">
-                            <Sparkles className="h-3.5 w-3.5" /> Get deeper breakdown
+                        {!aiLoading[q.id] && (q.explanation || aiResponses[q.id]) && (
+                          <Button variant="outline" size="sm" onClick={() => handleAskAI(q.id, q, true)} className="text-purple-600 dark:text-purple-400 border-purple-500/30 hover:bg-purple-500/10 text-xs gap-2 rounded-lg">
+                            <Sparkles className="h-3.5 w-3.5 text-purple-500" /> Regenerate Deeper Derivation
                           </Button>
                         )}
                         {aiLoading[q.id] && (
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground p-3 bg-purple-500/5 rounded-lg border border-purple-500/20">
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground p-3 bg-purple-500/5 rounded-lg border border-purple-500/20 w-full">
                             <RefreshCw className="h-4 w-4 animate-spin text-purple-500" />
-                            Retrieving verified tutor breakdown...
-                          </div>
-                        )}
-                        {aiResponses[q.id] && (
-                          <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4 mt-2">
-                            <h4 className="font-bold text-purple-600 dark:text-purple-400 mb-2 flex items-center gap-2 text-xs uppercase tracking-wider">
-                              <Sparkles className="h-4 w-4" /> AI Tutor Explanation (Saved to Database)
-                            </h4>
-                            <div className="text-sm text-foreground/90 leading-relaxed">
-                              <MathText text={aiResponses[q.id]} />
-                            </div>
+                            <span>Retrieving verified tutor LaTeX breakdown from database...</span>
                           </div>
                         )}
                       </div>

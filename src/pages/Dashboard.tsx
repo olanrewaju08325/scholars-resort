@@ -18,6 +18,7 @@ import { Flame, Zap } from 'lucide-react';
 import { DailyFiveQuestionDrill } from '@/components/dashboard/DailyFiveQuestionDrill';
 import { CbtHubGrid } from '@/components/dashboard/CbtHubGrid';
 import { UserSubjectsQuickGrid } from '@/components/dashboard/UserSubjectsQuickGrid';
+import { LearningProgressDashboard } from '@/components/dashboard/LearningProgressDashboard';
 import { MistakeBankQuickCard } from '@/components/dashboard/MistakeBankQuickCard';
 import { PeerStudyRoomWidget } from '@/components/dashboard/PeerStudyRoomWidget';
 
@@ -81,6 +82,16 @@ export default function Dashboard() {
           className="min-w-0 w-full"
         >
           <UserSubjectsQuickGrid />
+        </motion.div>
+
+        {/* Learning Progress & Remediation Dashboard */}
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ duration: 0.3, delay: 0.08 }} 
+          className="min-w-0 w-full"
+        >
+          <LearningProgressDashboard />
         </motion.div>
 
         {/* Main 2-Column Responsive Layout */}
