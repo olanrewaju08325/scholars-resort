@@ -7,7 +7,7 @@ import Papa from 'papaparse';
 import pg from 'pg';
 
 const DB_CONNECTION = process.env.DATABASE_URL || 
-  'postgresql://postgres:Halimot0%2A%40%23%23@db.syoodykedvqaoeplmamd.supabase.co:5432/postgres';
+  'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
 
 const SERVER_URL = 'http://localhost:3000';
 const ADMIN_TOKEN = 'scholar_admin_secure_key_2026';

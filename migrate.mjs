@@ -3,7 +3,7 @@ import fs from 'fs';
 const { Client } = pg;
 
 const client = new Client({
-  connectionString: 'postgresql://postgres:Halimot0%2A%40%23%23@db.syoodykedvqaoeplmamd.supabase.co:5432/postgres'
+  connectionString: 'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres'
 });
 
 async function run() {

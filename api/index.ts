@@ -448,12 +448,13 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_A
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Direct PostgreSQL Connection Pool (Superuser connection for authoritative writes)
-const PG_CONN_STRING = process.env.DATABASE_URL || 'postgresql://postgres:Halimot0%2A%40%23%23@db.syoodykedvqaoeplmamd.supabase.co:5432/postgres';
+const PG_CONN_STRING = process.env.DATABASE_URL || 'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
 const pgPool = new pg.Pool({
   connectionString: PG_CONN_STRING,
+  ssl: { rejectUnauthorized: false },
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000
+  connectionTimeoutMillis: 8000
 });
 pgPool.on('error', (err) => {
   console.warn('[PG Pool warning]:', err.message);
@@ -2483,65 +2484,81 @@ app.post('/api/admin/reset-ai-key-cycle', verifyAdminToken, async (req, res) => 
 // Endpoint to run deep cryptographic & integrity audit on AI enrichment
 app.get('/api/admin/audit-ai-enrichment', verifyAdminToken, async (req, res) => {
   try {
-    if (!pgPool) {
-      return res.status(500).json({ success: false, error: 'Database pool unavailable' });
+    let aiStats = { total_calls: 0, total_prompt: 0, total_completion: 0, total_tokens: 0, avg_tokens_per_call: 0, earliest_call: null, latest_call: null };
+    let zeroCompCount = 0;
+    let rotationIso = new Date().toISOString();
+    let activeUsage = { active_calls: 0, active_tokens: 0 };
+    let totalQuestions = 0;
+    let enrichedQuestions = 0;
+    let sampleQuestions: any[] = [];
+
+    if (pgPool) {
+      try {
+        const aiStatsRes = await pgPool.query(`
+          SELECT 
+            COUNT(*) as total_calls,
+            COALESCE(SUM(prompt_tokens), 0) as total_prompt,
+            COALESCE(SUM(completion_tokens), 0) as total_completion,
+            COALESCE(SUM(total_tokens), 0) as total_tokens,
+            COALESCE(AVG(total_tokens), 0)::int as avg_tokens_per_call,
+            MIN(created_at) as earliest_call,
+            MAX(created_at) as latest_call
+          FROM public.ai_usage
+          WHERE provider = 'groq' OR provider IS NULL
+        `);
+        if (aiStatsRes.rows[0]) aiStats = aiStatsRes.rows[0];
+
+        const zeroCompRes = await pgPool.query(`
+          SELECT COUNT(*) as zero_comp_count 
+          FROM public.ai_usage 
+          WHERE completion_tokens <= 0 OR completion_tokens IS NULL
+        `);
+        zeroCompCount = Number(zeroCompRes.rows[0]?.zero_comp_count || 0);
+
+        const keyRotRes = await pgPool.query(`
+          SELECT setting_value FROM public.admin_settings WHERE setting_key = 'ai_key_rotated_at'
+        `);
+        rotationIso = keyRotRes.rows[0]?.setting_value?.timestamp || new Date().toISOString();
+
+        const activeKeyUsageRes = await pgPool.query(`
+          SELECT COUNT(*) as active_calls, COALESCE(SUM(total_tokens), 0) as active_tokens
+          FROM public.ai_usage 
+          WHERE created_at >= $1
+        `, [rotationIso]);
+        if (activeKeyUsageRes.rows[0]) activeUsage = activeKeyUsageRes.rows[0];
+
+        const qCountRes = await pgPool.query(`SELECT COUNT(*) as total_q FROM public.questions`);
+        totalQuestions = Number(qCountRes.rows[0]?.total_q || 0);
+
+        const enrichedQRes = await pgPool.query(`
+          SELECT COUNT(*) as enriched_q 
+          FROM public.questions 
+          WHERE explanation IS NOT NULL AND length(trim(explanation)) > 15
+        `);
+        enrichedQuestions = Number(enrichedQRes.rows[0]?.enriched_q || 0);
+
+        const sampleRes = await pgPool.query(`
+          SELECT id, substring(question_text from 1 for 70) as preview, length(explanation) as exp_len, year, difficulty
+          FROM public.questions 
+          WHERE explanation IS NOT NULL AND length(trim(explanation)) > 50
+          ORDER BY created_at DESC NULLS LAST
+          LIMIT 5
+        `);
+        sampleQuestions = sampleRes.rows;
+      } catch (poolErr: any) {
+        console.warn('[Audit endpoint pgPool notice]:', poolErr.message);
+      }
     }
 
-    // 1. ai_usage table analytics
-    const aiStatsRes = await pgPool.query(`
-      SELECT 
-        COUNT(*) as total_calls,
-        COALESCE(SUM(prompt_tokens), 0) as total_prompt,
-        COALESCE(SUM(completion_tokens), 0) as total_completion,
-        COALESCE(SUM(total_tokens), 0) as total_tokens,
-        COALESCE(AVG(total_tokens), 0)::int as avg_tokens_per_call,
-        MIN(created_at) as earliest_call,
-        MAX(created_at) as latest_call
-      FROM public.ai_usage
-      WHERE provider = 'groq' OR provider IS NULL
-    `);
-    const aiStats = aiStatsRes.rows[0];
-
-    // Check for calls with 0 completion tokens
-    const zeroCompRes = await pgPool.query(`
-      SELECT COUNT(*) as zero_comp_count 
-      FROM public.ai_usage 
-      WHERE completion_tokens <= 0 OR completion_tokens IS NULL
-    `);
-    const zeroCompCount = Number(zeroCompRes.rows[0]?.zero_comp_count || 0);
-
-    // Active key rotation cycle
-    const keyRotRes = await pgPool.query(`
-      SELECT setting_value FROM public.admin_settings WHERE setting_key = 'ai_key_rotated_at'
-    `);
-    const rotationIso = keyRotRes.rows[0]?.setting_value?.timestamp || new Date().toISOString();
-
-    const activeKeyUsageRes = await pgPool.query(`
-      SELECT COUNT(*) as active_calls, COALESCE(SUM(total_tokens), 0) as active_tokens
-      FROM public.ai_usage 
-      WHERE created_at >= $1
-    `, [rotationIso]);
-    const activeUsage = activeKeyUsageRes.rows[0];
-
-    // 2. Questions table cross-reference
-    const qCountRes = await pgPool.query(`SELECT COUNT(*) as total_q FROM public.questions`);
-    const totalQuestions = Number(qCountRes.rows[0]?.total_q || 0);
-
-    const enrichedQRes = await pgPool.query(`
-      SELECT COUNT(*) as enriched_q 
-      FROM public.questions 
-      WHERE explanation IS NOT NULL AND length(trim(explanation)) > 15
-    `);
-    const enrichedQuestions = Number(enrichedQRes.rows[0]?.enriched_q || 0);
-
-    // Sample recent enriched questions
-    const sampleRes = await pgPool.query(`
-      SELECT id, substring(question_text from 1 for 70) as preview, length(explanation) as exp_len, year, difficulty
-      FROM public.questions 
-      WHERE explanation IS NOT NULL AND length(trim(explanation)) > 50
-      ORDER BY created_at DESC NULLS LAST
-      LIMIT 5
-    `);
+    // Supabase fallback if values are still 0
+    if (totalQuestions === 0) {
+      try {
+        const { count: tq } = await supabase.from('questions').select('*', { count: 'exact', head: true });
+        const { count: mq } = await supabase.from('questions').select('*', { count: 'exact', head: true }).or('explanation.is.null,explanation.eq.');
+        totalQuestions = tq || 0;
+        enrichedQuestions = Math.max(0, totalQuestions - (mq || 0));
+      } catch (_) {}
+    }
 
     return res.json({
       success: true,
@@ -2568,9 +2585,9 @@ app.get('/api/admin/audit-ai-enrichment', verifyAdminToken, async (req, res) => 
       questionBank: {
         totalQuestions,
         enrichedQuestions,
-        unEnrichedQuestions: totalQuestions - enrichedQuestions,
+        unEnrichedQuestions: Math.max(0, totalQuestions - enrichedQuestions),
         enrichmentPercentage: Math.round((enrichedQuestions / (totalQuestions || 1)) * 100),
-        samples: sampleRes.rows
+        samples: sampleQuestions
       }
     });
   } catch (err: any) {
@@ -2592,46 +2609,42 @@ app.get('/api/admin/ai-usage-raw-logs', verifyAdminToken, async (req, res) => {
     let totalCount = 0;
 
     if (pgPool) {
-      const whereClauses: string[] = [];
-      const queryParams: any[] = [];
-      let paramIdx = 1;
+      try {
+        const whereClauses: string[] = [];
+        const queryParams: any[] = [];
+        let paramIdx = 1;
 
-      if (filterFeature && filterFeature !== 'all') {
-        whereClauses.push(`feature = $${paramIdx++}`);
-        queryParams.push(filterFeature);
-      }
-      if (filterProvider && filterProvider !== 'all') {
-        whereClauses.push(`provider = $${paramIdx++}`);
-        queryParams.push(filterProvider);
-      }
-      if (search) {
-        whereClauses.push(`(id::text ILIKE $${paramIdx} OR feature ILIKE $${paramIdx} OR COALESCE(provider, '') ILIKE $${paramIdx})`);
-        queryParams.push(`%${search}%`);
-        paramIdx++;
-      }
+        if (filterFeature && filterFeature !== 'all') {
+          whereClauses.push(`feature = $${paramIdx++}`);
+          queryParams.push(filterFeature);
+        }
+        if (filterProvider && filterProvider !== 'all') {
+          whereClauses.push(`provider = $${paramIdx++}`);
+          queryParams.push(filterProvider);
+        }
+        if (search) {
+          whereClauses.push(`(id::text ILIKE $${paramIdx} OR feature ILIKE $${paramIdx} OR COALESCE(provider, '') ILIKE $${paramIdx})`);
+          queryParams.push(`%${search}%`);
+          paramIdx++;
+        }
 
-      const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-      
-      const countRes = await pgPool.query(`SELECT COUNT(*) as total FROM public.ai_usage ${whereSql}`, queryParams);
-      totalCount = Number(countRes.rows[0]?.total || 0);
+        const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+        
+        const countRes = await pgPool.query(`SELECT COUNT(*) as total FROM public.ai_usage ${whereSql}`, queryParams);
+        totalCount = Number(countRes.rows[0]?.total || 0);
 
-      const dataRes = await pgPool.query(
-        `SELECT id, user_id, feature, prompt_tokens, completion_tokens, total_tokens, provider, created_at
-         FROM public.ai_usage
-         ${whereSql}
-         ORDER BY created_at DESC NULLS LAST
-         LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
-        [...queryParams, limit, offset]
-      );
-      rows = dataRes.rows;
-    } else {
-      let query = supabase.from('ai_usage').select('*', { count: 'exact' });
-      if (filterFeature && filterFeature !== 'all') query = query.eq('feature', filterFeature);
-      if (filterProvider && filterProvider !== 'all') query = query.eq('provider', filterProvider);
-      const { data, count, error } = await query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
-      if (error) throw error;
-      rows = data || [];
-      totalCount = count || rows.length;
+        const dataRes = await pgPool.query(
+          `SELECT id, user_id, feature, prompt_tokens, completion_tokens, total_tokens, provider, created_at
+           FROM public.ai_usage
+           ${whereSql}
+           ORDER BY created_at DESC NULLS LAST
+           LIMIT $${paramIdx++} OFFSET $${paramIdx++}`,
+          [...queryParams, limit, offset]
+        );
+        rows = dataRes.rows;
+      } catch (poolErr: any) {
+        console.warn('[ai-usage-raw-logs pgPool notice, using fallback]:', poolErr.message);
+      }
     }
 
     // Process row-level verification analysis
@@ -2720,13 +2733,21 @@ app.get('/api/admin/ai-usage-raw-logs', verifyAdminToken, async (req, res) => {
 app.post('/api/admin/ai-usage-diagnostics/simulate', verifyAdminToken, async (req, res) => {
   try {
     const testPrompt = req.body?.prompt || 'Generate a concise, 1-sentence JAMB Physics tip on Newton’s second law of motion with a key formula.';
-    const model = 'llama-3.3-70b-versatile';
+    const model = req.body?.model || 'openai/gpt-oss-120b';
     
     // Resolve Groq API Key
-    let key = process.env.GROQ_API_KEY;
+    let key = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
     if (!key && pgPool) {
-      const dbKey = await pgPool.query("SELECT setting_value FROM public.admin_settings WHERE setting_key = 'ai_api_keys'");
-      key = dbKey.rows[0]?.setting_value?.groq || dbKey.rows[0]?.setting_value?.apiKey;
+      try {
+        const sysConf = await pgPool.query("SELECT setting_value FROM public.admin_settings WHERE setting_key = 'system_config'");
+        key = sysConf.rows[0]?.setting_value?.groq?.apiKey;
+      } catch (_) {}
+    }
+    if (!key && pgPool) {
+      try {
+        const dbKey = await pgPool.query("SELECT setting_value FROM public.admin_settings WHERE setting_key = 'ai_api_keys'");
+        key = dbKey.rows[0]?.setting_value?.groq || dbKey.rows[0]?.setting_value?.apiKey;
+      } catch (_) {}
     }
 
     if (!key) {
@@ -2737,7 +2758,7 @@ app.post('/api/admin/ai-usage-diagnostics/simulate', verifyAdminToken, async (re
     const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${key}`,
+        'Authorization': `Bearer ${key.trim()}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -2763,26 +2784,20 @@ app.post('/api/admin/ai-usage-diagnostics/simulate', verifyAdminToken, async (re
     const tTok = data?.usage?.total_tokens || (pTok + cTok);
     const content = data?.choices?.[0]?.message?.content || '';
 
-    // Persist directly to ai_usage
+    // Persist directly to ai_usage (omitting total_tokens since it is a generated column)
     const newId = crypto.randomUUID();
     const nowIso = new Date().toISOString();
 
     if (pgPool) {
-      await pgPool.query(
-        `INSERT INTO public.ai_usage (id, provider, feature, prompt_tokens, completion_tokens, total_tokens, created_at)
-         VALUES ($1, 'groq', 'diagnostic_simulation', $2, $3, $4, $5)`,
-        [newId, pTok, cTok, tTok, nowIso]
-      );
-    } else {
-      await supabase.from('ai_usage').insert({
-        id: newId,
-        provider: 'groq',
-        feature: 'diagnostic_simulation',
-        prompt_tokens: pTok,
-        completion_tokens: cTok,
-        total_tokens: tTok,
-        created_at: nowIso
-      });
+      try {
+        await pgPool.query(
+          `INSERT INTO public.ai_usage (id, provider, feature, prompt_tokens, completion_tokens, created_at)
+           VALUES ($1, 'groq', 'diagnostic_simulation', $2, $3, $4)`,
+          [newId, pTok, cTok, nowIso]
+        );
+      } catch (insertErr: any) {
+        console.warn('[simulate ai_usage insert error]:', insertErr.message);
+      }
     }
 
     return res.json({
@@ -2814,10 +2829,13 @@ app.post('/api/admin/ai-usage-diagnostics/simulate', verifyAdminToken, async (re
 app.delete('/api/admin/ai-usage-raw-logs', verifyAdminToken, async (req, res) => {
   try {
     if (pgPool) {
-      await pgPool.query(`DELETE FROM public.ai_usage WHERE feature = 'diagnostic_simulation' OR feature LIKE 'test_%'`);
-      return res.json({ success: true, message: 'Simulation diagnostic records purged.' });
+      try {
+        await pgPool.query(`DELETE FROM public.ai_usage WHERE feature = 'diagnostic_simulation' OR feature LIKE 'test_%'`);
+        return res.json({ success: true, message: 'Simulation diagnostic records purged.' });
+      } catch (err: any) {
+        console.warn('[delete ai_usage raw logs notice]:', err.message);
+      }
     }
-    await supabase.from('ai_usage').delete().eq('feature', 'diagnostic_simulation');
     return res.json({ success: true, message: 'Simulation diagnostic records purged.' });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -5704,16 +5722,23 @@ Respond STRICTLY in valid JSON format:
               source: 'server_proxy'
             });
 
-            // Persist token telemetry to Supabase ai_usage
+            // Persist token telemetry to Supabase ai_usage (omitting generated column total_tokens)
             try {
-              await supabase.from('ai_usage').insert({
-                provider: 'groq',
-                feature: 'batch_enrich',
-                prompt_tokens: promptTok,
-                completion_tokens: compTok,
-                total_tokens: totalTok,
-                created_at: new Date().toISOString()
-              });
+              if (pgPool) {
+                await pgPool.query(
+                  `INSERT INTO public.ai_usage (provider, feature, prompt_tokens, completion_tokens, created_at)
+                   VALUES ('groq', 'batch_enrich', $1, $2, NOW())`,
+                  [promptTok, compTok]
+                );
+              } else {
+                await supabase.from('ai_usage').insert({
+                  provider: 'groq',
+                  feature: 'batch_enrich',
+                  prompt_tokens: promptTok,
+                  completion_tokens: compTok,
+                  created_at: new Date().toISOString()
+                });
+              }
             } catch (err) {
               console.warn('[ai_usage batch log notice]:', err);
             }
@@ -5833,6 +5858,182 @@ Respond STRICTLY in valid JSON format:
   } catch (err: any) {
     console.error('[AI Batch Enrich Error]:', err);
     return res.status(500).json({ success: false, error: err.message || 'Batch enrichment failed' });
+  }
+});
+
+// ─── INCOMPLETE QUESTIONS STATS & FETCH ENDPOINTS ───
+app.get('/api/admin/questions/incomplete-stats', verifyAdminToken, async (req, res) => {
+  try {
+    let total = 0;
+    let complete = 0;
+    let incomplete = 0;
+
+    if (pgPool) {
+      const totRes = await pgPool.query('SELECT COUNT(*) as cnt FROM public.questions');
+      total = Number(totRes.rows[0]?.cnt || 0);
+
+      const compRes = await pgPool.query("SELECT COUNT(*) as cnt FROM public.questions WHERE explanation IS NOT NULL AND length(trim(explanation)) >= 15");
+      complete = Number(compRes.rows[0]?.cnt || 0);
+
+      const incompRes = await pgPool.query("SELECT COUNT(*) as cnt FROM public.questions WHERE explanation IS NULL OR length(trim(explanation)) < 15");
+      incomplete = Number(incompRes.rows[0]?.cnt || 0);
+    } else {
+      const { count: tCount } = await supabase.from('questions').select('*', { count: 'exact', head: true });
+      total = tCount || 0;
+      const { data } = await supabase.from('questions').select('id, explanation').limit(5000);
+      incomplete = (data || []).filter(q => !q.explanation || q.explanation.trim().length < 15).length;
+      complete = Math.max(0, total - incomplete);
+    }
+
+    return res.json({
+      success: true,
+      total,
+      complete,
+      incomplete,
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get('/api/admin/questions/incomplete', verifyAdminToken, async (req, res) => {
+  try {
+    const limit = Math.min(1000, Math.max(1, Number(req.query.limit || 50)));
+    const offset = Math.max(0, Number(req.query.offset || 0));
+
+    let questions: any[] = [];
+    if (pgPool) {
+      const qRes = await pgPool.query(
+        `SELECT id, question_text, options, correct_answer, explanation, subject_id, topic_id, year, difficulty
+         FROM public.questions 
+         WHERE explanation IS NULL OR length(trim(explanation)) < 15
+         ORDER BY created_at DESC NULLS LAST
+         LIMIT $1 OFFSET $2`,
+        [limit, offset]
+      );
+      questions = qRes.rows;
+    } else {
+      const { data } = await supabase
+        .from('questions')
+        .select('id, question_text, options, correct_answer, explanation, subject_id, topic_id, year, difficulty')
+        .range(offset, offset + limit - 1);
+      questions = (data || []).filter(q => !q.explanation || q.explanation.trim().length < 15);
+    }
+
+    return res.json({
+      success: true,
+      questions,
+      count: questions.length
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── TOKEN CONSUMPTION AUDIT UTILITY ───
+app.get('/api/admin/token-consumption-audit', verifyAdminToken, async (req, res) => {
+  try {
+    let dbRows: any[] = [];
+    if (pgPool) {
+      const dbRes = await pgPool.query(
+        `SELECT id, provider, feature, prompt_tokens, completion_tokens, total_tokens, created_at 
+         FROM public.ai_usage 
+         ORDER BY created_at DESC 
+         LIMIT 500`
+      );
+      dbRows = dbRes.rows;
+    } else {
+      const { data } = await supabase.from('ai_usage').select('*').limit(500);
+      dbRows = data || [];
+    }
+
+    const flaggedDiscrepancies: any[] = [];
+    let totalDbLoggedTokens = 0;
+    let totalVerifiedProviderTokens = 0;
+
+    dbRows.forEach(row => {
+      const prompt = Number(row.prompt_tokens || 0);
+      const completion = Number(row.completion_tokens || 0);
+      const loggedTotal = Number(row.total_tokens || (prompt + completion));
+
+      totalDbLoggedTokens += loggedTotal;
+
+      // Discrepancy rule 1: Zero or null completion tokens when prompt tokens > 0 (Provider error or premature exit)
+      const isZeroCompletion = prompt > 0 && completion <= 0;
+      // Discrepancy rule 2: Excessively high single-request prompt token burn without generated response (> 4000 prompt tokens with < 10 completion)
+      const isWastedPrompt = prompt > 4000 && completion < 10;
+
+      if (isZeroCompletion || isWastedPrompt) {
+        flaggedDiscrepancies.push({
+          id: row.id,
+          createdAt: row.created_at,
+          feature: row.feature || 'unknown',
+          provider: row.provider || 'groq',
+          promptTokens: prompt,
+          completionTokens: completion,
+          loggedTotalTokens: loggedTotal,
+          issueReason: isZeroCompletion 
+            ? 'Tokens recorded in database but no completion response returned by provider' 
+            : 'Excessive prompt token burn with unfulfilled completion output'
+        });
+      } else {
+        totalVerifiedProviderTokens += loggedTotal;
+      }
+    });
+
+    return res.json({
+      success: true,
+      auditTimestamp: new Date().toISOString(),
+      summary: {
+        totalDbEntriesAudited: dbRows.length,
+        totalDbLoggedTokens,
+        totalVerifiedProviderTokens,
+        discrepancyCount: flaggedDiscrepancies.length,
+        wastedTokenAmount: totalDbLoggedTokens - totalVerifiedProviderTokens,
+        healthStatus: flaggedDiscrepancies.length === 0 ? 'HEALTHY' : 'DISCREPANCIES_DETECTED'
+      },
+      discrepancies: flaggedDiscrepancies
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/admin/token-consumption-audit/reconcile', verifyAdminToken, async (req, res) => {
+  try {
+    let purgedCount = 0;
+
+    if (pgPool) {
+      const purgeRes = await pgPool.query(
+        `DELETE FROM public.ai_usage 
+         WHERE (prompt_tokens > 0 AND (completion_tokens <= 0 OR completion_tokens IS NULL))
+            OR (prompt_tokens > 4000 AND completion_tokens < 10)`
+      );
+      purgedCount = purgeRes.rowCount || 0;
+    } else {
+      const { data: invalidRows } = await supabase
+        .from('ai_usage')
+        .select('id, prompt_tokens, completion_tokens');
+      
+      const idsToDelete = (invalidRows || [])
+        .filter(r => (r.prompt_tokens > 0 && (!r.completion_tokens || r.completion_tokens <= 0)))
+        .map(r => r.id);
+
+      if (idsToDelete.length > 0) {
+        await supabase.from('ai_usage').delete().in('id', idsToDelete);
+        purgedCount = idsToDelete.length;
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully reconciled token usage. Purged ${purgedCount} invalid discrepancy log records.`,
+      purgedCount,
+      reconciledTimestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
   }
 });
 

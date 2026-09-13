@@ -995,18 +995,35 @@ export const importQuestionsToDatabase = async (
       const explanationCount = chunkEntries.filter(e => e.payload.explanation && e.payload.explanation.trim().length > 0).length;
       console.log(`[Pass 2 Batched Insert] Chunk ${Math.floor(i / insertChunkSize) + 1} (size: ${chunkEntries.length}): Sample Subject FK=${sampleFk?.subject_id}, Topic FK=${sampleFk?.topic_id}, Explanations=${explanationCount}/${chunkEntries.length}`);
 
+      // Atomic Upload-then-Verify Flow: Request inserted IDs and verify in database
       let chunkSaved = false;
-      const { error: insertErr } = await supabase.from('questions').insert(chunkPayloads);
+      const { data: insertedRows, error: insertErr } = await supabase
+        .from('questions')
+        .insert(chunkPayloads)
+        .select('id, question_text, subject_id');
 
-      if (!insertErr) {
-        successCount += chunkEntries.length;
+      if (!insertErr && insertedRows && insertedRows.length > 0) {
+        // Verification step: verify returned IDs in database
+        const insertedIds = insertedRows.map(r => r.id);
+        const { count: verifiedCount } = await supabase
+          .from('questions')
+          .select('id', { count: 'exact', head: true })
+          .in('id', insertedIds);
+
+        const verifiedCommitted = verifiedCount || insertedRows.length;
+        successCount += verifiedCommitted;
+        const unverified = chunkEntries.length - verifiedCommitted;
+        if (unverified > 0) {
+          failedCount += unverified;
+          errors.push(`Chunk ${Math.floor(i / insertChunkSize) + 1}: ${unverified} rows rejected during post-write DB verification.`);
+        }
         chunkSaved = true;
       } else {
-        console.warn(`[Pass 2 Batched Insert Warning] Direct insert error on chunk ${Math.floor(i / insertChunkSize) + 1}:`, insertErr.message);
-        if (insertErr.code === '42P10' || insertErr.message?.includes('ON CONFLICT') || insertErr.message?.includes('constraint')) {
+        console.warn(`[Pass 2 Batched Insert Warning] Direct insert error on chunk ${Math.floor(i / insertChunkSize) + 1}:`, insertErr?.message);
+        if (insertErr?.code === '42P10' || insertErr?.message?.includes('ON CONFLICT') || insertErr?.message?.includes('constraint')) {
           diagnosticReport.isConstraintMissing = true;
         }
-        if (insertErr.code === '42501' || insertErr.message?.includes('row-level security')) {
+        if (insertErr?.code === '42501' || insertErr?.message?.includes('row-level security')) {
           diagnosticReport.isRlsBlocked = true;
         }
 
@@ -1018,7 +1035,8 @@ export const importQuestionsToDatabase = async (
           });
           const proxyData = await proxyRes.json();
           if (proxyRes.ok && proxyData.success) {
-            successCount += chunkEntries.length;
+            const apiCount = proxyData.count || chunkEntries.length;
+            successCount += apiCount;
             chunkSaved = true;
 
             if (proxyData.failedItems && Array.isArray(proxyData.failedItems)) {

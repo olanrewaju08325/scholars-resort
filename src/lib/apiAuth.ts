@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { getApiUrl } from './utils';
+import { logErrorDiag } from './errorDiagStorage';
 
 export { getApiUrl };
 
@@ -25,7 +26,8 @@ export async function getAuthHeaders(): Promise<Record<string, string>> {
 }
 
 /**
- * Helper to perform an authenticated fetch with current Supabase Bearer token
+ * Helper to perform an authenticated fetch with current Supabase Bearer token,
+ * automatically logging 400/500 errors and network timeouts to local 'error_diag' storage.
  */
 export async function authFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const resolvedUrl = getApiUrl(url);
@@ -35,8 +37,65 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
     ...(options.headers || {})
   };
 
-  return fetch(resolvedUrl, {
-    ...options,
-    headers: mergedHeaders
-  });
+  let sessionState = { isAuthenticated: false, userId: undefined as string | undefined };
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session?.user) {
+      sessionState = { isAuthenticated: true, userId: session.user.id };
+    }
+  } catch (_) {}
+
+  let parsedPayload: any = undefined;
+  if (options.body && typeof options.body === 'string') {
+    try {
+      parsedPayload = JSON.parse(options.body);
+    } catch {
+      parsedPayload = options.body;
+    }
+  }
+
+  try {
+    const response = await fetch(resolvedUrl, {
+      ...options,
+      headers: mergedHeaders
+    });
+
+    if (!response.ok && (response.status >= 400)) {
+      let errMsg = `HTTP ${response.status} ${response.statusText}`;
+      try {
+        const clone = response.clone();
+        const json = await clone.json();
+        errMsg = json.error || json.message || errMsg;
+      } catch (_) {}
+
+      logErrorDiag({
+        endpoint: resolvedUrl,
+        method: options.method || 'GET',
+        status: response.status,
+        errorMessage: errMsg,
+        requestPayload: parsedPayload,
+        sessionState,
+        networkTimeout: false
+      });
+    }
+
+    return response;
+  } catch (netErr: any) {
+    logErrorDiag({
+      endpoint: resolvedUrl,
+      method: options.method || 'GET',
+      status: 0,
+      errorMessage: netErr?.message || 'Network Timeout / ENOTFOUND',
+      requestPayload: parsedPayload,
+      sessionState,
+      networkTimeout: true
+    });
+
+    // Return safe fallback response object to prevent UI crashes
+    return new Response(
+      JSON.stringify({ success: false, error: netErr?.message || 'Network request failed' }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } }
+    );
+  }
 }
+

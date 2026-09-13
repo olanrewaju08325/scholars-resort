@@ -1,6 +1,6 @@
 import pg from 'pg';
 
-const DEFAULT_POSTGRES_URL = process.env.DATABASE_URL || 'postgresql://postgres:Halimot0%2A%40%23%23@db.syoodykedvqaoeplmamd.supabase.co:5432/postgres';
+const DEFAULT_POSTGRES_URL = process.env.DATABASE_URL || 'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
 
 export async function runEnrichmentAudit() {
   console.log('========================================================================');

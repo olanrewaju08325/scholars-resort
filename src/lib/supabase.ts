@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { logErrorDiag } from './errorDiagStorage';
 
 // Load from environment variables or production defaults
 const DEFAULT_SUPABASE_URL = 'https://syoodykedvqaoeplmamd.supabase.co';
@@ -165,6 +166,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
             }
           }
 
+          if (!response.ok) {
+            logErrorDiag({
+              endpoint: urlStr,
+              method: options?.method || 'GET',
+              status: response.status,
+              errorMessage: `Supabase REST HTTP ${response.status}`,
+              requestPayload: options?.body ? (typeof options.body === 'string' ? options.body.slice(0, 300) : options.body) : undefined,
+              sessionState: { isAuthenticated: true },
+              networkTimeout: false
+            });
+          }
+
           return response;
         } catch (err: any) {
           if (attempts < maxAttempts) {
@@ -174,6 +187,17 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
           }
 
           console.warn('[Supabase Client] Network connectivity error intercepted:', err?.message || err);
+
+          logErrorDiag({
+            endpoint: urlStr,
+            method: options?.method || 'GET',
+            status: 0,
+            errorMessage: err?.message || 'Supabase Network Timeout',
+            requestPayload: options?.body ? (typeof options.body === 'string' ? options.body.slice(0, 300) : options.body) : undefined,
+            sessionState: { isAuthenticated: true },
+            networkTimeout: true
+          });
+
           return new Response(
             JSON.stringify({ 
               error: {

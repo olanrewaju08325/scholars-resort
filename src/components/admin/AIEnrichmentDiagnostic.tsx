@@ -13,6 +13,7 @@ import {
   type AiUsageLogRow, 
   type AiUsageDiagnosticSummary 
 } from '@/services/aiUsageDiagnosticService';
+import { TokenConsumptionAuditModal } from './TokenConsumptionAuditModal';
 import { toast } from 'sonner';
 
 interface AIEnrichmentDiagnosticProps {
@@ -42,6 +43,7 @@ export const AIEnrichmentDiagnostic: React.FC<AIEnrichmentDiagnosticProps> = ({
   // Detail Modal / Inspector
   const [selectedRow, setSelectedRow] = useState<AiUsageLogRow | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showAuditModal, setShowAuditModal] = useState(false);
 
   // Simulation State
   const [isSimulating, setIsSimulating] = useState(false);
@@ -271,6 +273,16 @@ export const AIEnrichmentDiagnostic: React.FC<AIEnrichmentDiagnosticProps> = ({
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             Refresh
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowAuditModal(true)}
+            className="h-8 gap-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold"
+          >
+            <ShieldCheck className="w-3.5 h-3.5 text-amber-500" />
+            Token Consumption Audit
           </Button>
 
           <Button
@@ -773,6 +785,12 @@ export const AIEnrichmentDiagnostic: React.FC<AIEnrichmentDiagnosticProps> = ({
           </div>
         </div>
       )}
+
+      {/* Token Consumption Audit Modal */}
+      <TokenConsumptionAuditModal
+        isOpen={showAuditModal}
+        onClose={() => setShowAuditModal(false)}
+      />
 
     </div>
   );

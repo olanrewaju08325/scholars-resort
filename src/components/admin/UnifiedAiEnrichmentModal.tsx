@@ -43,25 +43,26 @@ export const UnifiedAiEnrichmentModal: React.FC<UnifiedAiEnrichmentModalProps> =
   const fetchRepositoryStats = async () => {
     setStats(prev => ({ ...prev, loading: true }));
     try {
-      const { count: totalCount } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true });
+      const res = await authFetch('/api/admin/questions/incomplete-stats');
+      const data = await res.json();
 
-      const { count: missingCount } = await supabase
-        .from('questions')
-        .select('*', { count: 'exact', head: true })
-        .or('explanation.is.null,explanation.eq.');
+      if (data && data.success) {
+        setStats({
+          total: data.total || 0,
+          complete: data.complete || 0,
+          incomplete: data.incomplete || 0,
+          loading: false
+        });
+      } else {
+        // Fallback to client query
+        const { count: totalCount } = await supabase.from('questions').select('*', { count: 'exact', head: true });
+        const { data: qData } = await supabase.from('questions').select('id, explanation').limit(5000);
+        const incomplete = (qData || []).filter(q => !q.explanation || q.explanation.trim().length < 15).length;
+        const total = totalCount || 0;
+        const complete = Math.max(0, total - incomplete);
 
-      const total = totalCount || 0;
-      const incomplete = missingCount || 0;
-      const complete = Math.max(0, total - incomplete);
-
-      setStats({
-        total,
-        complete,
-        incomplete,
-        loading: false
-      });
+        setStats({ total, complete, incomplete, loading: false });
+      }
     } catch (err: any) {
       console.warn('[UnifiedEnrichment] Failed to load repository stats:', err);
       setStats(prev => ({ ...prev, loading: false }));
@@ -100,26 +101,23 @@ export const UnifiedAiEnrichmentModal: React.FC<UnifiedAiEnrichmentModalProps> =
     ]);
 
     try {
-      // 1. Fetch targeted incomplete questions
+      // 1. Fetch targeted incomplete questions directly from server API
       let itemsToProcess: any[] = [];
-      let from = 0;
-      const fetchPage = Math.min(1000, Math.max(100, runTarget));
+      const fetchRes = await authFetch(`/api/admin/questions/incomplete?limit=${runTarget}`);
+      const fetchData = await fetchRes.json();
 
-      while (itemsToProcess.length < runTarget) {
-        const remainingNeeded = runTarget - itemsToProcess.length;
-        const limitThisPage = Math.min(fetchPage, remainingNeeded);
+      if (fetchData && fetchData.success && Array.isArray(fetchData.questions)) {
+        itemsToProcess = fetchData.questions;
+      }
 
-        const { data: qBatch, error: qErr } = await supabase
+      // Client-side fallback if server route didn't return items
+      if (itemsToProcess.length === 0) {
+        const { data: qBatch } = await supabase
           .from('questions')
           .select('id, question_text, options, correct_answer, explanation, subject_id, topic_id')
-          .or('explanation.is.null,explanation.eq.')
-          .range(from, from + limitThisPage - 1);
+          .limit(runTarget);
 
-        if (qErr || !qBatch || qBatch.length === 0) break;
-
-        itemsToProcess = itemsToProcess.concat(qBatch);
-        if (qBatch.length < limitThisPage) break;
-        from += limitThisPage;
+        itemsToProcess = (qBatch || []).filter(q => !q.explanation || q.explanation.trim().length < 15);
       }
 
       if (itemsToProcess.length === 0) {

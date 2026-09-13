@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, XCircle, RefreshCw, AlertTriangle, Layers, FileSpreadsheet } from 'lucide-react';
+import { CheckCircle2, XCircle, RefreshCw, AlertTriangle, Layers, FileSpreadsheet, ShieldCheck } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 
@@ -34,8 +34,11 @@ export const ImportProgressTracker: React.FC<ImportProgressTrackerProps> = ({
           ) : (
             <FileSpreadsheet className="w-5 h-5 text-slate-600" />
           )}
-          <span className="text-sm font-bold text-slate-800">
-            {isUploading ? 'Batch Upsert in Progress...' : 'Ingestion Progress Tracker'}
+          <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+            {isUploading ? 'Atomic Batch Ingestion Active...' : 'Upload-then-Verify Status Tracker'}
+            <Badge variant="outline" className="text-[10px] bg-emerald-50 text-emerald-700 border-emerald-300 gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-600" /> Atomic Verification Active
+            </Badge>
           </span>
         </div>
 
@@ -56,41 +59,41 @@ export const ImportProgressTracker: React.FC<ImportProgressTrackerProps> = ({
         <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg flex items-center gap-2.5">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
           <div>
-            <div className="text-xs text-emerald-700 font-semibold uppercase tracking-wider">Upserted / Saved</div>
-            <div className="text-lg font-bold text-emerald-800">{successCount}</div>
+            <div className="text-xs text-emerald-700 font-semibold uppercase tracking-wider">Committed to Database</div>
+            <div className="text-lg font-bold text-emerald-800">{successCount} <span className="text-xs font-normal text-emerald-600">verified</span></div>
           </div>
         </div>
 
         <div className="bg-red-50 border border-red-200 p-2.5 rounded-lg flex items-center gap-2.5">
           <XCircle className="w-5 h-5 text-red-600 shrink-0" />
           <div>
-            <div className="text-xs text-red-700 font-semibold uppercase tracking-wider">Failed / Rejected</div>
-            <div className="text-lg font-bold text-red-800">{failedCount}</div>
+            <div className="text-xs text-red-700 font-semibold uppercase tracking-wider">Rejected Rows</div>
+            <div className="text-lg font-bold text-red-800">{failedCount} <span className="text-xs font-normal text-red-600">unverified</span></div>
           </div>
         </div>
 
         <div className="bg-slate-100 border border-slate-300 p-2.5 rounded-lg flex items-center gap-2.5 col-span-2 sm:col-span-1">
           <Layers className="w-5 h-5 text-slate-600 shrink-0" />
           <div>
-            <div className="text-xs text-slate-700 font-semibold uppercase tracking-wider">Total Queue</div>
+            <div className="text-xs text-slate-700 font-semibold uppercase tracking-wider">Total Rows Queue</div>
             <div className="text-lg font-bold text-slate-800">{totalCount}</div>
           </div>
         </div>
       </div>
 
       {errors.length > 0 && (
-        <div className="mt-3 p-3 bg-red-50/70 border border-red-200 rounded-lg max-h-32 overflow-y-auto text-xs space-y-1">
+        <div className="mt-3 p-3 bg-red-50/70 border border-red-200 rounded-lg max-h-36 overflow-y-auto text-xs space-y-1">
           <div className="font-bold text-red-800 flex items-center gap-1.5 mb-1">
-            <AlertTriangle className="w-4 h-4 text-red-600" /> Ingestion Error Log ({errors.length}):
+            <AlertTriangle className="w-4 h-4 text-red-600" /> Rejected Rows Diagnostic Log ({errors.length}):
           </div>
-          {errors.slice(0, 10).map((err, idx) => (
+          {errors.slice(0, 15).map((err, idx) => (
             <div key={idx} className="text-red-700 font-mono text-[11px] leading-tight">
               • {err}
             </div>
           ))}
-          {errors.length > 10 && (
+          {errors.length > 15 && (
             <div className="text-slate-500 italic text-[11px] pt-0.5">
-              ...and {errors.length - 10} more errors.
+              ...and {errors.length - 15} more errors.
             </div>
           )}
         </div>
