@@ -43,6 +43,7 @@ import {
 } from '@/utils/subjectTaxonomy';
 import { BulkUploadIntegrationTesterComponent } from '@/components/admin/BulkUploadIntegrationTester';
 import { BulkUploadSchemaGuide } from '@/components/admin/BulkUploadSchemaGuide';
+import { authFetch } from '@/lib/apiAuth';
 import { DataHealthReportCard } from '@/components/admin/DataHealthReportCard';
 import { DataHealthDashboard } from '@/components/admin/DataHealthDashboard';
 
@@ -708,18 +709,29 @@ export const QuestionBankTab = () => {
   const [enrichmentStatusText, setEnrichmentStatusText] = useState('');
 
   const handleRunAiBatchEnrichment = async () => {
-    if (!parsedCsvResult || parsedCsvResult.validQuestions.length === 0) return;
+    if (!parsedCsvResult || (parsedCsvResult.validQuestions.length === 0 && parsedCsvResult.duplicateQuestionsInDb.length === 0)) return;
     setAiEnriching(true);
     setEnrichmentStatusText('Initializing AI batch enrichment (20 questions/batch)...');
     try {
-      const enriched = await enrichQuestionsBatchWithAI(parsedCsvResult.validQuestions, 20, (processed, total, msg) => {
+      const allToEnrich = [
+        ...parsedCsvResult.validQuestions,
+        ...parsedCsvResult.duplicateQuestionsInDb
+      ];
+
+      const enrichedAll = await enrichQuestionsBatchWithAI(allToEnrich, 20, (processed, total, msg) => {
         setEnrichmentStatusText(msg);
       });
+
+      const validCount = parsedCsvResult.validQuestions.length;
+      const enrichedValid = enrichedAll.slice(0, validCount);
+      const enrichedDupDb = enrichedAll.slice(validCount);
+
       setParsedCsvResult({
         ...parsedCsvResult,
-        validQuestions: enriched
+        validQuestions: enrichedValid,
+        duplicateQuestionsInDb: enrichedDupDb
       });
-      toast.success('AI Batch Enrichment completed successfully! Missing explanations, years, and topics have been generated.');
+      toast.success(`AI Batch Enrichment completed for ${enrichedAll.length} questions! Click 'Confirm & Ingest' to persist to database.`);
     } catch (err: any) {
       toast.error('AI Enrichment error: ' + (err?.message || err));
     } finally {
@@ -743,38 +755,73 @@ export const QuestionBankTab = () => {
     setGlobalAiEnriching(true);
     toast.loading(`Starting AI enrichment for ${incomplete.length} incomplete questions (20/batch)...`, { id: 'global-enrich' });
     try {
-      const parsedItems = incomplete.map((q, idx) => ({
-        rowNumber: idx + 1,
-        subjectName: q.subject_id || 'General',
-        topicName: '',
-        questionText: q.question_text,
-        options: Array.isArray(q.options) ? q.options : [],
-        correctAnswer: q.correct_answer || 'A',
-        explanation: q.explanation || '',
-        year: q.year || 2023,
-        difficulty: q.difficulty || 'medium'
-      }));
+      const parsedItems = incomplete.map((q, idx) => {
+        const subName = subjects.find(s => s.id === q.subject_id)?.name || 'General';
+        let rawOpts: any = q.options;
+        if (typeof rawOpts === 'object' && !Array.isArray(rawOpts) && rawOpts !== null) {
+          rawOpts = Object.values(rawOpts);
+        }
+        return {
+          rowNumber: idx + 1,
+          subjectName: subName,
+          topicName: '',
+          questionText: q.question_text,
+          options: Array.isArray(rawOpts) ? rawOpts : [],
+          correctAnswer: q.correct_answer || 'A',
+          explanation: q.explanation || '',
+          year: q.year || 2023,
+          difficulty: q.difficulty || 'medium'
+        };
+      });
 
       const enriched = await enrichQuestionsBatchWithAI(parsedItems, 20, (processed, total, msg) => {
         toast.loading(`${msg} (${processed}/${total})`, { id: 'global-enrich' });
       });
       toast.dismiss('global-enrich');
 
-      let updatedCount = 0;
+      // Collect payload for guaranteed server-authoritative persistence
+      const updatesToPersist: any[] = [];
       for (const item of enriched) {
         const orig = incomplete[item.rowNumber - 1];
         if (orig && orig.id) {
-          const { error } = await supabase.from('questions').update({
+          updatesToPersist.push({
+            id: orig.id,
             explanation: item.explanation,
             year: item.year,
             difficulty: item.difficulty
-          }).eq('id', orig.id);
-          if (!error) updatedCount++;
+          });
         }
       }
 
-      toast.success(`Successfully enriched ${updatedCount} repository questions with AI explanations and years!`);
-      fetchData();
+      let updatedCount = 0;
+      if (updatesToPersist.length > 0) {
+        try {
+          const proxyRes = await authFetch('/api/questions/upsert', {
+            method: 'POST',
+            body: JSON.stringify({ questions: updatesToPersist })
+          });
+          const proxyData = await proxyRes.json();
+          if (proxyRes.ok && proxyData.success) {
+            updatedCount = proxyData.count || updatesToPersist.length;
+          }
+        } catch (serverErr) {
+          console.warn('[handleGlobalAiEnrich] Server upsert fallback:', serverErr);
+        }
+
+        if (updatedCount === 0) {
+          for (const u of updatesToPersist) {
+            const { error } = await supabase.from('questions').update({
+              explanation: u.explanation,
+              year: u.year,
+              difficulty: u.difficulty
+            }).eq('id', u.id);
+            if (!error) updatedCount++;
+          }
+        }
+      }
+
+      toast.success(`Successfully enriched and saved ${updatedCount} repository questions!`);
+      await fetchData();
     } catch (err: any) {
       toast.dismiss('global-enrich');
       toast.error('AI repository enrichment error: ' + (err?.message || err));

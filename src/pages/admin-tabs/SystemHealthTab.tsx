@@ -41,7 +41,7 @@ export const SystemHealthTab = () => {
         sessionRes, 
         aiRes,
         rejectedPaymentRes,
-        usageStats
+        usageStatsRes
       ] = await Promise.allSettled([
         supabase.from('activity_logs').select('*', { count: 'exact', head: true }),
         supabase.from('exam_sessions').select('*', { count: 'exact', head: true }),
@@ -54,12 +54,13 @@ export const SystemHealthTab = () => {
       const sessionCount = sessionRes.status === 'fulfilled' ? sessionRes.value.count || 0 : 0;
       const aiData = aiRes.status === 'fulfilled' ? aiRes.value.data : [];
       const rejectedPaymentCount = rejectedPaymentRes.status === 'fulfilled' ? rejectedPaymentRes.value.count || 0 : 0;
+      const usageStatsVal = usageStatsRes.status === 'fulfilled' ? usageStatsRes.value : null;
 
-      const totalAiTokens = aiData?.reduce((acc, curr) => acc + (curr.total_tokens || 0), 0) || usageStats.ai.tokensUsedThisMonth || 0;
-      const failedEmailCount = usageStats.smtp.failedEmailsToday || 0;
+      const totalAiTokens = aiData?.reduce((acc, curr) => acc + (curr.total_tokens || 0), 0) || usageStatsVal?.ai?.tokensUsedThisMonth || 0;
+      const failedEmailCount = usageStatsVal?.smtp?.failedToday || 0;
 
       // Real calculated error rate based on real logs
-      const totalEvents = (activityCount || 0) + (usageStats.smtp.emailsSentToday || 0);
+      const totalEvents = (activityCount || 0) + (usageStatsVal?.smtp?.emailsSentToday || 0);
       const failures = (failedEmailCount || 0) + (rejectedPaymentCount || 0);
       const calculatedErrorRate = totalEvents > 0 
         ? ((failures / totalEvents) * 100).toFixed(2) + '%'
@@ -73,7 +74,7 @@ export const SystemHealthTab = () => {
         failedEmails: failedEmailCount,
         rejectedPayments: rejectedPaymentCount || 0,
         dbLatency: latency,
-        storageObjects: usageStats.storage.objectsCount || 0,
+        storageObjects: usageStatsVal?.storage?.objectsCount || 0,
         errorRate: calculatedErrorRate,
         avgResponseTime: latency
       });

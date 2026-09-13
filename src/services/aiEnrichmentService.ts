@@ -1,6 +1,7 @@
 import { callGroqAPI, safeParseAIJSON, aiCircuitBreaker } from './aiService';
 import { supabase } from '@/lib/supabase';
 import { AiUsageMonitoringService } from './aiUsageMonitoringService';
+import { authFetch } from '@/lib/apiAuth';
 import type { ParsedQuestionItem } from '../lib/csvQuestionParser';
 
 /**
@@ -176,22 +177,45 @@ export class AiEnrichmentEngine {
 
     const enriched = await enrichQuestionsBatchWithAI(parsedItems, 20, onProgress);
 
-    let updatedCount = 0;
-    let failedCount = 0;
-
+    const updatesToPersist: any[] = [];
     for (const item of enriched) {
       const orig = incompleteDbQuestions[item.rowNumber - 1];
       if (orig && orig.id) {
-        try {
-          const updatePayload: Record<string, any> = {};
-          if (item.explanation) updatePayload.explanation = item.explanation;
-          if (item.year) updatePayload.year = item.year;
-          if (item.difficulty) updatePayload.difficulty = item.difficulty;
+        const updatePayload: Record<string, any> = { id: orig.id };
+        if (item.explanation) updatePayload.explanation = item.explanation;
+        if (item.year) updatePayload.year = item.year;
+        if (item.difficulty) updatePayload.difficulty = item.difficulty;
+        updatesToPersist.push(updatePayload);
+      }
+    }
 
+    let updatedCount = 0;
+    let failedCount = 0;
+
+    // Batch upsert via server API first (Admin superuser privileges)
+    if (updatesToPersist.length > 0) {
+      try {
+        const proxyRes = await authFetch('/api/questions/upsert', {
+          method: 'POST',
+          body: JSON.stringify({ questions: updatesToPersist })
+        });
+        const proxyData = await proxyRes.json();
+        if (proxyRes.ok && proxyData.success) {
+          updatedCount = proxyData.count || updatesToPersist.length;
+          return { updatedCount, failedCount: 0 };
+        }
+      } catch (err) {
+        console.warn('[autoEnrichAndUpsertToDatabase] Server upsert notice, falling back to direct client write:', err);
+      }
+
+      // Direct client write fallback
+      for (const updatePayload of updatesToPersist) {
+        try {
+          const { id, ...fields } = updatePayload;
           const { error } = await supabase
             .from('questions')
-            .update(updatePayload)
-            .eq('id', orig.id);
+            .update(fields)
+            .eq('id', id);
 
           if (!error) {
             updatedCount++;

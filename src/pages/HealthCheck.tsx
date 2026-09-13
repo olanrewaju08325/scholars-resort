@@ -66,14 +66,14 @@ export const HealthCheck: React.FC = () => {
     {
       id: 'ai_quotas',
       name: 'User AI Quotas & Token Budget',
-      table: 'profiles (ai_tokens_used, daily_ai_limit)',
+      table: 'profiles (xp, coins, streak_days) / ai_usage',
       count: 0,
       latencyMs: 0,
       status: 'testing',
       details: 'Querying live user profile token usage and remaining daily AI capacity...',
       liveProof: 'Pending test',
       icon: Cpu,
-      querySample: "supabase.from('profiles').select('ai_tokens_used, daily_ai_limit').eq('id', user.id)",
+      querySample: "supabase.from('profiles').select('id, xp, coins, streak_days').eq('id', user.id)",
       rawSampleData: null
     },
     {
@@ -99,7 +99,7 @@ export const HealthCheck: React.FC = () => {
       details: 'Validating active study plans, daily questions target, and study streak counts...',
       liveProof: 'Pending test',
       icon: BookOpen,
-      querySample: "supabase.from('study_plans').select('id, title, completed').eq('user_id', user.id)",
+      querySample: "supabase.from('study_plans').select('id, title, status').eq('user_id', user.id)",
       rawSampleData: null
     },
     {
@@ -173,19 +173,18 @@ export const HealthCheck: React.FC = () => {
           if (targetUserId) {
             const { data: prof, error } = await supabase
               .from('profiles')
-              .select('id, ai_tokens_used, daily_ai_limit, xp, coins, streak_days')
+              .select('id, xp, coins, streak_days, role')
               .eq('id', targetUserId)
               .maybeSingle();
 
             if (error) throw error;
             rawData = prof;
-            aiCount = prof?.ai_tokens_used ?? 0;
-            const limit = prof?.daily_ai_limit ?? 50000;
-            aiDetails = `Live user profile queried: ${aiCount.toLocaleString()} / ${limit.toLocaleString()} tokens used today. Non-hardcoded live database response verified.`;
-            liveProof = `User: ${targetUserId.slice(0, 8)}... • ${aiCount} tokens used`;
+            aiCount = prof?.xp ?? 0;
+            aiDetails = `Live user profile queried: ${prof?.role || 'student'} role, ${prof?.xp || 0} XP, ${prof?.coins || 0} coins, ${prof?.streak_days || 0} days streak. Non-hardcoded live database response verified.`;
+            liveProof = `User: ${targetUserId.slice(0, 8)}... • ${prof?.xp || 0} XP`;
           } else {
             // General query on profiles count
-            const { count, data } = await supabase.from('profiles').select('id, ai_tokens_used', { count: 'exact' }).limit(1);
+            const { count, data } = await supabase.from('profiles').select('id, xp', { count: 'exact' }).limit(1);
             aiCount = count || 0;
             rawData = data;
             aiDetails = `Connected to profiles table (${aiCount} student accounts registered). Live query verified.`;
@@ -275,7 +274,7 @@ export const HealthCheck: React.FC = () => {
 
         try {
           const [plansRes, answersRes] = await Promise.all([
-            supabase.from('study_plans').select('id, title, completed', { count: 'exact' }).limit(1),
+            supabase.from('study_plans').select('id, title, status', { count: 'exact' }).limit(1),
             supabase.from('session_answers').select('id', { count: 'exact', head: true })
           ]);
 

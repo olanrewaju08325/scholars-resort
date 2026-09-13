@@ -18,6 +18,7 @@ import type {
 } from '@/services/systemUsageLimitService';
 import { toast } from 'sonner';
 import { sendEmailMessage } from '@/services/emailService';
+import { authFetch } from '@/lib/apiAuth';
 
 export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ className = '' }) => {
   const [stats, setStats] = useState<ResourceUsageStats | null>(null);
@@ -80,7 +81,7 @@ export const RealtimeUsageQuotaMonitor: React.FC<{ className?: string }> = ({ cl
   const handleRunAiAudit = async () => {
     setIsAuditing(true);
     try {
-      const res = await fetch('/api/admin/audit-ai-enrichment');
+      const res = await authFetch('/api/admin/audit-ai-enrichment');
       if (res.ok) {
         const data = await res.json();
         setAuditData(data);

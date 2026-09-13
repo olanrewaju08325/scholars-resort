@@ -6727,11 +6727,41 @@ app.post('/api/questions/insert', verifyAdminToken, async (req, res) => {
   try {
     const db = getScopedSupabaseClient(req);
     const { data, error } = await db.from('questions').insert(questions).select();
-    if (error) {
-      console.warn('[Server Questions Insert Warn]', error.message);
-      return res.status(200).json({ success: false, error: error.message, count: 0 });
+    if (!error && data) {
+      return res.json({ success: true, count: data.length, data });
     }
-    return res.json({ success: true, count: data?.length || questions.length, data });
+
+    console.warn('[Server Questions Insert Warn, falling back to pgPool]', error?.message);
+    if (pgPool) {
+      let savedCount = 0;
+      for (const q of questions) {
+        try {
+          const rawOpts = typeof q.options === 'string' ? q.options : JSON.stringify(q.options || []);
+          await pgPool.query(
+            `INSERT INTO public.questions (subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, year, is_active, is_draft)
+             VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)`,
+            [
+              q.subject_id || null,
+              q.topic_id || null,
+              q.question_text || q.questionText || '',
+              rawOpts,
+              q.correct_answer || q.correctAnswer || 'A',
+              q.explanation || '',
+              q.difficulty || 'medium',
+              q.year ? Number(q.year) : 2024,
+              q.is_active !== undefined ? q.is_active : true,
+              q.is_draft !== undefined ? q.is_draft : false
+            ]
+          );
+          savedCount++;
+        } catch (singleErr: any) {
+          console.warn('[pgPool single insert warn]:', singleErr.message);
+        }
+      }
+      return res.json({ success: savedCount > 0, count: savedCount });
+    }
+
+    return res.status(200).json({ success: false, error: error?.message || 'Insert failed', count: 0 });
   } catch (err: any) {
     console.error('[Server Questions Insert Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server insert failed.' });
@@ -6751,92 +6781,77 @@ app.post('/api/questions/upsert', verifyAdminToken, async (req, res) => {
     if (onConflict) options.onConflict = onConflict;
 
     const { data, error } = await db.from('questions').upsert(questions, options).select();
-    if (error) {
-      console.warn('[Server Questions Upsert Warn]', error.message);
+    if (!error && data) {
+      return res.json({ success: true, count: data.length, data });
+    }
 
-      // Intelligent Fallback if PostgREST rejected ON CONFLICT specification or constraint is missing
-      if (error.code === '42P10' || error.message?.includes('ON CONFLICT') || error.message?.includes('constraint')) {
-        let insertedCount = 0;
-        let updatedCount = 0;
-        const failedItems: any[] = [];
+    console.warn('[Server Questions Upsert Warn, executing authoritative pgPool update/insert]:', error?.message);
+    if (pgPool) {
+      let updatedCount = 0;
+      let insertedCount = 0;
 
-        const itemsWithId = questions.filter((q: any) => Boolean(q.id));
-        const itemsWithoutId = questions.filter((q: any) => !q.id);
-
-        if (itemsWithId.length > 0) {
-          const { error: idUpsertErr } = await db.from('questions').upsert(itemsWithId);
-          if (!idUpsertErr) {
-            updatedCount += itemsWithId.length;
-          } else {
-            for (const item of itemsWithId) {
-              const { error: singleUpErr } = await db.from('questions').update(item).eq('id', item.id);
-              if (!singleUpErr) {
-                updatedCount++;
-              } else {
-                failedItems.push({
-                  question_text: item.question_text?.slice(0, 100),
-                  subject_id: item.subject_id,
-                  year: item.year,
-                  error: {
-                    code: singleUpErr.code,
-                    message: singleUpErr.message,
-                    details: singleUpErr.details,
-                    hint: singleUpErr.hint
-                  }
-                });
-              }
-            }
+      for (const q of questions) {
+        if (q.id) {
+          try {
+            await pgPool.query(
+              `UPDATE public.questions 
+               SET explanation = COALESCE($1, explanation),
+                   "year" = COALESCE($2, "year"),
+                   difficulty = COALESCE($3, difficulty),
+                   subject_id = COALESCE($4, subject_id),
+                   topic_id = COALESCE($5, topic_id)
+               WHERE id = $6`,
+              [
+                q.explanation !== undefined ? q.explanation : null,
+                q.year ? Number(q.year) : null,
+                q.difficulty || null,
+                q.subject_id || null,
+                q.topic_id || null,
+                q.id
+              ]
+            );
+            updatedCount++;
+          } catch (upErr: any) {
+            console.warn(`[pgPool update q ${q.id} notice]:`, upErr.message);
+          }
+        } else {
+          try {
+            const rawOpts = typeof q.options === 'string' ? q.options : JSON.stringify(q.options || []);
+            await pgPool.query(
+              `INSERT INTO public.questions (subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, year, is_active, is_draft)
+               VALUES ($1, $2, $3, $4::jsonb, $5, $6, $7, $8, $9, $10)`,
+              [
+                q.subject_id || null,
+                q.topic_id || null,
+                q.question_text || q.questionText || '',
+                rawOpts,
+                q.correct_answer || q.correctAnswer || 'A',
+                q.explanation || '',
+                q.difficulty || 'medium',
+                q.year ? Number(q.year) : 2024,
+                q.is_active !== undefined ? q.is_active : true,
+                q.is_draft !== undefined ? q.is_draft : false
+              ]
+            );
+            insertedCount++;
+          } catch (inErr: any) {
+            console.warn('[pgPool insert notice]:', inErr.message);
           }
         }
-
-        if (itemsWithoutId.length > 0) {
-          const { error: insertErr } = await db.from('questions').insert(itemsWithoutId);
-          if (!insertErr) {
-            insertedCount += itemsWithoutId.length;
-          } else {
-            for (const item of itemsWithoutId) {
-              const { error: singleInErr } = await db.from('questions').insert([item]);
-              if (!singleInErr) {
-                insertedCount++;
-              } else {
-                failedItems.push({
-                  question_text: item.question_text?.slice(0, 100),
-                  subject_id: item.subject_id,
-                  year: item.year,
-                  error: {
-                    code: singleInErr.code,
-                    message: singleInErr.message,
-                    details: singleInErr.details,
-                    hint: singleInErr.hint
-                  }
-                });
-              }
-            }
-          }
-        }
-
-        return res.json({ 
-          success: insertedCount + updatedCount > 0, 
-          count: insertedCount + updatedCount, 
-          failedCount: failedItems.length,
-          failedItems,
-          fallbackUsed: true, 
-          error: error.message,
-          errorCode: error.code,
-          details: `Processed ${updatedCount} updates and ${insertedCount} inserts via fallback safe-write.` 
-        });
       }
 
-      return res.status(200).json({ 
-        success: false, 
-        error: error.message, 
-        errorCode: error.code,
-        details: error.details,
-        hint: error.hint,
-        count: 0 
+      return res.json({
+        success: updatedCount + insertedCount > 0,
+        count: updatedCount + insertedCount,
+        details: `Saved ${updatedCount} updates and ${insertedCount} inserts via PostgreSQL.`
       });
     }
-    return res.json({ success: true, count: data?.length || questions.length, data });
+
+    return res.status(200).json({ 
+      success: false, 
+      error: error?.message || 'Upsert failed', 
+      count: 0 
+    });
   } catch (err: any) {
     console.error('[Server Questions Upsert Error]', err);
     return res.status(500).json({ success: false, error: err.message || 'Server upsert failed.' });

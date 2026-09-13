@@ -1,6 +1,7 @@
 // System Resource Quota Limits & Real-Time Usage Monitor Service
 import { supabase } from '@/lib/supabase';
 import { sendEmailMessage } from './emailService';
+import { authFetch } from '@/lib/apiAuth';
 
 export interface UsageQuotaLimits {
   dbStorageLimitMB: number;
@@ -462,7 +463,7 @@ export class SystemUsageLimitService {
    */
   static async resetTokenCycle(): Promise<{ success: boolean; keyRotatedAt: string }> {
     try {
-      const res = await fetch('/api/admin/reset-ai-key-cycle', {
+      const res = await authFetch('/api/admin/reset-ai-key-cycle', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' }
       });
