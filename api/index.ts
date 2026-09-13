@@ -4463,7 +4463,7 @@ app.post('/api/tournaments/register', async (req, res) => {
       payment_reference,
       coins_deducted,
       entry_fee_amount: tournamentEntryFee,
-      is_paid: tournamentEntryFee > 0 || payment_method === 'coins' || payment_method === 'paystack',
+      is_paid: tournamentEntryFee > 0 || payment_method === 'coins' || payment_method === 'flutterwave' || payment_method === 'bank_transfer',
       joined_at: new Date().toISOString(),
       score: 0,
       time_taken_seconds: 0
@@ -5861,6 +5861,49 @@ Respond STRICTLY in valid JSON format:
   }
 });
 
+// ─── PAST QUESTION YEARS & METADATA API ───
+app.get('/api/cbt/past-questions/years', async (req, res) => {
+  try {
+    const subjectName = req.query.subject as string;
+    let years: number[] = [];
+
+    if (pgPool) {
+      if (subjectName && subjectName !== 'all') {
+        const qRes = await pgPool.query(
+          `SELECT DISTINCT q.year 
+           FROM public.questions q
+           LEFT JOIN public.subjects s ON q.subject_id = s.id
+           WHERE q.year IS NOT NULL 
+             AND (s.name ILIKE $1 OR s.name ILIKE $2)
+           ORDER BY q.year DESC`,
+          [`%${subjectName}%`, `%${subjectName.replace(/-/g, ' ')}%`]
+        );
+        years = qRes.rows.map(r => Number(r.year)).filter(y => !isNaN(y) && y >= 1970);
+      } else {
+        const qRes = await pgPool.query(
+          `SELECT DISTINCT year FROM public.questions WHERE year IS NOT NULL ORDER BY year DESC`
+        );
+        years = qRes.rows.map(r => Number(r.year)).filter(y => !isNaN(y) && y >= 1970);
+      }
+    } else {
+      const { data } = await supabase
+        .from('questions')
+        .select('year')
+        .not('year', 'is', null)
+        .order('year', { ascending: false });
+      years = Array.from(new Set((data || []).map(r => Number(r.year)).filter(y => !isNaN(y) && y >= 1970)));
+    }
+
+    if (years.length === 0) {
+      years = [2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010, 2009, 2008, 2005, 2000, 1995, 1990];
+    }
+
+    return res.json({ success: true, years });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message, years: [2024, 2023, 2022, 2021, 2020, 2019, 2018] });
+  }
+});
+
 // ─── INCOMPLETE QUESTIONS STATS & FETCH ENDPOINTS ───
 app.get('/api/admin/questions/incomplete-stats', verifyAdminToken, async (req, res) => {
   try {
@@ -5926,6 +5969,40 @@ app.get('/api/admin/questions/incomplete', verifyAdminToken, async (req, res) =>
       questions,
       count: questions.length
     });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ─── ADMIN AI MOCK CONFIGURATION ENDPOINTS ARE IMPLEMENTED ABOVE ───
+
+app.get('/api/cbt/past-question-years', async (req, res) => {
+  try {
+    const subjectId = req.query.subjectId as string;
+    let years: number[] = [];
+
+    if (pgPool) {
+      let query = 'SELECT DISTINCT year FROM public.questions WHERE year IS NOT NULL AND year > 1900';
+      let params: any[] = [];
+      if (subjectId && subjectId !== 'all') {
+        query += ' AND (subject_id = $1 OR subject_id IN (SELECT id FROM public.subjects WHERE lower(name) = lower($1)))';
+        params.push(subjectId);
+      }
+      query += ' ORDER BY year DESC';
+      const r = await pgPool.query(query, params);
+      years = r.rows.map(row => Number(row.year)).filter(Boolean);
+    } else {
+      let q = supabase.from('questions').select('year').not('year', 'is', null).limit(2000);
+      const { data } = await q;
+      years = Array.from(new Set((data || []).map(row => Number(row.year)).filter(y => y > 1900))).sort((a,b) => b-a);
+    }
+
+    // Default JAMB UTME fallback list if empty
+    if (years.length === 0) {
+      years = [2024, 2023, 2022, 2021, 2020, 2019, 2018, 2017, 2016, 2015, 2014, 2013, 2012, 2011, 2010];
+    }
+
+    return res.json({ success: true, years });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }

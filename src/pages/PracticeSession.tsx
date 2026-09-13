@@ -11,7 +11,7 @@ import { awardXp, checkAndAwardBadges } from '@/lib/gamification';
 import { withRetry } from '@/lib/apiWithRetry';
 import { toast } from 'sonner';
 import { callGroqAPI, stripThinkTags } from '@/services/aiService';
-import { ExplanationCacheService } from '@/services/explanationCacheService';
+import { ExplanationCacheService, isGenericOrLazyExplanation } from '@/services/explanationCacheService';
 import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { recordTopicScore } from '@/services/topicProgressService';
 import { fetchQuestionsForSubject, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
@@ -612,7 +612,7 @@ const PracticeSession = () => {
 
     // 1. Token Saver: Check existing explanation or database/local cache first!
     const existing = getNormalizedExplanation(q);
-    if (existing && existing.length > 5) {
+    if (existing && !isGenericOrLazyExplanation(existing)) {
       setAiExplanation(existing);
       return;
     }
@@ -627,7 +627,8 @@ const PracticeSession = () => {
         correctAnswer: correctAns,
         selectedAnswer: optChosen,
         existingExplanation: existing || undefined,
-        options: q.options
+        options: q.options,
+        subjectName: state?.subjectName || state?.subject
       });
       setAiExplanation(explanation);
       q.explanation = explanation;

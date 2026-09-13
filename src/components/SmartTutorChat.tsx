@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
-import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame, Lock } from 'lucide-react';
+import { MessageSquare, X, Send, Bot, User, Loader2, Sparkles, Paperclip, BarChart2, Target, BookOpen, Flame, Lock, RotateCcw } from 'lucide-react';
 import Markdown from 'react-markdown';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -111,13 +111,29 @@ export const SmartTutorChat = () => {
           weakTopics: stats?.weak_topics || ['General Exam Speed', 'Complex Calculations'],
         });
 
-        // Initialize greeting message
-        setMessages([
-          {
-            role: 'assistant',
-            content: `Hello ${profile.full_name?.split(' ')[0] || 'there'}! I am your AI Scholar Assistant. I have loaded your study data: your target score is ${profile.target_score || 300} for ${profile.target_university || 'JAMB'}, and your streak is ${profile.streak_days || 0} days. How can I help you master your subjects today?`
+        // Initialize or restore saved messages
+        let savedMsgs: any[] = [];
+        try {
+          const stored = localStorage.getItem(`scholars_ai_tutor_history_${profile.id}`);
+          if (stored) {
+            savedMsgs = JSON.parse(stored);
           }
-        ]);
+        } catch (_) {}
+
+        if (savedMsgs && savedMsgs.length > 0) {
+          setMessages(savedMsgs);
+        } else {
+          const initialGreeting = [
+            {
+              role: 'assistant',
+              content: `Hello ${profile.full_name?.split(' ')[0] || 'there'}! I am your AI Scholar Assistant. I have loaded your study data: your target score is ${profile.target_score || 300} for ${profile.target_university || 'JAMB'}, and your streak is ${profile.streak_days || 0} days. How can I help you master your subjects today?`
+            }
+          ];
+          setMessages(initialGreeting);
+          try {
+            localStorage.setItem(`scholars_ai_tutor_history_${profile.id}`, JSON.stringify(initialGreeting));
+          } catch (_) {}
+        }
       } catch (err) {
         console.error('Failed to load tutor context:', err);
       }
@@ -185,19 +201,47 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
       const fullConversation = [systemContext, ...updatedMessages];
       const response = await chatWithTutor(fullConversation);
 
-      setMessages([...updatedMessages, { role: 'assistant', content: response }]);
+      const finalMsgs = [...updatedMessages, { role: 'assistant', content: response }];
+      setMessages(finalMsgs);
+      if (profile?.id) {
+        try {
+          localStorage.setItem(`scholars_ai_tutor_history_${profile.id}`, JSON.stringify(finalMsgs));
+        } catch (_) {}
+      }
     } catch (error: any) {
       console.error('AI Tutor error:', error);
-      setMessages([
+      const fallbackMsgs = [
         ...updatedMessages, 
         { 
           role: 'assistant', 
           content: `I am analyzing your query and study history. Please feel free to re-submit your question or ask about specific UTME topics.` 
         }
-      ]);
+      ];
+      setMessages(fallbackMsgs);
+      if (profile?.id) {
+        try {
+          localStorage.setItem(`scholars_ai_tutor_history_${profile.id}`, JSON.stringify(fallbackMsgs));
+        } catch (_) {}
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleClearChat = () => {
+    const initialGreeting = [
+      {
+        role: 'assistant',
+        content: `Chat history cleared. Hello ${profile?.full_name?.split(' ')[0] || 'there'}! How can I assist you with your UTME prep today?`
+      }
+    ];
+    setMessages(initialGreeting);
+    if (profile?.id) {
+      try {
+        localStorage.removeItem(`scholars_ai_tutor_history_${profile.id}`);
+      } catch (_) {}
+    }
+    toast.success('AI Tutor conversation reset.');
   };
 
 
@@ -267,6 +311,17 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
               )}
             </CardTitle>
             <div className="flex items-center gap-1">
+              {!isExamLocked && (
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleClearChat} 
+                  title="Clear chat history / New session"
+                  className="text-white hover:bg-purple-700 h-8 w-8"
+                >
+                  <RotateCcw className="h-3.5 w-3.5" />
+                </Button>
+              )}
               <Button variant="ghost" size="icon" onClick={() => setIsOpen(false)} className="text-white hover:bg-purple-700 h-8 w-8">
                 <X className="h-4 w-4" />
               </Button>

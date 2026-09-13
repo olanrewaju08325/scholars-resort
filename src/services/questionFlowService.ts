@@ -30,6 +30,9 @@ export interface ModeQuestionQueryConfig {
   sourceType?: 'jamb_past' | 'custom' | 'ai_generated' | 'tournament';
   count?: number;
   examYear?: number | string;
+  startYear?: number | string;
+  endYear?: number | string;
+  drillMode?: 'exam' | 'practice';
   difficulty?: 'easy' | 'medium' | 'hard' | 'mixed' | 'adaptive';
   timeLimitSeconds?: number;
   learningStyle?: string;
@@ -228,6 +231,48 @@ export class QuestionFlowService {
         } catch (err: any) {
           isMistakeFallbackNeeded = true;
           warnings.push(`Error loading adaptive weakness questions: ${err.message || err}. Falling back.`);
+        }
+      } else if (config.learningStyle === 'revision' && config.userId) {
+        try {
+          const { data: userAnswers, error: answersError } = await supabase
+            .from('session_answers')
+            .select('question_id')
+            .eq('user_id', config.userId)
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+          if (!answersError && userAnswers && userAnswers.length > 0) {
+            const attemptedQIds = Array.from(new Set(userAnswers.map((a: any) => a.question_id).filter(Boolean)));
+            if (attemptedQIds.length > 0) {
+              let query = supabase
+                .from('questions')
+                .select(QUESTION_SELECT_FIELDS)
+                .in('id', attemptedQIds.slice(0, 50));
+
+              if (config.subjectId && config.subjectId !== 'all') {
+                const matchedIds = await resolveSubjectIdsByNameOrAlias(config.subjectId);
+                const validUuids = matchedIds.filter(isUUID);
+                if (validUuids.length > 0) {
+                  query = query.in('subject_id', validUuids);
+                }
+              }
+
+              const { data: revQs, error: revError } = await query.limit(targetCount);
+              if (!revError && revQs && revQs.length > 0) {
+                rawQuestions = revQs;
+                subjectsQueried.push('Revision Mode (Past Attempts)');
+                isMistakeFallbackNeeded = false;
+              } else {
+                isMistakeFallbackNeeded = true;
+              }
+            } else {
+              isMistakeFallbackNeeded = true;
+            }
+          } else {
+            isMistakeFallbackNeeded = true;
+          }
+        } catch (_) {
+          isMistakeFallbackNeeded = true;
         }
       } else {
         isMistakeFallbackNeeded = true;
@@ -491,8 +536,14 @@ export class QuestionFlowService {
               query = query.in('subject_id', validUuids);
             }
 
-            if (config.examYear) {
-              query = query.eq('year', config.examYear);
+            if (config.examYear && config.examYear !== 'all') {
+              if (config.examYear === 'last_5') {
+                query = query.gte('year', 2020);
+              } else {
+                query = query.eq('year', Number(config.examYear));
+              }
+            } else if (config.startYear && config.endYear) {
+              query = query.gte('year', Number(config.startYear)).lte('year', Number(config.endYear));
             }
 
             const { data, error } = await query.limit(targetCount * 2);
@@ -513,7 +564,7 @@ export class QuestionFlowService {
               const { data: fallbackData } = await fallbackQuery.limit(targetCount * 2);
               if (fallbackData && fallbackData.length > 0) {
                 rawQuestions = fallbackData;
-                warnings.push(`Year ${config.examYear} is currently being compiled; presenting official past syllabus questions for ${canonical}.`);
+                warnings.push(`Year ${config.examYear || 'selected range'} is currently being compiled; presenting official past syllabus questions for ${canonical}.`);
               }
             }
             break;

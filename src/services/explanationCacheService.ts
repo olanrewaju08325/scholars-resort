@@ -45,10 +45,27 @@ export function getQuestionKey(questionId?: string, questionText?: string): stri
   return `q_rand_${Date.now()}`;
 }
 
+export function isGenericOrLazyExplanation(text?: string | null): boolean {
+  if (!text) return true;
+  const t = text.trim();
+  if (t.length < 35) return true;
+  const lower = t.toLowerCase();
+  if (
+    lower.includes('applying the relevant') ||
+    lower.includes('leads to option') ||
+    lower.includes('verified according to the utme syllabus') ||
+    lower.includes('correct answer according to') ||
+    lower.includes('leads to the correct option')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export class ExplanationCacheService {
   /**
    * Retrieves an explanation with 0 AI tokens whenever available.
-   * If not cached anywhere, generates it once via AI with LaTeX math derivations and permanently persists it to the database.
+   * If not cached anywhere or if existing explanation is generic/lazy, generates it once via AI with LaTeX math derivations and permanently persists it to the database.
    */
   public static async getExplanation(params: {
     questionId?: string;
@@ -58,30 +75,35 @@ export class ExplanationCacheService {
     existingExplanation?: string;
     subjectName?: string;
     options?: string[];
+    forceRegenerate?: boolean;
+    style?: 'simpler' | 'another' | 'normal';
   }): Promise<string> {
-    const { questionId, questionText, correctAnswer, selectedAnswer, existingExplanation, subjectName } = params;
+    const { questionId, questionText, correctAnswer, selectedAnswer, existingExplanation, subjectName, forceRegenerate, style } = params;
 
-    // 1. Check existing explanation on object
-    if (existingExplanation && existingExplanation.trim().length > 6 && !existingExplanation.includes('undefined')) {
+    // 1. Check existing explanation on object unless forceRegenerate or generic
+    if (!forceRegenerate && existingExplanation && !isGenericOrLazyExplanation(existingExplanation) && !existingExplanation.includes('undefined')) {
       return existingExplanation.trim();
     }
 
     const key = getQuestionKey(questionId, questionText);
 
-    // 2. Check in-memory session cache
-    if (memCache.has(key)) {
-      return memCache.get(key)!;
+    // 2. Check in-memory session cache unless forceRegenerate
+    if (!forceRegenerate && memCache.has(key)) {
+      const cached = memCache.get(key)!;
+      if (!isGenericOrLazyExplanation(cached)) {
+        return cached;
+      }
     }
 
-    // 3. Check localStorage cache
+    // 3. Check localStorage cache unless forceRegenerate
     const localStore = getLocalStore();
-    if (localStore[key] && localStore[key].trim().length > 6) {
+    if (!forceRegenerate && localStore[key] && !isGenericOrLazyExplanation(localStore[key])) {
       memCache.set(key, localStore[key]);
       return localStore[key];
     }
 
-    // 4. Check database questions table
-    if (questionId) {
+    // 4. Check database questions table unless forceRegenerate
+    if (!forceRegenerate && questionId) {
       try {
         const { data } = await supabase
           .from('questions')
@@ -89,7 +111,7 @@ export class ExplanationCacheService {
           .eq('id', questionId)
           .maybeSingle();
 
-        if (data?.explanation && data.explanation.trim().length > 6) {
+        if (data?.explanation && !isGenericOrLazyExplanation(data.explanation)) {
           saveToLocalStore(key, data.explanation);
           return data.explanation;
         }

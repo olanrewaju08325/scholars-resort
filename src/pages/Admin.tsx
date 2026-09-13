@@ -48,6 +48,9 @@ import { AdminNotificationSystem } from '@/components/admin/AdminNotificationSys
 import { AdminThemeToggle } from '@/components/admin/AdminThemeToggle';
 import { AdminSessionTimeout } from '@/components/admin/AdminSessionTimeout';
 
+import { Sliders } from 'lucide-react';
+import { AiMockConfigTab } from './admin-tabs/AiMockConfigTab';
+
 // Consolidated Tab Modules
 import { QuestionBankContentStudioTab } from './admin-tabs/QuestionBankContentStudioTab';
 import { AcademicTaxonomyHubTab } from './admin-tabs/AcademicTaxonomyHubTab';
@@ -137,6 +140,7 @@ export default function Admin() {
       group: 'AI',
       items: [
         { id: 'ai-command-center', label: 'AI Command Center', icon: Sparkles },
+        { id: 'ai-mock-config', label: 'AI Mock Configurator', icon: Sliders },
       ]
     },
     {
@@ -214,6 +218,8 @@ export default function Admin() {
       case 'ai-studio':
       case 'ai-keys': 
         return <AICommandCenterTab />;
+      case 'ai-mock-config':
+        return <AiMockConfigTab />;
 
       // Business
       case 'revenue': return <RevenueReportingTab />;

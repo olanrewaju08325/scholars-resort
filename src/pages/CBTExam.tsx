@@ -273,6 +273,14 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         return;
       }
 
+      // Past Questions & AI Mock Specific Query Parameters
+      const subjectParam = searchParams.get('subject');
+      const yearParam = searchParams.get('year');
+      const drillModeParam = searchParams.get('drillMode');
+      const countParam = searchParams.get('count');
+
+      let targetCount = countParam ? Number(countParam) : (examMode === 'past_questions' ? 40 : 180);
+
       // JAMB 180-Question Master Logic via QuestionFlowService
       const userSubs = profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0
         ? profile.utme_subjects
@@ -281,7 +289,9 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       const validation = validateUtmeSubjectCombination(userSubs);
       let finalSubjects = validation.isValid ? validation.normalizedSubjects : [];
 
-      if (!finalSubjects || finalSubjects.length === 0) {
+      if (examMode === 'past_questions' && subjectParam) {
+        finalSubjects = [subjectParam];
+      } else if (!finalSubjects || finalSubjects.length === 0) {
         if (userSubs.length > 0) {
           const withEnglish = Array.from(new Set(['Use of English', ...userSubs])).slice(0, 4);
           finalSubjects = withEnglish;
@@ -294,16 +304,37 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       setStartingSubject(finalSubjects[0] || 'Use of English');
       
       try {
+        let aiConfig: any = null;
+        if (examMode === 'ai_generated_mock') {
+          try {
+            const cfgRes = await fetch('/api/admin/ai-mock-config');
+            const cfgData = await cfgRes.json();
+            if (cfgData?.success && cfgData.config) {
+              aiConfig = cfgData.config;
+            }
+          } catch (_) {}
+        }
+
+        const startYearParam = searchParams.get('startYear');
+        const endYearParam = searchParams.get('endYear');
+
         const flowResult = await QuestionFlowService.fetchQuestionsForMode({
           mode: examMode,
+          subjectId: examMode === 'past_questions' ? finalSubjects[0] : undefined,
           subjectIds: finalSubjects,
-          count: examMode === 'past_questions' ? 40 : 180
+          count: targetCount,
+          examYear: examMode === 'past_questions' ? (yearParam || 'all') : undefined,
+          startYear: examMode === 'past_questions' ? (startYearParam || undefined) : undefined,
+          endYear: examMode === 'past_questions' ? (endYearParam || undefined) : undefined,
+          drillMode: (drillModeParam as 'exam' | 'practice') || 'exam',
+          learningStyle: (examMode === 'ai_generated_mock' && aiConfig?.enableWeaknessTargeting) ? 'weakness' : undefined,
+          userId: profile?.id
         });
 
-        console.log(`[CBT Exam Question Flow] Full Mock Retrieved: ${flowResult.totalRetrieved} questions across ${Object.keys(flowResult.validation.subjectsCovered).length} subjects in ${flowResult.queryLatencyMs}ms (Zero Mock Enforced)`);
+        console.log(`[CBT Exam Question Flow] Mode: ${examMode} | Retrieved: ${flowResult.totalRetrieved} questions in ${flowResult.queryLatencyMs}ms`);
 
-        if (flowResult.questions.length < 10) {
-          toast.warning("Limited questions found for this specific subject combination. Practice questions loaded.");
+        if (flowResult.questions.length < 5) {
+          toast.warning("Limited questions found for this specific past question selection. Displaying available bank.");
         }
 
         setQuestions(flowResult.questions);

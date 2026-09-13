@@ -838,16 +838,16 @@ export const SettingsTab = () => {
               <CardTitle className="flex items-center gap-2 text-foreground">
                 <Key className="w-5 h-5 text-purple-500" /> Payment Gateway Keys
               </CardTitle>
-              <CardDescription>Configure Paystack and Stripe keys for student subscription activations.</CardDescription>
+              <CardDescription>Configure Flutterwave and primary gateway keys for student subscription activations.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground">Paystack Secret / Public Key</label>
+                <label className="text-sm font-medium text-foreground">Flutterwave Public / Secret Key</label>
                 <Input 
                   type="password"
                   value={paystackKey} 
                   onChange={e => setPaystackKey(e.target.value)} 
-                  placeholder="pk_test_... or sk_test_..." 
+                  placeholder="FLWPUBK_TEST-... or FLWSECK_TEST-..." 
                 />
               </div>
               <div className="space-y-2">

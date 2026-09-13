@@ -14,6 +14,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { getCanonicalSubjectByName, normalizeToCanonicalSubjectName } from '@/utils/subjectTaxonomy';
 import { MathText } from '@/components/MathText';
+import { JambPQSetupModal } from '@/components/cbt/JambPQSetupModal';
+import { AiMockSetupModal } from '@/components/cbt/AiMockSetupModal';
 
 export default function CBTCenter() {
   const location = useLocation();
@@ -28,6 +30,8 @@ export default function CBTCenter() {
   const [mistakes, setMistakes] = useState<any[]>([]);
   const [selectedMistakeSubject, setSelectedMistakeSubject] = useState<string>('all');
   const [expandedMistakeId, setExpandedMistakeId] = useState<string | null>(null);
+  const [isPqModalOpen, setIsPqModalOpen] = useState(false);
+  const [isAiMockModalOpen, setIsAiMockModalOpen] = useState(false);
 
   const navigate = useNavigate();
   const { profile } = useAuth();
@@ -373,9 +377,27 @@ export default function CBTCenter() {
                     <mode.icon className={`w-12 h-12 ${mode.color} mb-6 transition-transform group-hover:scale-110`} />
                     <h3 className="font-bold font-display text-2xl mb-3">{mode.title}</h3>
                     <p className="text-muted-foreground mb-8">{mode.desc}</p>
-                    <Button asChild className="w-full" variant="default">
-                      <Link to={mode.path || "/exam"}>Start Exam</Link>
-                    </Button>
+                    {mode.title === 'Past Questions' ? (
+                      <Button 
+                        onClick={() => setIsPqModalOpen(true)}
+                        className="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold" 
+                        variant="default"
+                      >
+                        Setup PQ Drill
+                      </Button>
+                    ) : mode.title === 'AI Generated Mock' ? (
+                      <Button 
+                        onClick={() => setIsAiMockModalOpen(true)}
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold" 
+                        variant="default"
+                      >
+                        Configure AI Mock
+                      </Button>
+                    ) : (
+                      <Button asChild className="w-full" variant="default">
+                        <Link to={mode.path || "/exam"}>Start Exam</Link>
+                      </Button>
+                    )}
                   </CardContent>
                 </Card>
               ))}
@@ -886,6 +908,16 @@ export default function CBTCenter() {
           </div>
         )}
       </motion.div>
+
+      <JambPQSetupModal 
+        isOpen={isPqModalOpen} 
+        onClose={() => setIsPqModalOpen(false)} 
+      />
+
+      <AiMockSetupModal
+        isOpen={isAiMockModalOpen}
+        onClose={() => setIsAiMockModalOpen(false)}
+      />
 
     </div>
   );
