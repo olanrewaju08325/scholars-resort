@@ -42,7 +42,19 @@ interface ModuleDiagnosticItem extends HealthCheckModuleReport {
 
 export const HealthCheck: React.FC = () => {
   const navigate = useNavigate();
-  const { profile, user } = useAuth();
+  const { profile, user, loading: authLoading } = useAuth();
+
+  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  const userEmail = (user?.email || profile?.email || '').toLowerCase().trim();
+  const isAdmin = AUTHORIZED_ADMIN_EMAILS.includes(userEmail) || profile?.role === 'admin' || profile?.role === 'super_admin';
+
+  useEffect(() => {
+    if (!authLoading && (!user || !isAdmin)) {
+      toast.error('Access restricted to administrators.');
+      navigate('/dashboard', { replace: true });
+    }
+  }, [authLoading, user, isAdmin, navigate]);
+
   const [loading, setLoading] = useState(false);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [copiedShare, setCopiedShare] = useState(false);

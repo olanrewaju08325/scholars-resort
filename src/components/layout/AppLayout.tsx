@@ -161,7 +161,6 @@ export const AppLayout = () => {
       groupTitle: 'ACCOUNT',
       items: [
         { label: 'Profile', icon: User, path: '/profile' },
-        { label: 'System Health', icon: ShieldCheck, path: '/health-check' },
         { label: 'Support', icon: HelpCircle, path: '/support' },
       ]
     }

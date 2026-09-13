@@ -96,6 +96,7 @@ function AppContent() {
           <Route path="/pricing" element={<Pricing />} />
           <Route path="/features" element={<Features />} />
           <Route path="/scholarresortadmin@benedict" element={<Admin />} />
+          <Route path="/health-check" element={<HealthCheck />} />
           
           {/* Locked Premium Features */}
           <Route element={<ProtectedRoute />}>
@@ -132,7 +133,6 @@ function AppContent() {
               <Route path="/ai-tutor" element={<WeaknessDrill />} />
               <Route path="/referrals" element={<Referrals />} />
               <Route path="/scholarship" element={<Scholarship />} />
-              <Route path="/health-check" element={<HealthCheck />} />
             </Route>
 
             {/* Fullscreen / Immersive Pages (No Navigation) */}

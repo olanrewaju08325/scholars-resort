@@ -14,7 +14,7 @@ import { NotificationsMenu } from '@/components/NotificationsMenu';
 import { DashboardSkeleton } from '@/components/dashboard/skeletons/DashboardSkeleton';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { motion } from 'framer-motion';
-import { Flame, Zap, ShieldCheck } from 'lucide-react';
+import { Flame, Zap } from 'lucide-react';
 import { DailyFiveQuestionDrill } from '@/components/dashboard/DailyFiveQuestionDrill';
 import { CbtHubGrid } from '@/components/dashboard/CbtHubGrid';
 import { UserSubjectsQuickGrid } from '@/components/dashboard/UserSubjectsQuickGrid';
@@ -47,14 +47,6 @@ export default function Dashboard() {
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          <Link
-            to="/health-check"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold hover:bg-emerald-500/20 transition-all shadow-xs"
-            title="System Health & Live Data Integrity Diagnostics"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="hidden sm:inline">DB Health</span>
-          </Link>
           {profile.streak_days != null && profile.streak_days > 0 && (
             <div className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-600 dark:text-orange-400 text-xs font-bold">
               <Flame className="w-3.5 h-3.5 fill-orange-500 text-orange-500" />

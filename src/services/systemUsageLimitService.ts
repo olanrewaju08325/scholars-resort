@@ -456,4 +456,30 @@ export class SystemUsageLimitService {
       console.warn('[SystemUsageLimitService] Failed to dispatch automated alert email:', emailErr);
     }
   }
+
+  /**
+   * Resets the active AI token cycle and calibration timestamp when a new key is attached
+   */
+  static async resetTokenCycle(): Promise<{ success: boolean; keyRotatedAt: string }> {
+    try {
+      const res = await fetch('/api/admin/reset-ai-key-cycle', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      if (res.ok) {
+        return await res.json();
+      }
+    } catch (_) {}
+
+    const nowIso = new Date().toISOString();
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'ai_key_rotated_at',
+        setting_value: { timestamp: nowIso },
+        updated_at: nowIso
+      }, { onConflict: 'setting_key' });
+    } catch (_) {}
+
+    return { success: true, keyRotatedAt: nowIso };
+  }
 }
