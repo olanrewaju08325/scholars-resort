@@ -59,28 +59,20 @@ export default function CBTCenter() {
 
 
   useEffect(() => {
-    // Load local mistakes
-    try {
-      const stored = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
-      setMistakes(Array.isArray(stored) ? stored : []);
-    } catch {
-      setMistakes([]);
-    }
-
-    const fetchHistory = async () => {
+    const fetchHistoryAndMistakes = async () => {
       if (!profile) return;
       setHistoryLoading(true);
       try {
-        const { data } = await supabase
+        // 1. Fetch exam sessions
+        const { data: dbSessions } = await supabase
           .from('exam_sessions')
           .select('*')
           .eq('user_id', profile.id)
           .order('started_at', { ascending: false })
           .limit(50);
 
-        // Also merge with local completed sessions
         const localHistory = JSON.parse(localStorage.getItem('jamb_practice_history') || '[]');
-        const combined = [...(data || [])];
+        const combined = [...(dbSessions || [])];
         if (Array.isArray(localHistory)) {
           const existingIds = new Set(combined.map(s => s.id));
           localHistory.forEach((loc: any) => {
@@ -90,14 +82,75 @@ export default function CBTCenter() {
           });
         }
         setHistorySessions(combined);
+
+        // 2. Fetch real DB mistakes from session_answers
+        const { data: dbAnswers } = await supabase
+          .from('session_answers')
+          .select(`
+            id,
+            is_correct,
+            user_answer,
+            created_at,
+            question_id,
+            questions (
+              id,
+              question_text,
+              question,
+              options,
+              correct_answer,
+              explanation,
+              year,
+              subject_id,
+              subjects ( name )
+            )
+          `)
+          .eq('user_id', profile.id)
+          .eq('is_correct', false)
+          .order('created_at', { ascending: false });
+
+        const localMistakes = JSON.parse(localStorage.getItem('jamb_mistake_bank') || '[]');
+        const mistakeMap = new Map();
+
+        if (dbAnswers && dbAnswers.length > 0) {
+          dbAnswers.forEach(ans => {
+            const q = ans.questions as any;
+            if (!q || !q.id) return;
+            mistakeMap.set(q.id, {
+              id: q.id,
+              question_text: q.question_text || q.question,
+              questionText: q.question_text || q.question,
+              options: q.options,
+              correct_answer: q.correct_answer || 'A',
+              correctAnswer: q.correct_answer || 'A',
+              explanation: q.explanation,
+              userAnswer: ans.user_answer,
+              subject_name: q.subjects?.name || 'General UTME',
+              subjectName: q.subjects?.name || 'General UTME',
+              year: q.year
+            });
+          });
+        }
+
+        if (Array.isArray(localMistakes)) {
+          localMistakes.forEach((m: any) => {
+            if (m && (m.id || m.question_text)) {
+              const key = m.id || m.question_text;
+              if (!mistakeMap.has(key)) {
+                mistakeMap.set(key, m);
+              }
+            }
+          });
+        }
+
+        setMistakes(Array.from(mistakeMap.values()));
       } catch (err) {
-        console.warn('Error fetching exam history:', err);
+        console.warn('Error fetching exam history & mistakes:', err);
       } finally {
         setHistoryLoading(false);
       }
     };
 
-    fetchHistory();
+    fetchHistoryAndMistakes();
   }, [profile, activeTab]);
 
   const practiceModes = [
@@ -544,13 +597,14 @@ export default function CBTCenter() {
                   <div className="flex items-baseline gap-2 mt-2">
                     <span className="text-3xl font-display font-bold text-emerald-500">
                       {historySessions.length > 0 
-                        ? Math.round(
+                        ? Math.min(100, Math.round(
                             historySessions.reduce((acc, s) => {
-                              const total = s.total_questions || 20;
-                              const score = s.score || s.total_score || 0;
-                              return acc + (total > 0 ? (score / total) * 100 : 0);
+                              const total = s.total_questions || s.totalQuestions || 20;
+                              const score = s.score ?? s.total_score ?? s.correct_count ?? 0;
+                              const pct = s.percentage ?? s.score_percentage ?? (total > 0 ? (score / total) * 100 : 0);
+                              return acc + (pct > 100 ? (pct / 400) * 100 : pct);
                             }, 0) / historySessions.length
-                          )
+                          ))
                         : 0}%
                     </span>
                     <span className="text-xs text-muted-foreground">overall</span>
