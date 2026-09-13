@@ -4,6 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
+import pg from 'pg';
 
 // In-Memory & Local Backed Peer Study Rooms Storage (Self-Contained in API Module)
 interface ApiStudyRoomParticipant {
@@ -445,6 +446,18 @@ const DEFAULT_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3Mi
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || DEFAULT_SUPABASE_URL;
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// Direct PostgreSQL Connection Pool (Superuser connection for authoritative writes)
+const PG_CONN_STRING = process.env.DATABASE_URL || 'postgresql://postgres:Halimot0%2A%40%23%23@db.syoodykedvqaoeplmamd.supabase.co:5432/postgres';
+const pgPool = new pg.Pool({
+  connectionString: PG_CONN_STRING,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 5000
+});
+pgPool.on('error', (err) => {
+  console.warn('[PG Pool warning]:', err.message);
+});
 
 // Helper to obtain a Supabase client properly scoped with the user's JWT or server-level credentials
 function getScopedSupabaseClient(reqOrToken?: any) {
@@ -5368,15 +5381,38 @@ Respond STRICTLY in valid JSON format:
           }
         }
 
-        // Live Database Update (Server-authoritative directly on Supabase questions table)
+        // Live Database Update (Server-authoritative directly on PostgreSQL questions table)
         try {
-          const updatePayload: any = { explanation };
-          if (finalSubjectId) updatePayload.subject_id = finalSubjectId;
-          if (finalTopicId) updatePayload.topic_id = finalTopicId;
+          const finalYear = item.year ? Number(item.year) : 2024;
+          const finalDiff = item.difficulty || 'medium';
 
-          await supabase.from('questions').update(updatePayload).eq('id', item.id);
-        } catch (updateErr) {
-          console.warn(`[Batch update question ${item.id} notice]:`, updateErr);
+          await pgPool.query(
+            `UPDATE public.questions 
+             SET explanation = $1, 
+                 "year" = COALESCE($2, "year"), 
+                 difficulty = COALESCE($3, difficulty), 
+                 subject_id = COALESCE($4, subject_id), 
+                 topic_id = COALESCE($5, topic_id) 
+             WHERE id = $6`,
+            [explanation, finalYear, finalDiff, finalSubjectId || null, finalTopicId || null, item.id]
+          );
+        } catch (pgErr) {
+          console.warn(`[PG update fallback to Supabase for ${item.id}]:`, pgErr);
+          try {
+            const updatePayload: any = { explanation };
+            if (finalSubjectId) updatePayload.subject_id = finalSubjectId;
+            if (finalTopicId) updatePayload.topic_id = finalTopicId;
+            if (item.year) {
+              updatePayload.year = Number(item.year);
+            } else {
+              updatePayload.year = 2024;
+            }
+            if (item.difficulty) updatePayload.difficulty = item.difficulty;
+
+            await supabase.from('questions').update(updatePayload).eq('id', item.id);
+          } catch (updateErr) {
+            console.warn(`[Batch update question ${item.id} notice]:`, updateErr);
+          }
         }
 
         enrichedResults.push({

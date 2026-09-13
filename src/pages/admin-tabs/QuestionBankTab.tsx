@@ -1096,16 +1096,11 @@ export const QuestionBankTab = () => {
               <div className="space-y-2 pt-1">
                 <Button
                   type="button"
-                  onClick={handleGlobalAiEnrich}
-                  disabled={globalAiEnriching}
+                  onClick={() => setUnifiedEnrichmentModalOpen(true)}
                   className="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs h-9 gap-2 shadow-sm"
                 >
-                  {globalAiEnriching ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5" />
-                  )}
-                  {globalAiEnriching ? 'AI Enriching Repository...' : '✨ Run AI Auto-Enrich (All Incomplete)'}
+                  <Sparkles className="w-3.5 h-3.5" />
+                  ✨ Run AI Auto-Enrich (All Incomplete)
                 </Button>
 
                 <Button
