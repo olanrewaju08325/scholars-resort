@@ -246,7 +246,7 @@ export const AIContentOperations: React.FC = () => {
                 </div>
               )}
             </CardContent>
-          </CardCard>
+          </Card>
         </div>
       )}
 

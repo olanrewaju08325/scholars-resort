@@ -88,25 +88,20 @@ export const UnifiedAiEnrichmentModal: React.FC<UnifiedAiEnrichmentModalProps> =
 
           if (resData.success && Array.isArray(resData.enriched)) {
             for (const item of resData.enriched) {
-              const ans = item.correct_answer || 'A';
-              const cleanExp = item.explanation || `Step-by-step solution: Option ${ans} is the correct answer. The core JAMB UTME syllabus concepts confirm this choice with verified accuracy.`;
-              await supabase.from('questions').update({
-                explanation: cleanExp
-              }).eq('id', item.id);
-            }
-          } else {
-            // Direct fallback
-            for (const q of batch) {
-              const ans = q.correct_answer || 'A';
-              await supabase.from('questions').update({
-                explanation: `Step-by-step solution: Option ${ans} is the correct answer. Analyzing the core syllabus principles and fundamental concepts verifies that choice ${ans} accurately answers the question.`
-              }).eq('id', q.id);
+              if (item.explanation) {
+                await supabase.from('questions').update({
+                  explanation: item.explanation,
+                  ...(item.subject_id ? { subject_id: item.subject_id } : {}),
+                  ...(item.topic_id ? { topic_id: item.topic_id } : {})
+                }).eq('id', item.id);
+              }
             }
           }
 
           processed += batch.length;
           setProgress(p => ({ ...p, current: processed }));
-          setLogs(prev => [...prev, `✅ Batch ${currentBatchNum} saved to database (${processed}/${total}).`]);
+          const tokensMsg = resData.tokensUsed ? ` (${resData.tokensUsed} tokens via ${resData.model || 'Groq AI'})` : '';
+          setLogs(prev => [...prev, `✅ Batch ${currentBatchNum} saved to database (${processed}/${total})${tokensMsg}.`]);
         } catch (batchErr: any) {
           setLogs(prev => [...prev, `⚠️ Batch ${currentBatchNum} note: applying direct verified updates (${batchErr.message || 'fallback'})`]);
           for (const q of batch) {

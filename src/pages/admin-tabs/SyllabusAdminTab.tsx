@@ -67,31 +67,6 @@ export const SyllabusAdminTab = () => {
     title: ''
   });
 
-  useEffect(() => {
-    fetchSubjects();
-    loadLearningRules();
-    loadNovels();
-
-    const handleRefreshEvent = () => {
-      fetchSubjects();
-      if (selectedSubjectId) fetchTopicsForSubject(selectedSubjectId);
-    };
-
-    window.addEventListener('scholar:reset-admin-state', handleRefreshEvent);
-    window.addEventListener('scholar:refresh-taxonomy', handleRefreshEvent);
-
-    return () => {
-      window.removeEventListener('scholar:reset-admin-state', handleRefreshEvent);
-      window.removeEventListener('scholar:refresh-taxonomy', handleRefreshEvent);
-    };
-  }, [selectedSubjectId]);
-
-  useEffect(() => {
-    if (selectedSubjectId) {
-      fetchTopicsForSubject(selectedSubjectId);
-    }
-  }, [selectedSubjectId]);
-
   const loadLearningRules = async () => {
     const data = await fetchAcademicLearningRules();
     setRules(data);
@@ -100,24 +75,6 @@ export const SyllabusAdminTab = () => {
   const loadNovels = async () => {
     const books = await fetchJambBooks();
     setAvailableNovels(books);
-  };
-
-  const handleSaveLearningRules = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSavingRules(true);
-    try {
-      const res = await saveAcademicLearningRules(rules);
-      if (res.success) {
-        toast.success('Academic learning & progression rules updated successfully in Supabase!');
-        logAdminActivity('Update Learning Rules', `Mastery: ${rules.masteryThresholdPercent}%, Mode: ${rules.prerequisiteMode}`);
-      } else {
-        toast.error(`Failed to save learning rules: ${res.error}`);
-      }
-    } catch (err: any) {
-      toast.error(`Error saving rules: ${err.message}`);
-    } finally {
-      setSavingRules(false);
-    }
   };
 
   const fetchSubjects = async () => {
@@ -175,6 +132,49 @@ export const SyllabusAdminTab = () => {
       } catch {
         setTopics([]);
       }
+    }
+  };
+
+  useEffect(() => {
+    fetchSubjects();
+    loadLearningRules();
+    loadNovels();
+
+    const handleRefreshEvent = () => {
+      fetchSubjects();
+      if (selectedSubjectId) fetchTopicsForSubject(selectedSubjectId);
+    };
+
+    window.addEventListener('scholar:reset-admin-state', handleRefreshEvent);
+    window.addEventListener('scholar:refresh-taxonomy', handleRefreshEvent);
+
+    return () => {
+      window.removeEventListener('scholar:reset-admin-state', handleRefreshEvent);
+      window.removeEventListener('scholar:refresh-taxonomy', handleRefreshEvent);
+    };
+  }, [selectedSubjectId]);
+
+  useEffect(() => {
+    if (selectedSubjectId) {
+      fetchTopicsForSubject(selectedSubjectId);
+    }
+  }, [selectedSubjectId]);
+
+  const handleSaveLearningRules = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingRules(true);
+    try {
+      const res = await saveAcademicLearningRules(rules);
+      if (res.success) {
+        toast.success('Academic learning & progression rules updated successfully in Supabase!');
+        logAdminActivity('Update Learning Rules', `Mastery: ${rules.masteryThresholdPercent}%, Mode: ${rules.prerequisiteMode}`);
+      } else {
+        toast.error(`Failed to save learning rules: ${res.error}`);
+      }
+    } catch (err: any) {
+      toast.error(`Error saving rules: ${err.message}`);
+    } finally {
+      setSavingRules(false);
     }
   };
 

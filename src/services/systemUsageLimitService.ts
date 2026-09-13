@@ -251,13 +251,30 @@ export class SystemUsageLimitService {
 
       const { data: aiMonthData } = await supabase
         .from('ai_usage')
-        .select('total_tokens, created_at')
+        .select('total_tokens, prompt_tokens, completion_tokens, created_at')
         .gte('created_at', sinceTime);
 
       if (aiMonthData) {
-        aiTokensMonth = aiMonthData.reduce((acc, curr) => acc + (curr.total_tokens || 0), 0);
+        aiTokensMonth = aiMonthData.reduce((acc, curr) => {
+          const t = curr.total_tokens || ((curr.prompt_tokens || 0) + (curr.completion_tokens || 0));
+          return acc + t;
+        }, 0);
         aiRequestsToday = aiMonthData.filter(d => new Date(d.created_at) >= startOfToday).length;
       }
+
+      // Also query server-side telemetry endpoint to capture immediate in-memory sessions
+      try {
+        const telRes = await fetch('/api/groq-telemetry');
+        if (telRes.ok) {
+          const telData = await telRes.json();
+          if (telData?.totals?.totalTokens) {
+            aiTokensMonth = Math.max(aiTokensMonth, telData.totals.totalTokens);
+          }
+          if (telData?.totals?.totalRequests) {
+            aiRequestsToday = Math.max(aiRequestsToday, telData.totals.totalRequests);
+          }
+        }
+      } catch (_) {}
     } catch (aiErr) {
       console.warn('[SystemUsageLimitService] AI usage query error:', aiErr);
     }

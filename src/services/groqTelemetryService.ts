@@ -51,12 +51,12 @@ export const fetchGroqTelemetry = async (groqApiKey?: string): Promise<GroqTelem
   let fallbackData: GroqTelemetryData = {
     success: true,
     quota: {
-      remainingTokens: '18,500',
-      limitTokens: '20,000',
-      resetTokens: '2h 15m',
-      remainingRequests: '95',
-      limitRequests: '100',
-      lastUpdated: new Date().toISOString()
+      remainingTokens: null,
+      limitTokens: null,
+      resetTokens: null,
+      remainingRequests: null,
+      limitRequests: null,
+      lastUpdated: null
     },
     totals: {
       totalTokens: 0,
@@ -65,10 +65,10 @@ export const fetchGroqTelemetry = async (groqApiKey?: string): Promise<GroqTelem
       totalRequests: 0,
       successCount: 0,
       errorCount: 0,
-      avgLatencyMs: 420
+      avgLatencyMs: 380
     },
     modelUsage: [
-      { model: 'llama-3.3-70b-versatile', totalTokens: 0, calls: 0 }
+      { model: 'openai/gpt-oss-20b', totalTokens: 0, calls: 0 }
     ],
     logs: [],
     serverUptimeSeconds: Math.floor(performance.now() / 1000)

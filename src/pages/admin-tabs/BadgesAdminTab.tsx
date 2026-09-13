@@ -30,10 +30,6 @@ export const BadgesAdminTab = () => {
     name: ''
   });
 
-  useEffect(() => {
-    fetchBadges();
-  }, []);
-
   const fetchBadges = async () => {
     setLoading(true);
 
@@ -74,6 +70,10 @@ export const BadgesAdminTab = () => {
     setBadges(defaultBadges);
     setLoading(false);
   };
+
+  useEffect(() => {
+    fetchBadges();
+  }, []);
 
   const handleSaveBadge = async (e: React.FormEvent) => {
     e.preventDefault();
