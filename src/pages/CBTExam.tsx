@@ -42,7 +42,13 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   const location = useLocation();
   const { profile } = useAuth();
   const { confirmAction, ConfirmElement } = useConfirm();
-  const { abandonCurrentExam } = useExamCleanup();
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
+  const { abandonCurrentExam, cleanupIncompleteSessions } = useExamCleanup({
+    autoCleanupOnUnmount: true,
+    sessionId,
+    isSubmitted
+  });
   const { isLocked: isSessionLocked, acquireLock, releaseLock } = useExamSessionLock();
 
   const searchParams = new URLSearchParams(location.search);
@@ -106,7 +112,6 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   const [bookmarks, setBookmarks] = useState<Record<string, boolean>>({});
   const [showWarning, setShowWarning] = useState(false);
   const [hasStarted, setHasStarted] = useState(false);
-  const [sessionId, setSessionId] = useState<string>(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [showNavDrawer, setShowNavDrawer] = useState(false);
@@ -628,6 +633,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     }
     
     // Clear backups
+    setIsSubmitted(true);
     sessionStorage.removeItem('cbt_backup');
     localStorage.removeItem('scholars_live_exam_active');
     await clearInterruptedExamSession(profile?.id);
@@ -1530,38 +1536,6 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         </div>
 
       </div>
-
-      {/* Floating Persistent Non-Blocking Timer Widget */}
-      {hasStarted && !submitting && (
-        <div className="fixed bottom-4 right-4 z-40 hidden sm:flex items-center gap-2 px-3 py-2 rounded-full bg-slate-900/90 text-white dark:bg-card/95 dark:text-card-foreground backdrop-blur-md border border-slate-700 dark:border-border shadow-2xl animate-in fade-in slide-in-from-bottom-2">
-          <Clock className={`w-4 h-4 ${timeLeft <= 300 ? 'text-red-400 animate-pulse' : 'text-emerald-400'}`} />
-          <span className="font-mono text-xs font-bold tracking-tight">
-            {formatTime(timeLeft)}
-          </span>
-          <span className="text-[10px] text-slate-400 border-l border-slate-700 dark:border-border pl-2 pr-1 font-sans">
-            {Object.keys(answers).length}/{questions.length} answered
-          </span>
-          {getPaceStatus() && (
-            <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full border ${getPaceStatus()?.colorClass}`}>
-              {getPaceStatus()?.label}
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Mobile Floating Quick Navigator Trigger Pill */}
-      {hasStarted && !submitting && (
-        <div className="fixed bottom-4 left-4 z-40 sm:hidden animate-in fade-in slide-in-from-bottom-2">
-          <Button
-            onClick={() => setShowNavDrawer(true)}
-            className="h-10 px-3.5 rounded-full bg-slate-900/95 text-white dark:bg-card/95 dark:text-card-foreground border border-slate-700 dark:border-border shadow-2xl backdrop-blur-md flex items-center gap-2 text-xs font-bold active:scale-95 transition-transform"
-          >
-            <Grid3X3 className="w-4 h-4 text-emerald-400" />
-            <span>Q{currentQuestionIdx + 1}/{questions.length}</span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-          </Button>
-        </div>
-      )}
 
       {/* Persistent Accessible Navigation Drawer */}
       <CBTNavigationDrawer

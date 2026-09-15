@@ -140,7 +140,8 @@ export default function CBTCenter() {
               userAnswer: ans.user_answer,
               subject_name: subStr,
               subjectName: subStr,
-              year: q.year
+              year: q.year,
+              created_at: ans.created_at
             });
           });
         }
@@ -797,7 +798,14 @@ export default function CBTCenter() {
                                 </span>
                               </div>
                               <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-3">
-                                <span>{session.completed_at ? new Date(session.completed_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : new Date(session.created_at || Date.now()).toLocaleDateString()}</span>
+                                <span>{(() => {
+                                  const rawDate = session.submitted_at || session.completed_at || session.started_at || session.created_at || session.timestamp;
+                                  if (!rawDate) return 'Recent session';
+                                  const d = new Date(rawDate);
+                                  return isNaN(d.getTime())
+                                    ? 'Recent session'
+                                    : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                                })()}</span>
                                 <span>•</span>
                                 <span>{totalQ} Questions</span>
                                 {session.time_spent_seconds && (

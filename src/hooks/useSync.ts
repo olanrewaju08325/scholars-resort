@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import db from '../lib/db';
 import { useAuth } from '../context/AuthContext';
+import { sanitizeIndexedDbKey } from '@/utils/indexedDbKeySanitizer';
 
 export const useSync = () => {
   const { user } = useAuth();
@@ -58,9 +59,12 @@ export const useSync = () => {
         })) || [];
 
         // Transaction to update both tables atomically
+        const cleanSubId = sanitizeIndexedDbKey(subjectId, '');
         await db.transaction('rw', db.subjects_cache, db.questions_cache, db.download_meta, async () => {
           // Clear old questions for this subject
-          await db.questions_cache.where('subject_id').equals(subjectId).delete();
+          if (cleanSubId) {
+            await db.questions_cache.where('subject_id').equals(cleanSubId).delete();
+          }
           
           if (questionsToCache.length > 0) {
             await db.questions_cache.bulkAdd(questionsToCache);
@@ -115,11 +119,14 @@ export const useSync = () => {
         }
 
         // Get corresponding answers
-        const pendingAnswers = await db.pending_answers
-          .where('session_id')
-          .equals(session.id)
-          .and(a => !a.synced)
-          .toArray();
+        const cleanSessionId = sanitizeIndexedDbKey(session.id, '');
+        const pendingAnswers = cleanSessionId 
+          ? await db.pending_answers
+              .where('session_id')
+              .equals(cleanSessionId)
+              .and(a => !a.synced)
+              .toArray()
+          : [];
 
         if (pendingAnswers.length > 0) {
           const answersToInsert = pendingAnswers.map(a => ({

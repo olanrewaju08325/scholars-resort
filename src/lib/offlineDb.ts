@@ -1,4 +1,7 @@
 import Dexie, { type Table } from 'dexie';
+import { isValidIndexedDbKey, sanitizeIndexedDbKey, sanitizeNumericKey } from '@/utils/indexedDbKeySanitizer';
+
+export { isValidIndexedDbKey, sanitizeIndexedDbKey, sanitizeNumericKey };
 
 export interface OfflineQuestion {
   id: string;
@@ -74,28 +77,8 @@ export class ScholarsResortDB extends Dexie {
 
 export const sanitizeDbKey = (key: any): string | null => {
   if (key === null || key === undefined) return null;
-  if (Array.isArray(key)) {
-    if (key.length >= 1) {
-      return sanitizeDbKey(key[0]);
-    }
-    return null;
-  }
-  if (typeof key === 'string') {
-    const trimmed = key.trim();
-    if (trimmed === '' || trimmed === 'undefined' || trimmed === 'null') return null;
-    return trimmed;
-  }
-  if (typeof key === 'number') {
-    return (!isNaN(key) && isFinite(key)) ? String(key) : null;
-  }
-  if (key instanceof Date) {
-    return !isNaN(key.getTime()) ? key.toISOString() : null;
-  }
-  if (typeof key === 'object') {
-    if (key.id) return sanitizeDbKey(key.id);
-    if (key.userId) return sanitizeDbKey(key.userId);
-  }
-  return null;
+  const sanitized = sanitizeIndexedDbKey(key, '');
+  return (sanitized && sanitized.length > 0) ? sanitized : null;
 };
 
 export const offlineDb = new ScholarsResortDB();

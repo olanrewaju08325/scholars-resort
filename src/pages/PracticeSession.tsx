@@ -24,6 +24,7 @@ import { CbtSnapshotService } from '@/services/cbtSnapshotService';
 import { useFocusLock } from '@/hooks/useFocusLock';
 import { FocusLockOverlay } from '@/components/FocusLockOverlay';
 import { PracticeSessionCounter } from '@/utils/practiceSessionCounter';
+import { useExamCleanup } from '@/hooks/useExamCleanup';
 
 const getNormalizedExplanation = (q: any): string | null => {
   if (!q) return null;
@@ -73,6 +74,13 @@ const PracticeSession = () => {
   const [showExitConfirm, setShowExitConfirm] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const { abandonCurrentExam, cleanupIncompleteSessions } = useExamCleanup({
+    autoCleanupOnUnmount: true,
+    sessionId: sessionId || undefined,
+    isSubmitted
+  });
+
   // Advanced Practice State
   const [isPaused, setIsPaused] = useState(false);
   const [timeSpent, setTimeSpent] = useState(0); // per question
@@ -137,6 +145,7 @@ const PracticeSession = () => {
 
     } else {
       // End of session
+      setIsSubmitted(true);
       sessionStorage.removeItem('practice_session_state');
       
       // Authoritatively calculate correct answers from questions & student choices
@@ -421,6 +430,7 @@ const PracticeSession = () => {
       // 1. Create Practice Session Record in exam_sessions
       if (profile?.id) {
         try {
+          await cleanupIncompleteSessions(profile.id);
           const { data: sessionData, error: sessionErr } = await supabase.from('exam_sessions').insert({
             user_id: profile.id,
             status: 'in_progress',
@@ -888,9 +898,10 @@ D) ...
 
               <Button 
                 variant="ghost"
-                onClick={() => {
+                onClick={async () => {
                   setShowExitConfirm(false);
                   sessionStorage.removeItem('practice_session_state');
+                  await abandonCurrentExam(sessionId || undefined, false);
                   navigate('/practice');
                 }}
                 className="w-full text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 font-medium h-10 rounded-xl"

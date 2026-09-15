@@ -4,6 +4,8 @@
  * Solves environment variable deployment failures by safely caching API keys in browser storage.
  */
 
+import { sanitizeIndexedDbKey, isValidIndexedDbKey } from '@/utils/indexedDbKeySanitizer';
+
 const DB_NAME = 'ScholarsResort_Vault_v1';
 const STORE_NAME = 'secure_api_vault';
 const DB_VERSION = 1;
@@ -66,11 +68,12 @@ function decryptValue(enc: string): string | null {
  * Save a key-value pair to IndexedDB with localStorage fallback
  */
 export async function setSecureItem(key: string, value: string): Promise<boolean> {
-  if (!key) return false;
+  const safeKey = sanitizeIndexedDbKey(key, '');
+  if (!safeKey) return false;
   const cleanVal = (value || '').trim();
 
   // 1. Update in-memory cache
-  memoryCache.set(key, cleanVal);
+  memoryCache.set(safeKey, cleanVal);
 
   // 2. Try IndexedDB
   let idbSuccess = false;
@@ -79,7 +82,7 @@ export async function setSecureItem(key: string, value: string): Promise<boolean
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.put({ key, value: cleanVal, updatedAt: Date.now() });
+      const req = store.put({ key: safeKey, value: cleanVal, updatedAt: Date.now() });
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
@@ -92,9 +95,9 @@ export async function setSecureItem(key: string, value: string): Promise<boolean
   try {
     if (typeof localStorage !== 'undefined') {
       if (cleanVal) {
-        localStorage.setItem(`_sr_sec_${key}`, encryptValue(cleanVal));
+        localStorage.setItem(`_sr_sec_${safeKey}`, encryptValue(cleanVal));
       } else {
-        localStorage.removeItem(`_sr_sec_${key}`);
+        localStorage.removeItem(`_sr_sec_${safeKey}`);
       }
     }
   } catch {}
@@ -106,11 +109,12 @@ export async function setSecureItem(key: string, value: string): Promise<boolean
  * Get a key-value pair from in-memory cache, IndexedDB, or Encrypted LocalStorage
  */
 export async function getSecureItem(key: string): Promise<string | null> {
-  if (!key) return null;
+  const safeKey = sanitizeIndexedDbKey(key, '');
+  if (!safeKey) return null;
 
   // 1. Check in-memory cache first
-  if (memoryCache.has(key)) {
-    const val = memoryCache.get(key);
+  if (memoryCache.has(safeKey)) {
+    const val = memoryCache.get(safeKey);
     if (val && val.length > 0) return val;
   }
 
@@ -120,13 +124,13 @@ export async function getSecureItem(key: string): Promise<string | null> {
     const result = await new Promise<{ key: string; value: string } | undefined>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readonly');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.get(key);
+      const req = store.get(safeKey);
       req.onsuccess = () => resolve(req.result);
       req.onerror = () => reject(req.error);
     });
 
     if (result && result.value && result.value.trim().length > 0) {
-      memoryCache.set(key, result.value.trim());
+      memoryCache.set(safeKey, result.value.trim());
       return result.value.trim();
     }
   } catch (err) {
@@ -136,21 +140,21 @@ export async function getSecureItem(key: string): Promise<string | null> {
   // 3. Check encrypted localStorage
   try {
     if (typeof localStorage !== 'undefined') {
-      const rawEnc = localStorage.getItem(`_sr_sec_${key}`);
+      const rawEnc = localStorage.getItem(`_sr_sec_${safeKey}`);
       if (rawEnc) {
         const decrypted = decryptValue(rawEnc);
         if (decrypted && decrypted.trim().length > 0) {
-          memoryCache.set(key, decrypted.trim());
+          memoryCache.set(safeKey, decrypted.trim());
           return decrypted.trim();
         }
       }
 
       // Legacy fallback
-      const plain = localStorage.getItem(key);
+      const plain = localStorage.getItem(safeKey);
       if (plain && plain.trim().length > 0 && !plain.includes('placeholder')) {
-        memoryCache.set(key, plain.trim());
+        memoryCache.set(safeKey, plain.trim());
         // Migrate to secure store
-        setSecureItem(key, plain.trim()).catch(() => {});
+        setSecureItem(safeKey, plain.trim()).catch(() => {});
         return plain.trim();
       }
     }
@@ -163,15 +167,16 @@ export async function getSecureItem(key: string): Promise<string | null> {
  * Remove a key from all storage tiers
  */
 export async function removeSecureItem(key: string): Promise<boolean> {
-  if (!key) return false;
-  memoryCache.delete(key);
+  const safeKey = sanitizeIndexedDbKey(key, '');
+  if (!safeKey) return false;
+  memoryCache.delete(safeKey);
 
   try {
     const db = await openDatabase();
     await new Promise<void>((resolve, reject) => {
       const tx = db.transaction(STORE_NAME, 'readwrite');
       const store = tx.objectStore(STORE_NAME);
-      const req = store.delete(key);
+      const req = store.delete(safeKey);
       req.onsuccess = () => resolve();
       req.onerror = () => reject(req.error);
     });
@@ -179,8 +184,8 @@ export async function removeSecureItem(key: string): Promise<boolean> {
 
   try {
     if (typeof localStorage !== 'undefined') {
-      localStorage.removeItem(`_sr_sec_${key}`);
-      localStorage.removeItem(key);
+      localStorage.removeItem(`_sr_sec_${safeKey}`);
+      localStorage.removeItem(safeKey);
     }
   } catch {}
 

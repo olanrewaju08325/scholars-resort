@@ -32,7 +32,7 @@ export async function cleanupActiveExamSessions(options: ExamCleanupOptions = {}
     await clearInterruptedExamSession(cleanUserId);
     await clearExamSnapshot(cleanUserId);
 
-    // 2. Archive / Mark in-progress records in Supabase as 'abandoned'
+    // 2. Archive / Mark in-progress/started records in Supabase as 'abandoned'
     if (cleanUserId && isUuid(cleanUserId)) {
       try {
         let query = supabase
@@ -41,11 +41,12 @@ export async function cleanupActiveExamSessions(options: ExamCleanupOptions = {}
             status: 'abandoned',
             submitted_at: new Date().toISOString()
           })
-          .eq('user_id', cleanUserId)
-          .eq('status', 'in_progress');
+          .eq('user_id', cleanUserId);
 
         if (sessionId && isUuid(sessionId)) {
-          query = query.eq('id', sessionId);
+          query = query.eq('id', sessionId).neq('status', 'completed');
+        } else {
+          query = query.in('status', ['in_progress', 'started']);
         }
 
         const { error } = await query;
@@ -90,4 +91,16 @@ export async function cleanupActiveExamSessions(options: ExamCleanupOptions = {}
     console.error('[ExamCleanup] Unexpected cleanup error:', err);
     return { success: false };
   }
+}
+
+/**
+ * Marks all pending incomplete sessions for a user as 'abandoned' before starting/re-initializing an exam
+ */
+export async function cleanupIncompleteSessions(userId?: string): Promise<boolean> {
+  const result = await cleanupActiveExamSessions({
+    userId,
+    reason: 'started_new',
+    silent: true
+  });
+  return result.success;
 }
