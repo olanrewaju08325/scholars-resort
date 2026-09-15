@@ -8,7 +8,8 @@ import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { 
   Timer, BrainCircuit, Calendar, Swords, BookOpen, 
   History, Trophy, Target, Zap, RotateCcw, Monitor, CheckCircle2, ArrowRight,
-  CheckCircle, XCircle, AlertCircle, Trash2, Filter, Sparkles, ChevronDown, ChevronUp
+  CheckCircle, XCircle, AlertCircle, Trash2, Filter, Sparkles, ChevronDown, ChevronUp,
+  Loader2, PlayCircle, Play
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -17,6 +18,9 @@ import { MathText } from '@/components/MathText';
 import { JambPQSetupModal } from '@/components/cbt/JambPQSetupModal';
 import { AiMockSetupModal } from '@/components/cbt/AiMockSetupModal';
 import { useExamCleanup } from '@/hooks/useExamCleanup';
+import { useExamSessionContext } from '@/context/ExamSessionContext';
+import { useSessionValidator } from '@/hooks/useSessionValidator';
+import { ActiveExamConflictDialog } from '@/components/cbt/ActiveExamConflictDialog';
 import { clearInterruptedExamSession } from '@/lib/examSessionStorage';
 import { clearExamSnapshot } from '@/lib/offlineDb';
 
@@ -48,6 +52,26 @@ export default function CBTCenter() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const { abandonCurrentExam } = useExamCleanup();
+  const { isLocked, isStarting, startExamWithLock } = useExamSessionContext();
+  const { 
+    hasActiveConflict, 
+    conflictDetails, 
+    validateBeforeStart, 
+    handleDiscardAndProceed, 
+    handleResumeConflict, 
+    dismissConflict 
+  } = useSessionValidator();
+
+  const handleLaunchExam = async (path: string = '/exam') => {
+    await startExamWithLock(async () => {
+      const canProceed = await validateBeforeStart(() => {
+        navigate(path);
+      });
+      if (canProceed) {
+        navigate(path);
+      }
+    }, 'cbt_center_launch', 8000);
+  };
 
   const userSubjects = (profile?.utme_subjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'])
     .map((s: string) => normalizeToCanonicalSubjectName(s));
@@ -301,23 +325,50 @@ export default function CBTCenter() {
         {/* Active Session Warning / Resume */}
         {activeSession ? (
           <div className="flex gap-2">
-            <Button variant="default" className="shadow-lg bg-orange-500 hover:bg-orange-600" asChild>
-              <Link to="/exam">
-                <RotateCcw className="w-4 h-4 mr-2" /> Resume Exam
-              </Link>
+            <Button 
+              variant="default" 
+              className="shadow-lg bg-orange-500 hover:bg-orange-600"
+              disabled={isLocked || isStarting}
+              onClick={() => handleLaunchExam('/exam')}
+            >
+              {isStarting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Starting...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-4 h-4 mr-2" /> Resume Exam
+                </>
+              )}
             </Button>
-            <Button variant="outline" className="shadow-lg text-destructive border-destructive hover:bg-destructive/10" onClick={async () => {
-              await abandonCurrentExam(activeSession?.id);
-              setActiveSession(null);
-            }}>
+            <Button 
+              variant="outline" 
+              className="shadow-lg text-destructive border-destructive hover:bg-destructive/10" 
+              disabled={isLocked || isStarting}
+              onClick={async () => {
+                await abandonCurrentExam(activeSession?.id);
+                setActiveSession(null);
+              }}
+            >
               Abandon
             </Button>
           </div>
         ) : (
-          <Button variant="outline" className="shadow-lg" asChild>
-            <Link to="/exam">
-              <RotateCcw className="w-4 h-4 mr-2" /> Start New Exam
-            </Link>
+          <Button 
+            variant="outline" 
+            className="shadow-lg" 
+            disabled={isLocked || isStarting}
+            onClick={() => handleLaunchExam('/exam')}
+          >
+            {isStarting ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Starting...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="w-4 h-4 mr-2" /> Start New Exam
+              </>
+            )}
           </Button>
         )}
       </motion.div>
@@ -472,8 +523,19 @@ export default function CBTCenter() {
                         Configure AI Mock
                       </Button>
                     ) : (
-                      <Button asChild className="w-full" variant="default">
-                        <Link to={mode.path || "/exam"}>Start Exam</Link>
+                      <Button 
+                        onClick={() => handleLaunchExam(mode.path || "/exam")} 
+                        className="w-full" 
+                        variant="default"
+                        disabled={isLocked || isStarting}
+                      >
+                        {isStarting ? (
+                          <>
+                            <Loader2 className="w-4 h-4 mr-2 animate-spin" /> Initializing...
+                          </>
+                        ) : (
+                          'Start Exam'
+                        )}
                       </Button>
                     )}
                   </CardContent>
@@ -1006,6 +1068,14 @@ export default function CBTCenter() {
       <AiMockSetupModal
         isOpen={isAiMockModalOpen}
         onClose={() => setIsAiMockModalOpen(false)}
+      />
+
+      <ActiveExamConflictDialog
+        isOpen={hasActiveConflict}
+        conflictDetails={conflictDetails}
+        onResume={handleResumeConflict}
+        onDiscard={handleDiscardAndProceed}
+        onCancel={dismissConflict}
       />
 
     </div>

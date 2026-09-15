@@ -979,19 +979,25 @@ D) ...
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
-              <div className="text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium">
-                <MathText text={cleanQuestionText(q.question_text || q.question)} />
-              </div>
-
-              {q.image_url && (
-                <div className="my-4 flex justify-center">
-                  <img 
-                    src={q.image_url} 
-                    alt="Question diagram or visual figure" 
-                    className="max-h-72 max-w-full object-contain rounded-xl border border-border shadow-xs bg-white p-2" 
-                  />
+              <div className="cbt-question-content text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium space-y-4">
+                <div className="prose-cbt-text overflow-x-auto max-w-full">
+                  <MathText text={cleanQuestionText(q.question_text || q.question)} />
                 </div>
-              )}
+
+                {q.image_url && (
+                  <div className="my-5 w-full max-w-full flex justify-center items-center overflow-hidden clear-both isolate question-figure">
+                    <div className="relative inline-block max-w-full rounded-xl border border-border/80 shadow-xs bg-white dark:bg-card p-2 md:p-3 overflow-hidden">
+                      <img 
+                        src={q.image_url} 
+                        alt="Question diagram or visual figure" 
+                        loading="eager"
+                        className="max-w-full h-auto max-h-72 sm:max-h-80 md:max-h-96 object-contain block rounded-lg select-none" 
+                        style={{ maxWidth: '100%', height: 'auto' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
               
               <div className="space-y-3 md:space-y-4">
                 {q.options.map((opt: string, i: number) => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles, Grid3X3, Layers, Compass, Camera, Edit3, X } from 'lucide-react';
+import { Calculator, Flag, Clock, ChevronLeft, ChevronRight, AlertTriangle, Volume2, VolumeX, Keyboard, HelpCircle, Eye, EyeOff, Sparkles, Grid3X3, Layers, Compass, Camera, Edit3, X, CheckCircle, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { motion, AnimatePresence } from 'framer-motion';
 import { JambCalculator } from '@/components/cbt/JambCalculator';
@@ -1364,20 +1364,26 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
             transition={{ duration: 0.18, ease: "easeOut" }}
             className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6"
           >
-            <div className="text-base md:text-xl leading-relaxed font-medium text-foreground">
-              <MathText text={q.question_text} />
+            <div className="cbt-question-content text-base md:text-xl leading-relaxed font-medium text-foreground space-y-4">
+              <div className="prose-cbt-text overflow-x-auto max-w-full">
+                <MathText text={q.question_text} />
+              </div>
               {q.image_url && (
-                <div className="my-4 flex justify-start">
-                  <img 
-                    src={q.image_url} 
-                    alt="Question diagram" 
-                    className="max-h-72 max-w-full object-contain rounded-lg border border-border shadow-xs bg-white p-2" 
-                  />
+                <div className="my-5 w-full max-w-full flex justify-start items-center overflow-hidden clear-both isolate question-figure">
+                  <div className="relative inline-block max-w-full rounded-xl border border-border/80 shadow-xs bg-white dark:bg-card p-2 md:p-3 overflow-hidden">
+                    <img 
+                      src={q.image_url} 
+                      alt="Question diagram" 
+                      loading="eager"
+                      className="max-w-full h-auto max-h-72 sm:max-h-80 md:max-h-96 object-contain block rounded-lg select-none" 
+                      style={{ maxWidth: '100%', height: 'auto' }}
+                    />
+                  </div>
                 </div>
               )}
             </div>
             
-            <div className="grid grid-cols-1 gap-3 md:gap-4 max-w-3xl">
+            <div className="grid grid-cols-1 gap-3 md:gap-4 max-w-3xl pt-2">
               {(q.options || []).map((rawOpt: any, i: number) => {
                 const opt: string = typeof rawOpt === 'string'
                   ? rawOpt
@@ -1395,7 +1401,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
                       whileTap={{ scale: 0.98 }}
                       onClick={() => !isEliminated && handleSelectAnswer(q.id, opt)}
                       onDoubleClick={(e) => { e.stopPropagation(); toggleEliminated(q.id, opt); }}
-                      className={`flex-1 flex items-start text-left p-3.5 pr-20 md:p-4 md:pr-24 rounded-xl border-2 transition-all ${
+                      className={`flex-1 flex items-start text-left p-3.5 pr-24 md:p-4 md:pr-28 rounded-xl border-2 transition-all min-h-[3.5rem] ${
                         isSelected 
                           ? 'border-primary bg-primary/10 dark:bg-primary/20 text-foreground shadow-sm' 
                           : isEliminated
@@ -1403,12 +1409,12 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
                             : 'border-border hover:border-primary/50 hover:bg-muted/40 text-foreground'
                       }`}
                     >
-                      <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center font-bold mr-3 md:mr-4 shrink-0 text-xs md:text-sm transition-colors ${
+                      <div className={`w-7 h-7 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center font-bold mr-3 md:mr-4 shrink-0 text-xs md:text-sm transition-colors mt-0.5 ${
                         isSelected ? 'border-primary bg-primary text-primary-foreground' : 'border-muted-foreground/30 text-muted-foreground'
                       }`}>
                         {letter}
                       </div>
-                      <span className={`text-sm md:text-lg pt-0.5 ${isSelected ? 'font-semibold text-primary' : 'text-foreground'} ${isEliminated ? 'line-through opacity-55' : ''}`}>
+                      <span className={`text-sm md:text-lg pt-0.5 break-words flex-1 ${isSelected ? 'font-semibold text-primary' : 'text-foreground'} ${isEliminated ? 'line-through opacity-55' : ''}`}>
                         <MathText text={cleanOptionText(opt)} />
                       </span>
                     </motion.button>
@@ -1419,7 +1425,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
                         e.stopPropagation();
                         toggleEliminated(q.id, opt);
                       }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded border border-slate-700/30 bg-slate-900/40 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 text-[9px] font-mono tracking-wider font-bold transition-colors active:scale-95"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 px-2 py-1 rounded border border-slate-700/30 bg-slate-900/40 text-slate-400 hover:text-rose-400 hover:border-rose-500/50 text-[9px] font-mono tracking-wider font-bold transition-colors active:scale-95 z-10 shrink-0"
                       title={isEliminated ? "Restore option" : "Eliminate option"}
                     >
                       {isEliminated ? "RESTORE" : "CROSS OUT"}

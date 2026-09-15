@@ -165,6 +165,7 @@ function AppContent() {
 import { MaintenanceGuard } from './components/MaintenanceGuard';
 import { InterruptedExamPrompt } from './components/InterruptedExamPrompt';
 import { AiQuotaStatusModal } from './components/AiQuotaStatusModal';
+import { ExamSessionProvider } from './context/ExamSessionContext';
 
 function App() {
   return (
@@ -172,17 +173,19 @@ function App() {
       <Router>
         <ErrorBoundary>
           <AuthProvider>
-            <MaintenanceGuard>
-              <Toaster richColors position="top-right" />
-              <AppContent />
-              <InterruptedExamPrompt />
-              <WhatsAppWidget />
-              <GlobalSearch />
-              <GlobalShortcutsHandler />
-              <InstallPrompt />
-              <OfflineIndicator />
-              <AiQuotaStatusModal />
-            </MaintenanceGuard>
+            <ExamSessionProvider>
+              <MaintenanceGuard>
+                <Toaster richColors position="top-right" />
+                <AppContent />
+                <InterruptedExamPrompt />
+                <WhatsAppWidget />
+                <GlobalSearch />
+                <GlobalShortcutsHandler />
+                <InstallPrompt />
+                <OfflineIndicator />
+                <AiQuotaStatusModal />
+              </MaintenanceGuard>
+            </ExamSessionProvider>
           </AuthProvider>
         </ErrorBoundary>
       </Router>

@@ -25,7 +25,7 @@ const COMMON_CHEM_FORMULAS = [
  */
 export function formatChemicalFormulaToLatex(formula: string): string {
   // Convert numbers after elements or closing parens to subscripts
-  let formatted = formula.replace(/([A-Za-z\)])(\d+)/g, '$1_{$2}');
+  let formatted = formula.replace(/([A-Za-z)])(\d+)/g, '$1_{$2}');
   // Handle charges like 2+, 3+, 2-, +, -
   formatted = formatted.replace(/\^?(\d*[+-])/g, '^{$1}');
   return `\\mathrm{${formatted}}`;
@@ -130,7 +130,7 @@ export function renderKaTeXToString(math: string, displayMode = false): string {
 
     // If KaTeX still output a parse error markup, fallback gracefully to clean styled typography
     if (result.includes('katex-error')) {
-      const fallbackClean = cleanMath.replace(/[\{\}\\]/g, '');
+      const fallbackClean = cleanMath.replace(/[{}/\\]/g, '');
       return `<span class="katex-fallback font-mono text-sm tracking-wide">${escapeHtml(fallbackClean)}</span>`;
     }
 

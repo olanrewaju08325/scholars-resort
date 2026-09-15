@@ -196,5 +196,35 @@
     outline-offset: 2px;
     border-radius: 4px;
   }
+
+  /* ── CBT Question Content & Image Defensive Layout ── */
+  .cbt-question-content,
+  .prose-cbt-text,
+  .math-text {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .cbt-question-content img,
+  .math-text img,
+  .markdown-math-wrapper img,
+  .prose-cbt-text img,
+  .question-figure img {
+    max-width: 100% !important;
+    height: auto !important;
+    object-fit: contain;
+    display: block;
+    margin-top: 0.75rem;
+    margin-bottom: 0.75rem;
+    border-radius: 0.5rem;
+    clear: both;
+  }
+
+  .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5rem 0;
+    max-width: 100%;
+  }
 }
 
