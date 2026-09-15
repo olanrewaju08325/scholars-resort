@@ -12,6 +12,7 @@ import { NotificationBell } from '@/components/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PageTransition } from '@/components/PageTransition';
 import { StudentLogoutDialog } from '@/components/StudentLogoutDialog';
+import { OfflineErrorHandler } from '@/components/OfflineErrorHandler';
 import { useState, useEffect } from 'react';
 import { useSync } from '@/hooks/useSync';
 import { getPendingQueueCount, processSyncQueue } from '@/lib/syncQueue';
@@ -297,7 +298,8 @@ export const AppLayout = () => {
       {/* ========================================================================= */}
       {/* Compact Mobile Header (Sticky)                                            */}
       {/* ========================================================================= */}
-      <div className="md:hidden sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b border-border px-3 py-2 flex items-center justify-between shadow-xs">
+      {/* Mobile Sticky Header Bar (< 1024px) */}
+      <div className="lg:hidden sticky top-0 z-40 bg-card/95 backdrop-blur-md border-b border-border px-3 py-2 flex items-center justify-between shadow-xs">
         <div className="flex items-center gap-2 min-w-0">
           <button
             onClick={() => setDrawerOpen(true)}
@@ -355,7 +357,7 @@ export const AppLayout = () => {
       {/* ========================================================================= */}
       <AnimatePresence>
         {drawerOpen && (
-          <div className="md:hidden fixed inset-0 z-50 flex">
+          <div className="lg:hidden fixed inset-0 z-50 flex">
             {/* Backdrop */}
             <motion.div 
               initial={{ opacity: 0 }}
@@ -620,6 +622,9 @@ export const AppLayout = () => {
           <span>More</span>
         </button>
       </nav>
+
+      {/* Global Offline Error Handler & Retry Sync Bar */}
+      <OfflineErrorHandler />
     </div>
   );
 };

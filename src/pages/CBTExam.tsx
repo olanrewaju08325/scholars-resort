@@ -23,6 +23,7 @@ import { cleanQuestionText, cleanOptionText, checkIsCorrect } from '@/utils/ques
 import { sanitizeQuestionList, extractSafeSubjectName } from '@/utils/sanitizeExamData';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { QuestionFlowService } from '@/services/questionFlowService';
+import { QuestionReportModal } from '@/components/cbt/QuestionReportModal';
 import { validateUtmeSubjectCombination } from '@/utils/subjectTaxonomy';
 import { useFocusLock } from '@/hooks/useFocusLock';
 import { FocusLockOverlay } from '@/components/FocusLockOverlay';
@@ -100,6 +101,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     }
   }, [currentQuestionIdx, questions.length]);
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [showQuestionReportModal, setShowQuestionReportModal] = useState(false);
   const [timeSpentOnQuestions, setTimeSpentOnQuestions] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(7200); // 2 hours (typical JAMB time)
   const totalExamSecondsRef = useRef<number>(7200);
@@ -1345,20 +1347,11 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               <Button 
                 variant="outline" 
                 size="sm" 
-                onClick={() => { 
-                  toast.success("Question flagged for admin review. Thank you!"); 
-                  const current = JSON.parse(localStorage.getItem("jamb_reported_errors") || "[]"); 
-                  current.push({ 
-                    id: Date.now().toString(), 
-                    question_id: questions[currentQuestionIdx]?.id, 
-                    reason: "Student Report", 
-                    details: "Reported during CBT Exam", 
-                    status: "pending" 
-                  }); 
-                  localStorage.setItem("jamb_reported_errors", JSON.stringify(current)); 
-                }} 
-                className="h-8 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20"
+                onClick={() => setShowQuestionReportModal(true)} 
+                className="h-8 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/20 gap-1"
+                title="Report typo or error directly to admins"
               >
+                <AlertTriangle className="w-3.5 h-3.5" />
                 Report Error
               </Button>
             </div>
@@ -1564,6 +1557,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         }}
         answers={answers}
         flagged={flagged}
+        onToggleFlag={(idx) => setFlagged(prev => ({ ...prev, [idx]: !prev[idx] }))}
         visited={visited}
         subjects={examSubjectsList}
         activeSubject={q?.subject_name}
@@ -1787,6 +1781,15 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           </div>
         </div>
       )}
+      {/* Question Issue Reporter Modal */}
+      <QuestionReportModal
+        isOpen={showQuestionReportModal}
+        onClose={() => setShowQuestionReportModal(false)}
+        question={questions[currentQuestionIdx]}
+        questionIndex={currentQuestionIdx}
+        subjectName={q?.subject_name}
+        year={q?.year}
+      />
     </div>
   );
 }

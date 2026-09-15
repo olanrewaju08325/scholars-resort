@@ -17,6 +17,17 @@ export interface SubjectTopicAudit {
   questionCount: number;
 }
 
+export interface ConnectionStatusState {
+  isConnected: boolean;
+  questionsCount: number;
+  sessionsCount: number;
+  sampleQuestionText: string | null;
+  sampleSessionId: string | null;
+  lastVerified: string | null;
+  latencyMs: number;
+  error: string | null;
+}
+
 export interface SubjectHealthReport {
   subjectId: string;
   subjectName: string;
@@ -37,6 +48,57 @@ export const DataHealthDashboard: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterMode, setFilterMode] = useState<'all' | 'inconsistent' | 'healthy'>('all');
   const [expandedSubjectIds, setExpandedSubjectIds] = useState<Set<string>>(new Set());
+
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatusState>({
+    isConnected: false,
+    questionsCount: 0,
+    sessionsCount: 0,
+    sampleQuestionText: null,
+    sampleSessionId: null,
+    lastVerified: null,
+    latencyMs: 0,
+    error: null,
+  });
+
+  const verifySupabaseConnection = async () => {
+    const startTime = performance.now();
+    try {
+      // Sample past questions
+      const { data: qSample, count: qCount, error: qErr } = await supabase
+        .from('questions')
+        .select('id, question_text, year', { count: 'exact', head: false })
+        .limit(1);
+
+      if (qErr) throw qErr;
+
+      // Sample exam sessions
+      const { data: sSample, count: sCount, error: sErr } = await supabase
+        .from('cbt_sessions')
+        .select('id, created_at, score', { count: 'exact', head: false })
+        .limit(1);
+
+      const endTime = performance.now();
+      const latency = Math.round(endTime - startTime);
+
+      setConnectionStatus({
+        isConnected: (qCount ?? 0) > 0 || (qSample && qSample.length > 0),
+        questionsCount: qCount || (qSample ? qSample.length : 0),
+        sessionsCount: sCount || (sSample ? sSample.length : 0),
+        sampleQuestionText: qSample && qSample.length > 0 ? qSample[0].question_text : null,
+        sampleSessionId: sSample && sSample.length > 0 ? sSample[0].id : null,
+        lastVerified: new Date().toLocaleTimeString(),
+        latencyMs: latency,
+        error: null,
+      });
+    } catch (err: any) {
+      setConnectionStatus(prev => ({
+        ...prev,
+        isConnected: false,
+        error: err?.message || 'Database connection error',
+        lastVerified: new Date().toLocaleTimeString(),
+      }));
+    }
+  };
 
   const fetchSubjectHealthData = async () => {
     setLoading(true);
@@ -137,6 +199,7 @@ export const DataHealthDashboard: React.FC = () => {
   };
 
   useEffect(() => {
+    verifySupabaseConnection();
     fetchSubjectHealthData();
   }, []);
 
@@ -203,6 +266,58 @@ export const DataHealthDashboard: React.FC = () => {
 
   return (
     <div className="space-y-6">
+      {/* Visual Supabase Connection & Real Data Verification Banner */}
+      <Card className={`border-2 ${connectionStatus.isConnected ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-amber-500/40 bg-amber-500/5'} shadow-sm`}>
+        <CardContent className="p-4 sm:p-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-3 w-3">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full ${connectionStatus.isConnected ? 'bg-emerald-400 opacity-75' : 'bg-amber-400 opacity-75'}`} />
+                  <span className={`relative inline-flex rounded-full h-3 w-3 ${connectionStatus.isConnected ? 'bg-emerald-500' : 'bg-amber-500'}`} />
+                </span>
+                <h3 className="font-extrabold text-base text-foreground flex items-center gap-2">
+                  Database Connection Status:
+                  <Badge className={connectionStatus.isConnected ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-white'}>
+                    {connectionStatus.isConnected ? 'LIVE & RETURNING REAL DATA' : 'CHECKING / DEGRADED'}
+                  </Badge>
+                </h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Sampling live records from <strong className="text-foreground">questions</strong> & <strong className="text-foreground">cbt_sessions</strong> tables.
+                {connectionStatus.lastVerified && <span className="ml-1 text-[11px]">(Verified at {connectionStatus.lastVerified} in {connectionStatus.latencyMs}ms)</span>}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="px-3 py-1.5 rounded-xl bg-card border border-border text-xs flex items-center gap-2 font-mono">
+                <span className="text-muted-foreground">questions:</span>
+                <span className="font-bold text-emerald-600 dark:text-emerald-400">{connectionStatus.questionsCount.toLocaleString()} rows</span>
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-card border border-border text-xs flex items-center gap-2 font-mono">
+                <span className="text-muted-foreground">cbt_sessions:</span>
+                <span className="font-bold text-indigo-600 dark:text-indigo-400">{connectionStatus.sessionsCount.toLocaleString()} rows</span>
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={verifySupabaseConnection}
+                className="h-8 text-xs font-semibold gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Re-check
+              </Button>
+            </div>
+          </div>
+
+          {connectionStatus.error && (
+            <div className="mt-3 p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-xs text-red-500 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>Connection Notice: {connectionStatus.error}</span>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* Top Metrics Banner */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <Card className="border-border bg-card/50 shadow-sm">

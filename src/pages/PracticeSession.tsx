@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers, Camera, AlertCircle, Save, LogOut } from 'lucide-react';
+import { CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, X, Bookmark, BookmarkPlus, Flag, AlertTriangle, Sparkles, MessageSquare, PauseCircle, PlayCircle, Clock, RotateCcw, Grid3X3, Layers, Camera, AlertCircle, Save, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { motion, AnimatePresence } from 'framer-motion';
+import { QuestionReportModal } from '@/components/cbt/QuestionReportModal';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { recordStudyAction } from '@/lib/streakService';
@@ -54,6 +55,8 @@ const PracticeSession = () => {
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
+  const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [showQuestionReportModal, setShowQuestionReportModal] = useState(false);
 
   useEffect(() => {
     if (questions.length > 0) {
@@ -974,6 +977,29 @@ D) ...
                 >
                   <Grid3X3 className="w-3.5 h-3.5" /> Jump
                 </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setFlagged(prev => ({ ...prev, [currentIndex]: !prev[currentIndex] }))}
+                  className={flagged[currentIndex] ? "text-purple-600 dark:text-purple-400 h-8 px-2 text-xs font-bold gap-1 bg-purple-500/10" : "text-muted-foreground hover:text-purple-600 h-8 px-2 text-xs font-semibold gap-1"}
+                  title="Flag for review"
+                >
+                  <Flag className={`w-3.5 h-3.5 ${flagged[currentIndex] ? "fill-purple-600 text-purple-600" : ""}`} />
+                  <span className="hidden sm:inline">{flagged[currentIndex] ? 'Flagged' : 'Flag'}</span>
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowQuestionReportModal(true)}
+                  className="text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 h-8 px-2 text-xs font-semibold gap-1"
+                  title="Report question error directly to admin"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+                  <span className="hidden sm:inline">Report</span>
+                </Button>
+
                 <Button variant="ghost" size="sm" onClick={toggleBookmark} className={bookmarks[q.id] ? "text-primary h-8 w-8 p-0" : "text-muted-foreground h-8 w-8 p-0"}>
                   {bookmarks[q.id] ? <Bookmark className="w-5 h-5 fill-primary" /> : <BookmarkPlus className="w-5 h-5" />}
                 </Button>
@@ -1173,9 +1199,21 @@ D) ...
           setAiExplanation(null);
         }}
         answers={answersMap}
+        flagged={flagged}
+        onToggleFlag={(idx) => setFlagged(prev => ({ ...prev, [idx]: !prev[idx] }))}
         visited={visited}
         isPracticeMode={true}
         correctAnswersMap={correctAnswersMap}
+      />
+
+      {/* Question Issue Reporter Modal */}
+      <QuestionReportModal
+        isOpen={showQuestionReportModal}
+        onClose={() => setShowQuestionReportModal(false)}
+        question={questions[currentIndex]}
+        questionIndex={currentIndex}
+        subjectName={questions[currentIndex]?.subject_name}
+        year={questions[currentIndex]?.year}
       />
     </div>
   );

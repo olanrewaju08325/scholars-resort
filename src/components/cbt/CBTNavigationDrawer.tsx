@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
@@ -15,6 +15,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 interface CBTNavigationDrawerProps {
   isOpen: boolean;
@@ -24,6 +25,7 @@ interface CBTNavigationDrawerProps {
   onSelectQuestion: (idx: number) => void;
   answers: Record<string, string>;
   flagged?: Record<number, boolean>;
+  onToggleFlag?: (idx: number) => void;
   visited?: Record<number, boolean>;
   subjects?: string[];
   activeSubject?: string;
@@ -41,6 +43,7 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
   onSelectQuestion,
   answers,
   flagged = {},
+  onToggleFlag,
   visited = {},
   subjects = [],
   activeSubject,
@@ -50,6 +53,29 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
   correctAnswersMap = {}
 }) => {
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState<string>('ALL');
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isLongPressRef = useRef<boolean>(false);
+
+  const handleQuickFlag = (idx: number, e?: React.SyntheticEvent) => {
+    if (e) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+    if (onToggleFlag) {
+      onToggleFlag(idx);
+      try {
+        if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate?.(40);
+        }
+      } catch {}
+      const isCurrentlyFlagged = !!flagged[idx];
+      if (isCurrentlyFlagged) {
+        toast.info(`Unflagged Question #${idx + 1}`, { duration: 1500 });
+      } else {
+        toast.success(`Flagged Question #${idx + 1} 🚩`, { duration: 1500 });
+      }
+    }
+  };
 
   // Sync subject filter with active subject if provided
   useEffect(() => {
@@ -299,7 +325,17 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
             </div>
 
             {/* Question Grid Area */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+              {/* Pro Tip Banner */}
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground bg-primary/5 px-3.5 py-2 rounded-xl border border-primary/10">
+                <span className="flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span>
+                    <strong className="text-primary font-bold">Quick Flag Feature:</strong> Right-click or long-press any question number to flag/unflag instantly!
+                  </span>
+                </span>
+              </div>
+
               <div className="grid grid-cols-6 sm:grid-cols-8 md:grid-cols-10 gap-2.5">
                 {displayedQuestionIndices.map(({ q, idx }) => {
                   const isAnswered = !!answers[q.id];
@@ -330,12 +366,33 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
                   return (
                     <button
                       key={idx}
-                      onClick={() => {
+                      onClick={(e) => {
+                        if (isLongPressRef.current) {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          isLongPressRef.current = false;
+                          return;
+                        }
                         onSelectQuestion(idx);
                         onClose();
                       }}
-                      className={`relative aspect-square rounded-xl border text-xs md:text-sm font-semibold flex flex-col items-center justify-center transition-all active:scale-95 ${cellClass}`}
-                      title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : isVisited ? ' (Visited)' : ' (Unvisited)'}${isFlagged ? ' (Flagged)' : ''}`}
+                      onContextMenu={(e) => handleQuickFlag(idx, e)}
+                      onTouchStart={() => {
+                        isLongPressRef.current = false;
+                        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                        longPressTimerRef.current = setTimeout(() => {
+                          isLongPressRef.current = true;
+                          handleQuickFlag(idx);
+                        }, 450);
+                      }}
+                      onTouchEnd={() => {
+                        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                      }}
+                      onTouchMove={() => {
+                        if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+                      }}
+                      className={`relative aspect-square rounded-xl border text-xs md:text-sm font-semibold flex flex-col items-center justify-center transition-all active:scale-95 select-none ${cellClass}`}
+                      title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : isVisited ? ' (Visited)' : ' (Unvisited)'}${isFlagged ? ' (Flagged)' : ''} - Right-click or Long-press to Quick Flag`}
                     >
                       <span>{idx + 1}</span>
 

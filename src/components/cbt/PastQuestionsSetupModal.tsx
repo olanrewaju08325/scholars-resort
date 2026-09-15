@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { 
   History, BookOpen, Calendar, Clock, CheckCircle2, 
-  Sparkles, PlayCircle, Layers, RefreshCw, Loader2, HelpCircle 
+  Sparkles, PlayCircle, Layers, RefreshCw, Loader2, HelpCircle,
+  AlertTriangle, Bell
 } from 'lucide-react';
 import { OFFICIAL_JAMB_SUBJECTS } from '@/utils/subjectUtils';
 import { authFetch } from '@/lib/apiAuth';
@@ -14,6 +15,7 @@ import { useExamSessionLock } from '@/hooks/useExamSessionLock';
 import { useSessionValidator } from '@/hooks/useSessionValidator';
 import { ActiveExamConflictDialog } from '@/components/cbt/ActiveExamConflictDialog';
 import { ExamModeInfoModal } from '@/components/cbt/ExamModeInfoModal';
+import { reportMissingSubjectYear } from '@/services/problemReporterService';
 
 interface PastQuestionsSetupModalProps {
   isOpen: boolean;
@@ -44,6 +46,8 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
   const [questionCount, setQuestionCount] = useState<number>(40);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [loadingYears, setLoadingYears] = useState<boolean>(false);
+  const [isSubjectEmpty, setIsSubjectEmpty] = useState<boolean>(false);
+  const [hasReportedMissing, setHasReportedMissing] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState<boolean>(false);
   const [showModeInfoModal, setShowModeInfoModal] = useState<boolean>(false);
 
@@ -52,12 +56,20 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
     if (isOpen) {
       const fetchYears = async () => {
         setLoadingYears(true);
+        setIsSubjectEmpty(false);
+        setHasReportedMissing(false);
         try {
-          const res = await authFetch(`/api/cbt/past-question-years?subjectId=${encodeURIComponent(selectedSubject)}`);
-          if (res.ok) {
+          const res = authFetch ? await authFetch(`/api/cbt/past-question-years?subjectId=${encodeURIComponent(selectedSubject)}`) : null;
+          if (res && res.ok) {
             const data = await res.json();
             if (data && data.success && Array.isArray(data.years) && data.years.length > 0) {
               setAvailableYears(data.years);
+              return;
+            } else if (data && data.success && Array.isArray(data.years) && data.years.length === 0) {
+              setAvailableYears([]);
+              setIsSubjectEmpty(true);
+              reportMissingSubjectYear(selectedSubject);
+              setHasReportedMissing(true);
               return;
             }
           }
@@ -146,6 +158,33 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
                 })}
               </select>
             </div>
+
+            {/* Missing Subject Content Alert Banner */}
+            {isSubjectEmpty && (
+              <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 space-y-2">
+                <div className="flex items-center gap-2 font-bold text-xs text-amber-600 dark:text-amber-400">
+                  <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+                  <span>Past questions for {selectedSubject} will be available later</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                  Our academic team is currently digitizing and proctoring past papers for <strong>{selectedSubject}</strong>. An automated dispatch alert has been sent to system administrators to prioritize uploading this subject.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={async () => {
+                    await reportMissingSubjectYear(selectedSubject);
+                    setHasReportedMissing(true);
+                  }}
+                  disabled={hasReportedMissing}
+                  className="h-7 text-[10px] font-bold border-amber-500/30 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 gap-1.5"
+                >
+                  <Bell className="w-3 h-3 text-amber-500" />
+                  {hasReportedMissing ? 'Admin Priority Requested ✓' : 'Request Admin Priority Upload'}
+                </Button>
+              </div>
+            )}
 
             {/* Step 2: Year Selection */}
             <div className="space-y-2">
