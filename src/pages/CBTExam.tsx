@@ -26,6 +26,8 @@ import { QuestionFlowService } from '@/services/questionFlowService';
 import { validateUtmeSubjectCombination } from '@/utils/subjectTaxonomy';
 import { useFocusLock } from '@/hooks/useFocusLock';
 import { FocusLockOverlay } from '@/components/FocusLockOverlay';
+import { useExamCleanup } from '@/hooks/useExamCleanup';
+import { useExamSessionLock } from '@/hooks/useExamSessionLock';
 import { toast } from 'sonner';
 import { MathText } from '@/components/MathText';
 import { playFiveMinuteWarningSound } from '@/lib/celebration';
@@ -40,6 +42,8 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   const location = useLocation();
   const { profile } = useAuth();
   const { confirmAction, ConfirmElement } = useConfirm();
+  const { abandonCurrentExam } = useExamCleanup();
+  const { isLocked: isSessionLocked, acquireLock, releaseLock } = useExamSessionLock();
 
   const searchParams = new URLSearchParams(location.search);
   const queryMode = searchParams.get('mode');
@@ -232,6 +236,11 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     const initializeExam = async () => {
       setLoading(true);
       
+      const subjectParam = searchParams.get('subject');
+      const yearParam = searchParams.get('year');
+      const drillModeParam = searchParams.get('drillMode');
+      const isExplicitNewDrill = Boolean(subjectParam || yearParam || drillModeParam || (examMode === 'past_questions' && !location.state?.resume));
+
       try {
         // Check for interrupted exam from localStorage or IndexedDB
         if (profile?.id) {
@@ -239,7 +248,8 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           const shouldDirectResume = location.state?.resume;
 
           if (activeInterrupted && activeInterrupted.questions && activeInterrupted.questions.length > 0) {
-            if (shouldDirectResume || window.confirm("We found an unfinished exam session. Would you like to resume your previous exam?")) {
+            // Only resume if explicit resume requested or if user arrived on generic root /cbt with an unfinished exam
+            if (shouldDirectResume) {
               const sanitizedQuestions = sanitizeQuestionList(activeInterrupted.questions);
               setQuestions(sanitizedQuestions);
               setAnswers(activeInterrupted.answers || {});
@@ -256,8 +266,32 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               setLoading(false);
               toast.success("Exam session restored successfully!");
               return;
-            } else {
+            } else if (isExplicitNewDrill) {
+              // User deliberately launched a new past question drill or subject test -> clear previous stale mock
               await clearInterruptedExamSession(profile.id);
+            } else {
+              // Ask user if they wish to resume unfinished general session
+              const wantsResume = window.confirm("We found an unfinished exam session. Would you like to resume your previous exam?");
+              if (wantsResume) {
+                const sanitizedQuestions = sanitizeQuestionList(activeInterrupted.questions);
+                setQuestions(sanitizedQuestions);
+                setAnswers(activeInterrupted.answers || {});
+                setFlagged(activeInterrupted.flagged || {});
+                setSessionStartedAt(activeInterrupted.startedAt);
+                setTimeLeft(activeInterrupted.timeLeft);
+                setCurrentQuestionIdx(activeInterrupted.currentQuestionIdx || 0);
+                const sanitizedSubs = (activeInterrupted.subjects || []).map(s => extractSafeSubjectName(s));
+                setExamSubjectsList(sanitizedSubs);
+                if (sanitizedSubs.length > 0) {
+                  setStartingSubject(sanitizedSubs[0]);
+                }
+                setHasStarted(true);
+                setLoading(false);
+                toast.success("Exam session restored successfully!");
+                return;
+              } else {
+                await clearInterruptedExamSession(profile.id);
+              }
             }
           }
         }
@@ -279,9 +313,6 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       }
 
       // Past Questions & AI Mock Specific Query Parameters
-      const subjectParam = searchParams.get('subject');
-      const yearParam = searchParams.get('year');
-      const drillModeParam = searchParams.get('drillMode');
       const countParam = searchParams.get('count');
 
       let targetCount = countParam ? Number(countParam) : (examMode === 'past_questions' ? 40 : 180);
@@ -598,7 +629,9 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     
     // Clear backups
     sessionStorage.removeItem('cbt_backup');
-    clearExamSnapshot();
+    localStorage.removeItem('scholars_live_exam_active');
+    await clearInterruptedExamSession(profile?.id);
+    await clearExamSnapshot(profile?.id);
     
     // Persist to Supabase exam_sessions directly to guarantee live dashboard and leaderboard progression
     if (profile?.id) {
@@ -612,9 +645,16 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           user_id: profile.id,
           score: scaledScore,
           total_questions: questions.length,
-          status: compromised ? 'compromised' : 'submitted',
+          status: 'submitted',
           submitted_at: new Date().toISOString()
         });
+
+        // Unlock AI Tutor and finish session on backend
+        fetch('/api/exam-session/end', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: profile.id, sessionId, status: 'submitted', score: scaledScore, totalQuestions: questions.length })
+        }).catch(() => {});
 
         // Trigger real-time notification for dashboard widgets (Heatmap, Predictor, Trend)
         window.dispatchEvent(new CustomEvent('scholars:exam-completed', {
@@ -942,8 +982,11 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           <div className="flex flex-col sm:flex-row justify-center items-center gap-3 border-t border-slate-200 dark:border-border pt-4 sm:pt-6">
             <Button 
               size="lg" 
-              className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 sm:px-12 py-5 sm:py-6 text-base sm:text-lg rounded-xl shadow-lg font-bold tracking-wide transition-all active:scale-95"
+              disabled={isSessionLocked}
+              className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white px-8 sm:px-12 py-5 sm:py-6 text-base sm:text-lg rounded-xl shadow-lg font-bold tracking-wide transition-all active:scale-95 disabled:opacity-50"
               onClick={() => {
+                if (!acquireLock('cbt_start_button', 5000)) return;
+
                 if (document.documentElement.requestFullscreen) {
                   document.documentElement.requestFullscreen().catch((err) => console.log('Fullscreen denied:', err));
                 }
@@ -957,6 +1000,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
 
                 setHasStarted(true);
                 setSessionStartedAt(new Date().toISOString());
+                setTimeout(() => releaseLock(), 1000);
               }}
             >
               START EXAM WITH {String(startingSubject || '').toUpperCase()}
@@ -1742,15 +1786,14 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
 
               <Button 
                 variant="ghost"
-                onClick={() => {
+                onClick={async () => {
                   setShowExitConfirmModal(false);
-                  sessionStorage.removeItem('cbt_backup');
-                  localStorage.removeItem('scholars_live_exam_active');
-                  navigate('/dashboard');
+                  await abandonCurrentExam(sessionId, false);
+                  navigate('/cbt');
                 }}
                 className="w-full text-rose-500 hover:bg-rose-500/10 hover:text-rose-600 font-medium h-10 rounded-xl"
               >
-                Abandon Exam & Return to Dashboard
+                Abandon Exam & Return to CBT Center
               </Button>
             </div>
           </div>

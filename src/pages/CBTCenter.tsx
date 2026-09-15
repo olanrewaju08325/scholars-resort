@@ -16,6 +16,9 @@ import { getCanonicalSubjectByName, normalizeToCanonicalSubjectName } from '@/ut
 import { MathText } from '@/components/MathText';
 import { JambPQSetupModal } from '@/components/cbt/JambPQSetupModal';
 import { AiMockSetupModal } from '@/components/cbt/AiMockSetupModal';
+import { useExamCleanup } from '@/hooks/useExamCleanup';
+import { clearInterruptedExamSession } from '@/lib/examSessionStorage';
+import { clearExamSnapshot } from '@/lib/offlineDb';
 
 const extractSubjectName = (sub: any): string => {
   if (!sub) return 'General';
@@ -44,6 +47,7 @@ export default function CBTCenter() {
 
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { abandonCurrentExam } = useExamCleanup();
 
   const userSubjects = (profile?.utme_subjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry'])
     .map((s: string) => normalizeToCanonicalSubjectName(s));
@@ -302,7 +306,7 @@ export default function CBTCenter() {
               </Link>
             </Button>
             <Button variant="outline" className="shadow-lg text-destructive border-destructive hover:bg-destructive/10" onClick={async () => {
-              await supabase.from('exam_sessions').update({ status: 'abandoned' }).eq('id', activeSession.id);
+              await abandonCurrentExam(activeSession?.id);
               setActiveSession(null);
             }}>
               Abandon

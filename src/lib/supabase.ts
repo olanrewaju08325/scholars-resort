@@ -77,17 +77,39 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
             const parsed = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
             const sanitizeRow = (row: any) => {
               if (!row || typeof row !== 'object') return row;
-              const clean = { ...row };
-              if (clean.created_at && !clean.started_at) {
-                clean.started_at = clean.created_at;
+              const clean: any = {};
+
+              // id: only keep if valid UUID
+              if (row.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.id)) {
+                clean.id = row.id;
               }
-              delete clean.created_at;
-              delete clean.is_ai_tutor_locked;
-              delete clean.title;
-              delete clean.mode;
-              delete clean.subject;
-              delete clean.subject_id;
-              delete clean.time_allocated_minutes;
+
+              // user_id: only keep if valid UUID
+              if (row.user_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.user_id)) {
+                clean.user_id = row.user_id;
+              }
+
+              // mock_exam_id: only keep if valid UUID
+              if (row.mock_exam_id && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(row.mock_exam_id)) {
+                clean.mock_exam_id = row.mock_exam_id;
+              }
+
+              // status: strictly map to allowed PostgreSQL enum ('in_progress', 'submitted', 'abandoned')
+              let status = row.status || 'in_progress';
+              if (status === 'compromised' || status === 'completed') status = 'submitted';
+              if (!['in_progress', 'submitted', 'abandoned'].includes(status)) status = 'in_progress';
+              clean.status = status;
+
+              if (typeof row.score === 'number' && !isNaN(row.score)) clean.score = Math.round(row.score);
+              if (typeof row.total_questions === 'number' && !isNaN(row.total_questions)) clean.total_questions = Math.round(row.total_questions);
+
+              const started = row.started_at || row.created_at || new Date().toISOString();
+              clean.started_at = started;
+
+              if (row.submitted_at || row.completed_at) {
+                clean.submitted_at = row.submitted_at || row.completed_at;
+              }
+
               return clean;
             };
 

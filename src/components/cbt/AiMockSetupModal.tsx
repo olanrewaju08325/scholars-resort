@@ -6,11 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { 
   BrainCircuit, Sparkles, Sliders, ShieldCheck, 
-  Target, AlertCircle, PlayCircle, Activity, Cpu 
+  Target, AlertCircle, PlayCircle, Activity, Cpu, Loader2 
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
+import { useExamSessionLock } from '@/hooks/useExamSessionLock';
+import { useSessionValidator } from '@/hooks/useSessionValidator';
+import { ActiveExamConflictDialog } from '@/components/cbt/ActiveExamConflictDialog';
 
 interface AiMockSetupModalProps {
   isOpen: boolean;
@@ -23,10 +26,22 @@ export const AiMockSetupModal: React.FC<AiMockSetupModalProps> = ({
 }) => {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { isLocked, acquireLock, releaseLock } = useExamSessionLock();
+  const {
+    validateBeforeStart,
+    isConflictDialogOpen,
+    conflictResult,
+    isCleaningUp,
+    handleResume,
+    handleDiscardAndProceed,
+    closeConflictDialog
+  } = useSessionValidator();
+
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [activeConfig, setActiveConfig] = useState<any>(null);
   const [scanningWeaknesses, setScanningWeaknesses] = useState(true);
   const [detectedWeakTopics, setDetectedWeakTopics] = useState<string[]>([]);
+  const [isStarting, setIsStarting] = useState(false);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -82,10 +97,21 @@ export const AiMockSetupModal: React.FC<AiMockSetupModalProps> = ({
     loadMockSetup();
   }, [isOpen, profile?.id]);
 
-  const handleStartAiMock = () => {
+  const executeStartAiMock = () => {
+    if (!acquireLock('ai_mock_modal')) return;
+    setIsStarting(true);
     toast.success('Initializing Admin-configured AI Adaptive UTME Mock Exam session...');
     onClose();
     navigate('/exam?mode=ai');
+    setTimeout(() => {
+      setIsStarting(false);
+      releaseLock();
+    }, 1000);
+  };
+
+  const handleStartAiMock = async () => {
+    if (isLocked || isStarting || loadingConfig) return;
+    await validateBeforeStart(executeStartAiMock);
   };
 
   const userSubjects = profile?.utme_subjects && profile.utme_subjects.length > 0
@@ -93,6 +119,7 @@ export const AiMockSetupModal: React.FC<AiMockSetupModalProps> = ({
     : ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
 
   return (
+    <>
     <Dialog open={isOpen} onOpenChange={(open) => { if (open === false) onClose(); }}>
       <DialogContent className="max-w-xl bg-card border-border text-foreground shadow-2xl p-6">
         <DialogHeader className="space-y-1">
@@ -198,20 +225,39 @@ export const AiMockSetupModal: React.FC<AiMockSetupModalProps> = ({
 
         {/* Action Footer */}
         <div className="flex items-center justify-between pt-3 border-t border-border">
-          <Button type="button" variant="ghost" size="sm" onClick={onClose} className="text-xs h-9">
+          <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={isStarting} className="text-xs h-9">
             Cancel
           </Button>
 
           <Button 
             type="button" 
             onClick={handleStartAiMock}
-            disabled={loadingConfig}
+            disabled={loadingConfig || isLocked || isStarting}
             className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs h-9 px-5 gap-1.5 shadow-md shadow-indigo-600/20"
           >
-            <PlayCircle className="w-4 h-4" /> Launch 180-Q AI UTME Mock
+            {isStarting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" /> Launching...
+              </>
+            ) : (
+              <>
+                <PlayCircle className="w-4 h-4" /> Launch 180-Q AI UTME Mock
+              </>
+            )}
           </Button>
         </div>
       </DialogContent>
     </Dialog>
+
+    {/* Unfinished Session Conflict Dialog */}
+    <ActiveExamConflictDialog
+      isOpen={isConflictDialogOpen}
+      onClose={closeConflictDialog}
+      sessionCheckResult={conflictResult}
+      onResume={handleResume}
+      onDiscardAndProceed={handleDiscardAndProceed}
+      isProcessing={isCleaningUp}
+    />
+    </>
   );
 };
