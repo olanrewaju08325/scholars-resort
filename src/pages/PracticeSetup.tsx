@@ -25,6 +25,7 @@ const PracticeSetup = () => {
   const [difficulty, setDifficulty] = useState('mixed');
   const [questionCount, setQuestionCount] = useState(mode === 'speed' ? '20' : '20');
   const [learningStyle, setLearningStyle] = useState(mode === 'speed' ? 'rapid' : 'normal');
+  const [pacingMode, setPacingMode] = useState<'untimed' | 'timed'>(mode === 'speed' ? 'timed' : 'untimed');
   const [loading, setLoading] = useState(true);
   const [enabled, setEnabled] = useState(true);
   const [mistakeCount, setMistakeCount] = useState(0);
@@ -177,7 +178,8 @@ const PracticeSetup = () => {
         topicId: selectedTopic,
         difficulty,
         questionCount: parseInt(questionCount),
-        learningStyle
+        learningStyle,
+        isTimeManagementMode: pacingMode === 'timed'
       } 
     });
   };
@@ -281,6 +283,37 @@ const PracticeSetup = () => {
                       <option value="50">50 Questions</option>
                     </select>
                   )}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Session Timer Pacing</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPacingMode('untimed')}
+                    className={`p-3 text-left rounded-xl border text-xs font-semibold transition-all ${
+                      pacingMode === 'untimed'
+                        ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary'
+                        : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <div className="font-bold text-foreground text-sm mb-0.5">Untimed Study</div>
+                    <div>No countdown timer. Learn at your own pace.</div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPacingMode('timed')}
+                    className={`p-3 text-left rounded-xl border text-xs font-semibold transition-all ${
+                      pacingMode === 'timed'
+                        ? 'border-primary bg-primary/10 text-primary ring-1 ring-primary'
+                        : 'border-border bg-muted/50 text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    <div className="font-bold text-foreground text-sm mb-0.5">Timed Sprint</div>
+                    <div>Countdown timer active (e.g. 1 min / Q).</div>
+                  </button>
                 </div>
               </div>
 

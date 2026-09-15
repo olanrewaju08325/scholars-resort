@@ -959,12 +959,15 @@ D) ...
                   Question {currentIndex + 1} of {questions.length}
                 </span>
                 <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1.5">
-                  Time: {timeSpent}s
-                  <span className={`w-2 h-2 rounded-full inline-block transition-colors duration-300 ${
-                    timeSpent < 30 ? 'bg-emerald-500 shadow-sm shadow-emerald-500/50' :
-                    timeSpent < 45 ? 'bg-amber-500 shadow-sm shadow-amber-500/50' :
-                    'bg-rose-500 shadow-sm shadow-rose-500/50 animate-pulse'
-                  }`} title={timeSpent < 30 ? 'Pace: Perfect' : timeSpent < 45 ? 'Pace: Warning' : 'Pace: Take action!'} />
+                  {state?.isTimeManagementMode && timeRemaining !== null ? (
+                    <span className="text-amber-600 dark:text-amber-400 font-mono font-bold bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">
+                      Countdown: {Math.floor(timeRemaining / 60)}m {timeRemaining % 60}s
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                      Untimed Study ({timeSpent}s)
+                    </span>
+                  )}
                 </span>
               </div>
 
@@ -1033,6 +1036,34 @@ D) ...
               </div>
               
               <div className="space-y-3 md:space-y-4">
+                {isAnswered && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className={`p-3.5 rounded-xl border flex items-center justify-between text-xs sm:text-sm font-bold shadow-xs ${
+                      correctAnswersMap[q.id]
+                        ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300'
+                        : 'bg-rose-500/15 border-rose-500/40 text-rose-700 dark:text-rose-300'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      {correctAnswersMap[q.id] ? (
+                        <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+                      ) : (
+                        <XCircle className="w-5 h-5 text-rose-500 shrink-0" />
+                      )}
+                      <span>
+                        {correctAnswersMap[q.id]
+                          ? 'Correct Answer! Outstanding job.'
+                          : `Incorrect — You selected ${cleanOptionText(selectedAns || '')}, but the correct answer is Option ${getNormalizedCorrectAnswer(q) || 'verified in syllabus'}.`}
+                      </span>
+                    </div>
+                    <span className="text-[10px] uppercase font-mono px-2.5 py-1 rounded-md bg-background/80 border border-current shrink-0">
+                      {correctAnswersMap[q.id] ? '+1 Score' : 'Missed'}
+                    </span>
+                  </motion.div>
+                )}
+
                 {q.options.map((opt: string, i: number) => {
                   let btnClass = "border-border hover:bg-muted";
                   let Icon = null;
