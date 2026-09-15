@@ -20,6 +20,8 @@ import { saveCompletedOfflineSession } from '@/lib/offlineStore';
 import { usePerfMonitoring } from '@/hooks/usePerfMonitoring';
 import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegrity } from '@/utils/subjectUtils';
 import { cleanQuestionText, cleanOptionText, checkIsCorrect } from '@/utils/questionUtils';
+import { sanitizeQuestionList, extractSafeSubjectName } from '@/utils/sanitizeExamData';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { QuestionFlowService } from '@/services/questionFlowService';
 import { validateUtmeSubjectCombination } from '@/utils/subjectTaxonomy';
 import { useFocusLock } from '@/hooks/useFocusLock';
@@ -238,15 +240,17 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
 
           if (activeInterrupted && activeInterrupted.questions && activeInterrupted.questions.length > 0) {
             if (shouldDirectResume || window.confirm("We found an unfinished exam session. Would you like to resume your previous exam?")) {
-              setQuestions(activeInterrupted.questions);
+              const sanitizedQuestions = sanitizeQuestionList(activeInterrupted.questions);
+              setQuestions(sanitizedQuestions);
               setAnswers(activeInterrupted.answers || {});
               setFlagged(activeInterrupted.flagged || {});
               setSessionStartedAt(activeInterrupted.startedAt);
               setTimeLeft(activeInterrupted.timeLeft);
               setCurrentQuestionIdx(activeInterrupted.currentQuestionIdx || 0);
-              setExamSubjectsList(activeInterrupted.subjects || []);
-              if (activeInterrupted.subjects && activeInterrupted.subjects.length > 0) {
-                setStartingSubject(activeInterrupted.subjects[0]);
+              const sanitizedSubs = (activeInterrupted.subjects || []).map(s => extractSafeSubjectName(s));
+              setExamSubjectsList(sanitizedSubs);
+              if (sanitizedSubs.length > 0) {
+                setStartingSubject(sanitizedSubs[0]);
               }
               setHasStarted(true);
               setLoading(false);
@@ -263,14 +267,14 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
 
       // Check for retake questions passed directly from Results review screen
       if (location.state?.retakeQuestions && Array.isArray(location.state.retakeQuestions) && location.state.retakeQuestions.length > 0) {
-        const retakeList = location.state.retakeQuestions;
-        const distinctSubjects = Array.from(new Set(retakeList.map((q: any) => q.subject_name).filter(Boolean))) as string[];
+        const sanitizedRetake = sanitizeQuestionList(location.state.retakeQuestions);
+        const distinctSubjects = Array.from(new Set(sanitizedRetake.map((q: any) => extractSafeSubjectName(q.subject_name)).filter(Boolean))) as string[];
         const finalSubs = distinctSubjects.length > 0 ? distinctSubjects : ['General'];
         setExamSubjectsList(finalSubs);
         setStartingSubject(finalSubs[0]);
-        setQuestions(retakeList);
+        setQuestions(sanitizedRetake);
         setLoading(false);
-        toast.info(`Loaded ${retakeList.length} questions for exam retake!`);
+        toast.info(`Loaded ${sanitizedRetake.length} questions for exam retake!`);
         return;
       }
 
@@ -284,26 +288,28 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
 
       // JAMB 180-Question Master Logic via QuestionFlowService
       const userSubs = profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0
-        ? profile.utme_subjects.map((s: any) => typeof s === 'object' ? s?.name || s?.id || 'General' : String(s))
+        ? profile.utme_subjects.map((s: any) => extractSafeSubjectName(s))
         : [];
       
       const validation = validateUtmeSubjectCombination(userSubs);
       let finalSubjects = validation.isValid ? validation.normalizedSubjects : [];
 
       if (examMode === 'past_questions') {
-        finalSubjects = [subjectParam];
+        const resolvedSubject = extractSafeSubjectName(subjectParam || (userSubs.length > 0 ? userSubs[0] : 'Use of English'));
+        finalSubjects = [resolvedSubject];
         const allocatedSeconds = Math.max(1200, targetCount * 60); // 1 min per question or min 20 min
         totalExamSecondsRef.current = allocatedSeconds;
         setTimeLeft(allocatedSeconds);
       } else if (!finalSubjects || finalSubjects.length === 0) {
         if (userSubs.length > 0) {
           const withEnglish = Array.from(new Set(['Use of English', ...userSubs])).slice(0, 4);
-          finalSubjects = withEnglish;
+          finalSubjects = withEnglish.map(s => extractSafeSubjectName(s));
         } else {
           finalSubjects = ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
         }
       }
 
+      finalSubjects = finalSubjects.map(s => extractSafeSubjectName(s));
       setExamSubjectsList(finalSubjects);
       setStartingSubject(finalSubjects[0] || 'Use of English');
       
@@ -341,7 +347,14 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           toast.warning("Limited questions found for this specific past question selection. Displaying available bank.");
         }
 
-        setQuestions(flowResult.questions);
+        const sanitizedFlowQuestions = sanitizeQuestionList(flowResult.questions);
+        setQuestions(sanitizedFlowQuestions);
+        
+        // Ensure active subjects list matches the actual retrieved subjects
+        const retrievedSubjects = Array.from(new Set(sanitizedFlowQuestions.map(q => extractSafeSubjectName(q.subject_name)).filter(Boolean)));
+        if (retrievedSubjects.length > 0) {
+          setExamSubjectsList(retrievedSubjects);
+        }
       } catch (err: any) {
         console.error("Failed to fetch questions for mode:", err);
         toast.error("Failed to load exam questions from the database. Retrying with general question bank.");
@@ -1177,7 +1190,8 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           {...swipeHandlers}
           className="flex-1 flex flex-col relative bg-card text-card-foreground m-1.5 sm:m-2 md:m-4 lg:mr-0 rounded-xl shadow-xs border border-border min-h-0 touch-pan-y"
         >
-          {/* Real JAMB Subject Switcher Tabs */}
+          <ErrorBoundary isComponentLevel resetLabel="Reset Corrupted Session">
+            {/* Real JAMB Subject Switcher Tabs */}
           <div className="bg-slate-900 dark:bg-slate-950 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
             {examSubjectsList.map((subjItem, idx) => {
               const subjName = typeof subjItem === 'object' ? (subjItem as any)?.name || 'Subject' : String(subjItem || '');
@@ -1244,7 +1258,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
                </span>
 
                <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-[10px] md:text-xs font-bold uppercase">
-                 {q?.subject_name || 'Subject'}
+                 {extractSafeSubjectName(q?.subject_name) || 'Subject'}
                </span>
                {q?.is_ai_generated && (
                  <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 rounded text-[9px] md:text-[10px] font-bold uppercase flex items-center gap-1">
@@ -1314,10 +1328,13 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
             </div>
             
             <div className="grid grid-cols-1 gap-3 md:gap-4 max-w-3xl">
-              {q.options.map((opt: string, i: number) => {
-                const isSelected = answers[q.id] === opt;
+              {(q.options || []).map((rawOpt: any, i: number) => {
+                const opt: string = typeof rawOpt === 'string'
+                  ? rawOpt
+                  : (rawOpt?.text || rawOpt?.value || rawOpt?.label || String(rawOpt || ''));
                 const letter = String.fromCharCode(65 + i);
-                const isEliminated = (eliminatedOptions[q.id] || []).includes(opt);
+                const isSelected = answers[q.id] === opt || answers[q.id] === letter;
+                const isEliminated = (eliminatedOptions[q.id] || []).includes(opt) || (eliminatedOptions[q.id] || []).includes(letter);
                 
                 return (
                   <div 
@@ -1407,6 +1424,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               Submit
             </Button>
           </div>
+          </ErrorBoundary>
         </div>
 
         {/* Right Side: Desktop Navigator */}

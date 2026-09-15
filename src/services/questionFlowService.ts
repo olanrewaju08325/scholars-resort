@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { ContentNormalizer, type NormalizedQuestion } from '@/utils/ContentNormalizer';
+import { sanitizeQuestionForRendering } from '@/utils/sanitizeExamData';
 import { CBTPerformanceAuditService } from '@/services/cbtPerformanceAuditService';
 import { ExplanationCacheService } from '@/services/explanationCacheService';
 import { 
@@ -678,7 +679,8 @@ export class QuestionFlowService {
         if (!q.subject_name && subjectsQueried.length > 0) {
           q.subject_name = subjectsQueried[0];
         }
-        return q;
+        // Strictly sanitize for rendering: strip non-serializable elements, React nodes, circular refs, and object subject_names
+        return sanitizeQuestionForRendering(q);
       });
       
       // Shuffle and slice to target count (unless empty)

@@ -8,6 +8,12 @@ import { perfMonitor } from './lib/perfMonitor';
 import { initBatterySaver } from './lib/batterySaver';
 
 import { initSupabaseLifecycle } from './lib/supabaseLifecycle';
+import { diagnoseAiQuestionSchemaFromDatabase } from './utils/aiQuestionDiagnostics';
+
+// Expose diagnostic tool on window for admin and console diagnostics
+if (typeof window !== 'undefined') {
+  (window as any).diagnoseAiQuestionSchemaFromDatabase = diagnoseAiQuestionSchemaFromDatabase;
+}
 
 // Initialize dev-mode performance & API latency monitor (flags requests >2s)
 perfMonitor.init();

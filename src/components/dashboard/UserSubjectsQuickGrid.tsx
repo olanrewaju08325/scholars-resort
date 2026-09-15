@@ -114,7 +114,8 @@ export const UserSubjectsQuickGrid: React.FC = () => {
     ? profile.utme_subjects
     : ['Use of English', 'Mathematics', 'Physics', 'Chemistry'];
 
-  const userSubjectsList = rawSubjects.map((sName) => {
+  const userSubjectsList = rawSubjects.map((s) => {
+    const sName = typeof s === 'object' ? (s as any)?.name || 'Subject' : String(s || '');
     const canonical = getCanonicalSubjectByName(sName);
     return {
       name: canonical ? canonical.name : normalizeToCanonicalSubjectName(sName),

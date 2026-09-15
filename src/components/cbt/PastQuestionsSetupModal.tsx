@@ -100,11 +100,15 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
               onChange={(e) => setSelectedSubject(e.target.value)}
               className="w-full h-10 px-3 rounded-xl border border-border bg-muted/40 text-xs font-medium text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             >
-              {OFFICIAL_JAMB_SUBJECTS.map((subj) => (
-                <option key={subj} value={subj}>
-                  {subj}
-                </option>
-              ))}
+              {OFFICIAL_JAMB_SUBJECTS.map((subj) => {
+                const sName = typeof subj === 'string' ? subj : subj.name;
+                const sId = typeof subj === 'object' && subj?.id ? subj.id : sName;
+                return (
+                  <option key={sId} value={sName}>
+                    {sName}
+                  </option>
+                );
+              })}
             </select>
           </div>
 
@@ -213,7 +217,7 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
             onClick={handleLaunch}
             className="bg-orange-600 hover:bg-orange-500 text-white font-bold text-xs h-10 px-6 gap-2 shadow-lg shadow-orange-600/30"
           >
-            <PlayCircle className="w-4 h-4" /> Start {selectedSubject} Drill
+            <PlayCircle className="w-4 h-4" /> Start {typeof selectedSubject === 'object' ? (selectedSubject as any)?.name || 'Subject' : selectedSubject} Drill
           </Button>
         </div>
       </DialogContent>

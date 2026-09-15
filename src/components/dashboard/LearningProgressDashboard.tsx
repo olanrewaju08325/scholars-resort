@@ -48,10 +48,11 @@ export const LearningProgressDashboard: React.FC = () => {
   }, []);
 
   // Filter subjects
-  const subjectsList = Array.from(new Set(summaries.map(s => s.subjectName))).filter(Boolean);
+  const subjectsList = Array.from(new Set(summaries.map(s => typeof s.subjectName === 'object' ? (s.subjectName as any)?.name : String(s.subjectName || '')))).filter(Boolean);
 
   const filteredSummaries = summaries.filter(s => {
-    if (selectedSubject !== 'all' && s.subjectName !== selectedSubject) return false;
+    const sName = typeof s.subjectName === 'object' ? (s.subjectName as any)?.name : String(s.subjectName || '');
+    if (selectedSubject !== 'all' && sName !== selectedSubject) return false;
     if (selectedMastery !== 'all' && s.masteryStatus.toLowerCase() !== selectedMastery.toLowerCase()) return false;
     return true;
   });

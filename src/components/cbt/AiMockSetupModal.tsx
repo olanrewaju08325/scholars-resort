@@ -151,11 +151,14 @@ export const AiMockSetupModal: React.FC<AiMockSetupModalProps> = ({
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> Target 4-Subject UTME Paper Combination:
             </span>
             <div className="flex flex-wrap gap-1.5">
-              {userSubjects.map((sub: string) => (
-                <Badge key={sub} variant="secondary" className="text-xs bg-muted text-foreground">
-                  {sub}
-                </Badge>
-              ))}
+              {userSubjects.map((sub: any, i: number) => {
+                const subName = typeof sub === 'object' ? sub?.name || 'Subject' : String(sub || '');
+                return (
+                  <Badge key={i} variant="secondary" className="text-xs bg-muted text-foreground">
+                    {subName}
+                  </Badge>
+                );
+              })}
             </div>
           </div>
 

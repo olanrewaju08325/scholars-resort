@@ -239,9 +239,19 @@ export class ContentNormalizer {
       correct_option: cleanCorrect,
       explanation: this.cleanExplanation(rawQuestion.explanation || rawQuestion.solution || rawQuestion.sol || rawQuestion.rationale || rawQuestion.answer_explanation || rawQuestion.reason || rawQuestion.working),
       hint: this.cleanExplanation(rawQuestion.hint || rawQuestion.tip),
-      subject_id: rawQuestion.subject_id || rawQuestion.subjectId,
-      subject_name: rawQuestion.subject_name || rawQuestion.subjectName || rawQuestion.subject || rawQuestion.subjects?.name || rawQuestion.subject_title || rawQuestion.topic_name,
-      topic: rawQuestion.topic || rawQuestion.topic_name,
+      subject_id: typeof rawQuestion.subject_id === 'object' && rawQuestion.subject_id !== null
+        ? (rawQuestion.subject_id.id || String(rawQuestion.subject_id.name || ''))
+        : (rawQuestion.subject_id || rawQuestion.subjectId),
+      subject_name: (() => {
+        const raw = rawQuestion.subject_name || rawQuestion.subjectName || rawQuestion.subject || rawQuestion.subjects?.name || rawQuestion.subject_title || rawQuestion.topic_name;
+        if (typeof raw === 'object' && raw !== null) {
+          return raw.name || raw.title || raw.id || 'General';
+        }
+        return typeof raw === 'string' ? raw : (raw != null ? String(raw) : undefined);
+      })(),
+      topic: typeof rawQuestion.topic === 'object' && rawQuestion.topic !== null
+        ? (rawQuestion.topic.name || rawQuestion.topic.title || '')
+        : (rawQuestion.topic || rawQuestion.topic_name),
       year: rawQuestion.year || rawQuestion.exam_year,
       image_url: rawQuestion.image_url || rawQuestion.imageUrl || rawQuestion.image,
       source: 'Scholars Resort CBT Bank',

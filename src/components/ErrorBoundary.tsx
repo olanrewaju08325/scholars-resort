@@ -1,6 +1,14 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home, Bug, Copy, WifiOff, Database, HardDrive } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Home, Bug, Copy, WifiOff, Database, HardDrive, RotateCcw, ShieldAlert } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
+  isComponentLevel?: boolean;
+  onReset?: () => void;
+  resetLabel?: string;
+}
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -10,10 +18,10 @@ interface ErrorBoundaryState {
 }
 
 export class ErrorBoundary extends React.Component<
-  { children: React.ReactNode; fallback?: React.ReactNode },
+  ErrorBoundaryProps,
   ErrorBoundaryState
 > {
-  constructor(props: any) {
+  constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null, errorId: null };
   }
@@ -21,6 +29,62 @@ export class ErrorBoundary extends React.Component<
   static getDerivedStateFromError(error: Error): Partial<ErrorBoundaryState> {
     return { hasError: true, error };
   }
+
+  /**
+   * Clears invalid or corrupted exam state from localStorage and sessionStorage,
+   * allowing the user to recover immediately without needing a full page refresh.
+   */
+  handleResetSession = () => {
+    try {
+      const knownKeys = [
+        'jamb_active_exam_session',
+        'scholars_cbt_session',
+        'interrupted_exam_session',
+        'cbt_active_session',
+        'cbt_exam_backup',
+        'cbt_exam_snapshot',
+        'cbt_progress_cache',
+        'jamb_mistake_bank',
+        'jamb_practice_history',
+        'cbt_last_active_subject',
+        'eb_last_chunk_reload'
+      ];
+
+      knownKeys.forEach(k => {
+        try {
+          localStorage.removeItem(k);
+          sessionStorage.removeItem(k);
+        } catch (_) {}
+      });
+
+      // Clear dynamic keys with cbt_ or exam_ prefixes
+      try {
+        const toDelete: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && (key.startsWith('cbt_') || key.startsWith('exam_') || key.startsWith('jamb_session_') || key.includes('exam_backup'))) {
+            toDelete.push(key);
+          }
+        }
+        toDelete.forEach(k => localStorage.removeItem(k));
+      } catch (_) {}
+
+      try {
+        sessionStorage.clear();
+      } catch (_) {}
+    } catch (cleanErr) {
+      console.warn('[ErrorBoundary] Notice cleaning session state:', cleanErr);
+    }
+
+    if (this.props.onReset) {
+      try {
+        this.props.onReset();
+      } catch (_) {}
+    }
+
+    // Recover without a full page refresh
+    this.setState({ hasError: false, error: null, errorInfo: null, errorId: null });
+  };
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     const errorId = `ERR-${Date.now().toString(36).toUpperCase()}`;
@@ -204,6 +268,107 @@ export class ErrorBoundary extends React.Component<
         );
       }
 
+      // Detect data-rendering and React #31 crashes
+      const isDataRenderError =
+        errorMsg.includes('minified react error #31') ||
+        errorMsg.includes('objects are not valid as a react child') ||
+        errorMsg.includes('object with keys') ||
+        errorMsg.includes('cannot read properties') ||
+        errorMsg.includes('reading \'map\'') ||
+        errorMsg.includes('cbt') ||
+        errorMsg.includes('exam');
+
+      // Component-level crash rendering (e.g. inside a widget, drawer, or specific section)
+      if (this.props.isComponentLevel) {
+        return (
+          <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/5 text-card-foreground my-2 space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-destructive/10 text-destructive shrink-0 mt-0.5">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h4 className="text-sm font-bold text-foreground">Section Display Interrupted</h4>
+                <p className="text-xs text-muted-foreground">
+                  A data structure could not be displayed properly in this section.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={this.handleResetSession}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-destructive text-destructive-foreground text-xs font-semibold rounded-lg hover:bg-destructive/90 transition-colors shadow-xs"
+              >
+                <RotateCcw className="w-3.5 h-3.5" /> {this.props.resetLabel || 'Reset Session'}
+              </button>
+              <button
+                type="button"
+                onClick={() => this.setState({ hasError: false, error: null, errorInfo: null, errorId: null })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-border bg-card text-foreground text-xs font-semibold rounded-lg hover:bg-muted transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Try Again
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      // Dedicated Data Rendering & Exam Recovery View
+      if (isDataRenderError) {
+        return (
+          <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 text-center">
+            <div className="max-w-md w-full bg-card border border-border rounded-2xl p-8 shadow-2xl">
+              <div className="relative inline-flex mb-6">
+                <div className="w-20 h-20 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                  <ShieldAlert className="w-10 h-10 text-amber-500" />
+                </div>
+              </div>
+
+              <span className="inline-block px-3 py-1 rounded-full text-xs font-extrabold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30 mb-3 uppercase tracking-wider">
+                Exam State Recovered
+              </span>
+
+              <h1 className="text-2xl font-display font-bold mb-3">Session Data Conflict Detected</h1>
+              <p className="text-muted-foreground mb-6 text-sm leading-relaxed">
+                An invalid data structure (such as a non-serializable question format) was caught. You can reset the cached exam session below to recover immediately without refreshing your browser.
+              </p>
+
+              {this.state.error && (
+                <div className="bg-muted/50 border border-border rounded-xl p-3 mb-6 text-left">
+                  <p className="text-xs font-mono text-muted-foreground break-all">
+                    {this.state.error.message}
+                  </p>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <button
+                  type="button"
+                  onClick={this.handleResetSession}
+                  className="inline-flex items-center justify-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-lg"
+                >
+                  <RotateCcw className="w-4 h-4" /> Reset Session
+                </button>
+                <a
+                  href="/cbt"
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 border border-border rounded-xl font-semibold hover:bg-muted transition-colors text-sm"
+                >
+                  <Home className="w-4 h-4" /> CBT Hub
+                </a>
+                <button
+                  type="button"
+                  onClick={() => this.setState({ hasError: false, error: null, errorInfo: null, errorId: null })}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 border border-border rounded-xl font-semibold hover:bg-muted transition-colors text-sm text-muted-foreground"
+                >
+                  <RefreshCw className="w-4 h-4" /> Retry
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-6 text-center">
           <div className="max-w-md w-full">
@@ -243,18 +408,26 @@ export class ErrorBoundary extends React.Component<
               </div>
             )}
 
-            <div className="flex gap-3 justify-center">
+            <div className="flex flex-wrap gap-3 justify-center">
               <button
+                type="button"
+                onClick={this.handleResetSession}
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-destructive text-destructive-foreground font-semibold rounded-xl hover:bg-destructive/90 transition-colors shadow-lg text-sm"
+              >
+                <RotateCcw className="w-4 h-4" /> Reset Session
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   this.setState({ hasError: false, error: null, errorInfo: null, errorId: null });
                 }}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-lg"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary text-primary-foreground font-semibold rounded-xl hover:bg-primary/90 transition-colors shadow-lg text-sm"
               >
                 <RefreshCw className="w-4 h-4" /> Try Again
               </button>
               <a
                 href="/"
-                className="inline-flex items-center gap-2 px-6 py-2.5 border border-border rounded-xl font-semibold hover:bg-muted transition-colors"
+                className="inline-flex items-center gap-2 px-4 py-2.5 border border-border rounded-xl font-semibold hover:bg-muted transition-colors text-sm"
               >
                 <Home className="w-4 h-4" /> Go Home
               </a>

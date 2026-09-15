@@ -96,7 +96,10 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
   const displayedQuestionIndices = useMemo(() => {
     return questions.map((q, idx) => ({ q, idx })).filter(({ q }) => {
       if (selectedSubjectFilter === 'ALL') return true;
-      return q.subject_name === selectedSubjectFilter;
+      const qSubName = typeof q.subject_name === 'object' && q.subject_name !== null
+        ? (q.subject_name.name || q.subject_name.id || '')
+        : String(q.subject_name || '');
+      return qSubName.toLowerCase() === selectedSubjectFilter.toLowerCase();
     });
   }, [questions, selectedSubjectFilter]);
 
@@ -247,10 +250,18 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
                   >
                     All Subjects ({totalQuestions})
                   </button>
-                  {subjects.map((subj, idx) => {
-                    const subjQuestions = questions.filter(q => q.subject_name === subj);
+                  {subjects.map((rawSubj, idx) => {
+                    const subj = typeof rawSubj === 'object' && rawSubj !== null
+                      ? ((rawSubj as any).name || (rawSubj as any).title || (rawSubj as any).id || 'Subject')
+                      : String(rawSubj || '');
+                    const subjQuestions = questions.filter(q => {
+                      const qSubName = typeof q.subject_name === 'object' && q.subject_name !== null
+                        ? (q.subject_name.name || q.subject_name.id || '')
+                        : String(q.subject_name || '');
+                      return qSubName.toLowerCase() === subj.toLowerCase();
+                    });
                     const subjAnswered = subjQuestions.filter(q => !!answers[q.id]).length;
-                    const isSelected = selectedSubjectFilter === subj;
+                    const isSelected = selectedSubjectFilter.toLowerCase() === subj.toLowerCase();
 
                     return (
                       <button

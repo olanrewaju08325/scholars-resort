@@ -1,6 +1,21 @@
 import { ContentNormalizer } from './ContentNormalizer';
+import { 
+  sanitizeQuestionForRendering, 
+  sanitizeQuestionList, 
+  stripNonSerializable,
+  extractSafeSubjectName,
+  extractSafeOptionStrings
+} from './sanitizeExamData';
+export type { PlainQuestion, PlainOption } from './sanitizeExamData';
 
-export { ContentNormalizer };
+export { 
+  ContentNormalizer, 
+  sanitizeQuestionForRendering, 
+  sanitizeQuestionList, 
+  stripNonSerializable,
+  extractSafeSubjectName,
+  extractSafeOptionStrings
+};
 
 export function cleanQuestionText(text: string | null | undefined): string {
   return ContentNormalizer.cleanQuestionText(text);
