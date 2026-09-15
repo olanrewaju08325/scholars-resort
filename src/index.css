@@ -225,6 +225,27 @@
     overflow-y: hidden;
     padding: 0.5rem 0;
     max-width: 100%;
+    margin: 0.5rem 0 !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .math-text .katex {
+    font-size: 1.05em;
+    line-height: 1.2;
+    max-width: 100%;
+  }
+
+  .math-text .katex-html {
+    overflow-x: auto;
+    overflow-y: hidden;
+    max-width: 100%;
+    vertical-align: middle;
+    padding: 0.15rem 0;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .katex .frac-line {
+    border-bottom-width: 1.5px !important;
   }
 }
 

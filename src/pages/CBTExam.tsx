@@ -91,7 +91,14 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   };
 
   const [currentQuestionIdx, setCurrentQuestionIdx] = useState(0);
+  const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
   const [answers, setAnswers] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (questions.length > 0) {
+      setVisited(prev => (prev[currentQuestionIdx] ? prev : { ...prev, [currentQuestionIdx]: true }));
+    }
+  }, [currentQuestionIdx, questions.length]);
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
   const [timeSpentOnQuestions, setTimeSpentOnQuestions] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(7200); // 2 hours (typical JAMB time)
@@ -1557,6 +1564,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         }}
         answers={answers}
         flagged={flagged}
+        visited={visited}
         subjects={examSubjectsList}
         activeSubject={q?.subject_name}
         onSelectSubject={(subj) => {

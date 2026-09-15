@@ -53,6 +53,13 @@ const PracticeSession = () => {
   
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [visited, setVisited] = useState<Record<number, boolean>>({ 0: true });
+
+  useEffect(() => {
+    if (questions.length > 0) {
+      setVisited(prev => (prev[currentIndex] ? prev : { ...prev, [currentIndex]: true }));
+    }
+  }, [currentIndex, questions.length]);
   const [answersMap, setAnswersMap] = useState<Record<string, string>>({});
   const [correctAnswersMap, setCorrectAnswersMap] = useState<Record<string, boolean>>({});
   const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, string[]>>({});
@@ -1166,6 +1173,7 @@ D) ...
           setAiExplanation(null);
         }}
         answers={answersMap}
+        visited={visited}
         isPracticeMode={true}
         correctAnswersMap={correctAnswersMap}
       />

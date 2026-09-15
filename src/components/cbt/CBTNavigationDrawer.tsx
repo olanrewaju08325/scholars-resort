@@ -24,6 +24,7 @@ interface CBTNavigationDrawerProps {
   onSelectQuestion: (idx: number) => void;
   answers: Record<string, string>;
   flagged?: Record<number, boolean>;
+  visited?: Record<number, boolean>;
   subjects?: string[];
   activeSubject?: string;
   onSelectSubject?: (subject: string) => void;
@@ -40,6 +41,7 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
   onSelectQuestion,
   answers,
   flagged = {},
+  visited = {},
   subjects = [],
   activeSubject,
   onSelectSubject,
@@ -89,7 +91,12 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
     return Object.values(flagged).filter(Boolean).length;
   }, [flagged]);
 
+  const visitedCount = useMemo(() => {
+    return questions.filter((_, idx) => !!visited[idx] && !answers[questions[idx]?.id]).length;
+  }, [questions, visited, answers]);
+
   const unansweredCount = Math.max(0, totalQuestions - answeredCount);
+  const unvisitedCount = Math.max(0, totalQuestions - (answeredCount + visitedCount));
   const completionPercentage = totalQuestions > 0 ? Math.round((answeredCount / totalQuestions) * 100) : 0;
 
   // Filtered questions based on subject filter
@@ -193,19 +200,23 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
                 />
               </div>
 
-              {/* Status Pills */}
+              {/* Status Legend Pills */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold border border-emerald-500/20">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span>Answered: {answeredCount}</span>
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 flex items-center justify-center text-[8px] text-white">✓</div>
+                  <span>Answered ({answeredCount})</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 text-xs font-bold border border-red-500/20">
-                  <div className="w-2 h-2 rounded-full bg-red-500" />
-                  <span>Flagged: {flaggedCount}</span>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 text-xs font-bold border border-amber-500/20">
+                  <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  <span>Visited ({visitedCount})</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 text-xs font-bold border border-purple-500/20">
+                  <Flag className="w-3 h-3 text-purple-500 fill-purple-500" />
+                  <span>Flagged ({flaggedCount})</span>
                 </div>
                 <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-muted text-muted-foreground text-xs font-semibold border border-border">
-                  <div className="w-2 h-2 rounded-full bg-muted-foreground/50" />
-                  <span>Unanswered: {unansweredCount}</span>
+                  <div className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30" />
+                  <span>Unvisited ({unvisitedCount})</span>
                 </div>
               </div>
             </div>
@@ -293,6 +304,7 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
                 {displayedQuestionIndices.map(({ q, idx }) => {
                   const isAnswered = !!answers[q.id];
                   const isFlagged = !!flagged[idx];
+                  const isVisited = !!visited[idx];
                   const isCurrent = currentIdx === idx;
 
                   // Styling logic
@@ -308,9 +320,11 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
                       cellClass = "bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-300 font-bold";
                     }
                   } else if (isFlagged) {
-                    cellClass = "bg-red-500/15 border-red-500/40 text-red-600 dark:text-red-400 font-bold";
+                    cellClass = "bg-purple-500/20 border-purple-500/50 text-purple-700 dark:text-purple-300 font-bold";
                   } else if (isAnswered) {
-                    cellClass = "bg-emerald-500/15 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 font-semibold";
+                    cellClass = "bg-emerald-500/20 border-emerald-500/50 text-emerald-700 dark:text-emerald-300 font-bold";
+                  } else if (isVisited) {
+                    cellClass = "bg-amber-500/15 border-amber-500/40 text-amber-700 dark:text-amber-300 font-semibold";
                   }
 
                   return (
@@ -321,19 +335,24 @@ export const CBTNavigationDrawer: React.FC<CBTNavigationDrawerProps> = ({
                         onClose();
                       }}
                       className={`relative aspect-square rounded-xl border text-xs md:text-sm font-semibold flex flex-col items-center justify-center transition-all active:scale-95 ${cellClass}`}
-                      title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : ''}${isFlagged ? ' (Flagged)' : ''}`}
+                      title={`Question ${idx + 1}${isAnswered ? ' (Answered)' : isVisited ? ' (Visited)' : ' (Unvisited)'}${isFlagged ? ' (Flagged)' : ''}`}
                     >
                       <span>{idx + 1}</span>
 
                       {/* Small Indicators */}
                       {isFlagged && !isCurrent && (
                         <div className="absolute top-1 right-1">
-                          <div className="w-2 h-2 rounded-full bg-red-500" />
+                          <Flag className="w-2.5 h-2.5 text-purple-600 fill-purple-600" />
                         </div>
                       )}
                       {isAnswered && !isCurrent && !isFlagged && (
                         <div className="absolute bottom-1 right-1">
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        </div>
+                      )}
+                      {isVisited && !isAnswered && !isCurrent && !isFlagged && (
+                        <div className="absolute bottom-1 right-1">
+                          <div className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                         </div>
                       )}
                     </button>

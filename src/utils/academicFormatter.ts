@@ -35,13 +35,19 @@ export function formatChemicalFormulaToLatex(formula: string): string {
  * Sanitizes and repairs common LaTeX/OCR mathematical formatting errors:
  * - Fixes double superscripts like a^{2v}^{2} -> {a^{2v}}^{2}
  * - Fixes double subscripts like x_{1}_{2} -> {x_1}_2
- * - Replaces OCR comments like [Note: original equation formatting is unclear...]
+ * - Strips all OCR notes, disclaimers, and verify notices (e.g. [Note: computed value is...])
  * - Converts "cube root of [X]" -> \sqrt[3]{X}
  * - Converts "square root of [X]" -> \sqrt{X}
+ * - Converts raw "sqrt(c)" -> \sqrt{c}
  */
 export function sanitizeAndRepairMathLatex(expr: string): string {
   if (!expr) return '';
   let s = String(expr).trim();
+
+  // Strip all bracketed/parenthesized notes, disclaimers, verify notices from OCR or scrape databases
+  s = s.replace(/\[\s*(?:Note|note|NOTE|verify|Verify|VERIFY|Source|source|Answer|Comment|Disclaim|disclaimer)[^\]]*\]/gi, '');
+  s = s.replace(/\(\s*(?:Note|note|NOTE|verify|Verify|VERIFY|Source|source)[^\)]*\)/gi, '');
+  s = s.replace(/\[\s*verify\s*\]/gi, '');
 
   // Fix glued words from bad OCR/AI generation (e.g., correcttotwodecimalplaces -> correct to two decimal places)
   s = s
@@ -49,11 +55,6 @@ export function sanitizeAndRepairMathLatex(expr: string): string {
     .replace(/decimalplaces/gi, 'decimal places')
     .replace(/Find,/gi, 'Find, ')
     .replace(/([a-z])([A-Z])/g, '$1 $2');
-
-  // Strip OCR artifacts & disclaimers
-  s = s.replace(/\[\s*Note:?\s*original equation formatting is unclear[^\]]*\]/gi, '');
-  s = s.replace(/\(\s*Note:?\s*original equation formatting is unclear[^\)]*\)/gi, '');
-  s = s.replace(/\[\s*verify\s*\]/gi, '');
 
   // Convert arrows in chemical or physics reactions
   s = s.replace(/\s*(?:->|-->|\\rightarrow)\s*/g, ' \\rightarrow ');
@@ -65,6 +66,11 @@ export function sanitizeAndRepairMathLatex(expr: string): string {
   s = s.replace(/square\s+root\s+of\s+\[([^\]]+)\]/gi, '\\sqrt{$1}');
   s = s.replace(/square\s+root\s+of\s+\(([^)]+)\)/gi, '\\sqrt{$1}');
   s = s.replace(/nth\s+root\s+of\s+\[([^\]]+)\]/gi, '\\sqrt[n]{$1}');
+
+  // Convert sqrt(c) or sqrt{c} or sqrt x
+  s = s.replace(/\bsqrt\s*\(([^)]+)\)/gi, '\\sqrt{$1}');
+  s = s.replace(/\bsqrt\s*\{([^}]+)\}/gi, '\\sqrt{$1}');
+  s = s.replace(/\bsqrt\s+([a-zA-Z0-9]+)/gi, '\\sqrt{$1}');
 
   // Fix consecutive/nested superscripts like a^{2v}^{2} or a^{4v}^3 -> {a^{2v}}^{2}
   for (let i = 0; i < 4; i++) {
@@ -84,20 +90,28 @@ export function sanitizeAndRepairMathLatex(expr: string): string {
 }
 
 /**
- * Transforms raw algebraic expressions with ^ (like 4a^2-9b^2 or (4a+6b)^2) into valid LaTeX
+ * Transforms raw algebraic expressions with ^ (like 4a^2-9b^2 or (4a+6b)^2 or (a^3-b^3-sqrt(c))/(b-1-c)) into valid KaTeX LaTeX
  */
 export function formatRawMathToLatex(expr: string): string {
   let res = sanitizeAndRepairMathLatex(expr);
   
-  // Replace ^ followed by digit(s) or (parenthesized expression)
-  res = res.replace(/\^([0-9a-zA-Z+-]+)/g, '^{$1}');
+  // Handle caret exponents safely:
+  // 1. Parenthesized exponent: ^(x+1) -> ^{x+1}
+  res = res.replace(/\^\(([^)]+)\)/g, '^{$1}');
+  // 2. Single token or negative number: ^3, ^2, ^n, ^-1, ^-2 -> ^{3}, etc.
+  res = res.replace(/\^(-?\d+|[a-zA-Z])/g, '^{$1}');
+
+  // Convert parenthesized division fractions: (A) / (B) or (A)/(B) -> \frac{A}{B}
+  res = res.replace(/\(\s*([^\/()]+(?:\([^()]+\)[^\/()]*)*)\s*\)\s*\/\s*\(\s*([^\/()]+(?:\([^()]+\)[^\/()]*)*)\s*\)/g, (_, p1, p2) => {
+    return `\\frac{${p1.trim()}}{${p2.trim()}}`;
+  });
   
   // Replace simple * with \times
   res = res.replace(/(\d+)\s*\*\s*(\d+)/g, '$1 \\times $2');
   res = res.replace(/(\d+)\s*[xX×]\s*10\^/g, '$1 \\times 10^');
   
-  // Replace sqrt(...) with \sqrt{...}
-  res = res.replace(/sqrt\(([^)]+)\)/gi, '\\sqrt{$1}');
+  // Replace sqrt(...) if any remaining
+  res = res.replace(/\bsqrt\(([^)]+)\)/gi, '\\sqrt{$1}');
   
   // Replace degrees like 30° -> 30^\circ
   res = res.replace(/(\d+)\s*°([CF]?)/gi, (_, deg, unit) => {
@@ -202,8 +216,8 @@ export function processAcademicContent(rawText: string): string {
     }
   }
 
-  // 4. Inline mathematical clauses (powers, roots, scientific notation, LaTeX macros)
-  const mathClauseRegex = /(?:\\(?:frac|sqrt|sum|int|alpha|beta|gamma|theta|pi|omega|lambda|Delta|pm|times|div)(?:\{[^}]*\}|[a-zA-Z0-9\s()_^*+-])+|\(?[0-9a-zA-Z+-]+\)?\^[0-9a-zA-Z+-]+|\d+(?:\.\d+)?\s*[xX×]\s*10\^[-+]?\d+|\b\d+(?:\.\d+)?\s*°[CF]?\b)/g;
+  // 4. Inline mathematical clauses (powers, roots, division fractions, scientific notation, LaTeX macros)
+  const mathClauseRegex = /(?:\\(?:frac|sqrt|sum|int|alpha|beta|gamma|theta|pi|omega|lambda|Delta|pm|times|div)(?:\{[^}]*\}|[a-zA-Z0-9\s()_^*+-])+|\(\s*[a-zA-Z0-9\s()_^*+-\/\\^{}]+\s*\)\s*\/\s*\(\s*[a-zA-Z0-9\s()_^*+-\/\\^{}]+\s*\)|\(?[0-9a-zA-Z+-]+\)?\^[0-9a-zA-Z+-]+|\bsqrt\s*\([^)]+\)|\d+(?:\.\d+)?\s*[xX×]\s*10\^[-+]?\d+|\b\d+(?:\.\d+)?\s*°[CF]?\b)/g;
 
   text = text.replace(mathClauseRegex, (match) => {
     // Avoid turning normal short words into math

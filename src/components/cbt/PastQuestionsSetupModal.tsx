@@ -6,13 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { 
   History, BookOpen, Calendar, Clock, CheckCircle2, 
-  Sparkles, PlayCircle, Layers, RefreshCw, Loader2 
+  Sparkles, PlayCircle, Layers, RefreshCw, Loader2, HelpCircle 
 } from 'lucide-react';
 import { OFFICIAL_JAMB_SUBJECTS } from '@/utils/subjectUtils';
 import { authFetch } from '@/lib/apiAuth';
 import { useExamSessionLock } from '@/hooks/useExamSessionLock';
 import { useSessionValidator } from '@/hooks/useSessionValidator';
 import { ActiveExamConflictDialog } from '@/components/cbt/ActiveExamConflictDialog';
+import { ExamModeInfoModal } from '@/components/cbt/ExamModeInfoModal';
 
 interface PastQuestionsSetupModalProps {
   isOpen: boolean;
@@ -44,6 +45,7 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [loadingYears, setLoadingYears] = useState<boolean>(false);
   const [isStarting, setIsStarting] = useState<boolean>(false);
+  const [showModeInfoModal, setShowModeInfoModal] = useState<boolean>(false);
 
   // Fetch available years for the selected subject
   useEffect(() => {
@@ -171,9 +173,18 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
 
             {/* Step 3: Drill Mode Selection */}
             <div className="space-y-2">
-              <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
-                <Clock className="w-4 h-4 text-indigo-500" /> Practice & Timer Mode
-              </Label>
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-bold text-foreground flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-indigo-500" /> Practice & Timer Mode
+                </Label>
+                <button
+                  type="button"
+                  onClick={() => setShowModeInfoModal(true)}
+                  className="text-[11px] font-semibold text-primary hover:underline flex items-center gap-1"
+                >
+                  <HelpCircle className="w-3.5 h-3.5" /> Mode Guide & Info
+                </button>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -274,6 +285,13 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
         onResume={handleResume}
         onDiscardAndProceed={handleDiscardAndProceed}
         isProcessing={isCleaningUp}
+      />
+
+      {/* Mode Information & Comparison Guide Modal */}
+      <ExamModeInfoModal
+        isOpen={showModeInfoModal}
+        onClose={() => setShowModeInfoModal(false)}
+        onSelectMode={(mode) => setDrillMode(mode)}
       />
     </>
   );
