@@ -22,7 +22,8 @@ import { fetchQuestionsForSubject, normalizeSubjectName, checkSubjectDataIntegri
 import { cleanQuestionText, cleanOptionText, checkIsCorrect } from '@/utils/questionUtils';
 import { sanitizeQuestionList, extractSafeSubjectName } from '@/utils/sanitizeExamData';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { QuestionFlowService } from '@/services/questionFlowService';
+import { QuestionFlowService, type QuestionFlowResult } from '@/services/questionFlowService';
+import { CBTDataDiagnosticPanel } from '@/components/cbt/CBTDataDiagnosticPanel';
 import { QuestionReportModal } from '@/components/cbt/QuestionReportModal';
 import { validateUtmeSubjectCombination } from '@/utils/subjectTaxonomy';
 import { useFocusLock } from '@/hooks/useFocusLock';
@@ -76,6 +77,8 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   
   const [questions, setQuestions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [flowResultData, setFlowResultData] = useState<QuestionFlowResult | null>(null);
+  const [isReTestingEngine, setIsReTestingEngine] = useState<boolean>(false);
   const [startingSubject, setStartingSubject] = useState<string>('');
   const [activeSubjectTab, setActiveSubjectTab] = useState<string>('');
   const [examSubjectsList, setExamSubjectsList] = useState<string[]>([]);
@@ -387,6 +390,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         });
 
         console.log(`[CBT Exam Question Flow] Mode: ${examMode} | Retrieved: ${flowResult.totalRetrieved} questions in ${flowResult.queryLatencyMs}ms`);
+        setFlowResultData(flowResult);
 
         if (flowResult.questions.length < 5) {
           toast.warning("Limited questions found for this specific past question selection. Displaying available bank.");
@@ -410,6 +414,36 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     
     initializeExam();
   }, [profile, location.state]);
+
+  const handleReTestEngine = async () => {
+    setIsReTestingEngine(true);
+    try {
+      const subjectParam = searchParams.get('subject');
+      const yearParam = searchParams.get('year');
+      const countParam = searchParams.get('count');
+      const targetCount = countParam ? Number(countParam) : (examMode === 'past_questions' ? 40 : 180);
+
+      const reTestResult = await QuestionFlowService.fetchQuestionsForMode({
+        mode: examMode as any,
+        subjectId: examMode === 'past_questions' ? (subjectParam || examSubjectsList[0]) : undefined,
+        subjectIds: examSubjectsList,
+        count: targetCount,
+        examYear: examMode === 'past_questions' ? (yearParam || 'all') : undefined,
+        userId: profile?.id
+      });
+
+      setFlowResultData(reTestResult);
+      if (reTestResult.questions && reTestResult.questions.length > 0) {
+        const sanitized = sanitizeQuestionList(reTestResult.questions);
+        setQuestions(sanitized);
+      }
+      toast.success(`Data Engine Verified: ${reTestResult.totalRetrieved} rows fetched live from Supabase in ${reTestResult.queryLatencyMs}ms`);
+    } catch (err: any) {
+      toast.error("Engine verification query failed: " + (err?.message || "Error connecting to database"));
+    } finally {
+      setIsReTestingEngine(false);
+    }
+  };
 
   // Proctoring: Fullscreen lock, Tab-switch, and Blur detection
   useEffect(() => {
@@ -993,6 +1027,16 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               </ul>
             </div>
           </div>
+
+          {/* Live CBT Data Engine Diagnostic Panel */}
+          <CBTDataDiagnosticPanel
+            examMode={examMode}
+            flowResult={flowResultData}
+            questionsCount={questions.length}
+            subjectsList={examSubjectsList}
+            onReTestEngine={handleReTestEngine}
+            isReTesting={isReTestingEngine}
+          />
 
           <div className="flex flex-col sm:flex-row justify-center items-center gap-3 border-t border-slate-200 dark:border-border pt-4 sm:pt-6">
             <Button 
