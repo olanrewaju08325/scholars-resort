@@ -448,8 +448,7 @@ export class QuestionFlowService {
           }
 
 
-          case 'full_mock':
-          case 'ai_generated_mock': {
+          case 'full_mock': {
             // Standard UTME: 4 Subjects (Use of English [60 Qs] + 3 Core Subjects [40 Qs each] = 180 total)
             let targetSubs = config.subjectIds && config.subjectIds.length > 0 ? config.subjectIds : [];
             
@@ -467,7 +466,6 @@ export class QuestionFlowService {
             } else {
                finalSubjects = normalizedSubs.slice(0, 4);
             }
-
 
             subjectsQueried.push(...finalSubjects);
 
@@ -496,6 +494,100 @@ export class QuestionFlowService {
                 ...q,
                 subject_name: subjName
               }));
+            });
+
+            const results = await Promise.all(subjectPromises);
+            rawQuestions = results.flat();
+            break;
+          }
+
+          case 'ai_generated_mock': {
+            // Hybrid AI Mock: Combines database past questions and AI synthesized prediction questions
+            let targetSubs = config.subjectIds && config.subjectIds.length > 0 ? config.subjectIds : [];
+            
+            if (targetSubs.length === 0) {
+              return { questions: [], error: 'Please complete your UTME subject registration to take an AI Mock.' };
+            }
+
+            const normalizedSubs = Array.from(new Set(targetSubs.map(s => normalizeSubjectName(s))));
+            const hasEnglish = normalizedSubs.includes('Use of English');
+            let finalSubjects = normalizedSubs;
+            if (hasEnglish) {
+               finalSubjects = ['Use of English', ...normalizedSubs.filter(s => s !== 'Use of English').slice(0, 3)];
+            } else {
+               finalSubjects = normalizedSubs.slice(0, 4);
+            }
+
+            subjectsQueried.push(...finalSubjects);
+
+            // Fetch active AI Mock configuration from admin settings
+            let aiRatioPercent = 30;
+            let aiDifficulty = 'medium';
+            try {
+              const cfgRes = await fetch('/api/cbt/ai-mock-config/active');
+              const cfgData = await cfgRes.json();
+              if (cfgData?.success && cfgData.config?.hybridRatio) {
+                aiRatioPercent = Number(cfgData.config.hybridRatio.aiSyntheticQsPercent ?? 30);
+              }
+            } catch (_) {}
+
+            const subjectPromises = finalSubjects.map(async (subjName) => {
+              const totalNeeded = subjName === 'Use of English' ? 60 : 40;
+              const aiCount = aiRatioPercent > 0 ? Math.min(8, Math.max(2, Math.round(totalNeeded * (aiRatioPercent / 100)))) : 0;
+              const dbCountNeeded = totalNeeded - aiCount;
+
+              // 1. Fetch DB past questions
+              const matchedIds = await resolveSubjectIdsByNameOrAlias(subjName);
+              const validUuids = matchedIds.filter(isUUID);
+
+              let subQuery = supabase
+                .from('questions')
+                .select(QUESTION_SELECT_FIELDS)
+                .eq('is_active', true);
+
+              if (validUuids.length > 0) {
+                subQuery = subQuery.in('subject_id', validUuids);
+              }
+
+              const { data: dbData } = await subQuery.limit(totalNeeded * 2);
+              const dbPool = (dbData || []).sort(() => Math.random() - 0.5);
+
+              // 2. Synthesize AI questions if requested
+              let aiQuestions: any[] = [];
+              if (aiCount > 0) {
+                try {
+                  const genRes = await fetch('/api/cbt/ai-mock-generate-questions', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      subject: subjName,
+                      count: aiCount,
+                      difficulty: aiDifficulty
+                    })
+                  });
+                  const genData = await genRes.json();
+                  if (genData?.success && Array.isArray(genData.questions) && genData.questions.length > 0) {
+                    aiQuestions = genData.questions.map((q: any) => ({
+                      ...q,
+                      subject_name: subjName,
+                      is_ai_generated: true,
+                      source_type: 'ai_generated'
+                    }));
+                  }
+                } catch (aiErr) {
+                  console.warn(`AI question synthesis fallback for ${subjName}:`, aiErr);
+                }
+              }
+
+              // Combine AI questions and DB questions to reach totalNeeded
+              const finalDbSlice = dbPool.slice(0, totalNeeded - aiQuestions.length).map(q => ({
+                ...q,
+                subject_name: subjName,
+                is_ai_generated: false
+              }));
+
+              const mergedSubjQuestions = [...aiQuestions, ...finalDbSlice];
+              return mergedSubjQuestions.sort(() => Math.random() - 0.5);
             });
 
             const results = await Promise.all(subjectPromises);

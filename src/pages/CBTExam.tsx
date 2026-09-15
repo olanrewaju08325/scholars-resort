@@ -83,6 +83,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
   const [timeSpentOnQuestions, setTimeSpentOnQuestions] = useState<Record<string, number>>({});
   const [timeLeft, setTimeLeft] = useState(7200); // 2 hours (typical JAMB time)
+  const totalExamSecondsRef = useRef<number>(7200);
   const [showCalculator, setShowCalculator] = useState(false);
   const [showScratchpad, setShowScratchpad] = useState(false);
   const [scratchpadText, setScratchpadText] = useState(() => localStorage.getItem('jamb_exam_scratchpad') || '');
@@ -283,14 +284,17 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
 
       // JAMB 180-Question Master Logic via QuestionFlowService
       const userSubs = profile?.utme_subjects && Array.isArray(profile.utme_subjects) && profile.utme_subjects.length > 0
-        ? profile.utme_subjects
+        ? profile.utme_subjects.map((s: any) => typeof s === 'object' ? s?.name || s?.id || 'General' : String(s))
         : [];
       
       const validation = validateUtmeSubjectCombination(userSubs);
       let finalSubjects = validation.isValid ? validation.normalizedSubjects : [];
 
-      if (examMode === 'past_questions' && subjectParam) {
+      if (examMode === 'past_questions') {
         finalSubjects = [subjectParam];
+        const allocatedSeconds = Math.max(1200, targetCount * 60); // 1 min per question or min 20 min
+        totalExamSecondsRef.current = allocatedSeconds;
+        setTimeLeft(allocatedSeconds);
       } else if (!finalSubjects || finalSubjects.length === 0) {
         if (userSubs.length > 0) {
           const withEnglish = Array.from(new Set(['Use of English', ...userSubs])).slice(0, 4);
@@ -528,7 +532,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     if (questions.length === 0 || submitting) return;
     setSubmitting(true);
     
-    const timeSpentSeconds = 7200 - timeLeft;
+    const timeSpentSeconds = Math.max(0, totalExamSecondsRef.current - timeLeft);
     let finalScore = 0;
     
     try {
@@ -628,7 +632,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
        document.exitFullscreen().catch(console.error);
     }
         
-    navigate('/results', { state: { score: finalScore, total: questions.length, mode: 'CBT Exam', questions, answers, timeSpentSeconds } });
+    navigate('/results', { state: { score: finalScore, total: questions.length, mode: modeTitle, questions, answers, timeSpentSeconds } });
   };
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
@@ -880,9 +884,11 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
             <div className="bg-slate-50 dark:bg-muted/30 p-4 border border-slate-200 dark:border-border rounded-xl">
               <h3 className="font-bold text-slate-800 dark:text-slate-200 mb-2 border-b border-slate-200 dark:border-border pb-1 text-sm sm:text-base">Registered UTME Subjects</h3>
               <ul className="list-disc pl-5 text-xs sm:text-sm space-y-1 font-semibold text-slate-700 dark:text-slate-300 mb-4">
-                {examSubjectsList.map((s: string, i: number) => (
-                  <li key={i}>{String(s || '').toUpperCase()} ({s === 'Use of English' ? '60 Qs' : '40 Qs'})</li>
-                ))}
+                {examSubjectsList.map((s: any, i: number) => {
+                  const sName = typeof s === 'object' ? s?.name || 'Subject' : String(s || '');
+                  const qCount = questions.filter(q => (typeof q.subject_name === 'object' ? q.subject_name?.name : q.subject_name || '').toLowerCase() === sName.toLowerCase()).length || (examMode === 'past_questions' ? questions.length : (sName === 'Use of English' ? 60 : 40));
+                  return <li key={i}>{sName.toUpperCase()} ({qCount} Qs)</li>;
+                })}
               </ul>
 
               <div className="mt-4 pt-3 border-t border-slate-200 dark:border-border">
@@ -894,11 +900,15 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
                   value={startingSubject}
                   onChange={(e) => setStartingSubject(e.target.value)}
                 >
-                  {examSubjectsList.map((subj, idx) => (
-                    <option key={idx} value={subj}>
-                      Start with {subj} ({subj === 'Use of English' ? '60 Qs' : '40 Qs'})
-                    </option>
-                  ))}
+                  {examSubjectsList.map((subj: any, idx) => {
+                    const subjStr = typeof subj === 'object' ? subj?.name || 'Subject' : String(subj || '');
+                    const qCount = questions.filter(q => (typeof q.subject_name === 'object' ? q.subject_name?.name : q.subject_name || '').toLowerCase() === subjStr.toLowerCase()).length || (examMode === 'past_questions' ? questions.length : (subjStr === 'Use of English' ? 60 : 40));
+                    return (
+                      <option key={idx} value={subjStr}>
+                        Start with {subjStr} ({qCount} Qs)
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
             </div>
@@ -1169,19 +1179,26 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         >
           {/* Real JAMB Subject Switcher Tabs */}
           <div className="bg-slate-900 dark:bg-slate-950 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
-            {examSubjectsList.map((subjName, idx) => {
-              const activeQSubject = q?.subject_name;
-              const isSelectedSubject = activeQSubject === subjName;
+            {examSubjectsList.map((subjItem, idx) => {
+              const subjName = typeof subjItem === 'object' ? (subjItem as any)?.name || 'Subject' : String(subjItem || '');
+              const activeQSubject = typeof q?.subject_name === 'object' ? q?.subject_name?.name : q?.subject_name;
+              const isSelectedSubject = (activeQSubject || '').toLowerCase() === subjName.toLowerCase();
               
               // Count answered in this subject
-              const subjectQs = questions.filter(item => item.subject_name === subjName);
+              const subjectQs = questions.filter(item => {
+                const itemSubj = typeof item.subject_name === 'object' ? item.subject_name?.name : item.subject_name;
+                return (itemSubj || '').toLowerCase() === subjName.toLowerCase();
+              });
               const answeredSubjCount = subjectQs.filter(item => !!answers[item.id]).length;
 
               return (
                 <button
                   key={idx}
                   onClick={() => {
-                    const firstSubjIdx = questions.findIndex(item => item.subject_name === subjName);
+                    const firstSubjIdx = questions.findIndex(item => {
+                      const itemSubj = typeof item.subject_name === 'object' ? item.subject_name?.name : item.subject_name;
+                      return (itemSubj || '').toLowerCase() === subjName.toLowerCase();
+                    });
                     if (firstSubjIdx >= 0) {
                       setCurrentQuestionIdx(firstSubjIdx);
                       setActiveSubjectTab(subjName);
@@ -1195,7 +1212,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
                 >
                   <span>{subjName}</span>
                   <span className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] ${isSelectedSubject ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-800 text-slate-400'}`}>
-                    {answeredSubjCount}/{subjectQs.length || (subjName === 'Use of English' ? 60 : 40)}
+                    {answeredSubjCount}/{subjectQs.length || (examMode === 'past_questions' ? questions.length : (subjName === 'Use of English' ? 60 : 40))}
                   </span>
                 </button>
               );
@@ -1229,6 +1246,11 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
                <span className="px-2 py-1 bg-muted text-muted-foreground rounded text-[10px] md:text-xs font-bold uppercase">
                  {q?.subject_name || 'Subject'}
                </span>
+               {q?.is_ai_generated && (
+                 <span className="px-2 py-0.5 bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 rounded text-[9px] md:text-[10px] font-bold uppercase flex items-center gap-1">
+                   <Sparkles className="w-2.5 h-2.5" /> AI Prediction
+                 </span>
+               )}
                <button 
                  onClick={() => setShowNavDrawer(true)}
                  className="hidden sm:flex items-center gap-1 text-xs font-semibold text-primary hover:underline ml-1"

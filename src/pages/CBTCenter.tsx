@@ -17,6 +17,15 @@ import { MathText } from '@/components/MathText';
 import { JambPQSetupModal } from '@/components/cbt/JambPQSetupModal';
 import { AiMockSetupModal } from '@/components/cbt/AiMockSetupModal';
 
+const extractSubjectName = (sub: any): string => {
+  if (!sub) return 'General';
+  if (typeof sub === 'string') return sub.trim();
+  if (typeof sub === 'object') {
+    return (sub.name || sub.title || sub.id || 'General').trim();
+  }
+  return String(sub).trim();
+};
+
 export default function CBTCenter() {
   const location = useLocation();
   const [searchParams] = useSearchParams();
@@ -115,17 +124,18 @@ export default function CBTCenter() {
           dbAnswers.forEach(ans => {
             const q = ans.questions as any;
             if (!q || !q.id) return;
+            const subStr = extractSubjectName(q.subjects?.name || q.subject_name || 'General UTME');
             mistakeMap.set(q.id, {
               id: q.id,
-              question_text: q.question_text || q.question,
-              questionText: q.question_text || q.question,
+              question_text: typeof (q.question_text || q.question) === 'string' ? (q.question_text || q.question) : '',
+              questionText: typeof (q.question_text || q.question) === 'string' ? (q.question_text || q.question) : '',
               options: q.options,
               correct_answer: q.correct_answer || 'A',
               correctAnswer: q.correct_answer || 'A',
-              explanation: q.explanation,
+              explanation: typeof q.explanation === 'string' ? q.explanation : undefined,
               userAnswer: ans.user_answer,
-              subject_name: q.subjects?.name || 'General UTME',
-              subjectName: q.subjects?.name || 'General UTME',
+              subject_name: subStr,
+              subjectName: subStr,
               year: q.year
             });
           });
@@ -133,10 +143,20 @@ export default function CBTCenter() {
 
         if (Array.isArray(localMistakes)) {
           localMistakes.forEach((m: any) => {
-            if (m && (m.id || m.question_text)) {
-              const key = m.id || m.question_text;
+            if (m && (m.id || m.question_text || m.text)) {
+              const key = m.id || m.question_text || m.text;
               if (!mistakeMap.has(key)) {
-                mistakeMap.set(key, m);
+                const subStr = extractSubjectName(m.subject_name || m.subject || m.subjects?.name || m.subjects || 'General');
+                mistakeMap.set(key, {
+                  ...m,
+                  id: m.id || key,
+                  question_text: typeof (m.question_text || m.question || m.text) === 'string' ? (m.question_text || m.question || m.text) : '',
+                  subject_name: subStr,
+                  subjectName: subStr,
+                  year: typeof m.year === 'string' || typeof m.year === 'number' ? m.year : undefined,
+                  correct_answer: typeof (m.correct_answer || m.correctAnswer || m.correctOption) === 'string' ? (m.correct_answer || m.correctAnswer || m.correctOption) : 'A',
+                  explanation: typeof m.explanation === 'string' ? m.explanation : undefined
+                });
               }
             }
           });
@@ -836,7 +856,7 @@ export default function CBTCenter() {
                       className="text-xs bg-muted/60 border border-border rounded-lg px-2.5 py-1.5 text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                     >
                       <option value="all">All Subjects ({mistakes.length})</option>
-                      {Array.from(new Set(mistakes.map(m => m.subject_name || m.subjects?.name || 'General'))).map((s: any) => (
+                      {Array.from(new Set(mistakes.map(m => extractSubjectName(m.subject_name || m.subject || m.subjects?.name || 'General')))).map((s: string) => (
                         <option key={s} value={s}>{s}</option>
                       ))}
                     </select>
@@ -845,10 +865,13 @@ export default function CBTCenter() {
 
                 <div className="space-y-3">
                   {mistakes
-                    .filter(m => selectedMistakeSubject === 'all' || (m.subject_name || m.subjects?.name || 'General') === selectedMistakeSubject)
+                    .filter(m => {
+                      const sub = extractSubjectName(m.subject_name || m.subject || m.subjects?.name || 'General');
+                      return selectedMistakeSubject === 'all' || sub === selectedMistakeSubject;
+                    })
                     .map((m, idx) => {
                       const isExpanded = expandedMistakeId === (m.id || String(idx));
-                      const subName = m.subject_name || m.subjects?.name || 'UTME Question';
+                      const subName = extractSubjectName(m.subject_name || m.subject || m.subjects?.name || 'UTME Question');
                       const optionsObj = Array.isArray(m.options)
                         ? m.options
                         : typeof m.options === 'object' && m.options !== null
