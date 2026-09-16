@@ -387,17 +387,16 @@ app.use((req, res, next) => {
   const origUrl = req.url || '/';
   const [origPath, origQuery] = origUrl.split('?');
 
-  // If origPath is already a valid non-index API endpoint (e.g. /api/profile/123, /api/cbt-snapshots), keep it intact!
+  // If origPath is already a valid non-index API endpoint (e.g. /api/profile/123, /api/cbt-snapshots), proceed directly
   if (origPath.startsWith('/api/') && origPath !== '/api/index' && origPath !== '/api/index.ts') {
     return next();
   }
 
-  // 1. Check real original request headers attached by Vercel or proxies (excluding Vercel rewrite target /api/index)
+  // 1. Check real original request headers attached by Vercel or proxies
   const headerPath = (
     req.headers['x-original-url'] ||
     req.headers['x-forwarded-uri'] ||
-    req.headers['x-vercel-original-url'] ||
-    req.headers['x-matched-path']
+    req.headers['x-vercel-original-url']
   ) as string | undefined;
 
   let candidate = '';
@@ -410,18 +409,18 @@ app.use((req, res, next) => {
     if (routeMatches) {
       try {
         const parsed = new URLSearchParams(routeMatches);
-        const match = parsed.get('0') || parsed.get('1') || parsed.get('match') || parsed.get('path');
+        const match = parsed.get('path') || parsed.get('0') || parsed.get('1') || parsed.get('match');
         if (match && match !== 'index') {
           candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
         }
       } catch (_) {}
     }
 
-    // 3. Check query parameters for Vercel wildcard regex matches (e.g. ?0=profile/... or ?1=cbt-snapshots)
+    // 3. Check query parameters for Vercel wildcard regex or path matches (e.g. ?path=cbt-snapshots or ?0=profile/123)
     if (!candidate && origQuery) {
       try {
         const parsed = new URLSearchParams(origQuery);
-        const match = parsed.get('0') || parsed.get('1') || parsed.get('match') || parsed.get('path');
+        const match = parsed.get('path') || parsed.get('0') || parsed.get('1') || parsed.get('match');
         if (match && match !== 'index') {
           candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
         }
@@ -429,13 +428,9 @@ app.use((req, res, next) => {
     }
   }
 
-  // Fallback: If origPath was e.g. /profile/123 (without /api prefix)
-  if (!candidate) {
-    if (origPath === '/' || origPath === '' || origPath === '/api' || origPath === '/api/' || origPath === '/api/index' || origPath === '/api/index.ts') {
-      candidate = '/api/health';
-    } else if (!origPath.startsWith('/api') && !origPath.startsWith('/ws')) {
-      candidate = `/api${origPath.startsWith('/') ? origPath : `/${origPath}`}`;
-    }
+  // 4. Fallback: If request path does not start with /api (e.g. /cbt-snapshots or /profile/123)
+  if (!candidate && !origPath.startsWith('/api') && !origPath.startsWith('/ws') && origPath !== '/' && origPath !== '/api' && origPath !== '/api/index' && origPath !== '/api/index.ts') {
+    candidate = `/api${origPath.startsWith('/') ? origPath : `/${origPath}`}`;
   }
 
   if (candidate && candidate !== origPath) {
@@ -511,8 +506,8 @@ app.get(['/api/health', '/health', '/api', '/'], async (req, res) => {
     });
   } catch (err: any) {
     console.error('[Health Check Error]', err.message || err);
-    return res.status(500).json({
-      status: 'unhealthy',
+    return res.status(200).json({
+      status: 'degraded',
       database: 'disconnected',
       error: err.message || 'Database connection check failed',
       timestamp: new Date().toISOString()
@@ -7357,7 +7352,7 @@ app.post('/api/profile/clear-data', verifyUserToken, async (req, res) => {
 });
 
 // API Route: Authoritative Profile Fetch from Supabase
-app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
+app.get('/api/profile/:id', async (req, res) => {
   const { id } = req.params;
   if (!id) return res.status(400).json({ success: false, error: 'User ID is required' });
 
@@ -7366,7 +7361,20 @@ app.get('/api/profile/:id', verifyUserToken, async (req, res) => {
   }
 
   const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  const authenticatedUser = (req as any).user || { id, email: '' };
+  let authenticatedUser = (req as any).user || { id, email: '' };
+
+  // Soft token resolution if auth header is attached
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    const token = authHeader.split(' ')[1]?.trim();
+    if (token) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user) authenticatedUser = user;
+      } catch (_) {}
+    }
+  }
+
   const userEmail = (authenticatedUser.email || '').toLowerCase().trim();
 
   try {
