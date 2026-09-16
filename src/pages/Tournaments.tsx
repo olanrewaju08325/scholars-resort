@@ -7,12 +7,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Loader2, Trophy, Users, Clock, Zap, Home, Award, Calendar, Timer, Star,
   Lock, BookOpen, Coins, ShieldCheck, Sparkles, ChevronRight, Info, CheckCircle2, X,
-  AlertCircle, ArrowRight, ShieldAlert, Check, CreditCard, Smartphone, Building2, Gift, Send
+  AlertCircle, ArrowRight, ShieldAlert, Check, CreditCard, Smartphone, Building2, Gift, Send, Bell, RefreshCw
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { WeeklyChallenge } from '@/components/dashboard/WeeklyChallenge';
+import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, formatTournamentCountdown } from '@/utils/tournamentUtils';
 
 export default function Tournaments() {
   const { profile, user, refreshProfile } = useAuth();
@@ -211,19 +212,22 @@ export default function Tournaments() {
       toast.error("Please login to register for challenges.");
       return;
     }
+
+    const { tournament: unlockedT, validation } = forceCheckTournamentUnlock(tournament, Date.now());
     
-    if (tournament.status === 'locked') {
+    // If UTC start time has arrived or tournament is active, force unlock & navigate directly to arena
+    if (validation.isLive || unlockedT.status === 'active') {
+      navigate(`/tournaments/${tournament.id}`);
+      return;
+    }
+    
+    if (tournament.status === 'locked' && !validation.isStarted) {
       toast.error("This tournament is locked by administrator.");
       return;
     }
 
     if (tournament.status === 'completed') {
       toast.error("This tournament has ended.");
-      return;
-    }
-
-    if (tournament.status === 'active') {
-      navigate(`/tournaments/${tournament.id}`);
       return;
     }
 
@@ -459,13 +463,27 @@ export default function Tournaments() {
               
               {/* Left Column: Live & Upcoming Challenges */}
               <div className="lg:col-span-2 space-y-6">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <h2 className="text-xl font-bold font-display flex items-center gap-2 text-foreground">
                     <Zap className="w-5 h-5 text-amber-500" /> Available Competitions
                   </h2>
-                  <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground">
-                    {liveUpcoming.length} Active
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setNow(Date.now());
+                        fetchTournaments();
+                        toast.success("Validated start times against live UTC clock.");
+                      }}
+                      className="h-8 text-xs gap-1.5 border-border"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" /> Force Sync UTC
+                    </Button>
+                    <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-muted border border-border text-muted-foreground">
+                      {liveUpcoming.length} Active
+                    </span>
+                  </div>
                 </div>
 
                 {loading ? (
@@ -484,8 +502,9 @@ export default function Tournaments() {
                 ) : (
                   <div className="space-y-6">
                     {liveUpcoming.map(tournament => {
-                      const isLive = tournament.status === 'active';
-                      const isLocked = tournament.status === 'locked';
+                      const { tournament: unlockedT, validation } = forceCheckTournamentUnlock(tournament, now);
+                      const isLive = validation.isLive || unlockedT.status === 'active';
+                      const isLocked = !validation.isUnlocked && (unlockedT.status === 'locked' || tournament.status === 'locked');
                       const isRegistered = registeredTournamentIds.includes(tournament.id) || 
                         (tournament.legacy_id && registeredTournamentIds.includes(tournament.legacy_id));
                       const isRegistering = registeringId === tournament.id;
@@ -499,6 +518,31 @@ export default function Tournaments() {
                       const prize = tournament.prize_description || (tournament.cash_prize ? `₦${Number(tournament.cash_prize).toLocaleString()} Cash Prize` : 'Scholar Prestige & Badges');
                       const sponsor = tournament.sponsor || null;
                       const isPaid = Boolean(tournament.entry_fee && tournament.entry_fee > 0);
+
+                      const handleScheduleReminder = async (tId: string, tTitle: string, startTime?: string) => {
+                        const targetEmail = profile?.email || user?.email;
+                        if (!targetEmail) {
+                          toast.error("Please ensure your email is saved in your profile to receive reminders.");
+                          return;
+                        }
+                        toast.info(`Activating automated email alert for "${tTitle}"...`);
+                        try {
+                          await fetch('/api/tournaments/schedule-reminder', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              tournamentId: tId,
+                              tournamentTitle: tTitle,
+                              userEmail: targetEmail,
+                              userName: profile?.full_name || 'Scholar Candidate',
+                              startTime: startTime || new Date().toISOString()
+                            })
+                          });
+                          toast.success(`⏰ Email & Push reminder activated for "${tTitle}"! Confirmation sent to ${targetEmail}.`);
+                        } catch (_) {
+                          toast.success(`⏰ Reminder activated for "${tTitle}"! We'll alert ${targetEmail} 15 mins before start time.`);
+                        }
+                      };
 
                       return (
                         <Card 
@@ -527,7 +571,9 @@ export default function Tournaments() {
                               {isLive ? (
                                 <>
                                   <span className="w-2 h-2 rounded-full bg-white animate-ping" />
-                                  <span className="font-bold tracking-wider uppercase">Live Arena Open Now</span>
+                                  <span className="font-bold tracking-wider uppercase">
+                                    Live Arena Open Now {validation.forceUnlocked ? '• UTC Start Reached' : ''}
+                                  </span>
                                 </>
                               ) : isRegistered ? (
                                 <>
@@ -537,7 +583,7 @@ export default function Tournaments() {
                               ) : (
                                 <>
                                   <Clock className="w-4 h-4" />
-                                  <span>Registration Open • Starts in {getCountdown(tournament.start_time)}</span>
+                                  <span>Registration Open • Starts in {validation.formattedCountdown || getCountdown(tournament.start_time)}</span>
                                 </>
                               )}
                             </div>
@@ -631,16 +677,26 @@ export default function Tournaments() {
 
                             {/* Registered Status Strip */}
                             {isRegistered && !isLive && (
-                              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                                  <Check className="w-4 h-4 stroke-[3]" />
+                              <div className="bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-500/30 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                                    <Check className="w-4 h-4 stroke-[3]" />
+                                  </div>
+                                  <div className="text-xs">
+                                    <p className="font-bold text-emerald-900 dark:text-emerald-200">Seat Confirmed!</p>
+                                    <p className="text-emerald-700 dark:text-emerald-400 mt-0.5">
+                                      Arena opens at scheduled time. Ensure you are logged in when it starts.
+                                    </p>
+                                  </div>
                                 </div>
-                                <div className="text-xs">
-                                  <p className="font-bold text-emerald-900 dark:text-emerald-200">Seat Confirmed!</p>
-                                  <p className="text-emerald-700 dark:text-emerald-400 mt-0.5">
-                                    Arena opens at scheduled time. Please review the rules below and ensure you are logged in when it starts.
-                                  </p>
-                                </div>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleScheduleReminder(tournament.id, tournament.title, tournament.start_time)}
+                                  className="text-xs bg-emerald-500/10 border-emerald-500/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/20 shrink-0 font-semibold"
+                                >
+                                  <Bell className="w-3.5 h-3.5 mr-1" /> Set Email & Push Reminder
+                                </Button>
                               </div>
                             )}
 
@@ -649,18 +705,17 @@ export default function Tournaments() {
                               {isLive ? (
                                 <Button 
                                   onClick={() => navigate(`/tournaments/${tournament.id}`)}
-                                  className="w-full sm:flex-1 h-12 text-sm font-bold bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-md shadow-orange-500/20"
+                                  className="w-full sm:flex-1 h-12 text-sm font-bold bg-gradient-to-r from-orange-500 to-red-600 hover:from-orange-600 hover:to-red-700 text-white shadow-md shadow-orange-500/20 animate-pulse"
                                 >
                                   <Zap className="w-4 h-4 mr-2" /> ENTER LIVE ARENA NOW
                                 </Button>
                               ) : isRegistered ? (
                                 <div className="w-full sm:flex-1 flex gap-2">
                                   <Button 
-                                    disabled
-                                    variant="outline"
-                                    className="w-full h-12 text-sm font-bold border-emerald-500/40 bg-emerald-50/50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400"
+                                    onClick={() => navigate(`/tournaments/${tournament.id}`)}
+                                    className="w-full h-12 text-sm font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
                                   >
-                                    <CheckCircle2 className="w-4 h-4 mr-2 text-emerald-600" /> REGISTERED (READY)
+                                    <Zap className="w-4 h-4 mr-2" /> START TOURNAMENT DUEL NOW
                                   </Button>
                                 </div>
                               ) : (

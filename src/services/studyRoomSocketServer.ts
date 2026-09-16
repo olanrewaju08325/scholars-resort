@@ -16,7 +16,49 @@ import {
 export type { RoomParticipant, WhiteboardStroke, RoomTimerState, RoomChatMessage };
 
 export function setupStudyRoomWebSocket(server: http.Server) {
-  const wss = new WebSocketServer({ server, path: '/ws/study-room' });
+  // Setup WebSocket Server with protocol negotiation handler
+  const wss = new WebSocketServer({ 
+    noServer: true,
+    handleProtocols: (protocols: Set<string>) => {
+      // Negotiate protocol
+      if (protocols.has('utme-study-room-v1')) return 'utme-study-room-v1';
+      if (protocols.has('json')) return 'json';
+      return protocols.values().next().value || false;
+    }
+  });
+
+  // Explicitly handle HTTP Upgrade event with header verification
+  server.on('upgrade', (request, socket, head) => {
+    try {
+      const url = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
+      const pathname = url.pathname;
+
+      if (pathname === '/ws/study-room' || pathname === '/ws/study-room/') {
+        const upgradeHeader = request.headers['upgrade'];
+        const connectionHeader = request.headers['connection'];
+
+        // Verify that 'Upgrade: websocket' is explicitly provided
+        const isUpgradeWebSocket = typeof upgradeHeader === 'string' && upgradeHeader.toLowerCase() === 'websocket';
+        const isConnectionUpgrade = typeof connectionHeader === 'string' && connectionHeader.toLowerCase().includes('upgrade');
+
+        if (!isUpgradeWebSocket || !isConnectionUpgrade) {
+          socket.write('HTTP/1.1 426 Upgrade Required\r\nContent-Type: text/plain\r\nConnection: close\r\n\r\n426 Upgrade Required: WebSocket protocol required\r\n');
+          socket.destroy();
+          return;
+        }
+
+        // Delegate to ws handleUpgrade to complete 101 Switching Protocols handshake
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit('connection', ws, request);
+        });
+      }
+    } catch (err) {
+      console.warn('[StudyRoom WebSocket] Handshake upgrade exception:', err);
+      try {
+        socket.destroy();
+      } catch {}
+    }
+  });
 
   // Map client connection to user & room identity
   const clientSockets = new Map<WebSocket, { roomId: string; userId: string; userName: string }>();

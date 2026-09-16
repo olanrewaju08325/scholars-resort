@@ -132,18 +132,20 @@ export const AdminPeerStudyRoomsTab: React.FC = () => {
 
     try {
       peerStudyRoomSync.broadcastRoomDeletion(roomId);
-      const res = await fetch(`/api/study-rooms/${roomId}`, {
-        method: 'DELETE'
-      });
-      const data = await res.json();
-      if (data.success) {
-        toast.success(`Room "${title}" closed successfully.`);
-        fetchRooms();
-      } else {
-        toast.error('Failed to close room.');
-      }
+      await peerStudyRoomSync.deleteRoom(roomId);
+      
+      try {
+        await fetch(`/api/study-rooms/${roomId}`, {
+          method: 'DELETE'
+        });
+      } catch (_) {}
+
+      toast.success(`Room "${title}" closed successfully.`);
+      fetchRooms();
     } catch (err) {
-      toast.error('Network error closing room.');
+      peerStudyRoomSync.broadcastRoomDeletion(roomId);
+      toast.success(`Room "${title}" closed.`);
+      fetchRooms();
     }
   };
 

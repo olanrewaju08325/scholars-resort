@@ -5,8 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { getApiUrl } from '@/lib/utils';
+import { ReferralDiagnosticTester } from '@/components/admin/ReferralDiagnosticTester';
 import {
   Users, Gift, Copy, Check, Share2, DollarSign,
   ArrowUpRight, Clock, CheckCircle2, AlertCircle,
@@ -453,6 +455,9 @@ export const Referrals = () => {
           </div>
         </div>
       </div>
+
+      {/* Referral Diagnostic Suite */}
+      <ReferralDiagnosticTester />
 
       {/* Referral Link & Share Tools Card */}
       <Card className="border-border bg-card shadow-sm">

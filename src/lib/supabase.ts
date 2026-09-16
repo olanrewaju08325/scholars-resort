@@ -19,6 +19,11 @@ export const isSupabaseConfigured = Boolean(
 const supabaseUrl = isSupabaseConfigured ? rawSupabaseUrl : DEFAULT_SUPABASE_URL;
 const supabaseAnonKey = isSupabaseConfigured ? rawSupabaseAnonKey : DEFAULT_SUPABASE_ANON_KEY;
 
+// Construct explicit Realtime WebSocket endpoint URL
+const supabaseRealtimeUrl = isSupabaseConfigured && supabaseUrl
+  ? `${supabaseUrl.replace(/^http/i, 'ws')}/realtime/v1`
+  : undefined;
+
 // Create Supabase client with custom fetch wrapper to catch network and placeholder errors gracefully
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -29,9 +34,15 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   realtime: {
     params: {
       eventsPerSecond: 10,
+      apikey: supabaseAnonKey,
+      vsn: '1.0.0',
     },
     timeout: 20000,
     heartbeatIntervalMs: 30000,
+    headers: {
+      apikey: supabaseAnonKey,
+    },
+    ...(supabaseRealtimeUrl ? { url: supabaseRealtimeUrl } : {})
   },
   global: {
     fetch: async (url, options) => {

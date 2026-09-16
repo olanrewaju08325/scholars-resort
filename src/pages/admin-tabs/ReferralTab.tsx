@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { logAdminActivity } from '@/services/adminActivityService';
 import { authFetch } from '@/lib/apiAuth';
+import { ReferralDiagnosticTester } from '@/components/admin/ReferralDiagnosticTester';
 
 interface ReferralConfig {
   rewardPerSignup?: number;
@@ -284,6 +285,9 @@ export const ReferralTab = () => {
           <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
         </Button>
       </div>
+
+      {/* Automated Diagnostic Suite */}
+      <ReferralDiagnosticTester />
 
       {/* KPI Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

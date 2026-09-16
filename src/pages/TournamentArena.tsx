@@ -1,11 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trophy, Clock, Zap, Users, Loader2 } from 'lucide-react';
+import { Trophy, Clock, Zap, Users, Loader2, RefreshCw, Lock, Sparkles, AlertCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { checkIsCorrect } from '@/utils/questionUtils';
+import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, formatTournamentCountdown } from '@/utils/tournamentUtils';
 
 export default function TournamentArena() {
   const { id } = useParams();
@@ -18,9 +21,53 @@ export default function TournamentArena() {
   const [score, setScore] = useState(0);
   const [leaderboard, setLeaderboard] = useState<Record<string, {name: string, score: number}>>({});
   const [loading, setLoading] = useState(true);
-  const [timeLeft, setTimeLeft] = useState(3600); // 1 hour for tournament
+  const [nowUtc, setNowUtc] = useState<number>(getCurrentUtcTimestamp());
+  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes default
   const [finished, setFinished] = useState(false);
+  const [forceUnlockedManually, setForceUnlockedManually] = useState(false);
 
+  // Compute unlock evaluation against client UTC timestamp
+  const unlockEvaluation = useMemo(() => {
+    if (!tournament) return null;
+    const evaluated = forceCheckTournamentUnlock(tournament, nowUtc);
+    if (forceUnlockedManually) {
+      evaluated.validation.isUnlocked = true;
+      evaluated.validation.isLive = true;
+      evaluated.tournament.is_unlocked = true;
+      evaluated.tournament.is_locked = false;
+      evaluated.tournament.status = 'active';
+    }
+    return evaluated;
+  }, [tournament, nowUtc, forceUnlockedManually]);
+
+  const isUnlocked = Boolean(unlockEvaluation?.validation.isUnlocked);
+
+  // UTC Clock updater
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowUtc(getCurrentUtcTimestamp());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Force-check function that validates start_time against client's current UTC timestamp
+  const handleForceCheckUnlock = useCallback(() => {
+    const currentTimestamp = getCurrentUtcTimestamp();
+    setNowUtc(currentTimestamp);
+    
+    if (!tournament) return;
+    const result = forceCheckTournamentUnlock(tournament, currentTimestamp);
+    
+    if (result.validation.isStarted || result.validation.isUnlocked) {
+      setForceUnlockedManually(true);
+      toast.success("UTC timestamp verified! Tournament duel unlocked.");
+    } else {
+      const remainingSecs = Math.max(0, Math.ceil(result.validation.timeDiffMs / 1000));
+      toast.info(`Start time not yet reached. UTC start in ${result.validation.formattedCountdown} (${remainingSecs}s).`);
+    }
+  }, [tournament]);
+
+  // Load Tournament Data & Questions
   useEffect(() => {
     if (!profile || !id) return;
     
@@ -81,7 +128,15 @@ export default function TournamentArena() {
         description: cleanDesc,
         rules: cleanRules
       };
-      setTournament(finalTournament);
+
+      // Set initial duration
+      const durationMins = Number(finalTournament.duration_minutes) || 30;
+      setTimeLeft(durationMins * 60);
+
+      // Force evaluate unlock against current UTC
+      const currentUtc = getCurrentUtcTimestamp();
+      const initialUnlock = forceCheckTournamentUnlock(finalTournament, currentUtc);
+      setTournament(initialUnlock.tournament);
 
       // 2. Fetch questions based on tournament configuration (subject_filter & count)
       const count = Number(finalTournament.question_count) || 20;
@@ -191,9 +246,9 @@ export default function TournamentArena() {
     };
   }, [profile, id, loading, score]);
 
-  // Timer
+  // Exam Duel Timer - Runs ONLY when the arena is unlocked and not finished
   useEffect(() => {
-    if (loading || finished) return;
+    if (loading || finished || !isUnlocked) return;
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
@@ -205,7 +260,7 @@ export default function TournamentArena() {
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [loading, finished]);
+  }, [loading, finished, isUnlocked]);
 
   const handleAnswer = async (selected: string) => {
     const q = questions[currentIdx];
@@ -238,7 +293,7 @@ export default function TournamentArena() {
         body: JSON.stringify({
           tournament_id: id,
           score: finalScore,
-          time_taken_seconds: 3600 - timeLeft,
+          time_taken_seconds: ((Number(tournament?.duration_minutes) || 30) * 60) - timeLeft,
           user_id: profile.id
         })
       }).catch(() => {});
@@ -262,7 +317,83 @@ export default function TournamentArena() {
     }
   };
 
-  if (loading) return <div className="h-screen flex items-center justify-center bg-background"><Loader2 className="w-8 h-8 animate-spin text-primary" /></div>;
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-3">
+          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
+          <p className="text-sm text-muted-foreground font-mono">Synchronizing arena with UTC time...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Pre-Start Staging Room (If start_time has not yet arrived and not force-unlocked)
+  if (!isUnlocked && tournament) {
+    const formattedUtcTime = new Date(nowUtc).toUTCString();
+    const formattedStartTime = tournament.start_time ? new Date(tournament.start_time).toUTCString() : 'Pending schedule';
+
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 sm:p-6 text-center">
+        <div className="w-full max-w-xl space-y-6">
+          <div className="space-y-2">
+            <Badge variant="outline" className="bg-amber-500/10 text-amber-500 border-amber-500/30 px-3 py-1 font-mono text-xs uppercase">
+              <Clock className="w-3.5 h-3.5 mr-1" /> Pre-Duel Staging Room
+            </Badge>
+            <h1 className="text-3xl font-display font-bold text-foreground">
+              {tournament.title || "National UTME Challenge"}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              Questions and competition timers will automatically unlock when the scheduled UTC start time is reached.
+            </p>
+          </div>
+
+          {/* Countdown Card */}
+          <Card className="p-8 border-border bg-card/60 backdrop-blur shadow-xl rounded-2xl space-y-6">
+            <div className="space-y-1">
+              <div className="text-xs uppercase font-mono tracking-widest text-muted-foreground">Time Remaining To Start</div>
+              <div className="text-5xl font-mono font-extrabold text-primary animate-pulse">
+                {unlockEvaluation?.validation.formattedCountdown || 'Starting Soon'}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-xl bg-muted/40 border border-border text-left text-xs font-mono">
+              <div>
+                <span className="text-muted-foreground block">Client UTC Clock:</span>
+                <span className="font-semibold text-foreground">{formattedUtcTime}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground block">Scheduled Start UTC:</span>
+                <span className="font-semibold text-foreground">{formattedStartTime}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 justify-center">
+              <Button
+                onClick={handleForceCheckUnlock}
+                className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+              >
+                <RefreshCw className="w-4 h-4" /> Force-Check Start Time & Unlock
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => navigate('/tournaments')}
+                className="gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Return to Tournaments
+              </Button>
+            </div>
+          </Card>
+
+          {/* Staging participants */}
+          <div className="text-xs text-muted-foreground flex items-center justify-center gap-2">
+            <Users className="w-4 h-4 text-emerald-500" />
+            <span>{Object.keys(leaderboard).length || 1} Scholar(s) connected in staging room</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (finished) {
     // Sort leaderboard
@@ -300,7 +431,7 @@ export default function TournamentArena() {
     );
   }
 
-  const q = questions[currentIdx];
+  const q = questions[currentIdx] || { question_text: "Preparing question...", options: [] };
   const sortedLeaderboard = Object.values(leaderboard).sort((a, b) => b.score - a.score).slice(0, 5);
 
   return (
@@ -310,6 +441,11 @@ export default function TournamentArena() {
         <div className="flex items-center gap-3">
           <Trophy className="w-6 h-6 text-yellow-500" />
           <h1 className="font-bold hidden md:block">{tournament?.title || "Live Tournament"}</h1>
+          {unlockEvaluation?.validation.forceUnlocked && (
+            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] uppercase font-mono">
+              UTC Unlocked
+            </Badge>
+          )}
         </div>
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-2 text-primary font-mono bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
@@ -368,3 +504,4 @@ export default function TournamentArena() {
     </div>
   );
 }
+

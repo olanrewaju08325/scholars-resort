@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Trophy, Plus, Trash2, Users, Clock, Calendar, Edit2,
   CheckCircle, XCircle, Loader2, Sparkles, Lock, Unlock, ArrowLeft, RefreshCw, Database,
-  Gift, Coins, Check, Building2, Smartphone
+  Gift, Coins, Check, Building2, Smartphone, Bell, Send, Mail
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
@@ -221,6 +221,38 @@ export const AdminTournamentsTab = () => {
   const [claimsFilter, setClaimsFilter] = useState('all');
   const [updatingClaimId, setUpdatingClaimId] = useState<string | null>(null);
 
+  // Tournament Reminder Background Worker telemetry
+  const [workerStatus, setWorkerStatus] = useState<any>(null);
+  const [triggeringWorker, setTriggeringWorker] = useState(false);
+
+  const fetchWorkerStatus = async () => {
+    try {
+      const res = await authFetch('/api/tournaments/worker/status');
+      const data = await res.json();
+      if (data.success && data.status) {
+        setWorkerStatus(data.status);
+      }
+    } catch {}
+  };
+
+  const handleTriggerWorker = async () => {
+    setTriggeringWorker(true);
+    try {
+      const res = await authFetch('/api/tournaments/worker/trigger', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || `Worker completed! Sent ${data.result?.emailsSent || 0} alert email(s).`);
+        await fetchWorkerStatus();
+      } else {
+        toast.error(data.error || 'Failed to trigger worker.');
+      }
+    } catch (err: any) {
+      toast.error(`Trigger error: ${err.message}`);
+    } finally {
+      setTriggeringWorker(false);
+    }
+  };
+
   const fetchTournaments = async () => {
     setLoading(true);
     let allTournaments: any[] = [];
@@ -296,6 +328,7 @@ export const AdminTournamentsTab = () => {
   useEffect(() => {
     fetchTournaments();
     fetchClaims();
+    fetchWorkerStatus();
   }, []);
 
   const handleUpdateClaimStatus = async (claimId: string, status: 'verified' | 'disbursed' | 'rejected') => {
@@ -676,6 +709,52 @@ Return STRICT JSON format:
       {/* VIEW 1: TOURNAMENTS LIST */}
       {view === 'list' && (
         <div className="space-y-4">
+          {/* Tournament Reminder Background Worker Panel */}
+          <div className="bg-card border border-border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-500 shrink-0">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-sm text-foreground">Upcoming Tournament Email Alert Worker</span>
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    Auto-Scanning (Every 60s)
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Automatically scans upcoming tournaments and dispatches branded SMTP notifications to registered candidates.
+                  {typeof workerStatus?.totalEmailsDispatched === 'number' ? (
+                    <span className="ml-1.5 text-foreground font-medium">({workerStatus.totalEmailsDispatched} emails dispatched)</span>
+                  ) : null}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleTriggerWorker}
+                disabled={triggeringWorker}
+                className="text-xs font-semibold border-border hover:bg-muted"
+              >
+                {triggeringWorker ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    Scanning Now...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5 mr-1.5 text-blue-500" />
+                    Trigger Worker Check Now
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
           {/* Status Filter tabs */}
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
             {['all', 'upcoming', 'active', 'locked', 'completed'].map(tab => (

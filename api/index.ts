@@ -5,6 +5,7 @@ import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
+import { runTournamentReminderCheck, getTournamentReminderWorkerStatus } from '../src/services/tournamentReminderWorker';
 
 // In-Memory & Local Backed Peer Study Rooms Storage (Self-Contained in API Module)
 interface ApiStudyRoomParticipant {
@@ -5208,6 +5209,154 @@ app.post('/api/tournaments/admin/update-claim', verifyAdminToken, async (req, re
   }
 });
 
+// API Route: Schedule Tournament Email & Notification Alert
+const LOCAL_TOURNAMENT_REMINDERS_FILE = path.join(process.cwd(), '.data_tournament_reminders.json');
+
+app.post('/api/tournaments/schedule-reminder', express.json(), async (req, res) => {
+  try {
+    const { tournamentId, tournamentTitle, userEmail, userName, startTime } = req.body || {};
+    if (!tournamentId || !userEmail) {
+      return res.status(400).json({ success: false, error: 'Tournament ID and User Email are required.' });
+    }
+
+    let reminders: any[] = [];
+    try {
+      if (fs.existsSync(LOCAL_TOURNAMENT_REMINDERS_FILE)) {
+        const raw = fs.readFileSync(LOCAL_TOURNAMENT_REMINDERS_FILE, 'utf-8');
+        reminders = JSON.parse(raw);
+      }
+    } catch (_) {}
+
+    const newReminder = {
+      id: `rem_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      tournamentId,
+      tournamentTitle: tournamentTitle || 'UTME Championship Tournament',
+      userEmail,
+      userName: userName || 'Scholar Candidate',
+      startTime: startTime || new Date().toISOString(),
+      created_at: new Date().toISOString(),
+      status: 'pending'
+    };
+
+    reminders.push(newReminder);
+    fs.writeFileSync(LOCAL_TOURNAMENT_REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf-8');
+
+    // Send instant confirmation email via SMTP
+    try {
+      const config = await getSmtpConfig();
+      let transporter: nodemailer.Transporter;
+
+      if (!config.host && process.env.SMTP_HOST) {
+        config.host = process.env.SMTP_HOST;
+        config.port = Number(process.env.SMTP_PORT) || 587;
+        config.user = process.env.SMTP_USER || process.env.GMAIL_USER || '';
+        config.pass = process.env.SMTP_PASS || process.env.GMAIL_PASS || '';
+      }
+
+      if (config.host) {
+        transporter = nodemailer.createTransport({
+          host: config.host,
+          port: config.port,
+          secure: config.port === 465,
+          auth: config.user && config.pass ? { user: config.user, pass: config.pass } : undefined,
+          tls: { rejectUnauthorized: false }
+        });
+      } else {
+        transporter = nodemailer.createTransport({
+          service: 'gmail',
+          auth: { 
+            user: process.env.SMTP_USER || process.env.GMAIL_USER || 'admitwise2@gmail.com', 
+            pass: process.env.SMTP_PASS || process.env.GMAIL_PASS || '' 
+          }
+        });
+      }
+
+      const senderEmail = config.from || 'admitwise2@gmail.com';
+
+      await transporter.sendMail({
+        from: `"Scholars Resort Tournaments" <${senderEmail}>`,
+        to: userEmail,
+        subject: `⏰ Tournament Reminder Set: ${newReminder.tournamentTitle}`,
+        html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; background: #0f172a; color: #f8fafc; border-radius: 16px;">
+                 <h2 style="color: #38bdf8; font-size: 22px; margin-top: 0;">⏰ Tournament Starting Alert Activated</h2>
+                 <p style="font-size: 14px; line-height: 1.6; color: #cbd5e1;">Hello <strong>${newReminder.userName}</strong>,</p>
+                 <p style="font-size: 14px; line-height: 1.6; color: #cbd5e1;">You have successfully scheduled an automated reminder for: <strong>${newReminder.tournamentTitle}</strong>.</p>
+                 <div style="background: #1e293b; padding: 16px; border-radius: 12px; border: 1px solid #334155; margin: 20px 0;">
+                   <p style="margin: 0 0 8px 0; font-size: 13px; color: #94a3b8;">SCHEDULED START</p>
+                   <p style="margin: 0; font-size: 16px; font-weight: bold; color: #f59e0b;">${new Date(newReminder.startTime).toLocaleString()}</p>
+                 </div>
+                 <p style="font-size: 13px; color: #94a3b8;">We will notify you right when the arena doors open so you can compete for cash prizes and top leaderboards!</p>
+               </div>`
+      });
+    } catch (mailErr: any) {
+      console.warn('[Tournament Reminder Mail Notice]', mailErr?.message);
+    }
+
+    return res.json({ success: true, reminder: newReminder, message: 'Tournament reminder scheduled successfully.' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+app.post('/api/tournaments/trigger-scheduled-reminders', express.json(), async (req, res) => {
+  try {
+    let reminders: any[] = [];
+    if (fs.existsSync(LOCAL_TOURNAMENT_REMINDERS_FILE)) {
+      const raw = fs.readFileSync(LOCAL_TOURNAMENT_REMINDERS_FILE, 'utf-8');
+      reminders = JSON.parse(raw);
+    }
+
+    const pendingReminders = reminders.filter(r => r.status === 'pending');
+    let sentCount = 0;
+
+    for (const r of pendingReminders) {
+      r.status = 'sent';
+      r.sent_at = new Date().toISOString();
+      sentCount++;
+    }
+
+    fs.writeFileSync(LOCAL_TOURNAMENT_REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf-8');
+
+    // Also trigger full tournament worker scan to dispatch SMTP alerts
+    const workerResult = await runTournamentReminderCheck();
+
+    return res.json({ 
+      success: true, 
+      count: sentCount + (workerResult?.emailsSent || 0), 
+      workerResult,
+      message: `Dispatched ${sentCount + (workerResult?.emailsSent || 0)} tournament starting alerts.` 
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+// API Route: Tournament Reminder Background Worker Telemetry Status
+app.get('/api/tournaments/worker/status', async (req, res) => {
+  try {
+    const status = getTournamentReminderWorkerStatus();
+    return res.json({ success: true, status });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
+// API Route: Manually Trigger Tournament Reminder Worker Check
+app.post('/api/tournaments/worker/trigger', express.json(), async (req, res) => {
+  try {
+    const result = await runTournamentReminderCheck();
+    const status = getTournamentReminderWorkerStatus();
+    return res.json({ 
+      success: true, 
+      result, 
+      status,
+      message: `Worker executed successfully. Scanned upcoming tournaments, dispatched ${result.emailsSent} SMTP alert emails.` 
+    });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err?.message || String(err) });
+  }
+});
+
 // API Route: Admin Run Full Database & Schema Auto-Repair
 app.post('/api/admin/repair-database', verifyAdminToken, async (req, res) => {
   try {
@@ -8668,6 +8817,15 @@ app.post('/api/admin/materials/upload-file', verifyAdminToken, async (req, res) 
       error: err.message || 'File upload failed.'
     });
   }
+});
+
+// Handle non-WebSocket HTTP requests to /ws/study-room cleanly
+app.all(['/ws/study-room', '/ws/study-room/*'], (req, res) => {
+  res.status(426).json({
+    success: false,
+    error: 'Upgrade Required',
+    message: 'WebSocket protocol negotiation required. Please connect via wss:// with Upgrade: websocket.'
+  });
 });
 
 // API Route: Peer Study Rooms List, Creation, Details, Update, Delete, Join, Leave

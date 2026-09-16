@@ -3,6 +3,7 @@ import http from 'http';
 import path from 'path';
 import app from './api/index';
 import { setupStudyRoomWebSocket } from './src/services/studyRoomSocketServer';
+import { startTournamentReminderWorker } from './src/services/tournamentReminderWorker';
 
 const PORT = 3000;
 
@@ -11,6 +12,9 @@ async function startServer() {
 
   // Setup WebSocket server for Peer Study Rooms
   setupStudyRoomWebSocket(httpServer);
+
+  // Start background worker for upcoming tournament email alerts
+  startTournamentReminderWorker(60000);
 
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');

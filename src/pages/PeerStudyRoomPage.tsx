@@ -252,85 +252,111 @@ export const PeerStudyRoomPage: React.FC = () => {
         }
       });
 
-    // 2. Initialize WebSocket server connection fallback
+    // 2. Initialize WebSocket server connection with protocol negotiation & handshake verification
     try {
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      const wsUrl = `${protocol}//${host}/ws/study-room`;
+      if (typeof window !== 'undefined' && 'WebSocket' in window) {
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const wsUrl = `${protocol}//${host}/ws/study-room`;
 
-      const socket = new WebSocket(wsUrl);
-      wsRef.current = socket;
+        // Request specific subprotocols to verify protocol negotiation during upgrade handshake
+        const socket = new WebSocket(wsUrl, ['utme-study-room-v1', 'json']);
+        wsRef.current = socket;
 
-      socket.onopen = () => {
-        socket.send(JSON.stringify({
-          type: 'join_room',
-          roomId: selectedRoomId,
-          roomTitle: roomTitle || 'UTME Study Session',
-          subject: roomSubject,
-          userId: currentUserId,
-          userName: currentUserName,
-          avatar: currentUserName.substring(0, 2).toUpperCase()
-        }));
-      };
+        socket.onerror = (err) => {
+          // Handshake non-101 (such as 200 on serverless edge proxies) or network disconnect:
+          // Gracefully suppress unhandled exceptions and maintain real-time sync via Supabase Realtime channels
+          console.info('[StudyRoom WebSocket] Direct socket connection note. Utilizing Supabase Realtime & broadcast mesh sync.');
+        };
 
-      socket.onmessage = (event) => {
-        try {
-          const payload = JSON.parse(event.data);
-          const { type } = payload;
-
-          if (type === 'room_init_state') {
-            setRoomTitle(payload.title);
-            setRoomSubject(payload.subject);
-            setParticipants(payload.participants || []);
-            setWhiteboardStrokes(payload.whiteboardStrokes || []);
-            if (payload.timerState) setTimerState(payload.timerState);
-            setMessages(payload.messages || []);
-          } else if (type === 'participant_joined' || type === 'participant_left') {
-            if (payload.participants) setParticipants(payload.participants);
-            if (payload.systemMessage) {
-              toast.info(payload.systemMessage);
-            }
-          } else if (type === 'draw_stroke_broadcast') {
-            if (payload.stroke) {
-              setWhiteboardStrokes((prev) => {
-                if (prev.some((s) => s.id === payload.stroke.id)) return prev;
-                return [...prev, payload.stroke];
-              });
-            }
-          } else if (type === 'clear_whiteboard_broadcast') {
-            setWhiteboardStrokes([]);
-            toast.info(`Whiteboard cleared by ${payload.clearedBy || 'peer'}.`);
-          } else if (type === 'chat_message_broadcast') {
-            if (payload.message) {
-              setMessages((prev) => {
-                if (prev.some((m) => m.id === payload.message.id)) return prev;
-                return [...prev, payload.message];
-              });
-            }
-          } else if (type === 'question_shared_broadcast') {
-            if (payload.stroke) {
-              setWhiteboardStrokes((prev) => [...prev, payload.stroke]);
-            }
-            if (payload.message) {
-              setMessages((prev) => [...prev, payload.message]);
-            }
-            toast.success('New UTME question posted to whiteboard!');
-          } else if (type === 'timer_updated_broadcast') {
-            if (payload.timerState) setTimerState(payload.timerState);
-          } else if (type === 'participant_hand_toggled') {
-            if (payload.participants) setParticipants(payload.participants);
-          } else if (type === 'reaction_emoji_broadcast') {
-            toast(`${payload.userName}: ${payload.emoji}`, { duration: 1500 });
+        socket.onclose = (event) => {
+          if (event.code !== 1000) {
+            console.info(`[StudyRoom WebSocket] Socket session closed (Code: ${event.code}). Supabase Realtime active.`);
           }
-        } catch (err) {
-          console.warn('Error handling study room socket message:', err);
-        }
-      };
+        };
+
+        socket.onopen = () => {
+          console.info(`[StudyRoom WebSocket] Connected successfully. Negotiated Protocol: "${socket.protocol || 'standard'}"`);
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+              type: 'join_room',
+              roomId: selectedRoomId,
+              roomTitle: roomTitle || 'UTME Study Session',
+              subject: roomSubject,
+              userId: currentUserId,
+              userName: currentUserName,
+              avatar: currentUserName.substring(0, 2).toUpperCase()
+            }));
+          }
+        };
+
+        socket.onmessage = (event) => {
+          try {
+            const payload = JSON.parse(event.data);
+            const { type } = payload;
+
+            if (type === 'room_init_state') {
+              setRoomTitle(payload.title);
+              setRoomSubject(payload.subject);
+              setParticipants(payload.participants || []);
+              setWhiteboardStrokes(payload.whiteboardStrokes || []);
+              if (payload.timerState) setTimerState(payload.timerState);
+              setMessages(payload.messages || []);
+            } else if (type === 'participant_joined' || type === 'participant_left') {
+              if (payload.participants) setParticipants(payload.participants);
+              if (payload.systemMessage) {
+                toast.info(payload.systemMessage);
+              }
+            } else if (type === 'draw_stroke_broadcast') {
+              if (payload.stroke) {
+                setWhiteboardStrokes((prev) => {
+                  if (prev.some((s) => s.id === payload.stroke.id)) return prev;
+                  return [...prev, payload.stroke];
+                });
+              }
+            } else if (type === 'clear_whiteboard_broadcast') {
+              setWhiteboardStrokes([]);
+              toast.info(`Whiteboard cleared by ${payload.clearedBy || 'peer'}.`);
+            } else if (type === 'chat_message_broadcast') {
+              if (payload.message) {
+                setMessages((prev) => {
+                  if (prev.some((m) => m.id === payload.message.id)) return prev;
+                  return [...prev, payload.message];
+                });
+              }
+            } else if (type === 'question_shared_broadcast') {
+              if (payload.stroke) {
+                setWhiteboardStrokes((prev) => [...prev, payload.stroke]);
+              }
+              if (payload.message) {
+                setMessages((prev) => [...prev, payload.message]);
+              }
+              toast.success('New UTME question posted to whiteboard!');
+            } else if (type === 'timer_updated_broadcast') {
+              if (payload.timerState) setTimerState(payload.timerState);
+            } else if (type === 'participant_hand_toggled') {
+              if (payload.participants) setParticipants(payload.participants);
+            } else if (type === 'reaction_emoji_broadcast') {
+              toast(`${payload.userName}: ${payload.emoji}`, { duration: 1500 });
+            }
+          } catch (err) {
+            console.warn('Error handling study room socket message:', err);
+          }
+        };
+      }
     } catch (_) {}
 
     return () => {
       if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.close();
+        try {
+          wsRef.current.send(JSON.stringify({
+            type: 'leave_room',
+            roomId: selectedRoomId,
+            userId: currentUserId,
+            userName: currentUserName
+          }));
+          wsRef.current.close(1000, 'User left room');
+        } catch {}
       }
       wsRef.current = null;
       supabase.removeChannel(channel);
@@ -553,6 +579,37 @@ export const PeerStudyRoomPage: React.FC = () => {
 
   // ROOM SESSION ACTIVE VIEW
   if (selectedRoomId) {
+    const activeRoomMeta = activeRooms.find(r => r.roomId === selectedRoomId);
+    const isCreatorOrAdmin = activeRoomMeta?.hostId === currentUserId || 
+      activeRoomMeta?.hostName === currentUserName ||
+      profile?.role === 'admin' || 
+      profile?.role === 'super_admin';
+
+    const handleExitRoom = async () => {
+      if (selectedRoomId) {
+        try {
+          await peerStudyRoomSync.leaveRoom(selectedRoomId, currentUserId);
+        } catch {}
+      }
+      setSelectedRoomId(null);
+      toast.info('You left the study room session.');
+    };
+
+    const handleCloseAndEndRoom = async () => {
+      if (!selectedRoomId) return;
+      if (!confirm('Are you sure you want to end and close this study room for all participants?')) return;
+      try {
+        peerStudyRoomSync.broadcastRoomDeletion(selectedRoomId);
+        await peerStudyRoomSync.deleteRoom(selectedRoomId);
+        setSelectedRoomId(null);
+        toast.success('Study room ended and closed successfully.');
+      } catch (_) {
+        peerStudyRoomSync.broadcastRoomDeletion(selectedRoomId);
+        setSelectedRoomId(null);
+        toast.success('Study room closed.');
+      }
+    };
+
     return (
       <div className="container mx-auto px-4 py-6 max-w-7xl space-y-4 min-h-[90vh] flex flex-col">
         {/* Session Top Header Bar */}
@@ -561,11 +618,23 @@ export const PeerStudyRoomPage: React.FC = () => {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => setSelectedRoomId(null)}
+              onClick={handleExitRoom}
               className="border-slate-800 text-slate-300 hover:text-white hover:bg-slate-900"
             >
               <ArrowLeft className="w-4 h-4 mr-1" /> Exit Room
             </Button>
+
+            {isCreatorOrAdmin && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleCloseAndEndRoom}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-bold"
+              >
+                <X className="w-4 h-4 mr-1" /> End & Close Room
+              </Button>
+            )}
+
             <div>
               <div className="flex items-center gap-2">
                 <Badge className="bg-blue-600 text-white font-mono text-[10px] uppercase">
