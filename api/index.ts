@@ -384,53 +384,62 @@ app.use('/api', globalApiLimiter);
 
 // Vercel Serverless Function path normalization middleware
 app.use((req, res, next) => {
-  // 1. Try to extract original path from headers that Vercel or reverse proxies attach
-  const xMatchedPath = (
-    req.headers['x-matched-path'] || 
-    req.headers['x-original-url'] || 
-    req.headers['x-forwarded-uri'] || 
-    req.headers['x-vercel-original-url']
+  const origUrl = req.url || '/';
+  const [origPath, origQuery] = origUrl.split('?');
+
+  // If origPath is already a valid non-index API endpoint (e.g. /api/profile/123, /api/cbt-snapshots), keep it intact!
+  if (origPath.startsWith('/api/') && origPath !== '/api/index' && origPath !== '/api/index.ts') {
+    return next();
+  }
+
+  // 1. Check real original request headers attached by Vercel or proxies (excluding Vercel rewrite target /api/index)
+  const headerPath = (
+    req.headers['x-original-url'] ||
+    req.headers['x-forwarded-uri'] ||
+    req.headers['x-vercel-original-url'] ||
+    req.headers['x-matched-path']
   ) as string | undefined;
-  const routeMatches = req.headers['x-now-route-matches'] as string | undefined;
 
   let candidate = '';
 
-  if (xMatchedPath && xMatchedPath.startsWith('/api')) {
-    candidate = xMatchedPath;
-  } else if (routeMatches) {
-    try {
-      const parsed = new URLSearchParams(routeMatches);
-      const match = parsed.get('1') || parsed.get('0') || parsed.get('match') || parsed.get('path');
-      if (match) {
-        candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
-      }
-    } catch (_) {}
-  }
-
-  // Check query parameters for Vercel wildcard regex matches (e.g. ?0=health or ?1=health)
-  if (!candidate && req.url && req.url.includes('?')) {
-    try {
-      const queryString = req.url.split('?')[1];
-      const parsed = new URLSearchParams(queryString);
-      const match = parsed.get('1') || parsed.get('0') || parsed.get('path') || parsed.get('match');
-      if (match) {
-        candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
-      }
-    } catch (_) {}
-  }
-
-  if (candidate) {
-    const origQuery = req.url.includes('?') ? req.url.split('?')[1] : '';
-    req.url = origQuery ? `${candidate}?${origQuery}` : candidate;
+  if (headerPath && headerPath.startsWith('/api') && !headerPath.startsWith('/api/index')) {
+    candidate = headerPath.split('?')[0];
   } else {
-    // Standardize URL: If request is "/", "/api", or "/api/", rewrite to "/api/health"
-    const [pathPart, queryPart] = req.url.split('?');
-    if (pathPart === '/' || pathPart === '' || pathPart === '/api' || pathPart === '/api/') {
-      req.url = queryPart ? `/api/health?${queryPart}` : '/api/health';
-    } else if (!pathPart.startsWith('/api') && !pathPart.startsWith('/ws')) {
-      const normalized = `/api${pathPart.startsWith('/') ? pathPart : `/${pathPart}`}`;
-      req.url = queryPart ? `${normalized}?${queryPart}` : normalized;
+    // 2. Check x-now-route-matches header
+    const routeMatches = req.headers['x-now-route-matches'] as string | undefined;
+    if (routeMatches) {
+      try {
+        const parsed = new URLSearchParams(routeMatches);
+        const match = parsed.get('0') || parsed.get('1') || parsed.get('match') || parsed.get('path');
+        if (match && match !== 'index') {
+          candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
+        }
+      } catch (_) {}
     }
+
+    // 3. Check query parameters for Vercel wildcard regex matches (e.g. ?0=profile/... or ?1=cbt-snapshots)
+    if (!candidate && origQuery) {
+      try {
+        const parsed = new URLSearchParams(origQuery);
+        const match = parsed.get('0') || parsed.get('1') || parsed.get('match') || parsed.get('path');
+        if (match && match !== 'index') {
+          candidate = `/api/${decodeURIComponent(match).replace(/^\/+/, '')}`;
+        }
+      } catch (_) {}
+    }
+  }
+
+  // Fallback: If origPath was e.g. /profile/123 (without /api prefix)
+  if (!candidate) {
+    if (origPath === '/' || origPath === '' || origPath === '/api' || origPath === '/api/' || origPath === '/api/index' || origPath === '/api/index.ts') {
+      candidate = '/api/health';
+    } else if (!origPath.startsWith('/api') && !origPath.startsWith('/ws')) {
+      candidate = `/api${origPath.startsWith('/') ? origPath : `/${origPath}`}`;
+    }
+  }
+
+  if (candidate && candidate !== origPath) {
+    req.url = origQuery ? `${candidate}?${origQuery}` : candidate;
   }
 
   next();
