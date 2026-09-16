@@ -1,8 +1,17 @@
+// Sanitize environment __dirname if set to relative path by runner
+if (typeof (globalThis as any).__dirname === 'string' && (!(globalThis as any).__dirname.startsWith('/') && !(globalThis as any).__dirname.startsWith('file:'))) {
+  (globalThis as any).__dirname = process.cwd();
+}
+
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from "path";
+import { fileURLToPath } from 'url';
 import { VitePWA } from 'vite-plugin-pwa';
 import nodemailer from 'nodemailer';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // Custom Vite plugin to handle /api/send-otp in local dev
 const apiMockPlugin = () => ({
@@ -127,99 +136,106 @@ const apiMockPlugin = () => ({
 });
 
 // https://vite.dev/config/
-export default defineConfig({
-  define: {
-    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || 'https://syoodykedvqaoeplmamd.supabase.co'),
-    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5b29keWtlZHZxYW9lcGxtYW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNjEyMTIsImV4cCI6MjEwMDkzNzIxMn0.GV7jgq04Qha6W1JENvc-ntVt9zSOLDx7vTaTxZlOTq4')
-  },
-  plugins: [
-    apiMockPlugin(),
-    react(),
-    VitePWA({
-      registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'scholar.jpg', 'robots.txt', 'apple-touch-icon.png'],
-      manifest: {
-        name: 'Scholars Resort',
-        short_name: 'ScholarsResort',
-        description: 'Learn Smart. Score High. Secure Your Future.',
-        theme_color: '#0B1526',
-        icons: [
-          {
-            src: 'scholar.jpg',
-            sizes: '192x192',
-            type: 'image/jpeg'
-          },
-          {
-            src: 'scholar.jpg',
-            sizes: '512x512',
-            type: 'image/jpeg'
-          }
-        ]
-      },
-      workbox: {
-        cleanupOutdatedCaches: true,
-        clientsClaim: true,
-        skipWaiting: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
-        maximumFileSizeToCacheInBytes: 5000000,
-        runtimeCaching: [
-          {
-            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'google-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+export default defineConfig(({ command }) => {
+  const isBuild = command === 'build';
+
+  return {
+    define: {
+      'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || 'https://syoodykedvqaoeplmamd.supabase.co'),
+      'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5b29keWtlZHZxYW9lcGxtYW1kIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUzNjEyMTIsImV4cCI6MjEwMDkzNzIxMn0.GV7jgq04Qha6W1JENvc-ntVt9zSOLDx7vTaTxZlOTq4')
+    },
+    plugins: [
+      apiMockPlugin(),
+      react(),
+      ...(isBuild ? [
+        VitePWA({
+          registerType: 'autoUpdate',
+          includeAssets: ['favicon.svg', 'scholar.jpg', 'robots.txt', 'apple-touch-icon.png'],
+          manifest: {
+            name: 'Scholars Resort',
+            short_name: 'ScholarsResort',
+            description: 'Learn Smart. Score High. Secure Your Future.',
+            theme_color: '#0B1526',
+            icons: [
+              {
+                src: 'scholar.jpg',
+                sizes: '192x192',
+                type: 'image/jpeg'
               },
-              cacheableResponse: {
-                statuses: [0, 200]
+              {
+                src: 'scholar.jpg',
+                sizes: '512x512',
+                type: 'image/jpeg'
               }
-            }
+            ]
           },
-          {
-            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'gstatic-fonts-cache',
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+          workbox: {
+            cleanupOutdatedCaches: true,
+            clientsClaim: true,
+            skipWaiting: true,
+            globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+            maximumFileSizeToCacheInBytes: 5000000,
+            runtimeCaching: [
+              {
+                urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+                handler: 'CacheFirst',
+                options: {
+                  cacheName: 'google-fonts-cache',
+                  expiration: {
+                    maxEntries: 10,
+                    maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+                  },
+                  cacheableResponse: {
+                    statuses: [0, 200]
+                  }
+                }
               },
-              cacheableResponse: {
-                statuses: [0, 200]
-              },
-            }
+              {
+                urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+                handler: 'CacheFirst',
+                options: {
+                  cacheName: 'gstatic-fonts-cache',
+                  expiration: {
+                    maxEntries: 10,
+                    maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+                  },
+                  cacheableResponse: {
+                    statuses: [0, 200]
+                  },
+                }
+              }
+            ]
           }
-        ]
-      }
-    })
-  ],
-  build: {
-    chunkSizeWarningLimit: 2000,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
-              return 'vendor-react';
-            }
-            if (id.includes('lucide-react') || id.includes('framer-motion') || id.includes('sonner')) {
-              return 'vendor-ui';
+        })
+      ] : [])
+    ],
+    build: {
+      chunkSizeWarningLimit: 2000,
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) {
+                return 'vendor-react';
+              }
+              if (id.includes('lucide-react') || id.includes('framer-motion') || id.includes('sonner')) {
+                return 'vendor-ui';
+              }
             }
           }
         }
       }
-    }
-  },
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
     },
-  },
-  server: {
-    host: '0.0.0.0',
-    port: 3000,
-    allowedHosts: true,
-  },
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
+      },
+    },
+    server: {
+      host: '0.0.0.0',
+      port: 3000,
+      allowedHosts: true,
+      hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+    },
+  };
 });

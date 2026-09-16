@@ -427,7 +427,7 @@ app.use((req, res, next) => {
     const [pathPart, queryPart] = req.url.split('?');
     if (pathPart === '/' || pathPart === '' || pathPart === '/api' || pathPart === '/api/') {
       req.url = queryPart ? `/api/health?${queryPart}` : '/api/health';
-    } else if (!pathPart.startsWith('/api')) {
+    } else if (!pathPart.startsWith('/api') && !pathPart.startsWith('/ws')) {
       const normalized = `/api${pathPart.startsWith('/') ? pathPart : `/${pathPart}`}`;
       req.url = queryPart ? `${normalized}?${queryPart}` : normalized;
     }
@@ -8820,7 +8820,10 @@ app.post('/api/admin/materials/upload-file', verifyAdminToken, async (req, res) 
 });
 
 // Handle non-WebSocket HTTP requests to /ws/study-room cleanly
-app.all(['/ws/study-room', '/ws/study-room/*'], (req, res) => {
+app.use(['/ws/study-room', '/api/ws/study-room'], (req, res, next) => {
+  if (req.headers.upgrade && req.headers.upgrade.toLowerCase() === 'websocket') {
+    return next();
+  }
   res.status(426).json({
     success: false,
     error: 'Upgrade Required',
