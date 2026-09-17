@@ -327,7 +327,7 @@ export const checkSubjectDataIntegrity = async (subjectIdOrName: string, expecte
   try {
     // Try to resolve exact server-side count via custom API first
     try {
-      const response = await fetch('/api/admin/subject-counts');
+      const response = await apiHealthFetch('/api/admin/subject-counts');
       if (response.ok) {
         const resData = await response.json();
         if (resData.success && resData.counts) {
@@ -413,6 +413,8 @@ export const checkSubjectDataIntegrity = async (subjectIdOrName: string, expecte
   };
 };
 
+import { apiHealthFetch } from '@/utils/api-health';
+
 /**
  * Service function for Admin Utilities to run a count aggregation query
  * on the 'questions' table grouped by 'subject_id'.
@@ -425,7 +427,7 @@ export const getSubjectQuestionCountsAggregation = async (): Promise<{
   totalQuestions: number;
 }> => {
   try {
-    const response = await fetch('/api/admin/subject-counts');
+    const response = await apiHealthFetch('/api/admin/subject-counts');
     if (response.ok) {
       const resData = await response.json();
       if (resData.success && resData.counts) {

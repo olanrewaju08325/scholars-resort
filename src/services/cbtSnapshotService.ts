@@ -2,6 +2,7 @@
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/utils';
 import { cbtPerformanceMonitor } from './cbtPerformanceMonitorService';
+import { apiHealthFetch } from '@/utils/api-health';
 
 export interface CbtSessionSnapshot {
   id: string;
@@ -146,7 +147,7 @@ export class CbtSnapshotService {
     // 2. Persist to server / Supabase audit & snapshots
     try {
       try {
-        await fetch(getApiUrl('/api/cbt-snapshots'), {
+        await apiHealthFetch(getApiUrl('/api/cbt-snapshots'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(snapshot)
@@ -195,7 +196,7 @@ export class CbtSnapshotService {
   public static async fetchAllSnapshots(): Promise<CbtSessionSnapshot[]> {
     const local = this.getAllFromLocalStorage();
     try {
-      const res = await fetch(getApiUrl('/api/cbt-snapshots'));
+      const res = await apiHealthFetch(getApiUrl('/api/cbt-snapshots'));
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.snapshots)) {

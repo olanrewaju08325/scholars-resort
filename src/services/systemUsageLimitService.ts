@@ -2,6 +2,7 @@
 import { supabase } from '@/lib/supabase';
 import { sendEmailMessage } from './emailService';
 import { authFetch } from '@/lib/apiAuth';
+import { apiHealthFetch } from '@/utils/api-health';
 
 export interface UsageQuotaLimits {
   dbStorageLimitMB: number;
@@ -188,7 +189,7 @@ export class SystemUsageLimitService {
       // 2. SMTP Real Usage - Authoritative sync with communication_logs and server API
       let serverSmtpLoaded = false;
       try {
-        const res = await fetch('/api/system-usage');
+        const res = await apiHealthFetch('/api/system-usage');
         if (res.ok) {
           const sData = await res.json();
           if (sData?.smtp) {
@@ -265,7 +266,7 @@ export class SystemUsageLimitService {
 
       // Also query server-side telemetry endpoint to capture immediate in-memory sessions
       try {
-        const telRes = await fetch('/api/groq-telemetry');
+        const telRes = await apiHealthFetch('/api/groq-telemetry');
         if (telRes.ok) {
           const telData = await telRes.json();
           if (telData?.totals?.totalTokens) {

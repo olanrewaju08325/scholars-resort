@@ -15,11 +15,54 @@ export interface TournamentUnlockValidation {
   formattedCountdown: string;
 }
 
+let clientServerOffsetMs = 0;
+let lastSyncTimeMs = 0;
+
+/**
+ * Synchronizes client clock with server time by querying server header/API.
+ */
+export async function syncClientWithServerTime(): Promise<{ offsetMs: number; serverNowMs: number }> {
+  try {
+    const fetchStart = Date.now();
+    const res = await fetch('/api/health');
+    const fetchEnd = Date.now();
+    const latency = (fetchEnd - fetchStart) / 2;
+
+    if (res.ok) {
+      const data = await res.json();
+      const serverDateHeader = res.headers.get('date');
+      let serverTimeMs = data?.timestamp ? new Date(data.timestamp).getTime() : 0;
+      if (!serverTimeMs && serverDateHeader) {
+        serverTimeMs = new Date(serverDateHeader).getTime();
+      }
+
+      if (serverTimeMs) {
+        clientServerOffsetMs = (serverTimeMs + latency) - Date.now();
+        lastSyncTimeMs = Date.now();
+      }
+    }
+  } catch (err) {
+    console.warn('[ClientTimeSync] Clock sync notice:', err);
+  }
+
+  return {
+    offsetMs: clientServerOffsetMs,
+    serverNowMs: Date.now() + clientServerOffsetMs
+  };
+}
+
+/**
+ * Returns the current synced timestamp in milliseconds (client clock + server offset).
+ */
+export function getSyncedNowMs(): number {
+  return Date.now() + clientServerOffsetMs;
+}
+
 /**
  * Returns the current client UTC timestamp in milliseconds.
  */
 export function getCurrentUtcTimestamp(): number {
-  return Date.now();
+  return getSyncedNowMs();
 }
 
 /**

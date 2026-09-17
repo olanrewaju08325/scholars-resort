@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { checkIsCorrect } from '@/utils/questionUtils';
-import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, formatTournamentCountdown } from '@/utils/tournamentUtils';
+import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, formatTournamentCountdown, syncClientWithServerTime } from '@/utils/tournamentUtils';
 
 export default function TournamentArena() {
   const { id } = useParams();
@@ -42,13 +42,39 @@ export default function TournamentArena() {
 
   const isUnlocked = Boolean(unlockEvaluation?.validation.isUnlocked);
 
-  // UTC Clock updater
+  // Client-Time-Sync & UTC Clock updater
   useEffect(() => {
+    // Initial clock sync with server time
+    syncClientWithServerTime().then(({ serverNowMs }) => {
+      setNowUtc(serverNowMs);
+    });
+
     const timer = setInterval(() => {
       setNowUtc(getCurrentUtcTimestamp());
     }, 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Re-validation against Supabase 'tournaments' table when start time is reached
+  const [hasRevalidatedDb, setHasRevalidatedDb] = useState(false);
+  useEffect(() => {
+    if (!tournament || !id || hasRevalidatedDb) return;
+
+    const startMs = new Date(tournament.start_time || tournament.startTime || 0).getTime();
+    if (startMs > 0 && nowUtc >= startMs) {
+      setHasRevalidatedDb(true);
+      // Force re-validation query against Supabase 'tournaments' table to bypass any stale cached states
+      supabase.from('tournaments').select('*').eq('id', id).maybeSingle().then(({ data: freshData }) => {
+        if (freshData) {
+          const freshUnlock = forceCheckTournamentUnlock(freshData, nowUtc);
+          setTournament(freshUnlock.tournament);
+          toast.success("Tournament start time reached! Re-validated state with live database.");
+        }
+      }).catch((err) => {
+        console.warn('[TournamentArena] Re-validation query notice:', err);
+      });
+    }
+  }, [tournament, nowUtc, id, hasRevalidatedDb]);
 
   // Force-check function that validates start_time against client's current UTC timestamp
   const handleForceCheckUnlock = useCallback(() => {

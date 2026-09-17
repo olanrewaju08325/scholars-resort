@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/utils';
+import { apiHealthFetch } from '@/utils/api-health';
 
 export interface GroqLogEntry {
   id: string;
@@ -88,7 +89,7 @@ export const fetchGroqTelemetry = async (groqApiKey?: string): Promise<GroqTelem
     } catch (_) {}
 
     const targetUrl = getApiUrl('/api/groq-telemetry');
-    const res = await fetch(targetUrl, { headers }).catch(() => null);
+    const res = await apiHealthFetch(targetUrl, { headers }).catch(() => null);
     if (res && res.ok) {
       const contentType = res.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
@@ -160,7 +161,7 @@ export const reportGroqCallTelemetry = async (logData: {
   try {
     // 1. Post to server telemetry endpoint if available
     const targetUrl = getApiUrl('/api/groq-telemetry/log');
-    await fetch(targetUrl, {
+    await apiHealthFetch(targetUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(logData)

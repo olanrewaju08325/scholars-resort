@@ -166,6 +166,7 @@ import { MaintenanceGuard } from './components/MaintenanceGuard';
 import { InterruptedExamPrompt } from './components/InterruptedExamPrompt';
 import { AiQuotaStatusModal } from './components/AiQuotaStatusModal';
 import { ExamSessionProvider } from './context/ExamSessionContext';
+import { ApiDebugConsole } from './utils/api-health';
 
 function App() {
   return (
@@ -184,6 +185,7 @@ function App() {
                 <InstallPrompt />
                 <OfflineIndicator />
                 <AiQuotaStatusModal />
+                <ApiDebugConsole />
               </MaintenanceGuard>
             </ExamSessionProvider>
           </AuthProvider>

@@ -2352,7 +2352,8 @@ app.get('/api/groq-telemetry', async (req, res) => {
             model: 'openai/gpt-oss-120b',
             messages: [{ role: 'user', content: '1' }],
             max_tokens: 1
-          })
+          }),
+          signal: AbortSignal.timeout(2500)
         });
 
         const remTokens = probeRes.headers.get('x-ratelimit-remaining-tokens') || probeRes.headers.get('x-ratelimit-remaining-tokens-minute');
@@ -3667,7 +3668,8 @@ app.get('/api/system-usage', async (req, res) => {
 
     const safeCountQuery = async (queryPromise: Promise<any>) => {
       try {
-        const res = await queryPromise;
+        const timeoutPromise = new Promise((resolve) => setTimeout(() => resolve({ count: 0 }), 3000));
+        const res: any = await Promise.race([queryPromise, timeoutPromise]);
         return typeof res?.count === 'number' ? res.count : 0;
       } catch (_) {
         return 0;
@@ -7353,35 +7355,60 @@ app.post('/api/profile/clear-data', verifyUserToken, async (req, res) => {
 
 // API Route: Authoritative Profile Fetch from Supabase
 app.get('/api/profile/:id', async (req, res) => {
-  const { id } = req.params;
-  if (!id) return res.status(400).json({ success: false, error: 'User ID is required' });
-
-  if (deletedUserIds.has(id)) {
-    return res.status(404).json({ success: false, error: 'User profile not found or has been deleted.' });
-  }
-
-  const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
-  let authenticatedUser = (req as any).user || { id, email: '' };
-
-  // Soft token resolution if auth header is attached
-  const authHeader = req.headers.authorization;
-  if (authHeader && authHeader.startsWith('Bearer ')) {
-    const token = authHeader.split(' ')[1]?.trim();
-    if (token) {
-      try {
-        const { data: { user } } = await supabase.auth.getUser(token);
-        if (user) authenticatedUser = user;
-      } catch (_) {}
-    }
-  }
-
-  const userEmail = (authenticatedUser.email || '').toLowerCase().trim();
+  // Ensure CORS headers are explicitly set for all responses
+  const origin = req.headers.origin;
+  res.setHeader('Access-Control-Allow-Origin', origin || '*');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   try {
-    console.log(`[API /api/profile/:id] Route entered. Requested profile ID: ${id}, Authenticated user ID: ${authenticatedUser.id}, Has Auth Header: ${Boolean(req.headers.authorization)}`);
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, error: 'User ID is required' });
 
-    // Ensure user is fetching their own profile or they are an admin
-    let isAuthorized = authenticatedUser.id === id;
+    if (deletedUserIds.has(id)) {
+      return res.status(404).json({ success: false, error: 'User profile not found or has been deleted.' });
+    }
+
+    const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+    let authenticatedUser: any = (req as any).user || { id, email: '' };
+
+    // Soft token resolution with 3-second timeout & JWT fallback
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.split(' ')[1]?.trim();
+      if (token && token !== 'undefined' && token !== 'null') {
+        try {
+          const getUserPromise = supabase.auth.getUser(token);
+          const timeoutPromise = new Promise<{ data: { user: any } }>((resolve) => 
+            setTimeout(() => resolve({ data: { user: null } }), 3000)
+          );
+          const { data } = await Promise.race([getUserPromise, timeoutPromise]);
+          if (data?.user) {
+            authenticatedUser = data.user;
+          }
+        } catch (_) {}
+
+        // Fallback JWT payload parsing if getUser failed or timed out
+        if (!authenticatedUser.email) {
+          try {
+            const parts = token.split('.');
+            if (parts.length === 3) {
+              const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf-8'));
+              if (payload.sub) {
+                authenticatedUser = {
+                  id: payload.sub,
+                  email: (payload.email || '').toLowerCase().trim(),
+                  user_metadata: payload.user_metadata || {}
+                };
+              }
+            }
+          } catch (_) {}
+        }
+      }
+    }
+
+    const userEmail = (authenticatedUser.email || '').toLowerCase().trim();
+    let isAuthorized = authenticatedUser.id === id || !authenticatedUser.id || id === 'guest';
+
     const dbClient = getScopedSupabaseClient(req);
 
     if (!isAuthorized && authenticatedUser.id) {
@@ -7403,37 +7430,23 @@ app.get('/api/profile/:id', async (req, res) => {
 
     let dbProf: any = null;
 
-    // 1. Attempt using scoped client first
+    // 1. Attempt using scoped client with 3.5s timeout
     try {
-      const { data: scopedProf, error: scopedErr } = await dbClient
-        .from('profiles')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-
-      if (scopedProf) {
-        dbProf = scopedProf;
-      } else if (scopedErr) {
-        console.warn(`[API /api/profile/${id}] Scoped query notice:`, scopedErr.message);
-      }
+      const queryPromise = dbClient.from('profiles').select('*').eq('id', id).maybeSingle();
+      const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 3500));
+      const { data: scopedProf } = await Promise.race([queryPromise, timeoutPromise]);
+      if (scopedProf) dbProf = scopedProf;
     } catch (e: any) {
       console.warn(`[API /api/profile/${id}] Scoped client exception:`, e?.message);
     }
 
-    // 2. Fallback to base server client if not found or if scoped client failed
+    // 2. Fallback to base server client if scoped query failed or timed out
     if (!dbProf) {
       try {
-        const { data: baseProf, error: baseErr } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', id)
-          .maybeSingle();
-
-        if (baseProf) {
-          dbProf = baseProf;
-        } else if (baseErr) {
-          console.warn(`[API /api/profile/${id}] Base client notice:`, baseErr.message);
-        }
+        const queryPromise = supabase.from('profiles').select('*').eq('id', id).maybeSingle();
+        const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 3500));
+        const { data: baseProf } = await Promise.race([queryPromise, timeoutPromise]);
+        if (baseProf) dbProf = baseProf;
       } catch (e: any) {
         console.warn(`[API /api/profile/${id}] Base client exception:`, e?.message);
       }
@@ -7442,7 +7455,6 @@ app.get('/api/profile/:id', async (req, res) => {
     const emailVal = (dbProf?.email || userEmail).toLowerCase().trim();
     const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(emailVal);
 
-    // 3. If profile does not exist yet in database, synthesize and initialize it for this authenticated user
     if (!dbProf) {
       const initialProfile = {
         id,
@@ -7457,8 +7469,8 @@ app.get('/api/profile/:id', async (req, res) => {
         created_at: new Date().toISOString()
       };
 
-      // Asynchronously upsert so future queries find it immediately
-      supabase.from('profiles').upsert(initialProfile, { onConflict: 'id' }).then();
+      // Non-blocking upsert
+      supabase.from('profiles').upsert(initialProfile, { onConflict: 'id' }).catch(() => null);
 
       const merged = mergeProfileWithOverrides(initialProfile, id);
       return res.json({ success: true, profile: merged });
@@ -7473,13 +7485,14 @@ app.get('/api/profile/:id', async (req, res) => {
 
     return res.json({ success: true, profile });
   } catch (err: any) {
-    console.error(`[API /api/profile/${id} Exception]`, err);
-    // Provide a resilient fallback profile for the authenticated user to prevent 500 responses
-    const isMasterAdmin = AUTHORIZED_ADMIN_EMAILS.includes(userEmail);
+    console.error(`[API /api/profile/:id Exception]`, err);
+    const { id } = req.params;
+    const userEmail = ((req as any).user?.email || '').toLowerCase().trim();
+    const isMasterAdmin = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(userEmail);
     const safeProfile = mergeProfileWithOverrides({
-      id,
-      email: authenticatedUser.email || '',
-      full_name: authenticatedUser.user_metadata?.full_name || 'UTME Scholar',
+      id: id || 'guest',
+      email: (req as any).user?.email || '',
+      full_name: 'UTME Scholar',
       role: isMasterAdmin ? 'admin' : 'student',
       has_paid: isMasterAdmin,
       onboarding_completed: isMasterAdmin,
@@ -7488,7 +7501,8 @@ app.get('/api/profile/:id', async (req, res) => {
       streak_days: 0,
       created_at: new Date().toISOString()
     }, id);
-    return res.json({ success: true, profile: safeProfile });
+
+    return res.json({ success: true, profile: safeProfile, isFallback: true });
   }
 });
 

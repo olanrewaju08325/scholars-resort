@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { getApiUrl } from '@/lib/utils';
+import { apiHealthFetch } from '@/utils/api-health';
 import type { User } from '@supabase/supabase-js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -116,7 +117,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         if (currentSession.access_token) {
           headers['Authorization'] = `Bearer ${currentSession.access_token}`;
         }
-        const apiRes = await fetch(getApiUrl(`/api/profile/${userId}`), { headers });
+        const apiRes = await apiHealthFetch(getApiUrl(`/api/profile/${userId}`), { headers });
         if (apiRes.ok) {
           const apiData = await apiRes.json();
           if (apiData && apiData.success && apiData.profile) {
