@@ -278,12 +278,12 @@ function createRateLimiter(options: { windowMs: number; max: number; message: st
 
     const remaining = Math.max(0, options.max - bucket.count);
     const retryAfterSec = Math.ceil((bucket.resetAt - now) / 1000);
-    res.setHeader('X-RateLimit-Limit', options.max);
-    res.setHeader('X-RateLimit-Remaining', remaining);
-    res.setHeader('X-RateLimit-Reset', Math.ceil(bucket.resetAt / 1000));
+    res.setHeader('X-RateLimit-Limit', String(options.max));
+    res.setHeader('X-RateLimit-Remaining', String(remaining));
+    res.setHeader('X-RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1000)));
 
     if (bucket.count > options.max) {
-      res.setHeader('Retry-After', retryAfterSec);
+      res.setHeader('Retry-After', String(retryAfterSec));
       return res.status(429).json({
         success: false,
         error: options.message,
@@ -434,7 +434,18 @@ app.use((req, res, next) => {
   }
 
   if (candidate && candidate !== origPath) {
-    req.url = origQuery ? `${candidate}?${origQuery}` : candidate;
+    if (origQuery) {
+      try {
+        const qParams = new URLSearchParams(origQuery);
+        qParams.delete('path');
+        const cleanQs = qParams.toString();
+        req.url = cleanQs ? `${candidate}?${cleanQs}` : candidate;
+      } catch (_) {
+        req.url = candidate;
+      }
+    } else {
+      req.url = candidate;
+    }
   }
 
   next();
