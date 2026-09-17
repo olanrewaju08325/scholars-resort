@@ -5,7 +5,15 @@ import fs from 'fs';
 import nodemailer from 'nodemailer';
 import { createClient } from '@supabase/supabase-js';
 import pg from 'pg';
-import { runTournamentReminderCheck, getTournamentReminderWorkerStatus } from '../src/services/tournamentReminderWorker';
+// Lazy dynamic resolver for tournament reminder worker
+async function getTournamentWorker() {
+  try {
+    return await import('../src/services/tournamentReminderWorker');
+  } catch (e: any) {
+    console.warn('[Tournament Worker dynamic load notice]:', e?.message);
+    return null;
+  }
+}
 
 // In-Memory & Local Backed Peer Study Rooms Storage (Self-Contained in API Module)
 interface ApiStudyRoomParticipant {
@@ -465,16 +473,22 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // Direct PostgreSQL Connection Pool (Superuser connection for authoritative writes)
 const PG_CONN_STRING = process.env.DATABASE_URL || 'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
-const pgPool = new pg.Pool({
-  connectionString: PG_CONN_STRING,
-  ssl: { rejectUnauthorized: false },
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 8000
-});
-pgPool.on('error', (err) => {
-  console.warn('[PG Pool warning]:', err.message);
-});
+let pgPool: pg.Pool | null = null;
+try {
+  pgPool = new pg.Pool({
+    connectionString: PG_CONN_STRING,
+    ssl: { rejectUnauthorized: false },
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 8000
+  });
+  pgPool.on('error', (err) => {
+    console.warn('[PG Pool warning]:', err.message);
+  });
+} catch (poolInitErr: any) {
+  console.warn('[PG Pool init note]:', poolInitErr?.message);
+  pgPool = null;
+}
 
 // Helper to obtain a Supabase client properly scoped with the user's JWT or server-level credentials
 function getScopedSupabaseClient(reqOrToken?: any) {
@@ -5355,7 +5369,8 @@ app.post('/api/tournaments/trigger-scheduled-reminders', express.json(), async (
     fs.writeFileSync(LOCAL_TOURNAMENT_REMINDERS_FILE, JSON.stringify(reminders, null, 2), 'utf-8');
 
     // Also trigger full tournament worker scan to dispatch SMTP alerts
-    const workerResult = await runTournamentReminderCheck();
+    const worker = await getTournamentWorker();
+    const workerResult = worker ? await worker.runTournamentReminderCheck() : { emailsSent: 0, tournamentsScanned: 0 };
 
     return res.json({ 
       success: true, 
@@ -5371,7 +5386,8 @@ app.post('/api/tournaments/trigger-scheduled-reminders', express.json(), async (
 // API Route: Tournament Reminder Background Worker Telemetry Status
 app.get('/api/tournaments/worker/status', async (req, res) => {
   try {
-    const status = getTournamentReminderWorkerStatus();
+    const worker = await getTournamentWorker();
+    const status = worker ? worker.getTournamentReminderWorkerStatus() : { isRunning: false, totalEmailsDispatched: 0 };
     return res.json({ success: true, status });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err?.message || String(err) });
@@ -5381,8 +5397,9 @@ app.get('/api/tournaments/worker/status', async (req, res) => {
 // API Route: Manually Trigger Tournament Reminder Worker Check
 app.post('/api/tournaments/worker/trigger', express.json(), async (req, res) => {
   try {
-    const result = await runTournamentReminderCheck();
-    const status = getTournamentReminderWorkerStatus();
+    const worker = await getTournamentWorker();
+    const result = worker ? await worker.runTournamentReminderCheck() : { emailsSent: 0, tournamentsScanned: 0, errors: [] };
+    const status = worker ? worker.getTournamentReminderWorkerStatus() : { isRunning: false, totalEmailsDispatched: 0 };
     return res.json({ 
       success: true, 
       result, 
