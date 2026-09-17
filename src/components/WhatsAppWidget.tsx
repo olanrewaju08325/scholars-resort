@@ -39,7 +39,7 @@ export const WhatsAppWidget = () => {
   ) return null;
 
   return (
-    <div className="fixed bottom-24 right-4 md:bottom-24 md:right-6 z-[80] flex items-end justify-end group pb-[72px] md:pb-0">
+    <div className="fixed bottom-36 right-4 md:bottom-22 md:right-6 z-[80] flex items-end justify-end group">
       {/* Tooltip */}
       <div className="absolute right-0 bottom-full mb-3 origin-bottom-right scale-0 opacity-0 group-hover:scale-100 group-hover:opacity-100 transition-all duration-300 pointer-events-none">
         <div className="bg-card text-foreground text-sm font-medium px-4 py-2 rounded-xl shadow-premium border border-border/50 whitespace-nowrap">
@@ -54,11 +54,11 @@ export const WhatsAppWidget = () => {
         href={`https://wa.me/${whatsappNumber}?text=${encodeURIComponent(defaultMessage)}`} 
         target="_blank" 
         rel="noreferrer"
-        className="w-14 h-14 bg-[#25D366] hover:bg-[#1DA851] rounded-full shadow-premium flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 group-hover:shadow-[0_0_20px_rgba(37,211,102,0.4)]"
+        className="w-12 h-12 md:w-13 md:h-13 bg-[#25D366] hover:bg-[#1DA851] rounded-full shadow-lg flex items-center justify-center transition-all duration-300 hover:scale-110 active:scale-95 group-hover:shadow-[0_0_20px_rgba(37,211,102,0.4)]"
         aria-label="Contact Support on WhatsApp"
       >
         <svg 
-          className="w-8 h-8 text-white fill-current" 
+          className="w-7 h-7 text-white fill-current" 
           viewBox="0 0 24 24" 
           xmlns="http://www.w3.org/2000/svg"
           aria-hidden="true"

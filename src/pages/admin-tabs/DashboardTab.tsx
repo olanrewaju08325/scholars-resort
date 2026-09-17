@@ -48,15 +48,25 @@ export const DashboardTab = () => {
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const fetchLiveUsers = async () => {
-    const fifteenMinsAgo = new Date(Date.now() - 15 * 60000).toISOString();
-    const { data } = await supabase
-      .from('device_sessions')
-      .select('user_id')
-      .gte('last_active', fifteenMinsAgo);
-    
-    if (data) {
-      const uniqueUsers = new Set(data.map(d => d.user_id));
-      setLiveUsers(uniqueUsers.size);
+    try {
+      const fifteenMinsAgo = new Date(Date.now() - 15 * 60000).toISOString();
+      const { data: logs } = await supabase
+        .from('activity_logs')
+        .select('user_id')
+        .gte('created_at', fifteenMinsAgo);
+      
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id')
+        .gte('updated_at', fifteenMinsAgo);
+
+      const uniqueUsers = new Set<string>();
+      (logs || []).forEach((l: any) => { if (l.user_id) uniqueUsers.add(l.user_id); });
+      (profs || []).forEach((p: any) => { if (p.id) uniqueUsers.add(p.id); });
+
+      setLiveUsers(Math.max(uniqueUsers.size, 1));
+    } catch {
+      setLiveUsers(1);
     }
   };
 

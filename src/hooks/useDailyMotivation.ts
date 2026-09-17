@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { callGroqAPI, stripThinkTags } from '@/services/aiService';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -65,6 +65,8 @@ export function useDailyMotivation() {
   const [dbQuotes, setDbQuotes] = useState<MotivationQuote[]>([]);
   const [loading, setLoading] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const isUserInteractedRef = useRef<boolean>(false);
+  const currentQuoteIndexRef = useRef<number>(0);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -77,8 +79,8 @@ export function useDailyMotivation() {
     };
   }, []);
 
-  // Fetch all quotes from database and auto-rotate hourly without burning AI tokens
-  const fetchQuotesFromDb = useCallback(async () => {
+  // Fetch all quotes from database without overwriting an actively viewed custom quote
+  const fetchQuotesFromDb = useCallback(async (forceInitialSet: boolean = false) => {
     try {
       // 1. Try local cache first
       const cachedStr = localStorage.getItem('scholars_saved_quotes');
@@ -105,9 +107,11 @@ export function useDailyMotivation() {
           setDbQuotes(merged);
           localStorage.setItem('scholars_saved_quotes', JSON.stringify(merged.slice(0, 50)));
 
-          const currentHour = new Date().getHours();
-          const selected = json.todayQuote || merged[currentHour % merged.length];
-          setMotivation(selected);
+          if (forceInitialSet && !isUserInteractedRef.current) {
+            const currentHour = new Date().getHours();
+            const selected = json.todayQuote || merged[currentHour % merged.length];
+            setMotivation(selected);
+          }
           return merged;
         }
       } catch {}
@@ -149,14 +153,18 @@ export function useDailyMotivation() {
         setDbQuotes(merged);
         localStorage.setItem('scholars_saved_quotes', JSON.stringify(merged.slice(0, 50)));
 
-        const currentHour = new Date().getHours();
-        const selected = merged[currentHour % merged.length];
-        setMotivation(selected);
+        if (forceInitialSet && !isUserInteractedRef.current) {
+          const currentHour = new Date().getHours();
+          const selected = merged[currentHour % merged.length];
+          setMotivation(selected);
+        }
         return merged;
       } else if (cachedQuotes.length > 0) {
         setDbQuotes(cachedQuotes);
-        const currentHour = new Date().getHours();
-        setMotivation(cachedQuotes[currentHour % cachedQuotes.length]);
+        if (forceInitialSet && !isUserInteractedRef.current) {
+          const currentHour = new Date().getHours();
+          setMotivation(cachedQuotes[currentHour % cachedQuotes.length]);
+        }
         return cachedQuotes;
       }
     } catch (err) {
@@ -164,9 +172,11 @@ export function useDailyMotivation() {
     }
 
     // Default fallback
-    const currentHour = new Date().getHours();
-    const fallback = INITIAL_SEED_QUOTES[currentHour % INITIAL_SEED_QUOTES.length];
-    setMotivation(fallback);
+    if (forceInitialSet && !isUserInteractedRef.current) {
+      const currentHour = new Date().getHours();
+      const fallback = INITIAL_SEED_QUOTES[currentHour % INITIAL_SEED_QUOTES.length];
+      setMotivation(fallback);
+    }
     return INITIAL_SEED_QUOTES;
   }, []);
 
@@ -242,11 +252,13 @@ export function useDailyMotivation() {
 
   // Generate fresh AI inspiration & save directly to DB
   const generateNewMotivation = useCallback(async () => {
+    isUserInteractedRef.current = true;
+
     if (!navigator.onLine) {
       const pool = dbQuotes.length > 0 ? dbQuotes : INITIAL_SEED_QUOTES;
-      const randomIdx = Math.floor(Math.random() * pool.length);
-      setMotivation(pool[randomIdx]);
-      toast.info('Offline Mode: Loaded cached study strategy quote.');
+      currentQuoteIndexRef.current = (currentQuoteIndexRef.current + 1) % pool.length;
+      setMotivation(pool[currentQuoteIndexRef.current]);
+      toast.info('Loaded verified study strategy.');
       return;
     }
 
@@ -297,31 +309,27 @@ export function useDailyMotivation() {
       }
     } catch (err) {
       const pool = dbQuotes.length > 0 ? dbQuotes : INITIAL_SEED_QUOTES;
-      const randomIdx = Math.floor(Math.random() * pool.length);
-      setMotivation(pool[randomIdx]);
+      currentQuoteIndexRef.current = (currentQuoteIndexRef.current + 1) % pool.length;
+      setMotivation(pool[currentQuoteIndexRef.current]);
       toast.info('Loaded Scholars Resort verified study strategy.');
     } finally {
       setLoading(false);
     }
   }, [profile, user, dbQuotes]);
 
-  // Initial load and periodic hourly auto-rotation
+  // Initial load once on mount
   useEffect(() => {
-    fetchQuotesFromDb();
+    fetchQuotesFromDb(true);
 
-    // Check hourly for auto-rotation
+    // Hourly background update if user has not manually browsed quotes
     const interval = setInterval(() => {
-      if (dbQuotes.length > 0) {
-        const currentHour = new Date().getHours();
-        const selectedIdx = currentHour % dbQuotes.length;
-        setMotivation(dbQuotes[selectedIdx]);
-      } else {
-        fetchQuotesFromDb();
+      if (!isUserInteractedRef.current) {
+        fetchQuotesFromDb(true);
       }
-    }, 60 * 60 * 1000); // 1 hour rotation
+    }, 60 * 60 * 1000);
 
     return () => clearInterval(interval);
-  }, [fetchQuotesFromDb, dbQuotes.length]);
+  }, [fetchQuotesFromDb]);
 
   return {
     motivation,

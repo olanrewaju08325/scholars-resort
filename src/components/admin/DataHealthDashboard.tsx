@@ -71,10 +71,10 @@ export const DataHealthDashboard: React.FC = () => {
 
       if (qErr) throw qErr;
 
-      // Sample exam sessions
+      // Sample exam sessions safely from exam_sessions table
       const { data: sSample, count: sCount, error: sErr } = await supabase
-        .from('cbt_sessions')
-        .select('id, created_at, score', { count: 'exact', head: false })
+        .from('exam_sessions')
+        .select('id, started_at, score', { count: 'exact', head: false })
         .limit(1);
 
       const endTime = performance.now();
@@ -284,7 +284,7 @@ export const DataHealthDashboard: React.FC = () => {
                 </h3>
               </div>
               <p className="text-xs text-muted-foreground">
-                Sampling live records from <strong className="text-foreground">questions</strong> & <strong className="text-foreground">cbt_sessions</strong> tables.
+                Sampling live records from <strong className="text-foreground">questions</strong> & <strong className="text-foreground">exam_sessions</strong> tables.
                 {connectionStatus.lastVerified && <span className="ml-1 text-[11px]">(Verified at {connectionStatus.lastVerified} in {connectionStatus.latencyMs}ms)</span>}
               </p>
             </div>
@@ -295,7 +295,7 @@ export const DataHealthDashboard: React.FC = () => {
                 <span className="font-bold text-emerald-600 dark:text-emerald-400">{connectionStatus.questionsCount.toLocaleString()} rows</span>
               </div>
               <div className="px-3 py-1.5 rounded-xl bg-card border border-border text-xs flex items-center gap-2 font-mono">
-                <span className="text-muted-foreground">cbt_sessions:</span>
+                <span className="text-muted-foreground">exam_sessions:</span>
                 <span className="font-bold text-indigo-600 dark:text-indigo-400">{connectionStatus.sessionsCount.toLocaleString()} rows</span>
               </div>
               <Button
