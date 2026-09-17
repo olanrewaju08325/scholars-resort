@@ -14,14 +14,14 @@ import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { checkIsCorrect } from '@/utils/questionUtils';
 import { MathText } from '@/components/MathText';
-import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, syncClientWithServerTime } from '@/utils/tournamentUtils';
+import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, syncClientWithServerTime, parseTournamentStartTimeUtc } from '@/utils/tournamentUtils';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function TournamentArena() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { profile } = useAuth();
+  const { profile, user, loading: authLoading } = useAuth();
   
   const [tournament, setTournament] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
@@ -121,10 +121,11 @@ export default function TournamentArena() {
 
   // Load Tournament Data & Questions
   useEffect(() => {
-    if (!profile || !id) return;
+    if (!id || authLoading) return;
     
     const initArena = async () => {
       let tData: any = null;
+      const effectiveUserId = profile?.id || user?.id || 'guest_user';
 
       // 1. Fetch tournament details from Supabase ONLY if valid UUID
       if (UUID_REGEX.test(id)) {
@@ -207,7 +208,7 @@ export default function TournamentArena() {
 
       // Check if user has already submitted a score for this tournament
       try {
-        const storedResult = localStorage.getItem(`tournament_finished_${id}_${profile.id}`);
+        const storedResult = localStorage.getItem(`tournament_finished_${id}_${effectiveUserId}`);
         if (storedResult) {
           const parsed = JSON.parse(storedResult);
           if (parsed && typeof parsed.score === 'number') {
@@ -450,6 +451,9 @@ export default function TournamentArena() {
 
     const totalSecondsTaken = ((Number(tournament?.duration_minutes) || 30) * 60) - timeLeft;
 
+    const effectiveUserId = profile?.id || user?.id || 'guest_user';
+    const effectiveEmail = profile?.email || user?.email || '';
+
     try {
       // 1. Submit score to API backend
       await fetch('/api/tournaments/submit-score', {
@@ -459,8 +463,8 @@ export default function TournamentArena() {
           tournament_id: id,
           score: finalScore,
           time_taken_seconds: Math.max(1, totalSecondsTaken),
-          user_id: profile?.id,
-          user_email: profile?.email
+          user_id: effectiveUserId,
+          user_email: effectiveEmail
         })
       }).catch(() => {});
 
@@ -480,15 +484,13 @@ export default function TournamentArena() {
       }
 
       // Persist finished state locally for user
-      if (profile?.id) {
-        try {
-          localStorage.setItem(`tournament_finished_${id}_${profile.id}`, JSON.stringify({
-            score: finalScore,
-            answers,
-            submittedAt: new Date().toISOString()
-          }));
-        } catch {}
-      }
+      try {
+        localStorage.setItem(`tournament_finished_${id}_${effectiveUserId}`, JSON.stringify({
+          score: finalScore,
+          answers,
+          submittedAt: new Date().toISOString()
+        }));
+      } catch {}
 
       setFinished(true);
       await fetchLiveLeaderboard();
@@ -636,14 +638,13 @@ export default function TournamentArena() {
                   const durationMins = Number(tournament?.duration_minutes) || 30;
                   setTimeLeft(Math.max(60, durationMins * 60));
                   setAnswers({});
-                  setCurrentQuestionIndex(0);
+                  setCurrentIdx(0);
                   setFlagged({});
                   setEliminatedOptions({});
-                  if (profile?.id) {
-                    try {
-                      localStorage.removeItem(`tournament_finished_${id}_${profile.id}`);
-                    } catch {}
-                  }
+                  const effectiveUserId = profile?.id || user?.id || 'guest_user';
+                  try {
+                    localStorage.removeItem(`tournament_finished_${id}_${effectiveUserId}`);
+                  } catch {}
                   toast.info("Duel reset for a new run! Timer restarted.");
                 }} 
                 variant="outline" 
