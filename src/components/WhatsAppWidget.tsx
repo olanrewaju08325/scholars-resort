@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 
 export const WhatsAppWidget = () => {
   const location = useLocation();
-  const hiddenPaths = ['/cbt', '/exam', '/practice/session', '/tournaments/arena', '/weakness/drill'];
+  const hiddenPaths = ['/cbt', '/exam', '/practice/session', '/tournaments/', '/weakness/drill'];
   
   const [whatsappNumber, setWhatsappNumber] = useState('2349032517376');
   const [defaultMessage, setDefaultMessage] = useState('Hello Scholars Resort, I need some assistance.');

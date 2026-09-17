@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Trophy, Clock, Zap, Users, Loader2, RefreshCw, Lock, Sparkles, AlertCircle, ArrowLeft } from 'lucide-react';
+import { 
+  Trophy, Clock, Zap, Users, Loader2, RefreshCw, AlertCircle, ArrowLeft,
+  ChevronLeft, ChevronRight, Flag, CheckCircle2, CheckCircle, XCircle, 
+  Send, HelpCircle, Eye, EyeOff, LayoutGrid, Award, BarChart2
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
 import { toast } from 'sonner';
 import { checkIsCorrect } from '@/utils/questionUtils';
-import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, formatTournamentCountdown, syncClientWithServerTime } from '@/utils/tournamentUtils';
+import { MathText } from '@/components/MathText';
+import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, syncClientWithServerTime } from '@/utils/tournamentUtils';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export default function TournamentArena() {
   const { id } = useParams();
@@ -18,13 +26,19 @@ export default function TournamentArena() {
   const [tournament, setTournament] = useState<any>(null);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentIdx, setCurrentIdx] = useState(0);
-  const [score, setScore] = useState(0);
-  const [leaderboard, setLeaderboard] = useState<Record<string, {name: string, score: number}>>({});
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [flagged, setFlagged] = useState<Record<number, boolean>>({});
+  const [eliminatedOptions, setEliminatedOptions] = useState<Record<string, string[]>>({});
+  const [leaderboard, setLeaderboard] = useState<Array<{ userId: string; name: string; score: number; timeSpent?: number }>>([]);
   const [loading, setLoading] = useState(true);
   const [nowUtc, setNowUtc] = useState<number>(getCurrentUtcTimestamp());
-  const [timeLeft, setTimeLeft] = useState(1800); // 30 minutes default
+  const [timeLeft, setTimeLeft] = useState(1800); // 30 mins default
   const [finished, setFinished] = useState(false);
   const [forceUnlockedManually, setForceUnlockedManually] = useState(false);
+  const [showSubmitModal, setShowSubmitModal] = useState(false);
+  const [showPaletteMobile, setShowPaletteMobile] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showReview, setShowReview] = useState(false);
 
   // Compute unlock evaluation against client UTC timestamp
   const unlockEvaluation = useMemo(() => {
@@ -44,7 +58,6 @@ export default function TournamentArena() {
 
   // Client-Time-Sync & UTC Clock updater
   useEffect(() => {
-    // Initial clock sync with server time
     syncClientWithServerTime().then(({ serverNowMs }) => {
       setNowUtc(serverNowMs);
     });
@@ -63,16 +76,27 @@ export default function TournamentArena() {
     const startMs = new Date(tournament.start_time || tournament.startTime || 0).getTime();
     if (startMs > 0 && nowUtc >= startMs) {
       setHasRevalidatedDb(true);
-      // Force re-validation query against Supabase 'tournaments' table to bypass any stale cached states
-      supabase.from('tournaments').select('*').eq('id', id).maybeSingle().then(({ data: freshData }) => {
-        if (freshData) {
-          const freshUnlock = forceCheckTournamentUnlock(freshData, nowUtc);
-          setTournament(freshUnlock.tournament);
-          toast.success("Tournament start time reached! Re-validated state with live database.");
-        }
-      }).catch((err) => {
-        console.warn('[TournamentArena] Re-validation query notice:', err);
-      });
+      if (UUID_REGEX.test(id)) {
+        supabase.from('tournaments').select('*').eq('id', id).maybeSingle().then(({ data: freshData }) => {
+          if (freshData) {
+            const freshUnlock = forceCheckTournamentUnlock(freshData, nowUtc);
+            setTournament(freshUnlock.tournament);
+            toast.success("Tournament start time reached! Duel unlocked.");
+          }
+        }).catch((err) => {
+          console.warn('[TournamentArena] Re-validation notice:', err);
+        });
+      } else {
+        // Query API
+        fetch('/api/tournaments').then(r => r.json()).then(json => {
+          const fresh = json.tournaments?.find((t: any) => String(t.id) === String(id));
+          if (fresh) {
+            const freshUnlock = forceCheckTournamentUnlock(fresh, nowUtc);
+            setTournament(freshUnlock.tournament);
+            toast.success("Tournament start time reached! Duel unlocked.");
+          }
+        }).catch(() => {});
+      }
     }
   }, [tournament, nowUtc, id, hasRevalidatedDb]);
 
@@ -100,13 +124,15 @@ export default function TournamentArena() {
     const initArena = async () => {
       let tData: any = null;
 
-      // 1. Fetch tournament details from Supabase
-      try {
-        const { data: rawData } = await supabase.from('tournaments').select('*').eq('id', id).maybeSingle();
-        if (rawData) {
-          tData = rawData;
-        }
-      } catch {}
+      // 1. Fetch tournament details from Supabase ONLY if valid UUID
+      if (UUID_REGEX.test(id)) {
+        try {
+          const { data: rawData } = await supabase.from('tournaments').select('*').eq('id', id).maybeSingle();
+          if (rawData) {
+            tData = rawData;
+          }
+        } catch {}
+      }
 
       // 2. Fallback to API / admin_settings if needed
       if (!tData) {
@@ -171,29 +197,42 @@ export default function TournamentArena() {
       // Filter by tournament subject if specified
       if (tData.subject_filter && tData.subject_filter.trim() !== '' && tData.subject_filter.toLowerCase() !== 'all') {
         const rawSub = tData.subject_filter.trim();
-        const subjects = rawSub.split(',').map((s: string) => s.trim()).filter(Boolean);
+        const targetSubjects = rawSub.split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
         
-        let query = supabase.from('questions').select('*').eq('is_active', true);
-        if (subjects.length === 1) {
-          query = query.ilike('subject', `%${subjects[0]}%`);
-        } else if (subjects.length > 1) {
-          const filterStr = subjects.map((s: string) => `subject.ilike.%${s}%`).join(',');
-          query = query.or(filterStr);
-        }
-        const res = await query.limit(count);
-        if (res.data && res.data.length > 0) {
-          qData = res.data;
+        try {
+          // Resolve subject names to subject IDs using subjects table
+          const { data: allSubjects } = await supabase.from('subjects').select('id, name');
+          const matchedSubjectIds = (allSubjects || [])
+            .filter(s => targetSubjects.some(tn => s.name.toLowerCase().includes(tn)))
+            .map(s => s.id);
+
+          if (matchedSubjectIds.length > 0) {
+            const res = await supabase
+              .from('questions')
+              .select('*')
+              .eq('is_active', true)
+              .in('subject_id', matchedSubjectIds)
+              .limit(count);
+              
+            if (res.data && res.data.length > 0) {
+              qData = res.data;
+            }
+          }
+        } catch (e) {
+          console.warn('[TournamentArena] Subject matching error:', e);
         }
       }
 
       // Fallback if no subject filter or no questions returned for that subject
       if (!qData || qData.length === 0) {
-        const fallbackRes = await supabase
-          .from('questions')
-          .select('*')
-          .eq('is_active', true)
-          .limit(count);
-        qData = fallbackRes.data;
+        try {
+          const fallbackRes = await supabase
+            .from('questions')
+            .select('*')
+            .eq('is_active', true)
+            .limit(count);
+          qData = fallbackRes.data;
+        } catch {}
       }
 
       if (qData && qData.length > 0) {
@@ -230,7 +269,27 @@ export default function TournamentArena() {
     initArena();
   }, [id, profile, navigate]);
 
-  // Realtime subscription for live leaderboard
+  // Load Real Leaderboard from API
+  const fetchLiveLeaderboard = useCallback(async () => {
+    if (!id) return;
+    try {
+      const res = await fetch(`/api/tournaments/${id}/leaderboard`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.leaderboard)) {
+          setLeaderboard(json.leaderboard);
+        }
+      }
+    } catch {}
+  }, [id]);
+
+  useEffect(() => {
+    fetchLiveLeaderboard();
+    const interval = setInterval(fetchLiveLeaderboard, 10000);
+    return () => clearInterval(interval);
+  }, [fetchLiveLeaderboard]);
+
+  // Realtime presence channel
   useEffect(() => {
     if (!profile || !id || loading) return;
 
@@ -245,116 +304,174 @@ export default function TournamentArena() {
     channel
       .on('presence', { event: 'sync' }, () => {
         const state = channel.presenceState();
-        const newLeaderboard: Record<string, any> = {};
+        const activePresenceList: Array<{ userId: string; name: string; score: number }> = [];
         for (const [key, presences] of Object.entries(state)) {
           const p = presences[0] as any;
-          newLeaderboard[key] = { name: p.name, score: p.score || 0 };
+          activePresenceList.push({
+            userId: key,
+            name: p.name || 'Scholar Student',
+            score: p.score || 0
+          });
         }
-        setLeaderboard(newLeaderboard);
-      })
-      .on('presence', { event: 'join' }, ({ newPresences }) => {
-        toast.info(`${newPresences[0].name} joined the arena!`);
+        
+        // Merge presence list into leaderboard
+        setLeaderboard(prev => {
+          const map = new Map<string, { userId: string; name: string; score: number }>();
+          prev.forEach(item => map.set(item.userId, item));
+          activePresenceList.forEach(item => {
+            const current = map.get(item.userId);
+            if (!current || item.score >= current.score) {
+              map.set(item.userId, item);
+            }
+          });
+          return Array.from(map.values()).sort((a, b) => b.score - a.score);
+        });
       })
       .subscribe(async (status) => {
         if (status === 'SUBSCRIBED') {
-          await channel.track({ name: profile.full_name, score: 0 });
+          const currentAnswerCount = Object.keys(answers).length;
+          await channel.track({ 
+            name: profile.full_name || 'Scholar Student', 
+            score: currentAnswerCount * 10 
+          });
         }
       });
-
-    // Update presence when score changes
-    const updateScore = async () => {
-      await channel.track({ name: profile.full_name, score });
-    };
-    updateScore();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [profile, id, loading, score]);
+  }, [profile, id, loading]);
 
-  // Exam Duel Timer - Runs ONLY when the arena is unlocked and not finished
+  // Exam Duel Timer
   useEffect(() => {
     if (loading || finished || !isUnlocked) return;
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
           clearInterval(timer);
-          setFinished(true);
+          handleFinalSubmit(true);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [loading, finished, isUnlocked]);
+  }, [loading, finished, isUnlocked, questions, answers]);
 
-  const handleAnswer = async (selected: string) => {
-    const q = questions[currentIdx];
-    const isCorrect = checkIsCorrect(selected, q);
-    
-    let newScore = score;
-    if (isCorrect) {
-      newScore = score + 10;
-      setScore(newScore);
-      toast.success("Correct! +10 Points");
-    } else {
-      toast.error("Incorrect!");
-    }
-
-    if (currentIdx < questions.length - 1) {
-      setCurrentIdx(c => c + 1);
-    } else {
-      setFinished(true);
-      await finishTournament(newScore);
-    }
+  // Option selection
+  const handleSelectOption = (questionId: string, optionText: string) => {
+    setAnswers(prev => {
+      if (prev[questionId] === optionText) {
+        const next = { ...prev };
+        delete next[questionId];
+        return next;
+      }
+      return { ...prev, [questionId]: optionText };
+    });
   };
 
-  const finishTournament = async (finalScore: number) => {
-    if (!profile || !id) return;
+  // Flag toggle
+  const toggleFlag = (idx: number) => {
+    setFlagged(prev => ({ ...prev, [idx]: !prev[idx] }));
+  };
+
+  // Option elimination toggle
+  const toggleEliminate = (questionId: string, opt: string) => {
+    setEliminatedOptions(prev => {
+      const current = prev[questionId] || [];
+      const updated = current.includes(opt)
+        ? current.filter(o => o !== opt)
+        : [...current, opt];
+      return { ...prev, [questionId]: updated };
+    });
+  };
+
+  // Compute final score
+  const computedScore = useMemo(() => {
+    return questions.reduce((acc, q) => {
+      const userSelected = answers[q.id];
+      if (userSelected && checkIsCorrect(userSelected, q)) {
+        return acc + 10;
+      }
+      return acc;
+    }, 0);
+  }, [questions, answers]);
+
+  // Final submission
+  const handleFinalSubmit = async (forcedByTimer = false) => {
+    if (finished || isSubmitting) return;
+    setIsSubmitting(true);
+    setShowSubmitModal(false);
+
+    const finalScore = questions.reduce((acc, q) => {
+      const userSelected = answers[q.id];
+      if (userSelected && checkIsCorrect(userSelected, q)) {
+        return acc + 10;
+      }
+      return acc;
+    }, 0);
+
+    const totalSecondsTaken = ((Number(tournament?.duration_minutes) || 30) * 60) - timeLeft;
+
     try {
-      // 1. Submit to API backend (updates admin_settings, awards XP, resilient to non-UUIDs)
+      // 1. Submit score to API backend
       await fetch('/api/tournaments/submit-score', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tournament_id: id,
           score: finalScore,
-          time_taken_seconds: ((Number(tournament?.duration_minutes) || 30) * 60) - timeLeft,
-          user_id: profile.id
+          time_taken_seconds: Math.max(1, totalSecondsTaken),
+          user_id: profile?.id,
+          user_email: profile?.email
         })
       }).catch(() => {});
 
-      // 2. Also try direct table update if valid UUID
-      const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
-      if (isUUID) {
+      // 2. Direct table update if UUID
+      if (id && UUID_REGEX.test(id) && profile?.id) {
         try {
           await supabase
             .from('tournament_participants')
-            .update({ score: finalScore, completed_at: new Date().toISOString() })
+            .update({ 
+              score: finalScore, 
+              time_spent_seconds: Math.max(1, totalSecondsTaken),
+              completed_at: new Date().toISOString() 
+            })
             .eq('tournament_id', id)
             .eq('user_id', profile.id);
         } catch {}
       }
 
-      toast.success(`Tournament complete! You earned ${finalScore * 10} XP`);
+      setFinished(true);
+      await fetchLiveLeaderboard();
+
+      if (forcedByTimer) {
+        toast.info("Time expired! Your tournament duel answers have been submitted.");
+      } else {
+        toast.success(`Duel complete! You scored ${finalScore} points!`);
+      }
     } catch (err) {
-      console.warn("Tournament score save note:", err);
-      toast.success(`Tournament complete! Final score: ${finalScore}`);
+      console.warn("Tournament submission notice:", err);
+      setFinished(true);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
+  // Loading state
   if (loading) {
     return (
-      <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-3">
-          <Loader2 className="w-8 h-8 animate-spin text-primary mx-auto" />
-          <p className="text-sm text-muted-foreground font-mono">Synchronizing arena with UTC time...</p>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto" />
+          <h3 className="font-display font-bold text-lg text-foreground">Synchronizing Tournament Duel Arena...</h3>
+          <p className="text-xs text-muted-foreground font-mono">Verifying UTC timestamps and loading official question bank...</p>
         </div>
       </div>
     );
   }
 
-  // Pre-Start Staging Room (If start_time has not yet arrived and not force-unlocked)
+  // Pre-Start Staging Room
   if (!isUnlocked && tournament) {
     const formattedUtcTime = new Date(nowUtc).toUTCString();
     const formattedStartTime = tournament.start_time ? new Date(tournament.start_time).toUTCString() : 'Pending schedule';
@@ -370,11 +487,10 @@ export default function TournamentArena() {
               {tournament.title || "National UTME Challenge"}
             </h1>
             <p className="text-sm text-muted-foreground">
-              Questions and competition timers will automatically unlock when the scheduled UTC start time is reached.
+              Competition questions and timer will automatically unlock when the scheduled UTC start time arrives.
             </p>
           </div>
 
-          {/* Countdown Card */}
           <Card className="p-8 border-border bg-card/60 backdrop-blur shadow-xl rounded-2xl space-y-6">
             <div className="space-y-1">
               <div className="text-xs uppercase font-mono tracking-widest text-muted-foreground">Time Remaining To Start</div>
@@ -411,123 +527,549 @@ export default function TournamentArena() {
             </div>
           </Card>
 
-          {/* Staging participants */}
           <div className="text-xs text-muted-foreground flex items-center justify-center gap-2">
             <Users className="w-4 h-4 text-emerald-500" />
-            <span>{Object.keys(leaderboard).length || 1} Scholar(s) connected in staging room</span>
+            <span>{leaderboard.length || 1} Scholar(s) connected in staging room</span>
           </div>
         </div>
       </div>
     );
   }
 
+  // Results Screen
   if (finished) {
-    // Sort leaderboard
-    const ranked = Object.values(leaderboard).sort((a, b) => b.score - a.score);
-    
-    return (
-      <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 text-center">
-        <Trophy className="w-20 h-20 text-yellow-500 mb-6" />
-        <h1 className="text-4xl font-display font-bold mb-2">Tournament Complete!</h1>
-        <p className="text-xl text-muted-foreground mb-8">Your Final Score: {score}</p>
-        
-        <div className="w-full max-w-md bg-card border border-border rounded-xl p-6 mb-8 text-left">
-          <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><Users className="w-5 h-5"/> Final Live Rankings</h2>
-          <div className="space-y-3">
-            {ranked.map((p, i) => (
-              <div key={i} className="flex justify-between items-center p-3 rounded-lg bg-muted/50 border border-border">
-                <span className="font-semibold flex items-center gap-2">
-                  <span className={`px-2 py-0.5 rounded text-xs font-mono font-bold ${
-                    i === 0 ? 'bg-amber-500/20 text-amber-500' :
-                    i === 1 ? 'bg-slate-300/20 text-slate-400' :
-                    i === 2 ? 'bg-amber-700/20 text-amber-600' : 'bg-muted text-muted-foreground'
-                  }`}>
-                    #{i + 1}
-                  </span>
-                  {p.name}
-                </span>
-                <span className="text-primary font-mono font-bold">{p.score} pts</span>
-              </div>
-            ))}
-          </div>
-        </div>
+    const finalScore = computedScore;
+    const answeredCount = Object.keys(answers).length;
+    const correctCount = questions.filter(q => answers[q.id] && checkIsCorrect(answers[q.id], q)).length;
+    const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
+    const sortedLeaderboard = [...leaderboard].sort((a, b) => b.score - a.score);
+    const userRank = sortedLeaderboard.findIndex(p => p.userId === profile?.id) + 1 || 1;
 
-        <Button onClick={() => navigate('/dashboard')}>Return to Dashboard</Button>
+    return (
+      <div className="min-h-screen bg-background flex flex-col p-4 md:p-8">
+        <div className="w-full max-w-4xl mx-auto space-y-8">
+          {/* Header Card */}
+          <Card className="p-8 text-center border-border bg-card shadow-xl rounded-2xl space-y-4">
+            <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center justify-center mx-auto">
+              <Trophy className="w-8 h-8" />
+            </div>
+            <div>
+              <h1 className="text-3xl font-display font-bold text-foreground">Tournament Duel Complete!</h1>
+              <p className="text-sm text-muted-foreground mt-1">{tournament?.title || "National UTME Challenge"}</p>
+            </div>
+
+            {/* Score Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4">
+              <div className="p-4 rounded-xl bg-muted/40 border border-border">
+                <div className="text-xs text-muted-foreground uppercase font-mono">Final Score</div>
+                <div className="text-3xl font-bold font-mono text-primary mt-1">{finalScore} pts</div>
+              </div>
+              <div className="p-4 rounded-xl bg-muted/40 border border-border">
+                <div className="text-xs text-muted-foreground uppercase font-mono">Arena Rank</div>
+                <div className="text-3xl font-bold font-mono text-amber-500 mt-1">#{userRank}</div>
+              </div>
+              <div className="p-4 rounded-xl bg-muted/40 border border-border">
+                <div className="text-xs text-muted-foreground uppercase font-mono">Accuracy</div>
+                <div className="text-3xl font-bold font-mono text-emerald-500 mt-1">{accuracy}%</div>
+              </div>
+              <div className="p-4 rounded-xl bg-muted/40 border border-border">
+                <div className="text-xs text-muted-foreground uppercase font-mono">Questions Solved</div>
+                <div className="text-3xl font-bold font-mono text-foreground mt-1">{correctCount} / {questions.length}</div>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
+              <Button onClick={() => setShowReview(!showReview)} variant="outline" className="gap-2">
+                <Eye className="w-4 h-4" /> {showReview ? 'Hide Question Review' : 'Review My Answers'}
+              </Button>
+              <Button onClick={() => navigate('/tournaments')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                <Trophy className="w-4 h-4" /> Back to Tournaments Hub
+              </Button>
+              <Button onClick={() => navigate('/dashboard')} variant="ghost" className="gap-2">
+                Return to Dashboard
+              </Button>
+            </div>
+          </Card>
+
+          {/* Question Review Section */}
+          {showReview && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                <BarChart2 className="w-5 h-5 text-primary" /> Question Review & Official Solutions
+              </h3>
+              <div className="space-y-3">
+                {questions.map((q, idx) => {
+                  const studentAns = answers[q.id];
+                  const isCorrect = studentAns && checkIsCorrect(studentAns, q);
+                  const isAttempted = !!studentAns;
+
+                  return (
+                    <Card key={q.id || idx} className={`p-5 border transition-all ${
+                      !isAttempted ? 'border-border bg-card' :
+                      isCorrect ? 'border-emerald-500/40 bg-emerald-500/5' : 'border-rose-500/40 bg-rose-500/5'
+                    }`}>
+                      <div className="flex items-start justify-between gap-3 mb-2">
+                        <div className="flex items-center gap-2">
+                          <span className="w-6 h-6 rounded-full bg-muted flex items-center justify-center text-xs font-bold font-mono">
+                            {idx + 1}
+                          </span>
+                          <span className="text-xs font-bold uppercase text-muted-foreground">
+                            {isCorrect ? (
+                              <span className="text-emerald-600 dark:text-emerald-400 flex items-center gap-1"><CheckCircle className="w-3.5 h-3.5" /> Correct</span>
+                            ) : isAttempted ? (
+                              <span className="text-rose-600 dark:text-rose-400 flex items-center gap-1"><XCircle className="w-3.5 h-3.5" /> Incorrect</span>
+                            ) : (
+                              <span className="text-muted-foreground">Unanswered</span>
+                            )}
+                          </span>
+                        </div>
+                        {q.year && <Badge variant="outline" className="text-[10px] font-mono">UTME {q.year}</Badge>}
+                      </div>
+
+                      <div className="text-sm font-medium text-foreground mb-3 leading-relaxed">
+                        <MathText text={q.question_text || ''} />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                        {q.options.map((opt: string, optIdx: number) => {
+                          const optLetter = String.fromCharCode(65 + optIdx);
+                          const isStudentPick = studentAns === opt || studentAns === optLetter;
+                          const isRightAnswer = checkIsCorrect(opt, q) || checkIsCorrect(optLetter, q);
+
+                          return (
+                            <div key={optIdx} className={`p-2.5 rounded-lg border flex items-center gap-2 ${
+                              isRightAnswer ? 'border-emerald-500 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 font-semibold' :
+                              isStudentPick ? 'border-rose-500 bg-rose-500/10 text-rose-800 dark:text-rose-300' :
+                              'border-border bg-muted/20 text-muted-foreground'
+                            }`}>
+                              <span className="w-5 h-5 rounded-full bg-background/50 flex items-center justify-center font-bold text-[10px] shrink-0">
+                                {optLetter}
+                              </span>
+                              <span className="truncate">{opt}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {q.explanation && (
+                        <div className="mt-3 p-3 rounded-lg bg-muted/40 border border-border text-xs text-muted-foreground leading-relaxed">
+                          <strong className="text-foreground block mb-0.5">Solution & Explanation:</strong>
+                          <MathText text={q.explanation} />
+                        </div>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Live Leaderboard */}
+          <Card className="p-6 border-border bg-card shadow-md rounded-2xl">
+            <h3 className="text-base font-bold text-foreground flex items-center gap-2 mb-4">
+              <Users className="w-5 h-5 text-primary" /> Final Arena Leaderboard Rankings
+            </h3>
+            <div className="space-y-2">
+              {sortedLeaderboard.map((p, i) => {
+                const isMe = p.userId === profile?.id;
+                return (
+                  <div key={i} className={`flex items-center justify-between p-3 rounded-xl border ${
+                    isMe ? 'bg-primary/10 border-primary/40' : 'bg-muted/30 border-border'
+                  }`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center font-bold text-xs font-mono ${
+                        i === 0 ? 'bg-amber-500 text-white' :
+                        i === 1 ? 'bg-slate-300 text-slate-900' :
+                        i === 2 ? 'bg-amber-700 text-white' : 'bg-muted text-muted-foreground'
+                      }`}>
+                        {i + 1}
+                      </span>
+                      <span className="font-semibold text-sm text-foreground">
+                        {p.name} {isMe && <span className="text-xs text-primary font-bold">(You)</span>}
+                      </span>
+                    </div>
+                    <span className="font-mono font-bold text-primary">{p.score} pts</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </div>
       </div>
     );
   }
 
-  const q = questions[currentIdx] || { question_text: "Preparing question...", options: [] };
-  const sortedLeaderboard = Object.values(leaderboard).sort((a, b) => b.score - a.score).slice(0, 5);
+  // Active Duel Arena
+  const currentQ = questions[currentIdx] || { question_text: "Preparing question...", options: [] };
+  const currentAns = answers[currentQ.id];
+  const answeredCount = Object.keys(answers).length;
+  const progressPercent = questions.length > 0 ? Math.round((answeredCount / questions.length) * 100) : 0;
+  const isTimeCritical = timeLeft <= 300; // < 5 mins
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
-      <header className="h-16 border-b border-border bg-card/50 flex items-center justify-between px-6 sticky top-0 z-10 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <Trophy className="w-6 h-6 text-yellow-500" />
-          <h1 className="font-bold hidden md:block">{tournament?.title || "Live Tournament"}</h1>
-          {unlockEvaluation?.validation.forceUnlocked && (
-            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-500 border-emerald-500/30 text-[10px] uppercase font-mono">
-              UTC Unlocked
-            </Badge>
-          )}
-        </div>
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2 text-primary font-mono bg-primary/10 px-3 py-1 rounded-full border border-primary/20">
-            <Clock className="w-4 h-4" /> {Math.floor(timeLeft/60)}:{(timeLeft%60).toString().padStart(2, '0')}
+    <div className="min-h-screen bg-background flex flex-col select-none">
+      {/* Top UTME Arena Header */}
+      <header className="h-16 border-b border-border bg-card/80 sticky top-0 z-20 backdrop-blur px-4 sm:px-6 flex items-center justify-between gap-4">
+        {/* Left: Tournament Title */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-500 shrink-0">
+            <Trophy className="w-5 h-5" />
           </div>
-          <div className="font-bold">Score: <span className="text-primary">{score}</span></div>
+          <div className="min-w-0">
+            <h1 className="font-display font-bold text-sm sm:text-base text-foreground truncate">
+              {tournament?.title || "UTME Tournament Duel"}
+            </h1>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="hidden sm:inline">
+                {tournament?.subject_filter || 'UTME Core'}
+              </span>
+              <span className="inline-flex items-center gap-1 text-[10px] text-emerald-500 font-mono">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" /> LIVE DUEL
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Center / Right: Timer & Submit Action */}
+        <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+          {/* Digital Timer */}
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border font-mono font-bold text-sm sm:text-base transition-colors ${
+            isTimeCritical 
+              ? 'bg-rose-500/10 border-rose-500 text-rose-600 dark:text-rose-400 animate-pulse' 
+              : 'bg-primary/10 border-primary/20 text-primary'
+          }`}>
+            <Clock className="w-4 h-4" />
+            <span>
+              {Math.floor(timeLeft / 60).toString().padStart(2, '0')}:
+              {(timeLeft % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
+
+          {/* Question Palette Toggle (Mobile) */}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowPaletteMobile(!showPaletteMobile)}
+            className="lg:hidden h-9 px-2.5 text-xs font-semibold"
+          >
+            <LayoutGrid className="w-4 h-4 mr-1" />
+            {currentIdx + 1}/{questions.length}
+          </Button>
+
+          {/* Submit Duel Button */}
+          <Button
+            size="sm"
+            onClick={() => setShowSubmitModal(true)}
+            className="h-9 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs shadow-md gap-1.5"
+          >
+            <Send className="w-3.5 h-3.5" /> Submit Duel
+          </Button>
         </div>
       </header>
 
+      {/* Arena Content Body */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Main Arena */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-10 flex items-center justify-center">
-          <div className="w-full max-w-3xl">
-            <div className="mb-6 flex justify-between text-sm font-semibold text-muted-foreground">
-              <span>Question {currentIdx + 1} of {questions.length}</span>
-            </div>
-            <h2 className="text-2xl md:text-3xl font-display leading-relaxed mb-10">{q.question_text}</h2>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {q.options.map((opt: string, i: number) => (
-                <button
-                  key={i}
-                  onClick={() => handleAnswer(opt)}
-                  className="p-6 rounded-xl border-2 border-border bg-card hover:border-primary hover:bg-primary/5 transition-all text-left text-lg font-medium group"
+        {/* Main Question Area */}
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 flex flex-col justify-between max-w-4xl mx-auto w-full">
+          <div className="space-y-6">
+            {/* Question Progress Info Bar */}
+            <div className="flex items-center justify-between pb-3 border-b border-border text-xs">
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-foreground text-sm font-mono">
+                  Question {currentIdx + 1} of {questions.length}
+                </span>
+                {flagged[currentIdx] && (
+                  <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30 text-[10px] gap-1">
+                    <Flag className="w-3 h-3 fill-amber-500 text-amber-500" /> Flagged
+                  </Badge>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2">
+                <span className="text-muted-foreground hidden sm:inline">
+                  Answered: {answeredCount}/{questions.length} ({progressPercent}%)
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleFlag(currentIdx)}
+                  className={`h-8 px-2 text-xs font-semibold gap-1.5 ${
+                    flagged[currentIdx] ? 'text-amber-500 hover:text-amber-600' : 'text-muted-foreground'
+                  }`}
                 >
-                  <div className="flex items-center gap-4">
-                    <span className="w-8 h-8 rounded-full bg-muted flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors font-bold shrink-0">
-                      {String.fromCharCode(65 + i)}
-                    </span>
-                    {opt}
-                  </div>
-                </button>
-              ))}
+                  <Flag className={`w-3.5 h-3.5 ${flagged[currentIdx] ? 'fill-amber-500' : ''}`} />
+                  {flagged[currentIdx] ? 'Flagged' : 'Flag'}
+                </Button>
+              </div>
             </div>
+
+            {/* Question Text */}
+            <div className="bg-card p-6 sm:p-8 rounded-2xl border border-border shadow-xs">
+              <div className="text-base sm:text-lg md:text-xl font-medium text-foreground leading-relaxed">
+                <MathText text={currentQ.question_text || ''} />
+              </div>
+            </div>
+
+            {/* Options Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {currentQ.options.map((opt: string, i: number) => {
+                const optLetter = String.fromCharCode(65 + i);
+                const isSelected = currentAns === opt || currentAns === optLetter;
+                const isEliminated = (eliminatedOptions[currentQ.id] || []).includes(opt);
+
+                return (
+                  <div key={i} className="relative group">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectOption(currentQ.id, opt)}
+                      className={`w-full p-4 rounded-xl border-2 text-left transition-all flex items-center justify-between gap-3 ${
+                        isEliminated ? 'opacity-40 line-through bg-muted/20 border-border/50' :
+                        isSelected 
+                          ? 'border-primary bg-primary/10 shadow-xs ring-1 ring-primary' 
+                          : 'border-border bg-card hover:border-primary/40 hover:bg-primary/5'
+                      }`}
+                    >
+                      <div className="flex items-center gap-3.5 min-w-0">
+                        <span className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                          isSelected 
+                            ? 'bg-primary text-primary-foreground' 
+                            : 'bg-muted text-foreground group-hover:bg-primary/20'
+                        }`}>
+                          {optLetter}
+                        </span>
+                        <span className="text-sm font-medium text-foreground leading-snug">
+                          {opt}
+                        </span>
+                      </div>
+
+                      {isSelected && (
+                        <CheckCircle2 className="w-5 h-5 text-primary shrink-0" />
+                      )}
+                    </button>
+
+                    {/* Quick eliminate toggle */}
+                    <button
+                      type="button"
+                      title={isEliminated ? "Restore option" : "Eliminate option"}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleEliminate(currentQ.id, opt);
+                      }}
+                      className="absolute right-2 top-2 p-1 text-muted-foreground/40 hover:text-muted-foreground text-[10px] rounded"
+                    >
+                      {isEliminated ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Navigation Controls Bar */}
+          <div className="pt-8 pb-4 flex items-center justify-between gap-3 border-t border-border mt-8">
+            <Button
+              variant="outline"
+              disabled={currentIdx === 0}
+              onClick={() => setCurrentIdx(c => Math.max(0, c - 1))}
+              className="gap-2 h-10 px-4 text-xs font-semibold"
+            >
+              <ChevronLeft className="w-4 h-4" /> Previous
+            </Button>
+
+            <div className="text-xs font-mono text-muted-foreground hidden sm:block">
+              Question {currentIdx + 1} of {questions.length}
+            </div>
+
+            {currentIdx < questions.length - 1 ? (
+              <Button
+                onClick={() => setCurrentIdx(c => Math.min(questions.length - 1, c + 1))}
+                className="gap-2 h-10 px-5 text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+              >
+                Next <ChevronRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={() => setShowSubmitModal(true)}
+                className="gap-2 h-10 px-5 text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-md"
+              >
+                Finish & Submit <Send className="w-3.5 h-3.5" />
+              </Button>
+            )}
           </div>
         </main>
 
-        {/* Live Sidebar */}
-        <aside className="w-full lg:w-80 border-l border-border bg-card/30 p-6 flex flex-col">
-          <h3 className="font-bold flex items-center gap-2 mb-6">
-            <Zap className="w-5 h-5 text-yellow-500" /> Live Arena Leaderboard
-          </h3>
-          <div className="space-y-3 flex-1 overflow-y-auto">
-            {sortedLeaderboard.map((p, i) => (
-              <div key={i} className={`flex items-center justify-between p-3 rounded-lg border ${p.name === profile?.full_name ? 'bg-primary/10 border-primary/30' : 'bg-muted/50 border-border'}`}>
-                <div className="flex items-center gap-3 truncate">
-                  <span className="font-bold text-muted-foreground w-4">{i + 1}</span>
-                  <span className="font-medium truncate">{p.name === profile?.full_name ? 'You' : p.name}</span>
+        {/* Right Sidebar: Question Palette & Live Arena Leaderboard */}
+        <aside className={`w-full lg:w-80 border-l border-border bg-card/40 p-4 sm:p-6 flex flex-col space-y-6 ${
+          showPaletteMobile ? 'block' : 'hidden lg:flex'
+        }`}>
+          {/* Question Palette Grid */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <LayoutGrid className="w-4 h-4 text-primary" /> Question Palette
+              </h3>
+              <span className="text-[11px] font-mono text-primary font-semibold">
+                {answeredCount}/{questions.length} Solved
+              </span>
+            </div>
+
+            <div className="grid grid-cols-5 sm:grid-cols-10 lg:grid-cols-5 gap-1.5 max-h-56 overflow-y-auto p-1.5 rounded-xl bg-muted/20 border border-border">
+              {questions.map((q, idx) => {
+                const isCurrent = idx === currentIdx;
+                const isAnswered = !!answers[q.id];
+                const isFlagged = !!flagged[idx];
+
+                return (
+                  <button
+                    key={q.id || idx}
+                    type="button"
+                    onClick={() => {
+                      setCurrentIdx(idx);
+                      setShowPaletteMobile(false);
+                    }}
+                    className={`h-8 rounded-lg font-mono text-xs font-bold transition-all relative ${
+                      isCurrent 
+                        ? 'bg-primary text-primary-foreground ring-2 ring-primary ring-offset-1 shadow-xs' 
+                        : isFlagged
+                        ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/40'
+                        : isAnswered
+                        ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/40'
+                        : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                    }`}
+                  >
+                    {idx + 1}
+                    {isFlagged && (
+                      <span className="absolute top-0.5 right-0.5 w-1.5 h-1.5 rounded-full bg-amber-500" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Palette Legend */}
+            <div className="flex items-center justify-between text-[10px] text-muted-foreground px-1 pt-1">
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Answered
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Flagged
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="w-2.5 h-2.5 rounded-full bg-muted border border-border" /> Blank
+              </span>
+            </div>
+          </div>
+
+          {/* Live Arena Leaderboard */}
+          <div className="flex-1 flex flex-col min-h-48 space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-amber-500" /> Live Arena Leaderboard
+              </h3>
+              <Badge variant="outline" className="text-[10px] font-mono text-emerald-500 border-emerald-500/30">
+                ● Live
+              </Badge>
+            </div>
+
+            <div className="space-y-2 flex-1 overflow-y-auto max-h-72 pr-1">
+              {leaderboard.length === 0 ? (
+                <div className="text-center py-6 text-xs text-muted-foreground">
+                  Synchronizing scores...
                 </div>
-                <span className="font-mono text-primary font-bold">{p.score}</span>
-              </div>
-            ))}
+              ) : (
+                leaderboard.slice(0, 10).map((p, i) => {
+                  const isMe = p.userId === profile?.id;
+                  return (
+                    <div 
+                      key={i} 
+                      className={`flex items-center justify-between p-2.5 rounded-xl border text-xs transition-colors ${
+                        isMe 
+                          ? 'bg-primary/10 border-primary/40 font-semibold' 
+                          : 'bg-muted/30 border-border'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className={`w-5 h-5 rounded-full flex items-center justify-center font-bold text-[10px] font-mono shrink-0 ${
+                          i === 0 ? 'bg-amber-500 text-white' :
+                          i === 1 ? 'bg-slate-300 text-slate-900' :
+                          i === 2 ? 'bg-amber-700 text-white' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {i + 1}
+                        </span>
+                        <span className="truncate text-foreground">
+                          {p.name} {isMe && <span className="text-[10px] text-primary">(You)</span>}
+                        </span>
+                      </div>
+                      <span className="font-mono font-bold text-primary shrink-0">
+                        {p.score} pts
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </div>
         </aside>
       </div>
+
+      {/* Submit Confirmation Dialog */}
+      <Dialog open={showSubmitModal} onOpenChange={setShowSubmitModal}>
+        <DialogContent className="max-w-md bg-card border-border shadow-2xl p-6 text-foreground">
+          <DialogHeader className="space-y-2 text-center">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 flex items-center justify-center mx-auto">
+              <Send className="w-6 h-6" />
+            </div>
+            <DialogTitle className="text-xl font-bold font-display">
+              Submit Tournament Duel?
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Verify your questions completion summary before final submission.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-center">
+              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+                <span className="text-xs text-emerald-600 dark:text-emerald-400 block font-semibold">Answered</span>
+                <span className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">{answeredCount}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-muted border border-border">
+                <span className="text-xs text-muted-foreground block font-semibold">Unanswered</span>
+                <span className="text-2xl font-bold font-mono text-foreground">{questions.length - answeredCount}</span>
+              </div>
+            </div>
+
+            {questions.length - answeredCount > 0 && (
+              <p className="text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg text-center font-medium">
+                ⚠️ You still have {questions.length - answeredCount} unanswered question(s). You can return to answer them or submit now.
+              </p>
+            )}
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowSubmitModal(false)}
+              className="w-full sm:w-auto text-xs"
+            >
+              Return to Duel
+            </Button>
+            <Button
+              onClick={() => handleFinalSubmit(false)}
+              disabled={isSubmitting}
+              className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5"
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting...
+                </>
+              ) : (
+                'Confirm & Submit Duel'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-

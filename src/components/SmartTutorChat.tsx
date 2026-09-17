@@ -259,7 +259,8 @@ Provide a 3-step concrete study sequence for their weak areas (${studentStats?.w
   const isPracticeOrExam = 
     location.pathname.startsWith('/practice/session') ||
     location.pathname.startsWith('/exam') ||
-    location.pathname.startsWith('/cbt/');
+    location.pathname.startsWith('/cbt/') ||
+    (location.pathname.startsWith('/tournaments/') && location.pathname !== '/tournaments');
 
   if (isPracticeOrExam) {
     return null;

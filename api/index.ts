@@ -1883,7 +1883,7 @@ app.post('/api/cbt/check-answer', async (req, res) => {
     // Primary query
     const { data, error } = await db
       .from('questions')
-      .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
+      .select('id, correct_answer, explanation, options')
       .eq('id', questionId)
       .maybeSingle();
 
@@ -1893,7 +1893,7 @@ app.post('/api/cbt/check-answer', async (req, res) => {
       // Fallback query matching with server client
       const { data: serverData } = await supabase
         .from('questions')
-        .select('id, correct_answer, explanation, option_a, option_b, option_c, option_d, options')
+        .select('id, correct_answer, explanation, options')
         .eq('id', questionId)
         .maybeSingle();
       if (serverData) {
@@ -1937,7 +1937,7 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
       // Securely fetch correct answers and options from the database
       const { data: questions, error } = await db
         .from('questions')
-        .select('id, correct_answer, option_a, option_b, option_c, option_d, options')
+        .select('id, correct_answer, options')
         .in('id', questionIds);
         
       if (error) throw error;
@@ -5024,6 +5024,101 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
     } catch {}
 
     return res.json({ success: true, message: 'Score recorded successfully' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Get Live Tournament Leaderboard
+app.get('/api/tournaments/:id/leaderboard', async (req, res) => {
+  try {
+    const tournamentId = req.params.id;
+    if (!tournamentId) return res.status(400).json({ success: false, error: 'Tournament ID is required' });
+
+    const leaderMap = new Map<string, { userId: string; name: string; score: number; timeSpent: number; completedAt: string }>();
+
+    // 1. Check direct table if UUID
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tournamentId);
+    if (isUUID) {
+      try {
+        const { data: dbParts } = await supabase
+          .from('tournament_participants')
+          .select('user_id, score, time_spent_seconds, completed_at, profiles(full_name, email)')
+          .eq('tournament_id', tournamentId);
+        
+        if (dbParts && Array.isArray(dbParts)) {
+          dbParts.forEach((p: any) => {
+            const uId = p.user_id || 'anon';
+            const name = p.profiles?.full_name || p.profiles?.email?.split('@')[0] || 'Scholar';
+            leaderMap.set(uId, {
+              userId: uId,
+              name,
+              score: Number(p.score) || 0,
+              timeSpent: Number(p.time_spent_seconds) || 0,
+              completedAt: p.completed_at || ''
+            });
+          });
+        }
+      } catch {}
+    }
+
+    // 2. Check admin_settings.tournament_participants_db
+    try {
+      const { data: partSetting } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournament_participants_db')
+        .maybeSingle();
+
+      if (partSetting?.setting_value && Array.isArray(partSetting.setting_value)) {
+        partSetting.setting_value
+          .filter((p: any) => String(p.tournament_id) === String(tournamentId))
+          .forEach((p: any) => {
+            const uId = p.user_id || p.user_email || 'anon';
+            const current = leaderMap.get(uId);
+            const score = Number(p.score) || 0;
+            const name = p.user_name || p.user_email?.split('@')[0] || (current ? current.name : 'Scholar');
+            if (!current || score > current.score) {
+              leaderMap.set(uId, {
+                userId: uId,
+                name,
+                score,
+                timeSpent: Number(p.time_taken_seconds) || 0,
+                completedAt: p.completed_at || ''
+              });
+            }
+          });
+      }
+    } catch {}
+
+    // 3. Check local participants
+    try {
+      const localList = getLocalParticipants();
+      localList
+        .filter((p: any) => String(p.tournament_id) === String(tournamentId))
+        .forEach((p: any) => {
+          const uId = p.user_id || p.user_email || 'anon';
+          const current = leaderMap.get(uId);
+          const score = Number(p.score) || 0;
+          const name = p.user_name || p.user_email?.split('@')[0] || (current ? current.name : 'Scholar');
+          if (!current || score > current.score) {
+            leaderMap.set(uId, {
+              userId: uId,
+              name,
+              score,
+              timeSpent: Number(p.time_taken_seconds) || 0,
+              completedAt: p.completed_at || ''
+            });
+          }
+        });
+    } catch {}
+
+    const sorted = Array.from(leaderMap.values()).sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return a.timeSpent - b.timeSpent;
+    });
+
+    return res.json({ success: true, leaderboard: sorted });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }

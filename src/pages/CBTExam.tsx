@@ -258,6 +258,24 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       const drillModeParam = searchParams.get('drillMode');
       const isExplicitNewDrill = Boolean(subjectParam || yearParam || drillModeParam || (examMode === 'past_questions' && !location.state?.resume));
 
+      if (drillModeParam === 'practice') {
+        const countParam = searchParams.get('count');
+        navigate('/practice-session', {
+          replace: true,
+          state: {
+            mode: 'past_questions',
+            subjectName: subjectParam || '',
+            subjectId: subjectParam || '',
+            examYear: yearParam || 'all',
+            year: yearParam || 'all',
+            questionCount: countParam ? Number(countParam) : 20,
+            learningStyle: 'Past Questions Interactive Drill',
+            drillMode: 'practice'
+          }
+        });
+        return;
+      }
+
       try {
         // Check for interrupted exam from localStorage or IndexedDB
         if (profile?.id) {

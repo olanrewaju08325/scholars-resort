@@ -96,8 +96,21 @@ export const PastQuestionsSetupModal: React.FC<PastQuestionsSetupModalProps> = (
           drillMode,
           count: questionCount
         });
+      } else if (drillMode === 'practice') {
+        navigate('/practice-session', {
+          state: {
+            mode: 'past_questions',
+            subjectName: selectedSubject,
+            subjectId: selectedSubject,
+            examYear: selectedYear,
+            year: selectedYear,
+            questionCount,
+            learningStyle: 'Past Questions Interactive Drill',
+            drillMode: 'practice'
+          }
+        });
       } else {
-        navigate(`/cbt/past-questions?subject=${encodeURIComponent(selectedSubject)}&year=${selectedYear}&drillMode=${drillMode}&count=${questionCount}`);
+        navigate(`/cbt/past-questions?subject=${encodeURIComponent(selectedSubject)}&year=${selectedYear}&drillMode=exam&count=${questionCount}`);
       }
       onClose();
     } finally {
