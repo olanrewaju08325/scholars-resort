@@ -13,6 +13,27 @@ import { diagnoseAiQuestionSchemaFromDatabase } from './utils/aiQuestionDiagnost
 // Expose diagnostic tool on window for admin and console diagnostics
 if (typeof window !== 'undefined') {
   (window as any).diagnoseAiQuestionSchemaFromDatabase = diagnoseAiQuestionSchemaFromDatabase;
+
+  const isIgnorableError = (msg?: string) => {
+    if (!msg) return false;
+    const lower = msg.toLowerCase();
+    return lower.includes('starttime') || lower.includes('reportallchanges');
+  };
+
+  window.addEventListener('error', (event) => {
+    if (isIgnorableError(event.message) || isIgnorableError(event.error?.message)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const msg = String(event.reason?.message || event.reason || '');
+    if (isIgnorableError(msg)) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }
+  }, true);
 }
 
 // Initialize dev-mode performance & API latency monitor (flags requests >2s)

@@ -133,27 +133,128 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         }
       }
 
-      // Intercept direct client inserts to tournament_participants with non-UUID or offline to avoid 400 Bad Request
-      if (urlStr.includes('/rest/v1/tournament_participants') && options?.method === 'POST') {
-        try {
-          const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
-          const payload = Array.isArray(body) ? body[0] : body;
-          if (payload && payload.tournament_id) {
-            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.tournament_id);
+      // Intercept direct client queries & mutations to tournaments with non-UUID to avoid 400 Bad Request
+      if (urlStr.includes('/rest/v1/tournaments')) {
+        const idMatch = urlStr.match(/[?&]id=eq\.([^&]+)/);
+        if (idMatch) {
+          const rawId = decodeURIComponent(idMatch[1]);
+          const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId);
+          if (!isUUID) {
+            const acceptHeader = String((options?.headers as any)?.['Accept'] || (options?.headers as any)?.['accept'] || '');
+            const wantsSingle = acceptHeader.includes('vnd.pgrst.object');
+            
+            try {
+              const res = await fetch(`/api/tournaments/${encodeURIComponent(rawId)}`);
+              if (res.ok) {
+                const json = await res.json();
+                if (json.success && json.tournament) {
+                  return new Response(JSON.stringify(wantsSingle ? json.tournament : [json.tournament]), {
+                    status: 200,
+                    headers: { 'Content-Type': 'application/json', 'content-range': '0-0/1' }
+                  });
+                }
+              }
+            } catch {}
+
+            return new Response(JSON.stringify(wantsSingle ? null : []), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', 'content-range': '0-0/0' }
+            });
+          }
+        }
+      }
+
+      // Intercept direct client queries & mutations to tournament_participants with non-UUID to avoid 400 Bad Request
+      if (urlStr.includes('/rest/v1/tournament_participants')) {
+        if (options?.method === 'POST') {
+          try {
+            const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
+            const payload = Array.isArray(body) ? body[0] : body;
+            if (payload && payload.tournament_id) {
+              const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(payload.tournament_id);
+              if (!isUUID) {
+                // Direct non-UUID tournament_id to API register route to prevent Postgres 22P02 400 error
+                fetch('/api/tournaments/register', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(payload)
+                }).catch(() => {});
+                return new Response(JSON.stringify([{ id: 'reg_' + Date.now(), ...payload }]), {
+                  status: 201,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+            }
+          } catch {}
+        } else {
+          const tIdMatch = urlStr.match(/[?&]tournament_id=eq\.([^&]+)/);
+          if (tIdMatch) {
+            const rawTId = decodeURIComponent(tIdMatch[1]);
+            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawTId);
             if (!isUUID) {
-              // Direct non-UUID tournament_id to API register route to prevent Postgres 22P02 400 error
-              fetch('/api/tournaments/register', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-              }).catch(() => {});
-              return new Response(JSON.stringify([{ id: 'reg_' + Date.now(), ...payload }]), {
-                status: 201,
-                headers: { 'Content-Type': 'application/json' }
+              if (options?.method === 'PATCH' || options?.method === 'DELETE') {
+                return new Response(JSON.stringify([]), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json' }
+                });
+              }
+              // GET request for non-UUID tournament participants
+              try {
+                const res = await fetch(`/api/tournaments/${encodeURIComponent(rawTId)}/leaderboard`);
+                if (res.ok) {
+                  const json = await res.json();
+                  if (json.success && Array.isArray(json.leaderboard)) {
+                    const mapped = json.leaderboard.map((lb: any) => ({
+                      tournament_id: rawTId,
+                      user_id: lb.userId,
+                      score: lb.score,
+                      time_spent_seconds: lb.timeSpent,
+                      completed_at: lb.completedAt,
+                      profiles: { full_name: lb.name, email: '' }
+                    }));
+                    return new Response(JSON.stringify(mapped), {
+                      status: 200,
+                      headers: { 'Content-Type': 'application/json', 'content-range': `0-${mapped.length}/${mapped.length}` }
+                    });
+                  }
+                }
+              } catch {}
+
+              return new Response(JSON.stringify([]), {
+                status: 200,
+                headers: { 'Content-Type': 'application/json', 'content-range': '0-0/0' }
               });
             }
           }
-        } catch {}
+        }
+      }
+
+      // Intercept questions query with non-UUID subject_id to avoid 400 Bad Request
+      if (urlStr.includes('/rest/v1/questions')) {
+        const inMatch = urlStr.match(/subject_id=in\.\(([^)]+)\)/);
+        if (inMatch) {
+          const rawIds = inMatch[1].split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+          const validUUIDs = rawIds.filter(id => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id));
+          if (validUUIDs.length === 0) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', 'content-range': '0-0/0' }
+            });
+          } else if (validUUIDs.length !== rawIds.length) {
+            urlStr = urlStr.replace(inMatch[0], `subject_id=in.(${validUUIDs.map(id => `"${id}"`).join(',')})`);
+            url = urlStr;
+          }
+        }
+        const eqMatch = urlStr.match(/[?&]subject_id=eq\.([^&]+)/);
+        if (eqMatch) {
+          const rawId = decodeURIComponent(eqMatch[1]);
+          if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId)) {
+            return new Response(JSON.stringify([]), {
+              status: 200,
+              headers: { 'Content-Type': 'application/json', 'content-range': '0-0/0' }
+            });
+          }
+        }
       }
 
       const isMissingOptionalTable = urlStr.includes('/rest/v1/reported_errors') || 

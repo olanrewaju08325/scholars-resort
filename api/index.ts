@@ -4578,6 +4578,98 @@ app.get('/api/tournaments', async (req, res) => {
   }
 });
 
+// API Route: Public Get Single Tournament by ID (UUID or Legacy ID)
+app.get('/api/tournaments/:id', async (req, res) => {
+  try {
+    const targetId = req.params.id;
+    if (!targetId) return res.status(400).json({ success: false, error: 'Tournament ID is required' });
+
+    const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
+
+    const parseAndClean = (rawT: any) => {
+      if (!rawT) return null;
+      let meta: Record<string, any> = {};
+      const searchTarget = (rawT.rules || '') + '\n' + (rawT.description || '');
+      const match = searchTarget.match(/__meta__:(\{[\s\S]*?\})(?:\n|$)/);
+      if (match && match[1]) {
+        try { meta = JSON.parse(match[1]); } catch {}
+      }
+      const cleanDesc = (rawT.description || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
+      const cleanRules = (rawT.rules || '').replace(/\s*__meta__:[\s\S]*$/, '').trim();
+
+      return {
+        ...meta,
+        ...rawT,
+        description: cleanDesc || 'Compete in this UTME subject challenge and win rewards.',
+        rules: cleanRules,
+        participants_count: rawT.participants_count || rawT.participant_count || 0
+      };
+    };
+
+    // 1. If UUID, check Supabase directly
+    if (isUUID) {
+      try {
+        const { data: dbTournament } = await supabase
+          .from('tournaments')
+          .select('*')
+          .eq('id', targetId)
+          .maybeSingle();
+
+        if (dbTournament) {
+          const parsed = parseAndClean(dbTournament);
+          return res.json({ success: true, tournament: parsed });
+        }
+      } catch (dbErr: any) {
+        console.warn('[Get Single Tournament DB Warning]', dbErr?.message);
+      }
+    }
+
+    // 2. Check admin_settings.tournaments_db
+    try {
+      const { data: currentSettings } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournaments_db')
+        .maybeSingle();
+
+      if (currentSettings?.setting_value && Array.isArray(currentSettings.setting_value)) {
+        const matched = currentSettings.setting_value.find((t: any) => String(t.id) === String(targetId) || String(t.legacy_id) === String(targetId));
+        if (matched) {
+          const parsed = parseAndClean(matched);
+          return res.json({ success: true, tournament: parsed });
+        }
+      }
+    } catch {}
+
+    // 3. Fallback defaults
+    const localDefaults = [
+      {
+        id: 't_1788696725514',
+        title: 'Mega UTME Physics & Math Duel',
+        description: 'Elite timed tournament covering core mechanics, calculus, vectors, and algebra questions with instant ranking.',
+        prize_pool: '₦100,000 Cash Pool',
+        entry_fee: 0,
+        status: 'active',
+        start_time: '2026-09-12T08:00:00.000Z',
+        end_time: '2026-09-12T10:00:00.000Z',
+        duration_minutes: 60,
+        question_count: 50,
+        subject_filter: 'Physics, Mathematics',
+        rules: 'Calculators permitted. Submit before the UTC countdown expires.'
+      }
+    ];
+
+    const fallbackFound = localDefaults.find(t => String(t.id) === String(targetId));
+    if (fallbackFound) {
+      return res.json({ success: true, tournament: fallbackFound });
+    }
+
+    return res.status(404).json({ success: false, error: 'Tournament not found' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 const LOCAL_PARTICIPANTS_FILE = path.join(process.cwd(), '.data_tournament_participants.json');
 const LOCAL_PRIZE_CLAIMS_FILE = path.join(process.cwd(), '.data_tournament_prize_claims.json');
 

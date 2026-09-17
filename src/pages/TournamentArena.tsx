@@ -73,7 +73,7 @@ export default function TournamentArena() {
   useEffect(() => {
     if (!tournament || !id || hasRevalidatedDb) return;
 
-    const startMs = new Date(tournament.start_time || tournament.startTime || 0).getTime();
+    const startMs = parseTournamentStartTimeUtc(tournament?.start_time || tournament?.startTime);
     if (startMs > 0 && nowUtc >= startMs) {
       setHasRevalidatedDb(true);
       if (UUID_REGEX.test(id)) {
@@ -87,15 +87,17 @@ export default function TournamentArena() {
           console.warn('[TournamentArena] Re-validation notice:', err);
         });
       } else {
-        // Query API
-        fetch('/api/tournaments').then(r => r.json()).then(json => {
-          const fresh = json.tournaments?.find((t: any) => String(t.id) === String(id));
-          if (fresh) {
-            const freshUnlock = forceCheckTournamentUnlock(fresh, nowUtc);
-            setTournament(freshUnlock.tournament);
-            toast.success("Tournament start time reached! Duel unlocked.");
-          }
-        }).catch(() => {});
+        // Query API by id or list
+        fetch(`/api/tournaments/${encodeURIComponent(id)}`)
+          .then(r => r.json())
+          .then(json => {
+            if (json.success && json.tournament) {
+              const freshUnlock = forceCheckTournamentUnlock(json.tournament, nowUtc);
+              setTournament(freshUnlock.tournament);
+              toast.success("Tournament start time reached! Duel unlocked.");
+            }
+          })
+          .catch(() => {});
       }
     }
   }, [tournament, nowUtc, id, hasRevalidatedDb]);
@@ -134,13 +136,26 @@ export default function TournamentArena() {
         } catch {}
       }
 
-      // 2. Fallback to API / admin_settings if needed
+      // 2. Fetch directly from dedicated single tournament endpoint
+      if (!tData) {
+        try {
+          const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}`);
+          if (res.ok) {
+            const json = await res.json();
+            if (json?.success && json.tournament) {
+              tData = json.tournament;
+            }
+          }
+        } catch {}
+      }
+
+      // 3. Fallback to API list / admin_settings if needed
       if (!tData) {
         try {
           const res = await fetch('/api/tournaments');
           const json = await res.json();
           if (json?.tournaments && Array.isArray(json.tournaments)) {
-            tData = json.tournaments.find((t: any) => String(t.id) === String(id));
+            tData = json.tournaments.find((t: any) => String(t.id) === String(id) || String(t.legacy_id) === String(id));
           }
         } catch {}
       }
@@ -154,7 +169,7 @@ export default function TournamentArena() {
             .maybeSingle();
 
           if (currentSettings?.setting_value && Array.isArray(currentSettings.setting_value)) {
-            tData = currentSettings.setting_value.find((t: any) => String(t.id) === String(id));
+            tData = currentSettings.setting_value.find((t: any) => String(t.id) === String(id) || String(t.legacy_id) === String(id));
           }
         } catch {}
       }
@@ -183,12 +198,26 @@ export default function TournamentArena() {
 
       // Set initial duration
       const durationMins = Number(finalTournament.duration_minutes) || 30;
-      setTimeLeft(durationMins * 60);
+      setTimeLeft(Math.max(60, durationMins * 60));
 
       // Force evaluate unlock against current UTC
       const currentUtc = getCurrentUtcTimestamp();
       const initialUnlock = forceCheckTournamentUnlock(finalTournament, currentUtc);
       setTournament(initialUnlock.tournament);
+
+      // Check if user has already submitted a score for this tournament
+      try {
+        const storedResult = localStorage.getItem(`tournament_finished_${id}_${profile.id}`);
+        if (storedResult) {
+          const parsed = JSON.parse(storedResult);
+          if (parsed && typeof parsed.score === 'number') {
+            if (parsed.answers && Object.keys(parsed.answers).length > 0) {
+              setAnswers(parsed.answers);
+            }
+            setFinished(true);
+          }
+        }
+      } catch {}
 
       // 2. Fetch questions based on tournament configuration (subject_filter & count)
       const count = Number(finalTournament.question_count) || 20;
@@ -203,13 +232,14 @@ export default function TournamentArena() {
           // Resolve subject names to subject IDs using subjects table
           const { data: allSubjects } = await supabase.from('subjects').select('id, name');
           const matchedSubjectIds = (allSubjects || [])
-            .filter(s => targetSubjects.some(tn => s.name.toLowerCase().includes(tn)))
-            .map(s => s.id);
+            .filter(s => targetSubjects.some(tn => s.name?.toLowerCase().includes(tn)))
+            .map(s => s.id)
+            .filter(subId => UUID_REGEX.test(subId)); // Strictly keep valid UUIDs only
 
           if (matchedSubjectIds.length > 0) {
             const res = await supabase
               .from('questions')
-              .select('*')
+              .select('id, subject_id, question_text, options, correct_answer, explanation, difficulty, year, is_active')
               .eq('is_active', true)
               .in('subject_id', matchedSubjectIds)
               .limit(count);
@@ -228,10 +258,12 @@ export default function TournamentArena() {
         try {
           const fallbackRes = await supabase
             .from('questions')
-            .select('*')
+            .select('id, subject_id, question_text, options, correct_answer, explanation, difficulty, year, is_active')
             .eq('is_active', true)
             .limit(count);
-          qData = fallbackRes.data;
+          if (fallbackRes.data && fallbackRes.data.length > 0) {
+            qData = fallbackRes.data;
+          }
         } catch {}
       }
 
@@ -348,15 +380,20 @@ export default function TournamentArena() {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          clearInterval(timer);
-          handleFinalSubmit(true);
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [loading, finished, isUnlocked, questions, answers]);
+  }, [loading, finished, isUnlocked]);
+
+  // Submission on timer expiration
+  useEffect(() => {
+    if (!loading && !finished && isUnlocked && timeLeft === 0 && questions.length > 0) {
+      handleFinalSubmit(true);
+    }
+  }, [timeLeft, loading, finished, isUnlocked, questions.length]);
 
   // Option selection
   const handleSelectOption = (questionId: string, optionText: string) => {
@@ -439,6 +476,17 @@ export default function TournamentArena() {
             })
             .eq('tournament_id', id)
             .eq('user_id', profile.id);
+        } catch {}
+      }
+
+      // Persist finished state locally for user
+      if (profile?.id) {
+        try {
+          localStorage.setItem(`tournament_finished_${id}_${profile.id}`, JSON.stringify({
+            score: finalScore,
+            answers,
+            submittedAt: new Date().toISOString()
+          }));
         } catch {}
       }
 
@@ -581,6 +629,27 @@ export default function TournamentArena() {
             <div className="flex flex-wrap items-center justify-center gap-3 pt-4">
               <Button onClick={() => setShowReview(!showReview)} variant="outline" className="gap-2">
                 <Eye className="w-4 h-4" /> {showReview ? 'Hide Question Review' : 'Review My Answers'}
+              </Button>
+              <Button 
+                onClick={() => {
+                  setFinished(false);
+                  const durationMins = Number(tournament?.duration_minutes) || 30;
+                  setTimeLeft(Math.max(60, durationMins * 60));
+                  setAnswers({});
+                  setCurrentQuestionIndex(0);
+                  setFlagged({});
+                  setEliminatedOptions({});
+                  if (profile?.id) {
+                    try {
+                      localStorage.removeItem(`tournament_finished_${id}_${profile.id}`);
+                    } catch {}
+                  }
+                  toast.info("Duel reset for a new run! Timer restarted.");
+                }} 
+                variant="outline" 
+                className="gap-2 border-primary/40 text-primary hover:bg-primary/10"
+              >
+                <RefreshCw className="w-4 h-4" /> Retake Duel / Test Run
               </Button>
               <Button onClick={() => navigate('/tournaments')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
                 <Trophy className="w-4 h-4" /> Back to Tournaments Hub

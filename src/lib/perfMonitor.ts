@@ -61,9 +61,33 @@ class PerformanceMonitor {
     if (this.isInitialized) return;
     this.isInitialized = true;
 
-    // Safely listen to native performance observer entries if available, without replacing native window.fetch
+    // Install safety listener to prevent unhandled performance observer or web-vitals 'startTime' errors
+    if (typeof window !== 'undefined') {
+      const isIgnorableError = (msg?: string) => {
+        if (!msg) return false;
+        const lower = msg.toLowerCase();
+        return lower.includes('starttime') || lower.includes('reportallchanges');
+      };
+
+      window.addEventListener('error', (event) => {
+        if (isIgnorableError(event.message) || isIgnorableError(event.error?.message)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+
+      window.addEventListener('unhandledrejection', (event) => {
+        const msg = String(event.reason?.message || event.reason || '');
+        if (isIgnorableError(msg)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+    }
+
+    // Safely listen to native performance observer entries if in dev mode
     try {
-      if (typeof window !== 'undefined' && 'PerformanceObserver' in window) {
+      if (typeof window !== 'undefined' && 'PerformanceObserver' in window && process.env.NODE_ENV !== 'production') {
         const supported = (PerformanceObserver as any).supportedEntryTypes;
         if (supported && Array.isArray(supported) && supported.includes('resource')) {
           const observer = new PerformanceObserver((list) => {
@@ -85,8 +109,7 @@ class PerformanceMonitor {
               }
             } catch (_) {}
           });
-          // W3C spec: buffered flag is only valid with single `type`, not `entryTypes`
-          observer.observe({ type: 'resource', buffered: true });
+          observer.observe({ type: 'resource' });
         }
       }
     } catch {
