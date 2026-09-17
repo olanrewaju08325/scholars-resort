@@ -9,20 +9,38 @@ export const MistakeBankQuickCard: React.FC = () => {
   const [mistakeCount, setMistakeCount] = useState<number>(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const refreshCount = () => {
     try {
       const stored = localStorage.getItem('jamb_mistake_bank');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed)) {
           setMistakeCount(parsed.length);
+          return;
         }
       }
+      setMistakeCount(0);
     } catch {
       setMistakeCount(0);
     } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    refreshCount();
+
+    const handleUpdate = () => {
+      refreshCount();
+    };
+
+    window.addEventListener('scholars_study_data_reset', handleUpdate);
+    window.addEventListener('scholars_session_completed', handleUpdate);
+
+    return () => {
+      window.removeEventListener('scholars_study_data_reset', handleUpdate);
+      window.removeEventListener('scholars_session_completed', handleUpdate);
+    };
   }, []);
 
   return (

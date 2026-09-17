@@ -33,6 +33,7 @@ import {
   validateUtmeSubjectCombination, 
   normalizeToCanonicalSubjectName 
 } from '@/utils/subjectTaxonomy';
+import { offlineDb } from '@/lib/offlineDb';
 
 const CANONICAL_SUBJECTS = getAllCanonicalSubjects();
 
@@ -66,20 +67,35 @@ export default function Profile() {
         try {
           const res = await authFetch(getApiUrl('/api/profile/clear-data'), {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId: user?.id })
           });
           const data = await res.json();
           if (!res.ok || !data.success) {
             throw new Error(data.error || 'Failed to clear data');
           }
 
+          // Thorough client-side cache & Dexie purge
           try {
             localStorage.removeItem('offline_cbt_exams');
             localStorage.removeItem('scholars_active_exam_session');
+            localStorage.removeItem('jamb_mistake_bank');
+            localStorage.removeItem('scholar_offline_completed_sessions');
+            localStorage.removeItem('scholars_daily_goals');
+            localStorage.removeItem('study_plan_tasks');
           } catch (_) {}
 
+          try {
+            await offlineDb.examSnapshots.clear();
+            await offlineDb.answers.clear();
+            await offlineDb.completedOfflineSessions.clear();
+          } catch (_) {}
+
+          // Fire global reactive study data reset event
+          window.dispatchEvent(new Event('scholars_study_data_reset'));
+
           await refreshProfile();
-          toast.success('Your study progress and mock exam history have been cleared.');
+          toast.success('Your study progress, mistake bank, and mock exam history have been completely reset.');
         } catch (err: any) {
           toast.error(`Failed to clear study history: ${err.message}`);
         } finally {

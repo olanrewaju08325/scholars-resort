@@ -49,11 +49,48 @@ export interface OfflineSyncItem {
   lastError?: string;
 }
 
+export interface OfflineStoredPack {
+  subjectId: string;
+  subjectName: string;
+  version: number;
+  downloadedAt: string;
+  questionsCount: number;
+  questions: any[];
+  hasUpdate?: boolean;
+  remoteCount?: number;
+}
+
+export interface StoredCustomQuestion {
+  id: string;
+  subject_id?: string;
+  question_text?: string;
+  question?: string;
+  options?: any[];
+  correct_answer?: string;
+  explanation?: string;
+  [key: string]: any;
+}
+
+export interface StoredCompletedOfflineSession {
+  id: string;
+  mode: 'CBT Exam' | 'Practice Drill' | 'Weakness Drill' | 'Custom Practice';
+  score: number;
+  totalQuestions: number;
+  percentageScore: number;
+  timeSpentSeconds: number;
+  completedAt: string;
+  subjects?: string[];
+  userId?: string;
+}
+
 export class ScholarsResortDB extends Dexie {
   questions!: Table<OfflineQuestion, string>;
   answers!: Table<OfflineAnswer, number>;
   examSnapshots!: Table<OfflineExamSnapshot, string>;
   syncQueue!: Table<OfflineSyncItem, number>;
+  offlinePacks!: Table<OfflineStoredPack, string>;
+  customQuestions!: Table<StoredCustomQuestion, string>;
+  completedOfflineSessions!: Table<StoredCompletedOfflineSession, string>;
 
   constructor() {
     super('ScholarsResortOfflineDB');
@@ -71,6 +108,15 @@ export class ScholarsResortDB extends Dexie {
       answers: '++id, question_id, synced',
       examSnapshots: 'id, userId',
       syncQueue: '++id, type, table, status, userId, timestamp'
+    });
+    this.version(4).stores({
+      questions: 'id, subject_id, topic_id',
+      answers: '++id, question_id, synced',
+      examSnapshots: 'id, userId',
+      syncQueue: '++id, type, table, status, userId, timestamp',
+      offlinePacks: 'subjectId, subjectName, downloadedAt',
+      customQuestions: 'id, subject_id',
+      completedOfflineSessions: 'id, completedAt, mode, userId'
     });
   }
 }

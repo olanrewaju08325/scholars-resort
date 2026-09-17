@@ -10748,6 +10748,121 @@ app.post('/api/user/study-goal', express.json(), async (req, res) => {
   }
 });
 
+// ─── USER PROFILE DATA PURGE & ACCOUNT DELETION ENDPOINTS ───
+app.post('/api/profile/clear-data', async (req, res) => {
+  let userId = req.body?.userId;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1]?.trim();
+      if (token) {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user?.id) userId = user.id;
+      }
+    } catch (_) {}
+  }
+
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'User ID is required to reset study history.' });
+  }
+
+  try {
+    // 1. Delete exam sessions
+    try {
+      await supabase.from('exam_sessions').delete().eq('user_id', userId);
+    } catch (_) {}
+
+    // 2. Delete session answers and exam answers
+    try {
+      await supabase.from('session_answers').delete().eq('user_id', userId);
+    } catch (_) {}
+    try {
+      await supabase.from('exam_answers').delete().eq('user_id', userId);
+    } catch (_) {}
+
+    // 3. If PostgreSQL pool is available, execute direct cascade delete
+    if (pgPool) {
+      try {
+        await pgPool.query('DELETE FROM public.session_answers WHERE user_id = $1', [userId]).catch(() => null);
+        await pgPool.query('DELETE FROM public.exam_answers WHERE user_id = $1', [userId]).catch(() => null);
+        await pgPool.query('DELETE FROM public.exam_sessions WHERE user_id = $1', [userId]).catch(() => null);
+      } catch (poolErr: any) {
+        console.warn('[clear-data pgPool notice]:', poolErr.message);
+      }
+    }
+
+    // 4. Reset streak_days, xp, and coins on profile
+    try {
+      await supabase.from('profiles').update({
+        streak_days: 0,
+        xp: 0,
+        coins: 0,
+        updated_at: new Date().toISOString()
+      }).eq('id', userId);
+    } catch (_) {}
+
+    return res.json({
+      success: true,
+      message: 'Your study history, exam attempts, and practice records have been completely reset.'
+    });
+  } catch (err: any) {
+    console.error('Error in /api/profile/clear-data:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to clear data' });
+  }
+});
+
+app.post('/api/profile/delete', async (req, res) => {
+  let userId = req.body?.userId;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1]?.trim();
+      if (token) {
+        const { data: { user } } = await supabase.auth.getUser(token);
+        if (user?.id) userId = user.id;
+      }
+    } catch (_) {}
+  }
+
+  if (!userId) {
+    return res.status(400).json({ success: false, error: 'User ID is required to delete account.' });
+  }
+
+  const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  try {
+    const { data: prof } = await supabase.from('profiles').select('email').eq('id', userId).maybeSingle();
+    if (prof?.email && MASTER_ADMINS.includes(prof.email.toLowerCase().trim())) {
+      return res.status(403).json({ success: false, error: 'Master Admin account is protected and cannot be deleted.' });
+    }
+
+    // Clean up all user dependencies
+    try {
+      await supabase.from('session_answers').delete().eq('user_id', userId);
+      await supabase.from('exam_sessions').delete().eq('user_id', userId);
+      await supabase.from('exam_answers').delete().eq('user_id', userId);
+      await supabase.from('subscriptions').delete().eq('user_id', userId);
+      await supabase.from('profiles').delete().eq('id', userId);
+    } catch (_) {}
+
+    if (pgPool) {
+      try {
+        await pgPool.query('DELETE FROM public.session_answers WHERE user_id = $1', [userId]).catch(() => null);
+        await pgPool.query('DELETE FROM public.exam_answers WHERE user_id = $1', [userId]).catch(() => null);
+        await pgPool.query('DELETE FROM public.exam_sessions WHERE user_id = $1', [userId]).catch(() => null);
+        await pgPool.query('DELETE FROM public.subscriptions WHERE user_id = $1', [userId]).catch(() => null);
+        await pgPool.query('DELETE FROM public.profiles WHERE id = $1', [userId]).catch(() => null);
+      } catch (poolErr: any) {
+        console.warn('[delete account pgPool notice]:', poolErr.message);
+      }
+    }
+
+    return res.json({ success: true, message: 'Account and associated records deleted.' });
+  } catch (err: any) {
+    console.error('Error in /api/profile/delete:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to delete account' });
+  }
+});
+
 // API 404 handler - ensures unmatched API requests return structured JSON instead of falling through to static/HTML handler
 app.use('/api', (req, res) => {
   return res.status(404).json({

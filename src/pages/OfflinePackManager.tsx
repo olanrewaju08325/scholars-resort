@@ -3,7 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Download, Wifi, WifiOff, RefreshCw, CheckCircle2, Trash2, HardDrive, Info, Sparkles, FileJson, History, Trophy, BarChart2, Clock, Calendar, PlayCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { getDownloadedPacks, downloadSubjectPack, deleteOfflinePack, checkForPackUpdates, checkForSubjectUpdate, getCompletedOfflineSessions, type CompletedOfflineSession } from '@/lib/offlineStore';
+import { getDownloadedPacks, getDownloadedPacksAsync, downloadSubjectPack, deleteOfflinePack, checkForPackUpdates, checkForSubjectUpdate, getCompletedOfflineSessions, getCompletedOfflineSessionsAsync, type CompletedOfflineSession } from '@/lib/offlineStore';
 import type { OfflinePack } from '@/lib/offlineStore';
 import { exportOfflineDataAsJson } from '@/lib/offlineExport';
 import { toast } from 'sonner';
@@ -37,22 +37,26 @@ export const OfflinePackManager = () => {
     try {
       const { data } = await supabase.from('subjects').select('id, name').order('name');
       setSubjects(data || []);
-      const packs = getDownloadedPacks();
+      
+      const packs = await getDownloadedPacksAsync();
       setDownloadedPacks(packs);
 
-      const history = getCompletedOfflineSessions();
+      const history = await getCompletedOfflineSessionsAsync();
       setCompletedSessions(history);
 
       // Check updates in background if online
       if (navigator.onLine && Object.keys(packs).length > 0) {
-        checkForPackUpdates().then(() => {
-          setDownloadedPacks(getDownloadedPacks());
+        checkForPackUpdates().then(async () => {
+          const updated = await getDownloadedPacksAsync();
+          setDownloadedPacks(updated);
         }).catch(() => {});
       }
     } catch (err) {
       console.warn('Error loading offline packs:', err);
-      setDownloadedPacks(getDownloadedPacks());
-      setCompletedSessions(getCompletedOfflineSessions());
+      const fallbackPacks = await getDownloadedPacksAsync();
+      setDownloadedPacks(fallbackPacks);
+      const fallbackHistory = await getCompletedOfflineSessionsAsync();
+      setCompletedSessions(fallbackHistory);
     }
     setLoading(false);
   };
@@ -65,7 +69,8 @@ export const OfflinePackManager = () => {
     setCheckingUpdates(true);
     try {
       const { updatedSubjects } = await checkForPackUpdates();
-      setDownloadedPacks(getDownloadedPacks());
+      const refreshed = await getDownloadedPacksAsync();
+      setDownloadedPacks(refreshed);
       if (updatedSubjects.length > 0) {
         toast.success(`New questions found for ${updatedSubjects.length} subject(s)! Click "Update Pack" to download.`);
       } else {
@@ -81,7 +86,8 @@ export const OfflinePackManager = () => {
     setDownloadingId(subId);
     try {
       const pack = await downloadSubjectPack(subId, subName);
-      setDownloadedPacks(getDownloadedPacks());
+      const refreshed = await getDownloadedPacksAsync();
+      setDownloadedPacks(refreshed);
       toast.success(`Downloaded ${pack.questionsCount} questions for ${subName}! Ready for 100% offline practice.`);
     } catch (err: any) {
       toast.error(`Download failed: ${err.message}`);
@@ -89,9 +95,10 @@ export const OfflinePackManager = () => {
     setDownloadingId(null);
   };
 
-  const handleDelete = (subId: string, subName: string) => {
+  const handleDelete = async (subId: string, subName: string) => {
     deleteOfflinePack(subId);
-    setDownloadedPacks(getDownloadedPacks());
+    const refreshed = await getDownloadedPacksAsync();
+    setDownloadedPacks(refreshed);
     toast.info(`Removed offline pack for ${subName}`);
   };
 
@@ -102,7 +109,8 @@ export const OfflinePackManager = () => {
         await downloadSubjectPack(sub.id, sub.name);
       } catch (e) {}
     }
-    setDownloadedPacks(getDownloadedPacks());
+    const refreshed = await getDownloadedPacksAsync();
+    setDownloadedPacks(refreshed);
     toast.success('All subject question packs saved for offline CBT practice!');
   };
 

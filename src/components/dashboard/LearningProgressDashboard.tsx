@@ -45,6 +45,18 @@ export const LearningProgressDashboard: React.FC = () => {
 
   useEffect(() => {
     fetchPerformanceData();
+
+    const handleReset = () => {
+      fetchPerformanceData();
+    };
+
+    window.addEventListener('scholars_study_data_reset', handleReset);
+    window.addEventListener('scholars_session_completed', handleReset);
+
+    return () => {
+      window.removeEventListener('scholars_study_data_reset', handleReset);
+      window.removeEventListener('scholars_session_completed', handleReset);
+    };
   }, []);
 
   // Filter subjects

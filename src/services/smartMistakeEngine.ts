@@ -74,7 +74,7 @@ export class SmartMistakeEngine {
         .order('created_at', { ascending: false });
 
       if (error || !answers || answers.length === 0) {
-        return this.getFallbackLocalSummaries();
+        return this.getLocalMistakeSummaries();
       }
 
       const map = new Map<string, {
@@ -166,8 +166,8 @@ export class SmartMistakeEngine {
 
       return summaries.sort((a, b) => a.accuracyPercentage - b.accuracyPercentage);
     } catch (err) {
-      console.warn('[SmartMistakeEngine] DB fetch error:', err);
-      return this.getFallbackLocalSummaries();
+      console.warn('[SmartMistakeEngine] DB fetch notice:', err);
+      return this.getLocalMistakeSummaries();
     }
   }
 
@@ -200,54 +200,73 @@ export class SmartMistakeEngine {
   }
 
   /**
-   * Generates non-technical fallback performance metrics if DB is offline.
+   * Generates honest performance metrics from locally cached real mistakes.
+   * Returns empty array if no practice activity has occurred yet.
    */
-  private static getFallbackLocalSummaries(): TopicMistakeSummary[] {
-    return [
-      {
-        topicId: 'p_mech',
-        topicName: 'Mechanics & Motion',
-        subjectName: 'Physics',
-        totalAttempted: 20,
-        correctCount: 11,
-        missedCount: 9,
-        accuracyPercentage: 55,
-        masteryStatus: 'Developing',
-        subtopics: [
-          { subtopicName: 'Projectiles & Velocity', missedCount: 5 },
-          { subtopicName: 'Newtonian Gravity', missedCount: 4 }
-        ],
-        missedQuestions: []
-      },
-      {
-        topicId: 'c_stoich',
-        topicName: 'Stoichiometry & Gas Laws',
-        subjectName: 'Chemistry',
-        totalAttempted: 15,
-        correctCount: 6,
-        missedCount: 9,
-        accuracyPercentage: 40,
-        masteryStatus: 'Needs Review',
-        subtopics: [
-          { subtopicName: 'Ideal Gas Equation PV=nRT', missedCount: 6 },
-          { subtopicName: 'Molar Mass Conversions', missedCount: 3 }
-        ],
-        missedQuestions: []
-      },
-      {
-        topicId: 'm_trig',
-        topicName: 'Trigonometry & Calculus',
-        subjectName: 'Mathematics',
-        totalAttempted: 25,
-        correctCount: 20,
-        missedCount: 5,
-        accuracyPercentage: 80,
-        masteryStatus: 'Mastered',
-        subtopics: [
-          { subtopicName: 'Derivatives & Integrals', missedCount: 3 }
-        ],
-        missedQuestions: []
-      }
-    ];
+  private static getLocalMistakeSummaries(): TopicMistakeSummary[] {
+    try {
+      const raw = localStorage.getItem('jamb_mistake_bank');
+      if (!raw) return [];
+      const localMistakes: any[] = JSON.parse(raw);
+      if (!Array.isArray(localMistakes) || localMistakes.length === 0) return [];
+
+      const map = new Map<string, {
+        topicId: string;
+        topicName: string;
+        subjectName: string;
+        missed: number;
+        missedQuestions: any[];
+      }>();
+
+      localMistakes.forEach(q => {
+        const topicId = q.topic_id || 'topic_local';
+        const topicName = q.topic_name || q.topic || 'General Practice Topic';
+        const subjectName = typeof q.subject_name === 'object' ? q.subject_name?.name : (q.subject_name || 'General');
+
+        if (!map.has(topicId)) {
+          map.set(topicId, {
+            topicId,
+            topicName,
+            subjectName,
+            missed: 0,
+            missedQuestions: []
+          });
+        }
+
+        const entry = map.get(topicId)!;
+        entry.missed += 1;
+        entry.missedQuestions.push({
+          id: q.id,
+          questionText: cleanQuestionText(q.question_text || q.question || ''),
+          topicName,
+          subtopicName: 'Core Objectives',
+          userAnswer: q.user_answer || '',
+          correctAnswer: q.correct_answer || 'A',
+          explanation: q.explanation,
+          options: q.options,
+          year: q.year
+        });
+      });
+
+      const summaries: TopicMistakeSummary[] = [];
+      map.forEach(val => {
+        summaries.push({
+          topicId: val.topicId,
+          topicName: val.topicName,
+          subjectName: val.subjectName,
+          totalAttempted: val.missed,
+          correctCount: 0,
+          missedCount: val.missed,
+          accuracyPercentage: 0,
+          masteryStatus: 'Needs Review',
+          subtopics: [{ subtopicName: 'Unresolved Question', missedCount: val.missed }],
+          missedQuestions: val.missedQuestions
+        });
+      });
+
+      return summaries;
+    } catch {
+      return [];
+    }
   }
 }
