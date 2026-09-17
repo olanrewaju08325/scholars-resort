@@ -27,10 +27,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 
 export const EducationalJourneyMap: React.FC = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const navigate = useNavigate();
   const [data, setData] = useState<OverallJourneyProgress | null>(null);
-  const [selectedSubject, setSelectedSubject] = useState<string>('use_of_english');
+  const [filterMode, setFilterMode] = useState<'enrolled' | 'all'>('enrolled');
+  const [selectedSubject, setSelectedSubject] = useState<string>('');
   const [selectedNodeModal, setSelectedNodeModal] = useState<JourneyNode | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [lockModalInfo, setLockModalInfo] = useState<{
@@ -40,15 +41,23 @@ export const EducationalJourneyMap: React.FC = () => {
     prerequisiteNumber: number;
   } | null>(null);
 
+  const userEnrolled = profile?.utme_subjects || [];
+
   useEffect(() => {
     const loadJourney = async () => {
       setIsLoading(true);
-      const res = await fetchEducationalJourneyProgress(user?.id);
+      const res = await fetchEducationalJourneyProgress(user?.id, userEnrolled);
       setData(res);
+      if (res.enrolledSubjectIds && res.enrolledSubjectIds.length > 0) {
+        setSelectedSubject(res.enrolledSubjectIds[0]);
+      } else {
+        const first = Object.keys(res.subjectJourneys)[0];
+        if (first) setSelectedSubject(first);
+      }
       setIsLoading(false);
     };
     loadJourney();
-  }, [user?.id]);
+  }, [user?.id, JSON.stringify(userEnrolled)]);
 
   if (isLoading) {
     return (
@@ -61,7 +70,14 @@ export const EducationalJourneyMap: React.FC = () => {
 
   if (!data) return null;
 
-  const availableJourneys = Object.values(data.subjectJourneys);
+  const allJourneys = Object.values(data.subjectJourneys);
+  const enrolledJourneys = allJourneys.filter(j => j.isEnrolled);
+  
+  // Show only user's 4 registered subjects by default if enrolled, or all subjects if toggled
+  const availableJourneys = (filterMode === 'enrolled' && enrolledJourneys.length > 0)
+    ? enrolledJourneys
+    : allJourneys;
+
   const activeSubjectId = selectedSubject || (availableJourneys[0]?.subjectId ?? '');
   const currentSubjectJourney: SubjectJourney | undefined = 
     data.subjectJourneys[activeSubjectId] || 
@@ -135,6 +151,49 @@ export const EducationalJourneyMap: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Enrolled vs All Subjects Filter Toggle */}
+      {enrolledJourneys.length > 0 && (
+        <div className="flex items-center justify-between gap-4 flex-wrap pb-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold text-foreground">Syllabus Scope:</span>
+            <div className="inline-flex p-1 bg-muted/70 rounded-xl border border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterMode('enrolled');
+                  if (!enrolledJourneys.some(j => j.subjectId === selectedSubject)) {
+                    setSelectedSubject(enrolledJourneys[0]?.subjectId || '');
+                  }
+                }}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  filterMode === 'enrolled'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                My UTME Subjects ({enrolledJourneys.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterMode('all')}
+                className={`text-xs px-3 py-1.5 rounded-lg font-medium transition-all ${
+                  filterMode === 'all'
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                All UTME Subjects ({allJourneys.length})
+              </button>
+            </div>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {filterMode === 'enrolled' 
+              ? 'Showing only your 4 registered UTME exam subjects.'
+              : 'Viewing all subjects across the UTME syllabus.'}
+          </span>
+        </div>
+      )}
 
       {/* Subject Navigation Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">

@@ -23,6 +23,7 @@ import { useSessionValidator } from '@/hooks/useSessionValidator';
 import { ActiveExamConflictDialog } from '@/components/cbt/ActiveExamConflictDialog';
 import { clearInterruptedExamSession } from '@/lib/examSessionStorage';
 import { clearExamSnapshot } from '@/lib/offlineDb';
+import { getApiUrl } from '@/lib/utils';
 
 const extractSubjectName = (sub: any): string => {
   if (!sub) return 'General';
@@ -228,7 +229,7 @@ export default function CBTCenter() {
 
   const fetchTournaments = async () => {
     try {
-      const res = await fetch('/api/tournaments');
+      const res = await fetch(getApiUrl('/api/tournaments'));
       const json = await res.json();
       if (json?.success && Array.isArray(json.tournaments)) {
         setTournaments(json.tournaments);
@@ -249,11 +250,32 @@ export default function CBTCenter() {
         if (effectiveId) queryParams.set('userId', effectiveId);
         if (effectiveEmail) queryParams.set('email', effectiveEmail);
 
-        const regRes = await fetch(`/api/tournaments/my-registrations?${queryParams.toString()}`);
-        const regJson = await regRes.json();
-        if (regJson?.success && Array.isArray(regJson.registeredTournamentIds)) {
+        let fetchedRegIds: string[] = [];
+        try {
+          const regRes = await fetch(getApiUrl(`/api/tournaments/my-registrations?${queryParams.toString()}`));
+          if (regRes.ok) {
+            const regJson = await regRes.json();
+            if (regJson?.success && Array.isArray(regJson.registeredTournamentIds)) {
+              fetchedRegIds = regJson.registeredTournamentIds;
+            }
+          }
+        } catch (_) {}
+
+        if (fetchedRegIds.length === 0 && effectiveId) {
+          try {
+            const { data: dbParts } = await supabase
+              .from('tournament_participants')
+              .select('tournament_id')
+              .eq('user_id', effectiveId);
+            if (dbParts && Array.isArray(dbParts)) {
+              fetchedRegIds = dbParts.map((p: any) => p.tournament_id).filter(Boolean);
+            }
+          } catch {}
+        }
+
+        if (fetchedRegIds.length > 0) {
           setRegisteredTournamentIds(prev => {
-            const merged = Array.from(new Set([...prev, ...regJson.registeredTournamentIds]));
+            const merged = Array.from(new Set([...prev, ...fetchedRegIds]));
             try {
               localStorage.setItem('scholar_registered_tournaments', JSON.stringify(merged));
             } catch {}
@@ -275,7 +297,7 @@ export default function CBTCenter() {
     }
     setRegisteringTournamentId(t.id);
     try {
-      const res = await fetch('/api/tournaments/register', {
+      const res = await fetch(getApiUrl('/api/tournaments/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

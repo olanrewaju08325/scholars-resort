@@ -14,6 +14,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/context/AuthContext';
 import { WeeklyChallenge } from '@/components/dashboard/WeeklyChallenge';
 import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, formatTournamentCountdown } from '@/utils/tournamentUtils';
+import { getApiUrl } from '@/lib/utils';
 
 export default function Tournaments() {
   const { profile, user, refreshProfile } = useAuth();
@@ -64,11 +65,55 @@ export default function Tournaments() {
       if (effectiveId) queryParams.set('userId', effectiveId);
       if (effectiveEmail) queryParams.set('email', effectiveEmail);
 
-      const res = await fetch(`/api/tournaments/my-registrations?${queryParams.toString()}`);
-      const json = await res.json();
-      if (json?.success && Array.isArray(json.registeredTournamentIds)) {
+      let fetchedIds: string[] = [];
+      try {
+        const res = await fetch(getApiUrl(`/api/tournaments/my-registrations?${queryParams.toString()}`));
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.success && Array.isArray(json.registeredTournamentIds)) {
+            fetchedIds = json.registeredTournamentIds;
+          }
+        }
+      } catch (e) {
+        // Direct DB fallback below handles it silently
+      }
+
+      // Direct Supabase fallback if API returned empty or had edge network delay
+      if (fetchedIds.length === 0 && effectiveId) {
+        try {
+          const { data: dbParts } = await supabase
+            .from('tournament_participants')
+            .select('tournament_id')
+            .eq('user_id', effectiveId);
+          if (dbParts && Array.isArray(dbParts)) {
+            fetchedIds = dbParts.map((p: any) => p.tournament_id).filter(Boolean);
+          }
+        } catch {}
+      }
+
+      // Check admin_settings fallback
+      if (fetchedIds.length === 0) {
+        try {
+          const { data: partSetting } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'tournament_participants_db')
+            .maybeSingle();
+          if (Array.isArray(partSetting?.setting_value)) {
+            partSetting.setting_value.forEach((p: any) => {
+              if ((effectiveId && p.user_id === effectiveId) || 
+                  (effectiveEmail && p.user_email?.toLowerCase() === effectiveEmail.toLowerCase())) {
+                if (p.tournament_id) fetchedIds.push(p.tournament_id);
+                if (p.legacy_id) fetchedIds.push(p.legacy_id);
+              }
+            });
+          }
+        } catch {}
+      }
+
+      if (fetchedIds.length > 0) {
         setRegisteredTournamentIds(prev => {
-          const merged = Array.from(new Set([...prev, ...json.registeredTournamentIds]));
+          const merged = Array.from(new Set([...prev, ...fetchedIds]));
           try {
             localStorage.setItem('scholar_registered_tournaments', JSON.stringify(merged));
           } catch {}
@@ -85,11 +130,34 @@ export default function Tournaments() {
     if (!effectiveId) return;
     setLoadingClaims(true);
     try {
-      const res = await fetch(`/api/tournaments/prize-claims?user_id=${encodeURIComponent(effectiveId)}`);
-      const json = await res.json();
-      if (json?.success && Array.isArray(json.claims)) {
-        setMyClaims(json.claims);
+      let claimsList: any[] = [];
+      try {
+        const res = await fetch(getApiUrl(`/api/tournaments/prize-claims?user_id=${encodeURIComponent(effectiveId)}`));
+        if (res.ok) {
+          const json = await res.json();
+          if (json?.success && Array.isArray(json.claims)) {
+            claimsList = json.claims;
+          }
+        }
+      } catch (e) {
+        // Direct DB fallback below handles it silently
       }
+
+      // Supabase direct fallback
+      if (claimsList.length === 0) {
+        try {
+          const { data: claimsSetting } = await supabase
+            .from('admin_settings')
+            .select('setting_value')
+            .eq('setting_key', 'tournament_prize_claims_db')
+            .maybeSingle();
+          if (Array.isArray(claimsSetting?.setting_value)) {
+            claimsList = claimsSetting.setting_value.filter((c: any) => c.user_id === effectiveId);
+          }
+        } catch {}
+      }
+
+      setMyClaims(claimsList);
     } catch (err) {
       console.warn('Could not fetch prize claims:', err);
     } finally {
@@ -144,7 +212,7 @@ export default function Tournaments() {
 
     // 1. Fetch from server API
     try {
-      const res = await fetch('/api/tournaments');
+      const res = await fetch(getApiUrl('/api/tournaments'));
       const json = await res.json();
       if (json?.success && Array.isArray(json.tournaments)) {
         json.tournaments.forEach((t: any) => {
@@ -252,7 +320,7 @@ export default function Tournaments() {
   const executeRegistration = async (tournament: any, paymentDetails: any = {}) => {
     setRegisteringId(tournament.id);
     try {
-      const res = await fetch('/api/tournaments/register', {
+      const res = await fetch(getApiUrl('/api/tournaments/register'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -335,7 +403,7 @@ export default function Tournaments() {
 
     setClaimSubmitting(true);
     try {
-      const res = await fetch('/api/tournaments/prize-claim', {
+      const res = await fetch(getApiUrl('/api/tournaments/prize-claim'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -527,7 +595,7 @@ export default function Tournaments() {
                         }
                         toast.info(`Activating automated email alert for "${tTitle}"...`);
                         try {
-                          await fetch('/api/tournaments/schedule-reminder', {
+                          await fetch(getApiUrl('/api/tournaments/schedule-reminder'), {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({

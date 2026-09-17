@@ -8,6 +8,7 @@ import {
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
+import { getApiUrl } from '@/lib/utils';
 
 const Pricing = () => {
   const { user, profile, loading: authLoading } = useAuth();
@@ -359,7 +360,7 @@ const Pricing = () => {
 
       // ── 7. Submit to backend API endpoint (Guaranteed persistence + Email notifications) ──
       try {
-        await fetch('/api/manual-payments/submit', {
+        await fetch(getApiUrl('/api/manual-payments/submit'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

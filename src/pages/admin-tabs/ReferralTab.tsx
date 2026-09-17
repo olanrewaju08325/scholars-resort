@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import {
   Network, Users, Trophy, Percent, Link2, DollarSign,
   Settings2, CheckCircle2, XCircle, Clock, Save,
-  Smartphone, Building2, ShieldCheck, RefreshCw
+  Smartphone, Building2, ShieldCheck, RefreshCw, Trash2
 } from 'lucide-react';
 import { logAdminActivity } from '@/services/adminActivityService';
 import { authFetch } from '@/lib/apiAuth';
@@ -173,11 +173,15 @@ export const ReferralTab = () => {
     const counts: Record<string, { name: string, count: number, converted: number }> = {};
     
     data.forEach(r => {
-      const rid = r.referrer?.id;
+      const rid = r.referrer?.id || r.referrerId;
       if (!rid) return;
       
       if (!counts[rid]) {
-        counts[rid] = { name: r.referrer.full_name || 'Unknown', count: 0, converted: 0 };
+        counts[rid] = { 
+          name: r.referrer?.full_name || r.referrerName || (r.referrerCode ? `Ambassador (${r.referrerCode})` : 'Scholar Referrer'), 
+          count: 0, 
+          converted: 0 
+        };
       }
       counts[rid].count += 1;
       if (r.converted) counts[rid].converted += 1;
@@ -185,6 +189,27 @@ export const ReferralTab = () => {
 
     const sorted = Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 10);
     setLeaderboard(sorted);
+  };
+
+  const handleClearMockData = async () => {
+    if (!window.confirm('Are you sure you want to purge diagnostic and mock test referrals? Genuine student referrals will be retained.')) {
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await authFetch('/api/referrals/admin/clear-mock-data', { method: 'POST' });
+      const data = await res.json();
+      if (data.success) {
+        toast.success(data.message || 'Mock referral records successfully purged.');
+        await fetchReferralData();
+      } else {
+        toast.error(data.error || 'Failed to purge mock records.');
+      }
+    } catch (err: any) {
+      toast.error(`Error: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Save Referral Configuration
@@ -275,15 +300,27 @@ export const ReferralTab = () => {
             Configure commission rewards, review student bank payout requests, and monitor top student referrers.
           </p>
         </div>
-        <Button 
-          variant="outline" 
-          size="sm" 
-          onClick={fetchReferralData} 
-          disabled={loading}
-          className="text-xs font-semibold gap-1.5"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleClearMockData} 
+            disabled={loading}
+            className="text-xs font-semibold gap-1.5 border-rose-500/30 text-rose-400 hover:bg-rose-950/40 hover:text-rose-300"
+            title="Clean out test and diagnostic referral records"
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Purge Mock Data
+          </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={fetchReferralData} 
+            disabled={loading}
+            className="text-xs font-semibold gap-1.5"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh Data
+          </Button>
+        </div>
       </div>
 
       {/* Automated Diagnostic Suite */}

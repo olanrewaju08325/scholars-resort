@@ -283,8 +283,20 @@ export async function awardDailyStreakXp(userId: string, streakDays: number): Pr
 
   await awardXp(userId, totalAward, `Daily Study Streak: Day ${streakDays}`);
 
+  // Also award Scholar Coins
+  const baseCoins = 10;
+  const streakBonusCoins = Math.min(50, Math.floor(streakDays * 2));
+  let totalCoins = baseCoins + streakBonusCoins;
+
+  if (streakDays === 3) totalCoins += 30;
+  else if (streakDays === 7) totalCoins += 100;
+  else if (streakDays === 14) totalCoins += 200;
+  else if (streakDays === 30) totalCoins += 500;
+
+  await awardCoins(userId, totalCoins, `Daily Study Sequence: Day ${streakDays}`);
+
   toast.success(`Streak Maintained: Day ${streakDays}!`, {
-    description: `${bonusDesc} (Total: +${totalAward} XP)`,
+    description: `${bonusDesc} (+${totalCoins} Coins)`,
     duration: 6000
   });
 
@@ -292,6 +304,141 @@ export async function awardDailyStreakXp(userId: string, streakDays: number): Pr
   await checkStreakBadges(userId, streakDays);
 
   return totalAward;
+}
+
+/**
+ * Award Scholar Coins to a student profile, persist to DB and local storage
+ */
+export async function awardCoins(userId: string, amount: number, reason: string): Promise<number> {
+  if (!userId || amount <= 0) return 0;
+
+  try {
+    let currentCoins = 0;
+    try {
+      const { data: profile } = await supabase.from('profiles').select('coins').eq('id', userId).maybeSingle();
+      if (profile?.coins !== undefined) {
+        currentCoins = Number(profile.coins) || 0;
+      } else {
+        const local = localStorage.getItem(`user_coins_${userId}`);
+        if (local) currentCoins = parseInt(local, 10) || 0;
+      }
+    } catch {
+      const local = localStorage.getItem(`user_coins_${userId}`);
+      if (local) currentCoins = parseInt(local, 10) || 0;
+    }
+
+    const newCoins = currentCoins + amount;
+    localStorage.setItem(`user_coins_${userId}`, newCoins.toString());
+
+    // Update in Supabase
+    try {
+      await supabase.from('profiles').update({
+        coins: newCoins,
+        updated_at: new Date().toISOString()
+      }).eq('id', userId);
+    } catch (e) {
+      console.warn('[Gamification] Offline coin write enqueue:', e);
+    }
+
+    window.dispatchEvent(new CustomEvent('user_coins_updated', {
+      detail: { userId, coins: newCoins, amount, reason }
+    }));
+
+    return newCoins;
+  } catch (err) {
+    console.warn('Failed to award coins:', err);
+    return 0;
+  }
+}
+
+export interface MysteryChestReward {
+  day: number;
+  xp: number;
+  coins: number;
+  passGranted?: boolean;
+  freezeGranted?: boolean;
+  scholarshipTicketGranted?: boolean;
+  perkTitle: string;
+  perkDescription: string;
+}
+
+/**
+ * Claim and unlock Mystery Box reward for study sequence milestones (Day 3, 7, 14, 30)
+ */
+export async function claimMysteryChest(userId: string, day: number): Promise<MysteryChestReward | null> {
+  if (!userId || !day) return null;
+
+  const claimedKey = `scholar_chest_claimed_${userId}_day_${day}`;
+  if (localStorage.getItem(claimedKey)) {
+    toast.info(`You have already opened your Day ${day} Mystery Chest!`);
+    return null;
+  }
+
+  let reward: MysteryChestReward;
+  if (day === 3) {
+    reward = {
+      day: 3,
+      xp: 150,
+      coins: 60,
+      perkTitle: 'Speed Surge Booster',
+      perkDescription: 'Extra practice bonus + 3-Day Flame Badge'
+    };
+  } else if (day === 7) {
+    reward = {
+      day: 7,
+      xp: 350,
+      coins: 150,
+      passGranted: true,
+      perkTitle: 'Free Tournament Pass 🎟️',
+      perkDescription: '1 Free Entry to any paid cash/airtime arena tournament'
+    };
+  } else if (day === 14) {
+    reward = {
+      day: 14,
+      xp: 750,
+      coins: 300,
+      freezeGranted: true,
+      perkTitle: 'Streak Freeze Shield 🛡️',
+      perkDescription: '1 Active Shield to safeguard your streak from a missed day'
+    };
+  } else {
+    // 30 Days or more
+    reward = {
+      day: 30,
+      xp: 1500,
+      coins: 1000,
+      scholarshipTicketGranted: true,
+      perkTitle: 'Monthly Scholarship Draw Ticket 🎓',
+      perkDescription: 'VIP distinction badge + Entry in the monthly cash grant draw'
+    };
+  }
+
+  // Persist claimed state
+  localStorage.setItem(claimedKey, new Date().toISOString());
+
+  // Award XP and Coins
+  await awardXp(userId, reward.xp, `Day ${day} Mystery Chest`);
+  await awardCoins(userId, reward.coins, `Day ${day} Mystery Chest`);
+
+  if (reward.passGranted) {
+    const currentPasses = parseInt(localStorage.getItem(`scholar_tournament_passes_${userId}`) || '0', 10);
+    localStorage.setItem(`scholar_tournament_passes_${userId}`, (currentPasses + 1).toString());
+  }
+
+  if (reward.freezeGranted) {
+    const currentFreezes = parseInt(localStorage.getItem(`scholar_streak_freezes_${userId}`) || '0', 10);
+    localStorage.setItem(`scholar_streak_freezes_${userId}`, (currentFreezes + 1).toString());
+    try {
+      await supabase.from('profiles').update({
+        streak_freezes: currentFreezes + 1
+      }).eq('id', userId);
+    } catch {}
+  }
+
+  triggerConfetti();
+  playLevelUpFanfare();
+
+  return reward;
 }
 
 /**

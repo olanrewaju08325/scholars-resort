@@ -4,7 +4,7 @@ import {
   Timer, GraduationCap, HardDrive, LogOut, Users, ShieldAlert, CloudUpload, 
   RefreshCw, MapPin, GitMerge, Video, Menu, X, Compass, Zap, HelpCircle, 
   Layers, Swords, Sparkles, User, ChevronRight, CheckCircle2, Gift, DollarSign,
-  ShieldCheck
+  ShieldCheck, Flame, Coins, Shield
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -13,6 +13,8 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { PageTransition } from '@/components/PageTransition';
 import { StudentLogoutDialog } from '@/components/StudentLogoutDialog';
 import { OfflineErrorHandler } from '@/components/OfflineErrorHandler';
+import { StudentGuideModal } from '@/components/onboarding/StudentGuideModal';
+import { SequenceRewardsModal } from '@/components/gamification/SequenceRewardsModal';
 import { useState, useEffect } from 'react';
 import { useSync } from '@/hooks/useSync';
 import { getPendingQueueCount, processSyncQueue } from '@/lib/syncQueue';
@@ -25,11 +27,27 @@ export const AppLayout = () => {
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showLogoutDialog, setShowLogoutDialog] = useState(false);
+  const [showGuideModal, setShowGuideModal] = useState(false);
+  const [showRewardsModal, setShowRewardsModal] = useState(false);
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [isSyncingPending, setIsSyncingPending] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   useSync();
+
+  // Auto-prompt first-time students with friendly guide
+  useEffect(() => {
+    if (user?.id) {
+      const guideSeen = localStorage.getItem(`scholars_guide_seen_${user.id}`);
+      if (!guideSeen) {
+        const timer = setTimeout(() => {
+          setShowGuideModal(true);
+          localStorage.setItem(`scholars_guide_seen_${user.id}`, 'true');
+        }, 1500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [user?.id]);
 
   // Close mobile drawer whenever route changes
   useEffect(() => {
@@ -119,50 +137,40 @@ export const AppLayout = () => {
   const userEmail = (user?.email || profile?.email || '').toLowerCase().trim();
   const isAdmin = profile?.role === 'admin' || AUTHORIZED_ADMIN_EMAILS.includes(userEmail);
 
-  // Structured Navigation Groups
+  // 4 Streamlined, High-Clarity Hubs for Students
   const studentNavGroups = [
     {
-      groupTitle: 'LEARN',
+      groupTitle: 'STUDY & CBT',
       items: [
         { label: 'Dashboard', icon: Home, path: '/dashboard' },
-        { label: 'My Learning', icon: MapPin, path: '/journey-map' },
+        { label: 'CBT Exam Center', icon: Timer, path: '/cbt' },
+        { label: 'Practice Questions', icon: PlayCircle, path: '/practice' },
         { label: 'Study Plan', icon: CalendarDays, path: '/plan' },
-        { label: 'CBT Practice', icon: Timer, path: '/cbt' },
       ]
     },
     {
-      groupTitle: 'PRACTICE',
+      groupTitle: 'LIBRARY & SYLLABUS',
       items: [
-        { label: 'Practice', icon: PlayCircle, path: '/practice' },
+        { label: 'JAMB Materials (Offline)', icon: HardDrive, path: '/offline-packs' },
+        { label: 'Literature & Novels', icon: BookOpen, path: '/novel-hub' },
         { label: 'Weakness Practice', icon: Zap, path: '/weakness' },
         { label: 'Flashcards', icon: Layers, path: '/flashcards' },
-        { label: 'Mock Exams', icon: Sparkles, path: '/mocks' },
       ]
     },
     {
-      groupTitle: 'RESOURCES',
+      groupTitle: 'ARENA & REWARDS',
       items: [
-        { label: 'JAMB Materials', icon: HardDrive, path: '/offline-packs' },
-        { label: 'Novel Hub', icon: BookOpen, path: '/novel-hub' },
-        { label: 'Resource Library', icon: BookOpen, path: '/library' },
-        { label: 'Career & Courses', icon: Compass, path: '/career-guide' },
-      ]
-    },
-    {
-      groupTitle: 'COMMUNITY & EARN',
-      items: [
-        { label: 'Study Rooms', icon: Video, path: '/study-rooms' },
-        { label: 'Challenges', icon: Swords, path: '/tournaments' },
-        { label: 'Leaderboard', icon: Trophy, path: '/leaderboard' },
+        { label: 'Prize Tournaments', icon: Swords, path: '/tournaments' },
+        { label: 'National Leaderboard', icon: Trophy, path: '/leaderboard' },
         { label: 'Refer & Earn (₦)', icon: Gift, path: '/referrals' },
         { label: 'Scholarships', icon: GraduationCap, path: '/scholarship' },
       ]
     },
     {
-      groupTitle: 'ACCOUNT',
+      groupTitle: 'MY ACCOUNT',
       items: [
-        { label: 'Profile', icon: User, path: '/profile' },
-        { label: 'Support', icon: HelpCircle, path: '/support' },
+        { label: 'My Profile', icon: User, path: '/profile' },
+        { label: 'Help & Support', icon: HelpCircle, path: '/support' },
       ]
     }
   ];
@@ -179,11 +187,47 @@ export const AppLayout = () => {
       {/* Desktop Sidebar (Persistent)                                              */}
       {/* ========================================================================= */}
       <aside className="w-64 border-r border-border bg-card hidden md:flex flex-col sticky top-0 h-screen z-40">
-        <div className="p-5 pb-3 space-y-3">
-          <Link to="/" className="flex items-center gap-3 text-lg font-bold font-display text-primary">
-            <img src="/scholar.jpg" alt="Scholars Resort" className="w-8 h-8 rounded-lg object-cover border border-primary/20 shadow-sm" />
-            <span className="truncate">Scholars Resort</span>
-          </Link>
+        <div className="p-4 pb-2 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <Link to="/" className="flex items-center gap-2.5 text-base font-bold font-display text-primary">
+              <img src="/scholar.jpg" alt="Scholars Resort" className="w-7 h-7 rounded-lg object-cover border border-primary/20 shadow-xs" />
+              <span className="truncate">Scholars Resort</span>
+            </Link>
+
+            <button
+              onClick={() => setShowGuideModal(true)}
+              className="p-1.5 rounded-lg text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-all text-xs font-bold flex items-center gap-1"
+              title="Open Student Quick Guide"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span className="text-[10px]">Guide</span>
+            </button>
+          </div>
+
+          {/* Daily Sequence & Coins Quick Card (Desktop) */}
+          <button
+            onClick={() => setShowRewardsModal(true)}
+            className="w-full flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-amber-500/10 via-primary/10 to-orange-500/10 border border-amber-500/30 hover:border-amber-500/50 transition-all text-left group shadow-xs"
+          >
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950 shadow-xs">
+                <Flame className="w-3.5 h-3.5 fill-slate-950" />
+              </div>
+              <div>
+                <div className="text-xs font-bold text-foreground group-hover:text-primary transition-colors">
+                  {profile?.streak_days || 0} Day Sequence
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  Rewards & Streak Hub
+                </div>
+              </div>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                <Coins className="w-3 h-3" /> {profile?.coins || 0}
+              </span>
+            </div>
+          </button>
 
           {/* Sync Pending Badge (Desktop) */}
           {pendingSyncCount > 0 && (
@@ -204,7 +248,7 @@ export const AppLayout = () => {
           {/* Quick Search trigger */}
           <button 
             onClick={triggerSearch}
-            className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all border border-border/60 bg-muted/30 shadow-xs"
+            className="w-full flex items-center justify-between gap-2 px-3 py-1.5 rounded-xl text-xs font-medium text-muted-foreground hover:bg-muted hover:text-foreground transition-all border border-border/60 bg-muted/30 shadow-xs"
           >
             <div className="flex items-center gap-2">
               <Search className="h-3.5 w-3.5" />
@@ -217,7 +261,7 @@ export const AppLayout = () => {
         </div>
         
         {/* Navigation Sections */}
-        <nav className="flex-1 px-3 space-y-4 overflow-y-auto custom-scrollbar pb-4">
+        <nav className="flex-1 px-3 space-y-3.5 overflow-y-auto custom-scrollbar pb-4">
           {isAdmin && (
             <div className="mb-2">
               <Link 
@@ -316,6 +360,16 @@ export const AppLayout = () => {
         </div>
 
         <div className="flex items-center gap-1 shrink-0">
+          {/* Quick Guide Trigger (Mobile) */}
+          <button
+            onClick={() => setShowGuideModal(true)}
+            className="p-1.5 text-primary hover:bg-primary/10 rounded-lg transition-colors"
+            title="Student Quick Guide"
+            aria-label="Student Quick Guide"
+          >
+            <HelpCircle className="w-4 h-4" />
+          </button>
+
           {/* Quick Search Icon Button */}
           <button
             onClick={triggerSearch}
@@ -416,6 +470,47 @@ export const AppLayout = () => {
                 >
                   <ChevronRight className="w-4 h-4" />
                 </Link>
+              </div>
+
+              {/* Daily Sequence & Rewards Action in Drawer */}
+              <div className="mx-3 mt-2">
+                <button
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    setShowRewardsModal(true);
+                  }}
+                  className="w-full flex items-center justify-between p-2.5 rounded-xl bg-gradient-to-r from-amber-500/15 via-primary/15 to-orange-500/15 border border-amber-500/30 text-left shadow-xs"
+                >
+                  <div className="flex items-center gap-2">
+                    <div className="p-1.5 rounded-lg bg-amber-500 text-slate-950">
+                      <Flame className="w-3.5 h-3.5 fill-slate-950" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-foreground">{profile?.streak_days || 0} Day Sequence</p>
+                      <p className="text-[10px] text-muted-foreground">Tap for Rewards & Coins Hub</p>
+                    </div>
+                  </div>
+                  <span className="text-xs font-extrabold text-amber-600 dark:text-amber-400 flex items-center gap-1 font-mono">
+                    <Coins className="w-3 h-3" /> {profile?.coins || 0}
+                  </span>
+                </button>
+              </div>
+
+              {/* Student Guide Button in Drawer */}
+              <div className="mx-3 mt-1.5">
+                <button
+                  onClick={() => {
+                    setDrawerOpen(false);
+                    setShowGuideModal(true);
+                  }}
+                  className="w-full flex items-center justify-between p-2 rounded-xl bg-primary/10 hover:bg-primary/20 border border-primary/20 text-primary text-xs font-bold transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    <HelpCircle className="w-4 h-4" />
+                    <span>How to Use / Student Guide</span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {/* Pending Sync Alert inside Drawer */}
@@ -564,6 +659,12 @@ export const AppLayout = () => {
       
       {/* Student Account & Logout Modal */}
       <StudentLogoutDialog open={showLogoutDialog} onOpenChange={setShowLogoutDialog} />
+
+      {/* Student Quick Guide / How It Works Modal */}
+      <StudentGuideModal open={showGuideModal} onOpenChange={setShowGuideModal} />
+
+      {/* Sequence, Milestones & Coins Rewards Hub */}
+      <SequenceRewardsModal open={showRewardsModal} onOpenChange={setShowRewardsModal} />
 
       {/* ========================================================================= */}
       {/* Mobile Bottom Navigation Bar (Persistent on Mobile)                       */}

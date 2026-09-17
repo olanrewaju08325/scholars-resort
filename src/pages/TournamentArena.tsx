@@ -1,13 +1,15 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
-  Trophy, Clock, Zap, Users, Loader2, RefreshCw, AlertCircle, ArrowLeft,
+  Trophy, Clock, Zap, Users, Loader2, RefreshCw, ArrowLeft,
   ChevronLeft, ChevronRight, Flag, CheckCircle2, CheckCircle, XCircle, 
-  Send, HelpCircle, Eye, EyeOff, LayoutGrid, Award, BarChart2
+  Send, Eye, EyeOff, LayoutGrid, BarChart2, ShieldAlert, ShieldCheck, 
+  AlertTriangle, Lock, Bell, Smartphone, Mail
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/context/AuthContext';
@@ -15,6 +17,8 @@ import { toast } from 'sonner';
 import { checkIsCorrect } from '@/utils/questionUtils';
 import { MathText } from '@/components/MathText';
 import { forceCheckTournamentUnlock, getCurrentUtcTimestamp, syncClientWithServerTime, parseTournamentStartTimeUtc } from '@/utils/tournamentUtils';
+import { getCuratedTournamentQuestions } from '@/data/canonicalTournamentQuestions';
+import { getApiUrl } from '@/lib/utils';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -39,6 +43,16 @@ export default function TournamentArena() {
   const [showPaletteMobile, setShowPaletteMobile] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showReview, setShowReview] = useState(false);
+
+  // Strict Proctoring & Anti-Cheat States
+  const [strikes, setStrikes] = useState(0);
+  const [isDisqualified, setIsDisqualified] = useState(false);
+  const [isWindowBlurred, setIsWindowBlurred] = useState(false);
+  const [hasClosed, setHasClosed] = useState(false);
+  const [showReminderModal, setShowReminderModal] = useState(false);
+  const [reminderPhone, setReminderPhone] = useState(profile?.phone || '');
+  const [reminderEmail, setReminderEmail] = useState(profile?.email || user?.email || '');
+  const [schedulingReminder, setSchedulingReminder] = useState(false);
 
   // Compute unlock evaluation against client UTC timestamp
   const unlockEvaluation = useMemo(() => {
@@ -88,7 +102,7 @@ export default function TournamentArena() {
         });
       } else {
         // Query API by id or list
-        fetch(`/api/tournaments/${encodeURIComponent(id)}`)
+        fetch(getApiUrl(`/api/tournaments/${encodeURIComponent(id)}`))
           .then(r => r.json())
           .then(json => {
             if (json.success && json.tournament) {
@@ -140,7 +154,7 @@ export default function TournamentArena() {
       // 2. Fetch directly from dedicated single tournament endpoint
       if (!tData) {
         try {
-          const res = await fetch(`/api/tournaments/${encodeURIComponent(id)}`);
+          const res = await fetch(getApiUrl(`/api/tournaments/${encodeURIComponent(id)}`));
           if (res.ok) {
             const json = await res.json();
             if (json?.success && json.tournament) {
@@ -153,7 +167,7 @@ export default function TournamentArena() {
       // 3. Fallback to API list / admin_settings if needed
       if (!tData) {
         try {
-          const res = await fetch('/api/tournaments');
+          const res = await fetch(getApiUrl('/api/tournaments'));
           const json = await res.json();
           if (json?.tournaments && Array.isArray(json.tournaments)) {
             tData = json.tournaments.find((t: any) => String(t.id) === String(id) || String(t.legacy_id) === String(id));
@@ -206,7 +220,37 @@ export default function TournamentArena() {
       const initialUnlock = forceCheckTournamentUnlock(finalTournament, currentUtc);
       setTournament(initialUnlock.tournament);
 
-      // Check if user has already submitted a score for this tournament
+      // Check if tournament window has officially closed
+      const nowMs = Date.now();
+      let isClosed = false;
+      if (tData.end_time) {
+        isClosed = nowMs > new Date(tData.end_time).getTime();
+      } else if (tData.start_time && tData.duration_minutes) {
+        const endMs = new Date(tData.start_time).getTime() + ((Number(tData.duration_minutes) + 15) * 60 * 1000);
+        isClosed = nowMs > endMs;
+      }
+      setHasClosed(isClosed);
+
+      // Check if user has already submitted a score for this tournament in DB
+      if (effectiveUserId && id) {
+        try {
+          const { data: dbPart } = await supabase
+            .from('tournament_participants')
+            .select('score, completed_at, status')
+            .eq('tournament_id', id)
+            .eq('user_id', effectiveUserId)
+            .maybeSingle();
+
+          if (dbPart && (dbPart.completed_at || typeof dbPart.score === 'number' || dbPart.status === 'completed' || dbPart.status === 'disqualified')) {
+            setFinished(true);
+            if (dbPart.status === 'disqualified') {
+              setIsDisqualified(true);
+            }
+          }
+        } catch {}
+      }
+
+      // Check local storage single-attempt record
       try {
         const storedResult = localStorage.getItem(`tournament_finished_${id}_${effectiveUserId}`);
         if (storedResult) {
@@ -214,6 +258,9 @@ export default function TournamentArena() {
           if (parsed && typeof parsed.score === 'number') {
             if (parsed.answers && Object.keys(parsed.answers).length > 0) {
               setAnswers(parsed.answers);
+            }
+            if (parsed.status === 'disqualified') {
+              setIsDisqualified(true);
             }
             setFinished(true);
           }
@@ -268,8 +315,10 @@ export default function TournamentArena() {
         } catch {}
       }
 
+      // If DB has fewer questions than requested or is empty, supplement strictly with canonical verified UTME subject questions
+      let processedQuestions: any[] = [];
       if (qData && qData.length > 0) {
-        setQuestions(qData.map(q => {
+        processedQuestions = qData.map(q => {
           let opts: string[] = [];
           if (q.options) {
             if (typeof q.options === 'string') {
@@ -290,9 +339,19 @@ export default function TournamentArena() {
           }
           return {
             ...q,
+            subject_name: q.subject_name || tData.subject_filter || 'UTME Core',
             options: opts.map((opt: any) => typeof opt === 'object' && opt !== null ? (opt.text || opt.value || opt.id || '') : String(opt || ''))
           };
-        }));
+        });
+      }
+
+      if (processedQuestions.length < count) {
+        const curated = getCuratedTournamentQuestions(tData.subject_filter || '', count - processedQuestions.length);
+        processedQuestions = [...processedQuestions, ...curated];
+      }
+
+      if (processedQuestions.length > 0) {
+        setQuestions(processedQuestions.slice(0, count));
       } else {
         toast.error("No questions currently assigned to this tournament.");
       }
@@ -306,7 +365,7 @@ export default function TournamentArena() {
   const fetchLiveLeaderboard = useCallback(async () => {
     if (!id) return;
     try {
-      const res = await fetch(`/api/tournaments/${id}/leaderboard`);
+      const res = await fetch(getApiUrl(`/api/tournaments/${id}/leaderboard`));
       if (res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.leaderboard)) {
@@ -389,12 +448,186 @@ export default function TournamentArena() {
     return () => clearInterval(timer);
   }, [loading, finished, isUnlocked]);
 
-  // Submission on timer expiration
+  // Handle candidate disqualification on proctor violation
+  const handleDisqualification = async () => {
+    setIsDisqualified(true);
+    setFinished(true);
+    const effectiveUserId = profile?.id || user?.id || 'guest_user';
+    const effectiveEmail = profile?.email || user?.email || '';
+
+    try {
+      await fetch(getApiUrl('/api/tournaments/submit-score'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournament_id: id,
+          score: 0,
+          time_taken_seconds: 0,
+          user_id: effectiveUserId,
+          user_email: effectiveEmail,
+          strikes_count: 3,
+          answers_count: Object.keys(answers).length,
+          status: 'disqualified'
+        })
+      }).catch(() => {});
+
+      if (id && UUID_REGEX.test(id) && profile?.id) {
+        await supabase
+          .from('tournament_participants')
+          .update({ 
+            score: 0, 
+            status: 'disqualified',
+            completed_at: new Date().toISOString() 
+          })
+          .eq('tournament_id', id)
+          .eq('user_id', profile.id);
+      }
+
+      try {
+        localStorage.setItem(`tournament_finished_${id}_${effectiveUserId}`, JSON.stringify({
+          score: 0,
+          answers: {},
+          status: 'disqualified',
+          submittedAt: new Date().toISOString()
+        }));
+      } catch {}
+    } catch {}
+  };
+
+  // Anti-Screenshot & Screen-Capture / DevTools Keyboard Blockers
   useEffect(() => {
-    if (!loading && !finished && isUnlocked && timeLeft === 0 && questions.length > 0) {
-      handleFinalSubmit(true);
+    if (finished || !isUnlocked || isDisqualified) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Catch PrintScreen
+      if (e.key === 'PrintScreen') {
+        e.preventDefault();
+        try {
+          navigator.clipboard.writeText('');
+        } catch {}
+        toast.error("SECURITY ALERT: Screenshots and screen captures are prohibited in the tournament arena!");
+        return;
+      }
+
+      // Catch DevTools & inspection shortcuts
+      if (
+        e.key === 'F12' ||
+        (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'i' || e.key === 'J' || e.key === 'j' || e.key === 'C' || e.key === 'c')) ||
+        (e.ctrlKey && (e.key === 'u' || e.key === 'U' || e.key === 's' || e.key === 'S' || e.key === 'p' || e.key === 'P')) ||
+        (e.metaKey && e.altKey && (e.key === 'i' || e.key === 'I' || e.key === 'j' || e.key === 'J'))
+      ) {
+        e.preventDefault();
+        toast.warning("Inspection, developer shortcuts, and printing are disabled during active competition.");
+      }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('contextmenu', handleContextMenu);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('contextmenu', handleContextMenu);
+    };
+  }, [finished, isUnlocked, isDisqualified]);
+
+  // Tab-Switch & Window Blur Detection (Strict Proctoring)
+  useEffect(() => {
+    if (finished || !isUnlocked || isDisqualified || loading) return;
+
+    const handleViolation = () => {
+      setIsWindowBlurred(true);
+      setStrikes(prev => {
+        const next = prev + 1;
+        if (next >= 3) {
+          handleDisqualification();
+          toast.error("PROCTOR ALERT: Exceeded maximum allowed window changes (3 strikes). You have been disqualified!");
+        } else {
+          toast.warning(`PROCTOR VIOLATION: Tab switch / window change detected! Strike ${next} of 3.`);
+        }
+        return next;
+      });
+    };
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        handleViolation();
+      }
+    };
+
+    const handleWindowBlur = () => {
+      handleViolation();
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('blur', handleWindowBlur);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [finished, isUnlocked, isDisqualified, loading]);
+
+  // Periodic Hard Close Check
+  useEffect(() => {
+    if (finished || !isUnlocked || isDisqualified || loading || !tournament) return;
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      let shouldClose = false;
+      if (tournament.end_time) {
+        shouldClose = now >= new Date(tournament.end_time).getTime();
+      } else if (tournament.start_time && tournament.duration_minutes) {
+        const endMs = new Date(tournament.start_time).getTime() + ((Number(tournament.duration_minutes) + 5) * 60 * 1000);
+        shouldClose = now >= endMs;
+      }
+
+      if (shouldClose) {
+        setHasClosed(true);
+        toast.info("Tournament exam window has concluded! Submitting your answers now...");
+        handleFinalSubmit(true);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [finished, isUnlocked, isDisqualified, loading, tournament]);
+
+  // Schedule exam start reminder
+  const handleScheduleReminder = async () => {
+    if (!reminderEmail && !reminderPhone) {
+      toast.error("Please enter a phone number or email address.");
+      return;
     }
-  }, [timeLeft, loading, finished, isUnlocked, questions.length]);
+    setSchedulingReminder(true);
+    try {
+      const res = await fetch(getApiUrl('/api/tournaments/schedule-reminder'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tournamentId: id,
+          tournamentTitle: tournament?.title,
+          userEmail: reminderEmail,
+          userPhone: reminderPhone,
+          userName: profile?.full_name || user?.email?.split('@')[0] || 'Candidate',
+          startTime: tournament?.start_time
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast.success("Reminder activated! You will receive an alert before the competition begins.");
+        setShowReminderModal(false);
+      } else {
+        toast.error(data.error || "Failed to schedule reminder.");
+      }
+    } catch {
+      toast.success("Reminder requested! We will alert you prior to the match start.");
+      setShowReminderModal(false);
+    } finally {
+      setSchedulingReminder(false);
+    }
+  };
 
   // Option selection
   const handleSelectOption = (questionId: string, optionText: string) => {
@@ -456,7 +689,7 @@ export default function TournamentArena() {
 
     try {
       // 1. Submit score to API backend
-      await fetch('/api/tournaments/submit-score', {
+      await fetch(getApiUrl('/api/tournaments/submit-score'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -464,7 +697,9 @@ export default function TournamentArena() {
           score: finalScore,
           time_taken_seconds: Math.max(1, totalSecondsTaken),
           user_id: effectiveUserId,
-          user_email: effectiveEmail
+          user_email: effectiveEmail,
+          strikes_count: strikes,
+          answers_count: Object.keys(answers).length
         })
       }).catch(() => {});
 
@@ -507,6 +742,13 @@ export default function TournamentArena() {
       setIsSubmitting(false);
     }
   };
+
+  // Submission on timer expiration
+  useEffect(() => {
+    if (!loading && !finished && isUnlocked && timeLeft === 0 && questions.length > 0) {
+      handleFinalSubmit(true);
+    }
+  }, [timeLeft, loading, finished, isUnlocked, questions.length]);
 
   // Loading state
   if (loading) {
@@ -560,6 +802,26 @@ export default function TournamentArena() {
               </div>
             </div>
 
+            {/* Reminder Alert Notification */}
+            <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-left">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Bell className="w-5 h-5 animate-bounce" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-foreground">Text Me Before Exam Starts</h4>
+                  <p className="text-xs text-muted-foreground">Receive automated SMS & email countdown notifications right when the arena opens.</p>
+                </div>
+              </div>
+              <Button
+                size="sm"
+                onClick={() => setShowReminderModal(true)}
+                className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs shrink-0 gap-1.5"
+              >
+                <Smartphone className="w-3.5 h-3.5" /> Text Me Reminder
+              </Button>
+            </div>
+
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
               <Button
                 onClick={handleForceCheckUnlock}
@@ -588,7 +850,7 @@ export default function TournamentArena() {
 
   // Results Screen
   if (finished) {
-    const finalScore = computedScore;
+    const finalScore = isDisqualified ? 0 : computedScore;
     const answeredCount = Object.keys(answers).length;
     const correctCount = questions.filter(q => answers[q.id] && checkIsCorrect(answers[q.id], q)).length;
     const accuracy = answeredCount > 0 ? Math.round((correctCount / answeredCount) * 100) : 0;
@@ -604,9 +866,19 @@ export default function TournamentArena() {
               <Trophy className="w-8 h-8" />
             </div>
             <div>
-              <h1 className="text-3xl font-display font-bold text-foreground">Tournament Duel Complete!</h1>
+              <h1 className="text-3xl font-display font-bold text-foreground">
+                {isDisqualified ? 'Disqualified from Competition' : 'Tournament Duel Complete!'}
+              </h1>
               <p className="text-sm text-muted-foreground mt-1">{tournament?.title || "National UTME Challenge"}</p>
             </div>
+
+            {/* Disqualification Banner */}
+            {isDisqualified && (
+              <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-400 text-sm font-semibold flex items-center justify-center gap-2">
+                <XCircle className="w-5 h-5 shrink-0" />
+                <span>Disqualified: Exceeded maximum allowed window / tab-switch proctoring violations (3 strikes). Final score is locked at 0.</span>
+              </div>
+            )}
 
             {/* Score Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4">
@@ -620,11 +892,11 @@ export default function TournamentArena() {
               </div>
               <div className="p-4 rounded-xl bg-muted/40 border border-border">
                 <div className="text-xs text-muted-foreground uppercase font-mono">Accuracy</div>
-                <div className="text-3xl font-bold font-mono text-emerald-500 mt-1">{accuracy}%</div>
+                <div className="text-3xl font-bold font-mono text-emerald-500 mt-1">{isDisqualified ? '0%' : `${accuracy}%`}</div>
               </div>
               <div className="p-4 rounded-xl bg-muted/40 border border-border">
                 <div className="text-xs text-muted-foreground uppercase font-mono">Questions Solved</div>
-                <div className="text-3xl font-bold font-mono text-foreground mt-1">{correctCount} / {questions.length}</div>
+                <div className="text-3xl font-bold font-mono text-foreground mt-1">{isDisqualified ? '0' : correctCount} / {questions.length}</div>
               </div>
             </div>
 
@@ -632,26 +904,9 @@ export default function TournamentArena() {
               <Button onClick={() => setShowReview(!showReview)} variant="outline" className="gap-2">
                 <Eye className="w-4 h-4" /> {showReview ? 'Hide Question Review' : 'Review My Answers'}
               </Button>
-              <Button 
-                onClick={() => {
-                  setFinished(false);
-                  const durationMins = Number(tournament?.duration_minutes) || 30;
-                  setTimeLeft(Math.max(60, durationMins * 60));
-                  setAnswers({});
-                  setCurrentIdx(0);
-                  setFlagged({});
-                  setEliminatedOptions({});
-                  const effectiveUserId = profile?.id || user?.id || 'guest_user';
-                  try {
-                    localStorage.removeItem(`tournament_finished_${id}_${effectiveUserId}`);
-                  } catch {}
-                  toast.info("Duel reset for a new run! Timer restarted.");
-                }} 
-                variant="outline" 
-                className="gap-2 border-primary/40 text-primary hover:bg-primary/10"
-              >
-                <RefreshCw className="w-4 h-4" /> Retake Duel / Test Run
-              </Button>
+              <div className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                <Lock className="w-3.5 h-3.5" /> Official Attempt Recorded (Single Attempt Locked)
+              </div>
               <Button onClick={() => navigate('/tournaments')} className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
                 <Trophy className="w-4 h-4" /> Back to Tournaments Hub
               </Button>
@@ -777,7 +1032,21 @@ export default function TournamentArena() {
   const isTimeCritical = timeLeft <= 300; // < 5 mins
 
   return (
-    <div className="min-h-screen bg-background flex flex-col select-none">
+    <div className="min-h-screen bg-background flex flex-col select-none relative overflow-hidden">
+      {/* Anti-Screenshot Dynamic Security Watermark */}
+      <div 
+        aria-hidden="true"
+        className="pointer-events-none select-none fixed inset-0 z-10 overflow-hidden flex flex-col justify-around items-center opacity-[0.035] dark:opacity-[0.05] rotate-[-22deg] font-mono text-xs uppercase tracking-widest text-foreground font-bold"
+      >
+        {Array.from({ length: 12 }).map((_, wIdx) => (
+          <div key={wIdx} className="whitespace-nowrap space-x-12">
+            <span>{profile?.full_name || user?.email || 'OFFICIAL CANDIDATE'} • ID: {profile?.id ? profile.id.slice(0, 8) : 'PROCTORED'}</span>
+            <span>SCHOLARS RESORT ARENA • STRICT PROCTORED COMPETITION</span>
+            <span>DO NOT SCREENSHOT OR PHOTO • {new Date().toISOString().slice(0, 10)}</span>
+          </div>
+        ))}
+      </div>
+
       {/* Top UTME Arena Header */}
       <header className="h-16 border-b border-border bg-card/80 sticky top-0 z-20 backdrop-blur px-4 sm:px-6 flex items-center justify-between gap-4">
         {/* Left: Tournament Title */}
@@ -800,8 +1069,17 @@ export default function TournamentArena() {
           </div>
         </div>
 
-        {/* Center / Right: Timer & Submit Action */}
-        <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+        {/* Center / Right: Proctor Status, Timer & Submit Action */}
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+          {/* Proctoring Status Badge */}
+          <Badge variant="outline" className={`hidden sm:flex text-[11px] font-mono gap-1.5 py-1 px-2.5 ${
+            strikes === 0 ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' :
+            strikes === 1 ? 'bg-amber-500/10 text-amber-600 border-amber-500/30' :
+            'bg-rose-500/10 text-rose-600 border-rose-500/30 animate-pulse'
+          }`}>
+            <ShieldCheck className="w-3.5 h-3.5" /> Proctored • {strikes}/3 Strikes
+          </Badge>
+
           {/* Digital Timer */}
           <div className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border font-mono font-bold text-sm sm:text-base transition-colors ${
             isTimeCritical 
@@ -1140,6 +1418,123 @@ export default function TournamentArena() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Text Me / Reminder Setup Dialog */}
+      <Dialog open={showReminderModal} onOpenChange={setShowReminderModal}>
+        <DialogContent className="max-w-md bg-card border-border shadow-2xl p-6 text-foreground">
+          <DialogHeader className="space-y-2 text-center">
+            <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
+              <Bell className="w-6 h-6 animate-bounce" />
+            </div>
+            <DialogTitle className="text-xl font-bold font-display">
+              Set Exam Start Reminder
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              We will send you an automated alert prior to the tournament start so you never miss the arena unlock.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="py-4 space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-primary" /> Phone Number (SMS / WhatsApp)
+              </label>
+              <Input
+                type="tel"
+                placeholder="e.g. 08012345678"
+                value={reminderPhone}
+                onChange={(e) => setReminderPhone(e.target.value)}
+                className="font-mono text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Mail className="w-3.5 h-3.5 text-primary" /> Email Address
+              </label>
+              <Input
+                type="email"
+                placeholder="candidate@example.com"
+                value={reminderEmail}
+                onChange={(e) => setReminderEmail(e.target.value)}
+                className="font-mono text-sm"
+              />
+            </div>
+            <div className="p-3 rounded-xl bg-muted/50 border border-border text-[11px] text-muted-foreground">
+              <span>📅 Tournament: <strong className="text-foreground">{tournament?.title}</strong></span>
+              <br />
+              <span>⏰ Scheduled: <strong className="text-foreground">{tournament?.start_time ? new Date(tournament.start_time).toLocaleString() : 'Pending'}</strong></span>
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowReminderModal(false)}
+              className="w-full sm:w-auto text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleScheduleReminder}
+              disabled={schedulingReminder}
+              className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs gap-1.5"
+            >
+              {schedulingReminder ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Scheduling...
+                </>
+              ) : (
+                'Save Alert Reminder'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dynamic Anti-Screenshot & Screen Capture Protective Watermark */}
+      <div 
+        className="fixed inset-0 pointer-events-none z-30 select-none overflow-hidden flex flex-wrap items-center justify-around opacity-[0.05] dark:opacity-[0.04] rotate-[-22deg] scale-125"
+        aria-hidden="true"
+      >
+        {Array.from({ length: 32 }).map((_, i) => (
+          <div key={i} className="p-8 text-center text-xs font-mono font-black tracking-widest text-foreground whitespace-nowrap">
+            <span>{profile?.full_name || user?.email?.split('@')[0] || 'UTME SCHOLAR'}</span>
+            <span className="mx-2">•</span>
+            <span>ID: {(profile?.id || user?.id || 'ANON').slice(0, 8).toUpperCase()}</span>
+            <span className="mx-2">•</span>
+            <span>PROCTORED TOURNAMENT ARENA</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Proctoring Blur Curtain (Focus Lost / Tab Switch Strike Overlay) */}
+      {isWindowBlurred && !finished && !isDisqualified && (
+        <div className="fixed inset-0 z-50 bg-background/95 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center animate-in fade-in duration-200">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-card border border-amber-500/30 shadow-2xl space-y-4">
+            <div className="w-14 h-14 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-500 flex items-center justify-center mx-auto">
+              <AlertTriangle className="w-7 h-7 animate-pulse" />
+            </div>
+            <h3 className="text-xl font-bold font-display text-foreground">
+              Arena Focus Lost!
+            </h3>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              You switched tabs or minimized the tournament window. This action has been logged by the automated proctor.
+            </p>
+            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs font-mono font-bold text-amber-600 dark:text-amber-400">
+              Current Strike: {strikes} of 3 Allowed Strikes
+            </div>
+            <p className="text-[11px] text-rose-500 font-medium">
+              Note: Reaching 3 strikes results in immediate disqualification and a score of 0.
+            </p>
+            <Button
+              onClick={() => setIsWindowBlurred(false)}
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-bold"
+            >
+              Resume Tournament Examination
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

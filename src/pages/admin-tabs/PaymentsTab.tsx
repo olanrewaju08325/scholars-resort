@@ -9,6 +9,7 @@ import { authFetch } from '@/lib/apiAuth';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { sendPaymentApprovedEmail } from '@/services/emailService';
+import { getApiUrl } from '@/lib/utils';
 
 export const PaymentsTab = () => {
   const [pendingPayments, setPendingPayments] = useState<any[]>([]);
@@ -46,7 +47,7 @@ export const PaymentsTab = () => {
 
       // 2. Fetch from backend API / local store
       try {
-        const apiRes = await fetch('/api/manual-payments/all');
+        const apiRes = await fetch(getApiUrl('/api/manual-payments/all'));
         const apiJson = await apiRes.json();
         if (apiJson.success && Array.isArray(apiJson.payments)) {
           apiJson.payments.forEach((p: any) => {

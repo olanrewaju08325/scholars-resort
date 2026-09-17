@@ -96,9 +96,11 @@ export async function runReferralFlowDiagnostic(params?: {
   // Step 2: Attempt Mock Referral Tracking
   // -------------------------------------------------------------
   const mockTimestamp = Date.now();
-  const mockReferredId = `mock_cand_${mockTimestamp}`;
-  const mockReferredName = `Diagnostic Scholar #${Math.floor(Math.random() * 900 + 100)}`;
-  const mockReferredEmail = `diag.student.${mockTimestamp}@scholarsresort.org`;
+  const mockReferredId = typeof crypto !== 'undefined' && crypto.randomUUID 
+    ? crypto.randomUUID() 
+    : `00000000-0000-4000-8000-${String(mockTimestamp).padStart(12, '0').slice(-12)}`;
+  const mockReferredName = `Diagnostic Candidate #${Math.floor(Math.random() * 900 + 100)}`;
+  const mockReferredEmail = `diag.student.${mockTimestamp}@testscholars.org`;
 
   let trackApiSuccess = false;
   try {
@@ -212,9 +214,14 @@ export async function runReferralFlowDiagnostic(params?: {
       });
     }
 
-    // Clean up Supabase mock row if direct insert succeeded
+    // Clean up Supabase mock row and server test cache if direct insert succeeded
     try {
       await supabase.from('referrals').delete().eq('referred_id', mockReferredId);
+      await fetch(getApiUrl('/api/referrals/admin/purge-diagnostic-test'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ referredId: mockReferredId, referredEmail: mockReferredEmail })
+      }).catch(() => {});
     } catch (_) {}
   } catch (err: any) {
     steps.push({

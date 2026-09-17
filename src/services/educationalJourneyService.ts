@@ -29,6 +29,7 @@ export interface SubjectJourney {
   totalNodes: number;
   masteredNodes: number;
   completionPercentage: number;
+  isEnrolled?: boolean;
   nodes: JourneyNode[];
 }
 
@@ -38,14 +39,18 @@ export interface OverallJourneyProgress {
   overallPercentage: number;
   currentActiveTopic: JourneyNode | null;
   subjectJourneys: Record<string, SubjectJourney>;
+  enrolledSubjectIds: string[];
   learningRules: AcademicLearningRules;
 }
 
-export async function fetchEducationalJourneyProgress(userId?: string): Promise<OverallJourneyProgress> {
+export async function fetchEducationalJourneyProgress(
+  userId?: string,
+  userEnrolledSubjects?: string[]
+): Promise<OverallJourneyProgress> {
   // 1. Fetch Authoritative Academic Learning Rules from DB (admin_settings)
   const learningRules = await fetchAcademicLearningRules();
 
-  // 2. Fetch Subjects and Topics from Supabase
+  // 2. Fetch Subjects and Topics from Supabase and dynamic API store
   let subjectsList: any[] = [];
   let topicsList: any[] = [];
 
@@ -61,16 +66,37 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
     if (topRes.data && topRes.data.length > 0) {
       topicsList = topRes.data;
     }
-
-    console.log('[Academy Taxonomy / Educational Journey DB Response]', {
-      subjectsRetrieved: subjectsList.length,
-      topicsRetrieved: topicsList.length,
-      sampleSubjects: subjectsList.slice(0, 3).map(s => s.name),
-      timestamp: new Date().toISOString()
-    });
   } catch (err) {
     console.warn('[EducationalJourney] Error fetching subjects/topics from Supabase:', err);
   }
+
+  // Also query the dynamic topics API (which holds custom admin syllabus topics added in admin portal)
+  try {
+    const apiRes = await fetch('/api/topics');
+    if (apiRes.ok) {
+      const apiData = await apiRes.json();
+      if (apiData.success && Array.isArray(apiData.topics) && apiData.topics.length > 0) {
+        const existingMap = new Map<string, any>();
+        topicsList.forEach(t => existingMap.set(t.id, t));
+        apiData.topics.forEach((t: any) => {
+          const matchedSub = subjectsList.find(s => 
+            s.id === t.subject_id || 
+            (s.name && t.subject_name && s.name.toLowerCase() === t.subject_name.toLowerCase())
+          );
+          const subjectObj = matchedSub 
+            ? { id: matchedSub.id, name: matchedSub.name } 
+            : (t.subjects || { id: t.subject_id, name: t.subject_name || 'General' });
+          
+          existingMap.set(t.id, {
+            ...existingMap.get(t.id),
+            ...t,
+            subjects: subjectObj
+          });
+        });
+        topicsList = Array.from(existingMap.values());
+      }
+    }
+  } catch {}
 
   // If DB topics are empty, load canonical UTME subjects & syllabus
   if (topicsList.length === 0) {
@@ -275,16 +301,33 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
     const masteredCount = nodes.filter((n) => n.status === 'mastered').length;
     const completionPercentage = totalNodes > 0 ? Math.round((masteredCount / totalNodes) * 100) : 0;
     const firstNode = nodes[0];
+    const subName = firstNode ? firstNode.subjectName : subId;
+
+    // Determine whether this subject is enrolled by the student
+    let isEnrolled = false;
+    if (Array.isArray(userEnrolledSubjects) && userEnrolledSubjects.length > 0) {
+      const normSub = subName.toLowerCase().replace(/^(use\s+of\s+)/i, 'english').replace(/\s+/g, '');
+      const normSubId = subId.toLowerCase().replace(/\s+/g, '');
+      isEnrolled = userEnrolledSubjects.some(enrolled => {
+        const normEnrolled = enrolled.toLowerCase().replace(/^(use\s+of\s+)/i, 'english').replace(/\s+/g, '');
+        return normSub === normEnrolled || normSubId.includes(normEnrolled) || normEnrolled.includes(normSub);
+      });
+    }
 
     subjectGroups[subId] = {
       subjectId: subId,
-      subjectName: firstNode ? firstNode.subjectName : subId,
+      subjectName: subName,
       totalNodes,
       masteredNodes: masteredCount,
       completionPercentage,
+      isEnrolled,
       nodes
     };
   });
+
+  const enrolledSubjectIds = Object.values(subjectGroups)
+    .filter(s => s.isEnrolled)
+    .map(s => s.subjectId);
 
   const totalMastered = evaluatedNodes.filter((n) => n.status === 'mastered').length;
   const totalTopics = evaluatedNodes.length;
@@ -298,6 +341,7 @@ export async function fetchEducationalJourneyProgress(userId?: string): Promise<
     overallPercentage,
     currentActiveTopic,
     subjectJourneys: subjectGroups,
+    enrolledSubjectIds,
     learningRules
   };
 }

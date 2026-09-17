@@ -925,6 +925,27 @@ Return STRICT JSON format:
                           <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
                             {claim.prize_amount}
                           </span>
+                          {/* Security Audit Badge */}
+                          {claim.security_audit === 'VERIFIED_CLEAN' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 flex items-center gap-1">
+                              <ShieldCheck className="w-3 h-3" /> Anti-Cheat Verified Clean
+                            </span>
+                          )}
+                          {claim.security_audit === 'DISQUALIFIED_CHEATING_STRIKES' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-red-500/20 text-red-600 dark:text-red-400 border border-red-500/30 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> DISQUALIFIED (3 Proctor Strikes)
+                            </span>
+                          )}
+                          {claim.security_audit === 'SUSPICIOUS_SPEED_ANOMALY' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-amber-500/20 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> Flagged Speed Anomaly (Bot Alert)
+                            </span>
+                          )}
+                          {claim.security_audit === 'UNVERIFIED_NO_PARTICIPATION' && (
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3" /> Unverified (No Attempt Record)
+                            </span>
+                          )}
                         </div>
 
                         <p className="text-xs font-semibold text-foreground">

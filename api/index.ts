@@ -4476,7 +4476,7 @@ app.post('/api/admin/tournaments/delete', verifyAdminToken, async (req, res) => 
 });
 
 // API Route: Public Get Tournaments (Merged from DB & Settings Backup)
-app.get('/api/tournaments', async (req, res) => {
+app.get(['/api/tournaments', '/tournaments'], async (req, res) => {
   try {
     const listMap = new Map<string, any>();
 
@@ -4578,10 +4578,180 @@ app.get('/api/tournaments', async (req, res) => {
   }
 });
 
+// Local Tournament Files & Helpers
+const LOCAL_PARTICIPANTS_FILE = path.join(process.cwd(), '.data_tournament_participants.json');
+const LOCAL_PRIZE_CLAIMS_FILE = path.join(process.cwd(), '.data_tournament_prize_claims.json');
+
+function getLocalParticipants(): any[] {
+  try {
+    if (fs.existsSync(LOCAL_PARTICIPANTS_FILE)) {
+      const raw = fs.readFileSync(LOCAL_PARTICIPANTS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalParticipants(list: any[]) {
+  try {
+    fs.writeFileSync(LOCAL_PARTICIPANTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[Local Tournament Participants Save Warning]', e);
+  }
+}
+
+function getLocalPrizeClaims(): any[] {
+  try {
+    if (fs.existsSync(LOCAL_PRIZE_CLAIMS_FILE)) {
+      const raw = fs.readFileSync(LOCAL_PRIZE_CLAIMS_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {}
+  return [];
+}
+
+function saveLocalPrizeClaims(list: any[]) {
+  try {
+    fs.writeFileSync(LOCAL_PRIZE_CLAIMS_FILE, JSON.stringify(list, null, 2), 'utf-8');
+  } catch (e) {
+    console.warn('[Local Prize Claims Save Warning]', e);
+  }
+}
+
+// API Route: Get My Registered Tournaments (Guaranteed before :id route)
+app.get(['/api/tournaments/my-registrations', '/tournaments/my-registrations'], async (req, res) => {
+  try {
+    let effectiveUserId = (req.query.userId || req.query.user_id) as string;
+    let effectiveUserEmail = (req.query.email || req.query.user_email) as string;
+
+    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
+    if (token) {
+      try {
+        const authClient = getScopedSupabaseClient(token);
+        const { data: { user } } = await authClient.auth.getUser();
+        if (user) {
+          effectiveUserId = user.id || effectiveUserId;
+          effectiveUserEmail = user.email || effectiveUserEmail;
+        }
+      } catch {}
+    }
+
+    if (!effectiveUserId && !effectiveUserEmail) {
+      return res.json({ success: true, registeredTournamentIds: [] });
+    }
+
+    const registeredIds = new Set<string>();
+
+    const matchesMe = (p: any) => {
+      if (effectiveUserId && p.user_id === effectiveUserId) return true;
+      if (effectiveUserEmail && p.user_email && p.user_email.toLowerCase() === effectiveUserEmail.toLowerCase()) return true;
+      if (effectiveUserId && p.id === effectiveUserId) return true;
+      return false;
+    };
+
+    // 1. Check local disk persistence
+    getLocalParticipants().forEach((p: any) => {
+      if (matchesMe(p)) {
+        if (p.tournament_id) registeredIds.add(p.tournament_id);
+        if (p.legacy_id) registeredIds.add(p.legacy_id);
+      }
+    });
+
+    // 2. Check admin_settings.tournament_participants_db
+    try {
+      const { data: partSetting } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournament_participants_db')
+        .maybeSingle();
+
+      if (Array.isArray(partSetting?.setting_value)) {
+        partSetting.setting_value.forEach((p: any) => {
+          if (matchesMe(p)) {
+            if (p.tournament_id) registeredIds.add(p.tournament_id);
+            if (p.legacy_id) registeredIds.add(p.legacy_id);
+          }
+        });
+      }
+    } catch {}
+
+    // 3. Check public.tournament_participants
+    if (effectiveUserId) {
+      try {
+        const { data: dbParts } = await supabase
+          .from('tournament_participants')
+          .select('tournament_id')
+          .eq('user_id', effectiveUserId);
+
+        if (dbParts && Array.isArray(dbParts)) {
+          dbParts.forEach((p: any) => {
+            if (p.tournament_id) registeredIds.add(p.tournament_id);
+          });
+        }
+      } catch {}
+    }
+
+    return res.json({ success: true, registeredTournamentIds: Array.from(registeredIds) });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message, registeredTournamentIds: [] });
+  }
+});
+
+// API Route: Get Tournament Prize Claims (Guaranteed before :id route)
+app.get(['/api/tournaments/prize-claims', '/tournaments/prize-claims'], async (req, res) => {
+  try {
+    const { tournament_id, user_id, status } = req.query;
+
+    const claimsMap = new Map<string, any>();
+    getLocalPrizeClaims().forEach((c: any) => {
+      if (c.id) claimsMap.set(c.id, c);
+    });
+
+    try {
+      const { data: claimsSetting } = await supabase
+        .from('admin_settings')
+        .select('setting_value')
+        .eq('setting_key', 'tournament_prize_claims_db')
+        .maybeSingle();
+
+      if (Array.isArray(claimsSetting?.setting_value)) {
+        claimsSetting.setting_value.forEach((c: any) => {
+          if (c.id) claimsMap.set(c.id, c);
+        });
+      }
+    } catch {}
+
+    let claimsList = Array.from(claimsMap.values());
+
+    if (tournament_id) {
+      claimsList = claimsList.filter((c: any) => c.tournament_id === String(tournament_id));
+    }
+    if (user_id) {
+      claimsList = claimsList.filter((c: any) => c.user_id === String(user_id));
+    }
+    if (status && status !== 'all') {
+      claimsList = claimsList.filter((c: any) => c.status === String(status));
+    }
+
+    // Sort newest first
+    claimsList.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+
+    return res.json({ success: true, claims: claimsList });
+  } catch (err: any) {
+    console.error('[API /api/tournaments/prize-claims Error]', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to fetch claims', claims: [] });
+  }
+});
+
 // API Route: Public Get Single Tournament by ID (UUID or Legacy ID)
-app.get('/api/tournaments/:id', async (req, res) => {
+app.get(['/api/tournaments/:id', '/tournaments/:id'], async (req, res, next) => {
   try {
     const targetId = req.params.id;
+    if (['my-registrations', 'prize-claims', 'worker', 'schedule-reminder', 'trigger-scheduled-reminders', 'leaderboard', 'register', 'submit-score', 'prize-claim'].includes(targetId)) {
+      return next();
+    }
     if (!targetId) return res.status(400).json({ success: false, error: 'Tournament ID is required' });
 
     const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(targetId);
@@ -4670,49 +4840,8 @@ app.get('/api/tournaments/:id', async (req, res) => {
   }
 });
 
-const LOCAL_PARTICIPANTS_FILE = path.join(process.cwd(), '.data_tournament_participants.json');
-const LOCAL_PRIZE_CLAIMS_FILE = path.join(process.cwd(), '.data_tournament_prize_claims.json');
-
-function getLocalParticipants(): any[] {
-  try {
-    if (fs.existsSync(LOCAL_PARTICIPANTS_FILE)) {
-      const raw = fs.readFileSync(LOCAL_PARTICIPANTS_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {}
-  return [];
-}
-
-function saveLocalParticipants(list: any[]) {
-  try {
-    fs.writeFileSync(LOCAL_PARTICIPANTS_FILE, JSON.stringify(list, null, 2), 'utf-8');
-  } catch (e) {
-    console.warn('[Local Tournament Participants Save Warning]', e);
-  }
-}
-
-function getLocalPrizeClaims(): any[] {
-  try {
-    if (fs.existsSync(LOCAL_PRIZE_CLAIMS_FILE)) {
-      const raw = fs.readFileSync(LOCAL_PRIZE_CLAIMS_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) return parsed;
-    }
-  } catch {}
-  return [];
-}
-
-function saveLocalPrizeClaims(list: any[]) {
-  try {
-    fs.writeFileSync(LOCAL_PRIZE_CLAIMS_FILE, JSON.stringify(list, null, 2), 'utf-8');
-  } catch (e) {
-    console.warn('[Local Prize Claims Save Warning]', e);
-  }
-}
-
 // API Route: Register for Tournament (Guaranteed zero-failure with Disk, DB & Settings fallback)
-app.post('/api/tournaments/register', async (req, res) => {
+app.post(['/api/tournaments/register', '/tournaments/register'], async (req, res) => {
   try {
     const { 
       tournament_id, 
@@ -4920,89 +5049,10 @@ app.post('/api/tournaments/register', async (req, res) => {
   }
 });
 
-// API Route: Get My Registered Tournaments
-app.get('/api/tournaments/my-registrations', async (req, res) => {
+// API Route: Submit Tournament Arena Score (Hardened Anti-Cheat & Single-Attempt Enforced)
+app.post(['/api/tournaments/submit-score', '/tournaments/submit-score'], async (req, res) => {
   try {
-    let effectiveUserId = (req.query.userId || req.query.user_id) as string;
-    let effectiveUserEmail = (req.query.email || req.query.user_email) as string;
-
-    const token = req.headers.authorization?.replace(/^Bearer\s+/i, '').trim();
-    if (token) {
-      try {
-        const authClient = getScopedSupabaseClient(token);
-        const { data: { user } } = await authClient.auth.getUser();
-        if (user) {
-          effectiveUserId = user.id || effectiveUserId;
-          effectiveUserEmail = user.email || effectiveUserEmail;
-        }
-      } catch {}
-    }
-
-    if (!effectiveUserId && !effectiveUserEmail) {
-      return res.json({ success: true, registeredTournamentIds: [] });
-    }
-
-    const registeredIds = new Set<string>();
-
-    const matchesMe = (p: any) => {
-      if (effectiveUserId && p.user_id === effectiveUserId) return true;
-      if (effectiveUserEmail && p.user_email && p.user_email.toLowerCase() === effectiveUserEmail.toLowerCase()) return true;
-      if (effectiveUserId && p.id === effectiveUserId) return true;
-      return false;
-    };
-
-    // 1. Check local disk persistence
-    getLocalParticipants().forEach((p: any) => {
-      if (matchesMe(p)) {
-        if (p.tournament_id) registeredIds.add(p.tournament_id);
-        if (p.legacy_id) registeredIds.add(p.legacy_id);
-      }
-    });
-
-    // 2. Check admin_settings.tournament_participants_db
-    try {
-      const { data: partSetting } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'tournament_participants_db')
-        .maybeSingle();
-
-      if (Array.isArray(partSetting?.setting_value)) {
-        partSetting.setting_value.forEach((p: any) => {
-          if (matchesMe(p)) {
-            if (p.tournament_id) registeredIds.add(p.tournament_id);
-            if (p.legacy_id) registeredIds.add(p.legacy_id);
-          }
-        });
-      }
-    } catch {}
-
-    // 3. Check public.tournament_participants
-    if (effectiveUserId) {
-      try {
-        const { data: dbParts } = await supabase
-          .from('tournament_participants')
-          .select('tournament_id')
-          .eq('user_id', effectiveUserId);
-
-        if (dbParts && Array.isArray(dbParts)) {
-          dbParts.forEach((p: any) => {
-            if (p.tournament_id) registeredIds.add(p.tournament_id);
-          });
-        }
-      } catch {}
-    }
-
-    return res.json({ success: true, registeredTournamentIds: Array.from(registeredIds) });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message, registeredTournamentIds: [] });
-  }
-});
-
-// API Route: Submit Tournament Arena Score
-app.post('/api/tournaments/submit-score', async (req, res) => {
-  try {
-    const { tournament_id, score, time_taken_seconds, user_id, user_email } = req.body;
+    const { tournament_id, score, time_taken_seconds, user_id, user_email, strikes_count = 0, answers_count = 0 } = req.body;
     if (!tournament_id) return res.status(400).json({ success: false, error: 'Tournament ID is required' });
 
     let effectiveUserId = user_id;
@@ -5021,6 +5071,18 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
 
     if (!effectiveUserId && !effectiveUserEmail) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
+    // Anti-Cheat Sanitization
+    const numericScore = Math.min(100, Math.max(0, Number(score) || 0));
+    const numericTime = Math.max(0, Number(time_taken_seconds) || 0);
+    const numericStrikes = Number(strikes_count) || 0;
+
+    // Disqualification if strikes exceeded limit (3 strikes)
+    const isDisqualified = numericStrikes >= 3;
+    const finalCalculatedScore = isDisqualified ? 0 : numericScore;
+
+    // Suspicious speed detection (flagging if < 0.3s per question attempted)
+    const isSpeedAnomalous = answers_count > 10 && numericTime < (answers_count * 0.3);
+
     // Update in local participants file
     const localList = getLocalParticipants();
     let localFound = false;
@@ -5033,9 +5095,12 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
         localFound = true;
         return {
           ...p,
-          score: Math.max(p.score || 0, Number(score) || 0),
-          time_taken_seconds: Number(time_taken_seconds) || p.time_taken_seconds,
-          completed_at: new Date().toISOString()
+          score: finalCalculatedScore,
+          time_taken_seconds: numericTime,
+          strikes_count: numericStrikes,
+          disqualified: isDisqualified,
+          flagged_speed_anomaly: isSpeedAnomalous,
+          completed_at: p.completed_at || new Date().toISOString()
         };
       }
       return p;
@@ -5046,8 +5111,11 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
         tournament_id,
         user_id: effectiveUserId,
         user_email: effectiveUserEmail,
-        score: Number(score) || 0,
-        time_taken_seconds: Number(time_taken_seconds) || 0,
+        score: finalCalculatedScore,
+        time_taken_seconds: numericTime,
+        strikes_count: numericStrikes,
+        disqualified: isDisqualified,
+        flagged_speed_anomaly: isSpeedAnomalous,
         completed_at: new Date().toISOString()
       });
     }
@@ -5072,9 +5140,12 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
           found = true;
           return { 
             ...p, 
-            score: Math.max(p.score || 0, Number(score) || 0), 
-            time_taken_seconds: Number(time_taken_seconds) || p.time_taken_seconds, 
-            completed_at: new Date().toISOString() 
+            score: finalCalculatedScore, 
+            time_taken_seconds: numericTime,
+            strikes_count: numericStrikes,
+            disqualified: isDisqualified,
+            flagged_speed_anomaly: isSpeedAnomalous,
+            completed_at: p.completed_at || new Date().toISOString() 
           };
         }
         return p;
@@ -5086,8 +5157,11 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
           tournament_id,
           user_id: effectiveUserId,
           user_email: effectiveUserEmail,
-          score: Number(score) || 0,
-          time_taken_seconds: Number(time_taken_seconds) || 0,
+          score: finalCalculatedScore,
+          time_taken_seconds: numericTime,
+          strikes_count: numericStrikes,
+          disqualified: isDisqualified,
+          flagged_speed_anomaly: isSpeedAnomalous,
           completed_at: new Date().toISOString()
         });
       }
@@ -5122,7 +5196,7 @@ app.post('/api/tournaments/submit-score', async (req, res) => {
 });
 
 // API Route: Get Live Tournament Leaderboard
-app.get('/api/tournaments/:id/leaderboard', async (req, res) => {
+app.get(['/api/tournaments/:id/leaderboard', '/tournaments/:id/leaderboard'], async (req, res) => {
   try {
     const tournamentId = req.params.id;
     if (!tournamentId) return res.status(400).json({ success: false, error: 'Tournament ID is required' });
@@ -5217,7 +5291,7 @@ app.get('/api/tournaments/:id/leaderboard', async (req, res) => {
 });
 
 // API Route: Submit Tournament Prize Claim (Cash / Airtime / Wallet)
-app.post('/api/tournaments/prize-claim', async (req, res) => {
+app.post(['/api/tournaments/prize-claim', '/tournaments/prize-claim'], async (req, res) => {
   try {
     const {
       tournament_id,
@@ -5256,6 +5330,35 @@ app.post('/api/tournaments/prize-claim', async (req, res) => {
       }
     }
 
+    // 1. Cross-check real participant record & verified leaderboard rank
+    const localParticipants = getLocalParticipants();
+    const matchedParticipant = localParticipants.find(
+      (p: any) => p.tournament_id === tournament_id && (p.user_id === user_id || (user_email && p.user_email?.toLowerCase() === user_email.toLowerCase()))
+    );
+
+    const verifiedScore = matchedParticipant ? Number(matchedParticipant.score) || 0 : (Number(score) || 0);
+    const strikesCount = matchedParticipant ? Number(matchedParticipant.strikes_count) || 0 : 0;
+    const isDisqualified = matchedParticipant?.disqualified || strikesCount >= 3;
+    const isSpeedAnomalous = !!matchedParticipant?.flagged_speed_anomaly;
+
+    // Calculate actual leaderboard rank on server
+    const tournamentParts = localParticipants
+      .filter((p: any) => p.tournament_id === tournament_id && !p.disqualified)
+      .sort((a: any, b: any) => (Number(b.score) || 0) - (Number(a.score) || 0) || (Number(a.time_taken_seconds) || 0) - (Number(b.time_taken_seconds) || 0));
+    
+    const computedRankIndex = tournamentParts.findIndex((p: any) => p.user_id === user_id || (user_email && p.user_email?.toLowerCase() === user_email.toLowerCase()));
+    const serverVerifiedRank = computedRankIndex >= 0 ? computedRankIndex + 1 : (Number(rank) || 1);
+
+    // Security audit verdict
+    let securityAuditStatus = 'VERIFIED_CLEAN';
+    if (isDisqualified) {
+      securityAuditStatus = 'DISQUALIFIED_CHEATING_STRIKES';
+    } else if (isSpeedAnomalous) {
+      securityAuditStatus = 'SUSPICIOUS_SPEED_ANOMALY';
+    } else if (!matchedParticipant || verifiedScore === 0) {
+      securityAuditStatus = 'UNVERIFIED_NO_PARTICIPATION';
+    }
+
     const claimsMap = new Map<string, any>();
     getLocalPrizeClaims().forEach((c: any) => {
       if (c.id) claimsMap.set(c.id, c);
@@ -5289,8 +5392,12 @@ app.post('/api/tournaments/prize-claim', async (req, res) => {
       user_id,
       user_name: user_name || 'Scholar Candidate',
       user_email: user_email || '',
-      rank: Number(rank) || 1,
-      score: Number(score) || 0,
+      rank: serverVerifiedRank,
+      submitted_rank: Number(rank) || serverVerifiedRank,
+      score: verifiedScore,
+      strikes_count: strikesCount,
+      security_audit: securityAuditStatus,
+      is_disqualified: isDisqualified,
       payout_type,
       bank_name: bank_name || null,
       account_number: account_number || null,
@@ -5299,7 +5406,7 @@ app.post('/api/tournaments/prize-claim', async (req, res) => {
       telecom_network: telecom_network || null,
       prize_amount: prize_amount || 'Cash / Airtime Prize',
       notes: notes || '',
-      status: 'pending', // 'pending' | 'verified' | 'disbursed' | 'rejected'
+      status: isDisqualified ? 'rejected' : 'pending', // Auto-reject disqualified claimants
       created_at: existingIndex >= 0 ? claimsList[existingIndex].created_at : new Date().toISOString(),
       updated_at: new Date().toISOString(),
       disbursed_at: null,
@@ -5337,53 +5444,8 @@ app.post('/api/tournaments/prize-claim', async (req, res) => {
   }
 });
 
-// API Route: Get Tournament Prize Claims
-app.get('/api/tournaments/prize-claims', async (req, res) => {
-  try {
-    const { tournament_id, user_id, status } = req.query;
-
-    const claimsMap = new Map<string, any>();
-    getLocalPrizeClaims().forEach((c: any) => {
-      if (c.id) claimsMap.set(c.id, c);
-    });
-
-    try {
-      const { data: claimsSetting } = await supabase
-        .from('admin_settings')
-        .select('setting_value')
-        .eq('setting_key', 'tournament_prize_claims_db')
-        .maybeSingle();
-
-      if (Array.isArray(claimsSetting?.setting_value)) {
-        claimsSetting.setting_value.forEach((c: any) => {
-          if (c.id) claimsMap.set(c.id, c);
-        });
-      }
-    } catch {}
-
-    let claimsList = Array.from(claimsMap.values());
-
-    if (tournament_id) {
-      claimsList = claimsList.filter((c: any) => c.tournament_id === String(tournament_id));
-    }
-    if (user_id) {
-      claimsList = claimsList.filter((c: any) => c.user_id === String(user_id));
-    }
-    if (status && status !== 'all') {
-      claimsList = claimsList.filter((c: any) => c.status === String(status));
-    }
-
-    // Sort newest first
-    claimsList.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-
-    return res.json({ success: true, claims: claimsList });
-  } catch (err: any) {
-    return res.status(500).json({ success: false, error: err.message, claims: [] });
-  }
-});
-
 // API Route: Admin Update / Disburse Tournament Prize Claim
-app.post('/api/tournaments/admin/update-claim', verifyAdminToken, async (req, res) => {
+app.post(['/api/tournaments/admin/update-claim', '/tournaments/admin/update-claim'], verifyAdminToken, async (req, res) => {
   try {
     const { claim_id, status, disbursal_reference, admin_note } = req.body;
 
@@ -5450,11 +5512,11 @@ app.post('/api/tournaments/admin/update-claim', verifyAdminToken, async (req, re
 // API Route: Schedule Tournament Email & Notification Alert
 const LOCAL_TOURNAMENT_REMINDERS_FILE = path.join(process.cwd(), '.data_tournament_reminders.json');
 
-app.post('/api/tournaments/schedule-reminder', express.json(), async (req, res) => {
+app.post(['/api/tournaments/schedule-reminder', '/tournaments/schedule-reminder'], express.json(), async (req, res) => {
   try {
-    const { tournamentId, tournamentTitle, userEmail, userName, startTime } = req.body || {};
-    if (!tournamentId || !userEmail) {
-      return res.status(400).json({ success: false, error: 'Tournament ID and User Email are required.' });
+    const { tournamentId, tournamentTitle, userEmail, userPhone, userName, startTime } = req.body || {};
+    if (!tournamentId || (!userEmail && !userPhone)) {
+      return res.status(400).json({ success: false, error: 'Tournament ID and User Email or Phone are required.' });
     }
 
     let reminders: any[] = [];
@@ -5469,7 +5531,8 @@ app.post('/api/tournaments/schedule-reminder', express.json(), async (req, res) 
       id: `rem_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       tournamentId,
       tournamentTitle: tournamentTitle || 'UTME Championship Tournament',
-      userEmail,
+      userEmail: userEmail || '',
+      userPhone: userPhone || '',
       userName: userName || 'Scholar Candidate',
       startTime: startTime || new Date().toISOString(),
       created_at: new Date().toISOString(),
@@ -5536,7 +5599,7 @@ app.post('/api/tournaments/schedule-reminder', express.json(), async (req, res) 
   }
 });
 
-app.post('/api/tournaments/trigger-scheduled-reminders', express.json(), async (req, res) => {
+app.post(['/api/tournaments/trigger-scheduled-reminders', '/tournaments/trigger-scheduled-reminders'], express.json(), async (req, res) => {
   try {
     let reminders: any[] = [];
     if (fs.existsSync(LOCAL_TOURNAMENT_REMINDERS_FILE)) {
@@ -5571,7 +5634,7 @@ app.post('/api/tournaments/trigger-scheduled-reminders', express.json(), async (
 });
 
 // API Route: Tournament Reminder Background Worker Telemetry Status
-app.get('/api/tournaments/worker/status', async (req, res) => {
+app.get(['/api/tournaments/worker/status', '/tournaments/worker/status'], async (req, res) => {
   try {
     const worker = await getTournamentWorker();
     const status = worker ? worker.getTournamentReminderWorkerStatus() : { isRunning: false, totalEmailsDispatched: 0 };
@@ -5582,7 +5645,7 @@ app.get('/api/tournaments/worker/status', async (req, res) => {
 });
 
 // API Route: Manually Trigger Tournament Reminder Worker Check
-app.post('/api/tournaments/worker/trigger', express.json(), async (req, res) => {
+app.post(['/api/tournaments/worker/trigger', '/tournaments/worker/trigger'], express.json(), async (req, res) => {
   try {
     const worker = await getTournamentWorker();
     const result = worker ? await worker.runTournamentReminderCheck() : { emailsSent: 0, tournamentsScanned: 0, errors: [] };
@@ -9901,18 +9964,8 @@ app.get('/api/referrals/leaderboard', async (req, res) => {
       .filter(item => item.totalInvited > 0 || item.totalEarned > 0)
       .sort((a, b) => b.convertedCount !== a.convertedCount ? b.convertedCount - a.convertedCount : b.totalEarned - a.totalEarned);
 
-    // Fallback benchmark leaders to ensure competitive gamification is always inspiring
-    const defaultBenchmarkLeaders = [
-      { referrerId: 'top-1', referrerCode: 'SR-CHUK-9821', referrerName: 'Chukwuebuka O. (UNILAG Aspirant)', totalInvited: 42, convertedCount: 38, totalEarned: 38 * config.rewardPerPaid },
-      { referrerId: 'top-2', referrerCode: 'SR-AMAK-4410', referrerName: 'Amaka D. (Medicine & Surgery)', totalInvited: 31, convertedCount: 27, totalEarned: 27 * config.rewardPerPaid },
-      { referrerId: 'top-3', referrerCode: 'SR-TAYO-1092', referrerName: 'Tayo B. (Computer Science)', totalInvited: 24, convertedCount: 21, totalEarned: 21 * config.rewardPerPaid },
-      { referrerId: 'top-4', referrerCode: 'SR-FATY-8832', referrerName: 'Fatima Z. (Law Aspirant)', totalInvited: 19, convertedCount: 16, totalEarned: 16 * config.rewardPerPaid },
-      { referrerId: 'top-5', referrerCode: 'SR-KLEM-3301', referrerName: 'Kelechi M. (Engineering)', totalInvited: 15, convertedCount: 13, totalEarned: 13 * config.rewardPerPaid }
-    ];
-
-    const finalLeaderboard = leaderboardList.length >= 5
-      ? leaderboardList.slice(0, 5)
-      : [...leaderboardList, ...defaultBenchmarkLeaders.slice(leaderboardList.length, 5)];
+    // Only genuine registered ambassadors with real referral activity
+    const finalLeaderboard = leaderboardList.slice(0, 10);
 
     return res.json({
       success: true,
@@ -10194,6 +10247,51 @@ app.post('/api/referrals/admin/update-config', verifyAdminToken, async (req, res
     return res.json({ success: true, config: sanitizedConfig, message: 'Referral program configuration updated successfully.' });
   } catch (err: any) {
     console.error('[API /api/referrals/admin/update-config Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 8. Admin: Purge / Clean Diagnostic Mock Referrals
+app.post('/api/referrals/admin/purge-diagnostic-test', express.json(), async (req, res) => {
+  try {
+    const { referredId, referredEmail } = req.body || {};
+    const localRefs = getLocalReferrals();
+    const filtered = localRefs.filter(r => {
+      const matchId = referredId && (r.referredId === referredId || r.id === referredId);
+      const matchEmail = referredEmail && r.referredEmail && r.referredEmail.toLowerCase() === String(referredEmail).toLowerCase();
+      const isDiag = r.referredEmail && (r.referredEmail.includes('diag.student.') || r.referredEmail.includes('testscholars.org'));
+      return !(matchId || matchEmail || isDiag);
+    });
+    saveLocalReferrals(filtered);
+    return res.json({ success: true, count: filtered.length });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.post('/api/referrals/admin/clear-mock-data', verifyAdminToken, async (req, res) => {
+  try {
+    const localRefs = getLocalReferrals();
+    // Keep only non-mock, non-diagnostic entries
+    const cleanList = localRefs.filter(r => {
+      const email = (r.referredEmail || '').toLowerCase();
+      const refEmail = (r.referrerEmail || '').toLowerCase();
+      const refCode = (r.referrerCode || '').toUpperCase();
+      const id = r.referredId || '';
+      const isMock = email.includes('test') || email.includes('example.com') || email.includes('diag') ||
+                     refEmail.includes('test') || refEmail.includes('example.com') ||
+                     refCode.includes('TEST') || id.startsWith('mock_') || id.startsWith('test-') ||
+                     r.referredName.includes('Adaeze Okonkwo') || r.referredName.includes('Student ABC');
+      return !isMock;
+    });
+
+    saveLocalReferrals(cleanList);
+    return res.json({ 
+      success: true, 
+      message: 'Mock referral test records have been purged. Only genuine referrals remain.',
+      remainingCount: cleanList.length
+    });
+  } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
 });
