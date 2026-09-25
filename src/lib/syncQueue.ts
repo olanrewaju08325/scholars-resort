@@ -14,6 +14,24 @@ export interface EnqueueWriteOptions {
 }
 
 let isSyncing = false;
+let lastSyncedTimestamp: number | null = null;
+const queueListeners: Set<() => void> = new Set();
+
+export function notifySyncQueueChanged() {
+  queueListeners.forEach(listener => {
+    try { listener(); } catch (_) {}
+  });
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('scholar_sync_queue_changed'));
+  }
+}
+
+export function subscribeToSyncQueue(callback: () => void): () => void {
+  queueListeners.add(callback);
+  return () => {
+    queueListeners.delete(callback);
+  };
+}
 
 /**
  * Enqueue a failed or offline write operation to IndexedDB for later syncing.
@@ -43,6 +61,7 @@ export async function enqueueOfflineWrite(options: EnqueueWriteOptions): Promise
     };
 
     const id = await offlineDb.syncQueue.add(item);
+    notifySyncQueueChanged();
 
     if (!silent) {
       toast.info('Offline Mode: Data saved locally to device. Will sync automatically once connected.', {
@@ -281,6 +300,7 @@ export async function processSyncQueue(supabaseClient: any = supabase): Promise<
     }
 
     if (synced > 0) {
+      lastSyncedTimestamp = Date.now();
       toast.success(`Cloud Sync: ${synced} offline study & exam record(s) synced to database!`, {
         icon: '☁️',
         duration: 4000
@@ -290,6 +310,7 @@ export async function processSyncQueue(supabaseClient: any = supabase): Promise<
     console.error('[SyncQueue] Fatal queue processing error:', queueErr);
   } finally {
     isSyncing = false;
+    notifySyncQueueChanged();
   }
 
   return { synced, failed };
@@ -304,6 +325,63 @@ export async function getPendingQueueCount(): Promise<number> {
   } catch {
     return 0;
   }
+}
+
+export interface SyncQueueDetails {
+  totalPending: number;
+  isSyncing: boolean;
+  lastSyncedTimestamp: number | null;
+  items: OfflineSyncItem[];
+  breakdown: Record<string, number>;
+}
+
+/**
+ * Returns detailed queue metrics and items for UI status components.
+ */
+export async function getSyncQueueDetails(): Promise<SyncQueueDetails> {
+  try {
+    const items = await offlineDb.syncQueue.toArray();
+    const pendingItems = items.filter(i => i.status === 'pending' || i.status === 'failed' || i.status === 'syncing');
+    const breakdown: Record<string, number> = {};
+
+    pendingItems.forEach(item => {
+      const key = item.type || item.table || 'other';
+      breakdown[key] = (breakdown[key] || 0) + 1;
+    });
+
+    return {
+      totalPending: pendingItems.length,
+      isSyncing,
+      lastSyncedTimestamp,
+      items: pendingItems.slice(0, 50),
+      breakdown
+    };
+  } catch {
+    return {
+      totalPending: 0,
+      isSyncing,
+      lastSyncedTimestamp,
+      items: [],
+      breakdown: {}
+    };
+  }
+}
+
+/**
+ * Force manual sync execution by immediately clearing backoff windows and re-attempting all pending items.
+ */
+export async function forceSyncQueue(supabaseClient: any = supabase): Promise<{ synced: number; failed: number }> {
+  try {
+    // Reset nextRetryTime on all failed or pending items to 0 so they are immediately eligible
+    await offlineDb.syncQueue
+      .where('status')
+      .anyOf(['pending', 'failed'])
+      .modify({ nextRetryTime: 0, status: 'pending' });
+  } catch (err) {
+    console.warn('[SyncQueue] Failed to reset backoff on force sync:', err);
+  }
+
+  return processSyncQueue(supabaseClient);
 }
 
 /**

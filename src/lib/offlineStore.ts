@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { offlineDb, type OfflineStoredPack, type StoredCustomQuestion, type StoredCompletedOfflineSession } from './offlineDb';
+import { resolveSubjectIdsByNameOrAlias, normalizeSubjectName, isUUID } from '@/utils/subjectUtils';
 
 export interface OfflinePack {
   subjectId: string;
@@ -114,9 +115,36 @@ export const getDownloadedPacksAsync = async (): Promise<Record<string, OfflineP
   }
 };
 
+export const findOfflinePackForSubject = (subjectIdOrName: string, packs?: Record<string, OfflinePack>): OfflinePack | null => {
+  const currentPacks = packs || inMemoryPacks;
+  if (!subjectIdOrName) return null;
+  
+  // Direct key lookup
+  if (currentPacks[subjectIdOrName]) {
+    return currentPacks[subjectIdOrName];
+  }
+
+  const queryNorm = normalizeSubjectName(subjectIdOrName).toLowerCase().trim();
+  const rawQuery = subjectIdOrName.toLowerCase().trim();
+
+  // Search across all saved packs by ID, Name, or normalized Name
+  for (const pack of Object.values(currentPacks)) {
+    if (!pack) continue;
+    if (pack.subjectId === subjectIdOrName) return pack;
+    const pNameNorm = normalizeSubjectName(pack.subjectName || '').toLowerCase().trim();
+    const pNameRaw = (pack.subjectName || '').toLowerCase().trim();
+
+    if (pNameNorm === queryNorm || pNameRaw === rawQuery || pNameNorm.includes(queryNorm) || queryNorm.includes(pNameNorm)) {
+      return pack;
+    }
+  }
+
+  return null;
+};
+
 export const saveOfflinePack = (subjectId: string, pack: OfflinePack) => {
   inMemoryPacks[subjectId] = pack;
-  // Persist to IndexedDB asynchronously (no 5MB quota limit)
+  // Persist to IndexedDB asynchronously
   offlineDb.offlinePacks.put(pack).catch(err => {
     console.error('[OfflineStore] Failed to save pack to IndexedDB:', err);
   });
@@ -137,18 +165,56 @@ export const clearAllOfflinePacks = async () => {
 };
 
 export const downloadSubjectPack = async (subjectId: string, subjectName: string): Promise<OfflinePack> => {
+  // Resolve all possible database UUIDs for this subject
+  let targetIds = [subjectId];
+  try {
+    const resolved = await resolveSubjectIdsByNameOrAlias(subjectName || subjectId);
+    if (resolved.length > 0) {
+      targetIds = Array.from(new Set([...targetIds, ...resolved])).filter(isUUID);
+    }
+  } catch (_) {}
+
   // Fetch up to 1000 questions for this subject from Supabase
-  const { data, error } = await supabase
-    .from('questions')
-    .select('*')
-    .eq('subject_id', subjectId)
-    .limit(1000);
+  let data: any[] | null = null;
+  let error: any = null;
+
+  if (targetIds.length > 1) {
+    const res = await supabase
+      .from('questions')
+      .select('*')
+      .in('subject_id', targetIds)
+      .limit(1000);
+    data = res.data;
+    error = res.error;
+  } else {
+    const res = await supabase
+      .from('questions')
+      .select('*')
+      .eq('subject_id', subjectId)
+      .limit(1000);
+    data = res.data;
+    error = res.error;
+  }
+
+  // Fallback: If 0 questions returned by ID and subject has a clear name, search by subject relation or name alias
+  if ((!data || data.length === 0) && !error) {
+    try {
+      const { data: altSubs } = await supabase.from('subjects').select('id, name').ilike('name', `%${subjectName}%`);
+      if (altSubs && altSubs.length > 0) {
+        const altIds = altSubs.map(s => s.id);
+        const altRes = await supabase.from('questions').select('*').in('subject_id', altIds).limit(1000);
+        if (altRes.data && altRes.data.length > 0) {
+          data = altRes.data;
+        }
+      }
+    } catch (_) {}
+  }
 
   if (error) throw error;
 
   const pack: OfflinePack = {
     subjectId,
-    subjectName,
+    subjectName: normalizeSubjectName(subjectName || 'Subject'),
     version: Date.now(),
     downloadedAt: new Date().toISOString(),
     questionsCount: data?.length || 0,
@@ -162,19 +228,38 @@ export const downloadSubjectPack = async (subjectId: string, subjectName: string
 };
 
 export const checkForSubjectUpdate = async (subjectId: string): Promise<{ hasUpdate: boolean; remoteCount: number }> => {
-  const packs = getDownloadedPacks();
+  const packs = await getDownloadedPacksAsync();
   const localPack = packs[subjectId];
   if (!localPack) return { hasUpdate: false, remoteCount: 0 };
 
   try {
-    const { count, error } = await supabase
-      .from('questions')
-      .select('id', { count: 'exact', head: true })
-      .eq('subject_id', subjectId);
+    // Resolve all possible DB IDs
+    let targetIds = [subjectId];
+    try {
+      const resolved = await resolveSubjectIdsByNameOrAlias(localPack.subjectName || subjectId);
+      if (resolved.length > 0) {
+        targetIds = Array.from(new Set([...targetIds, ...resolved])).filter(isUUID);
+      }
+    } catch (_) {}
 
-    if (error || count === null) return { hasUpdate: false, remoteCount: localPack.questionsCount };
+    let count: number | null = null;
+    if (targetIds.length > 1) {
+      const res = await supabase
+        .from('questions')
+        .select('id', { count: 'exact', head: true })
+        .in('subject_id', targetIds);
+      count = res.count;
+    } else {
+      const res = await supabase
+        .from('questions')
+        .select('id', { count: 'exact', head: true })
+        .eq('subject_id', subjectId);
+      count = res.count;
+    }
 
-    const hasUpdate = count > localPack.questionsCount;
+    if (count === null) return { hasUpdate: false, remoteCount: localPack.questionsCount };
+
+    const hasUpdate = count > localPack.questionsCount || (localPack.questionsCount === 0 && count > 0);
     return { hasUpdate, remoteCount: count };
   } catch {
     return { hasUpdate: false, remoteCount: localPack.questionsCount };
@@ -182,7 +267,7 @@ export const checkForSubjectUpdate = async (subjectId: string): Promise<{ hasUpd
 };
 
 export const checkForPackUpdates = async (): Promise<{ updatedSubjects: string[]; packUpdatesMap: Record<string, boolean> }> => {
-  const packs = getDownloadedPacks();
+  const packs = await getDownloadedPacksAsync();
   const packKeys = Object.keys(packs);
   const updatedSubjects: string[] = [];
   const packUpdatesMap: Record<string, boolean> = {};
@@ -194,7 +279,6 @@ export const checkForPackUpdates = async (): Promise<{ updatedSubjects: string[]
     if (res.hasUpdate) {
       updatedSubjects.push(subId);
       packUpdatesMap[subId] = true;
-      // Mark in memory and DB
       packs[subId].hasUpdate = true;
       packs[subId].remoteCount = res.remoteCount;
       offlineDb.offlinePacks.put(packs[subId]).catch(() => {});
@@ -206,6 +290,30 @@ export const checkForPackUpdates = async (): Promise<{ updatedSubjects: string[]
   }
 
   return { updatedSubjects, packUpdatesMap };
+};
+
+export const updateAllDownloadedPacks = async (
+  onProgress?: (current: number, total: number, subjectName: string) => void
+): Promise<{ updatedCount: number; errors: string[] }> => {
+  const packs = await getDownloadedPacksAsync();
+  const packList = Object.values(packs);
+  let updatedCount = 0;
+  const errors: string[] = [];
+
+  for (let i = 0; i < packList.length; i++) {
+    const pack = packList[i];
+    if (onProgress) {
+      onProgress(i + 1, packList.length, pack.subjectName);
+    }
+    try {
+      await downloadSubjectPack(pack.subjectId, pack.subjectName);
+      updatedCount++;
+    } catch (e: any) {
+      errors.push(`${pack.subjectName}: ${e.message}`);
+    }
+  }
+
+  return { updatedCount, errors };
 };
 
 export const saveCustomQuestions = (questions: any[]) => {
@@ -264,5 +372,6 @@ export const clearCompletedOfflineSessions = async () => {
     await offlineDb.completedOfflineSessions.clear();
   } catch (_) {}
 };
+
 
 

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { QuestionFlowService } from '@/services/questionFlowService';
-import { getDownloadedPacks } from '@/lib/offlineStore';
+import { getDownloadedPacks, findOfflinePackForSubject } from '@/lib/offlineStore';
 import type { CleanQuestion } from '@/types/exam';
 
 export interface UsePastQuestionsOptions {
@@ -90,15 +90,25 @@ export const usePastQuestionsData = (options: UsePastQuestionsOptions = {}): Use
 
       // 3. Fallback to offline downloaded packs if online fetch returns empty or fails
       const packs = getDownloadedPacks();
-      const matchedPackKey = Object.keys(packs).find(k => 
-        (subjectName && k.toLowerCase().includes(subjectName.toLowerCase())) ||
-        (subjectId && k.toLowerCase().includes(subjectId.toLowerCase()))
-      );
+      const matchedPack = findOfflinePackForSubject(subjectId || subjectName || '', packs);
 
-      if (matchedPackKey && packs[matchedPackKey]?.questions?.length) {
-        const offlineQuestions = packs[matchedPackKey].questions.map((q: any) => ({
+      if (matchedPack && matchedPack.questions?.length) {
+        let filtered = matchedPack.questions;
+        if (year) {
+          const yearFiltered = filtered.filter((q: any) => Number(q.year) === Number(year));
+          if (yearFiltered.length > 0) filtered = yearFiltered;
+        }
+        if (topic) {
+          const topicFiltered = filtered.filter((q: any) => 
+            q.topic_id === topic || 
+            (q.topics?.name && q.topics.name.toLowerCase().includes(topic.toLowerCase()))
+          );
+          if (topicFiltered.length > 0) filtered = topicFiltered;
+        }
+
+        const offlineQuestions = filtered.map((q: any) => ({
           ...q,
-          subject_name: q.subject_name || subjectName || 'Past Question',
+          subject_name: q.subject_name || matchedPack.subjectName || subjectName || 'Past Question',
           year: q.year || year || 2024
         }));
         setQuestions(offlineQuestions.slice(0, limit));
@@ -114,9 +124,14 @@ export const usePastQuestionsData = (options: UsePastQuestionsOptions = {}): Use
       // Check offline store on network error
       try {
         const packs = getDownloadedPacks();
-        const matchedKey = Object.keys(packs)[0];
-        if (matchedKey && packs[matchedKey]?.questions) {
-          setQuestions(packs[matchedKey].questions.slice(0, limit));
+        const matchedPack = findOfflinePackForSubject(subjectId || subjectName || '', packs) || Object.values(packs)[0];
+        if (matchedPack && matchedPack.questions?.length) {
+          const offlineQuestions = matchedPack.questions.map((q: any) => ({
+            ...q,
+            subject_name: q.subject_name || matchedPack.subjectName || subjectName || 'Past Question',
+            year: q.year || year || 2024
+          }));
+          setQuestions(offlineQuestions.slice(0, limit));
           setIsFromCache(true);
         }
       } catch (fallbackErr) {

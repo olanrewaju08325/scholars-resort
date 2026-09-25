@@ -21,6 +21,7 @@ import { UserSubjectsQuickGrid } from '@/components/dashboard/UserSubjectsQuickG
 import { LearningProgressDashboard } from '@/components/dashboard/LearningProgressDashboard';
 import { MistakeBankQuickCard } from '@/components/dashboard/MistakeBankQuickCard';
 import { PeerStudyRoomWidget } from '@/components/dashboard/PeerStudyRoomWidget';
+import { OfflineModeWidget } from '@/components/dashboard/OfflineModeWidget';
 
 export default function Dashboard() {
   usePerfMonitoring('Dashboard');
@@ -104,6 +105,9 @@ export default function Dashboard() {
             
             {/* Today's 5-Question Daily Streak Drill */}
             <DailyFiveQuestionDrill userId={profile.id} />
+
+            {/* Offline Mode & Question Hub Widget */}
+            <OfflineModeWidget />
 
             {/* Practice & Exam Modules (Categorized) */}
             <CbtHubGrid />

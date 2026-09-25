@@ -290,14 +290,23 @@ export const AppLayout = () => {
                     <Link 
                       key={item.path}
                       to={item.path} 
-                      className={`flex items-center gap-3 px-3 py-2 rounded-xl text-xs font-medium transition-all ${
+                      className={`flex items-center justify-between px-3 py-2 rounded-xl text-xs font-medium transition-all ${
                         active 
                           ? 'bg-primary text-primary-foreground font-semibold shadow-xs' 
                           : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                       }`}
                     >
-                      <item.icon className={`h-4 w-4 shrink-0 ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
-                      <span className="truncate">{item.label}</span>
+                      <div className="flex items-center gap-3 truncate">
+                        <item.icon className={`h-4 w-4 shrink-0 ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {item.path === '/offline-packs' && (
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-tight shrink-0 ${
+                          active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                        }`}>
+                          Offline
+                        </span>
+                      )}
                     </Link>
                   );
                 })}
@@ -577,14 +586,23 @@ export const AppLayout = () => {
                             key={item.path}
                             to={item.path} 
                             onClick={() => setDrawerOpen(false)}
-                            className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
+                            className={`flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-medium transition-all ${
                               active 
                                 ? 'bg-primary text-primary-foreground font-semibold shadow-xs' 
                                 : 'text-muted-foreground hover:bg-muted hover:text-foreground active:bg-muted/80'
                             }`}
                           >
-                            <item.icon className={`h-4 w-4 shrink-0 ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
-                            <span className="truncate">{item.label}</span>
+                            <div className="flex items-center gap-3 truncate">
+                              <item.icon className={`h-4 w-4 shrink-0 ${active ? 'text-primary-foreground' : 'text-muted-foreground'}`} />
+                              <span className="truncate">{item.label}</span>
+                            </div>
+                            {item.path === '/offline-packs' && (
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-tight shrink-0 ${
+                                active ? 'bg-primary-foreground/20 text-primary-foreground' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
+                              }`}>
+                                Offline
+                              </span>
+                            )}
                           </Link>
                         );
                       })}
