@@ -101,9 +101,15 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
           ? ['needs_diagram', 'missing_figure']
           : [];
 
+        // If diagram image was isolated from PDF, embed in markdown and question stem
+        let finalQuestionText = q.questionText.trim();
+        if (q.diagramImageUrl && !finalQuestionText.includes('![Diagram]')) {
+          finalQuestionText = `![Diagram](${q.diagramImageUrl})\n\n${finalQuestionText}`;
+        }
+
         return {
           subject_id: subjectId,
-          question_text: q.questionText,
+          question_text: finalQuestionText,
           options: q.options,
           correct_answer: q.correctAnswer,
           explanation: q.explanation,

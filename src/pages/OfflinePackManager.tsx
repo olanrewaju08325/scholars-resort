@@ -64,6 +64,7 @@ export const OfflinePackManager = () => {
   const [stationMode, setStationMode] = useState<'subject_drill' | 'full_mock' | 'past_questions'>('subject_drill');
   const [stationQuestionCount, setStationQuestionCount] = useState<number>(20);
   const [stationTimerMinutes, setStationTimerMinutes] = useState<number>(20);
+  const [stationYear, setStationYear] = useState<string>('all');
 
   useEffect(() => {
     fetchInitialData();
@@ -334,6 +335,22 @@ export const OfflinePackManager = () => {
   const uniquePacks = useMemo(() => {
     return Array.from(new Set(Object.values(downloadedPacks)));
   }, [downloadedPacks]);
+
+  const readyPacks = useMemo(() => {
+    return uniquePacks.filter(p => (p.questionsCount || 0) > 0);
+  }, [uniquePacks]);
+
+  const availableYearsInSelectedPack = useMemo(() => {
+    const targetPack = readyPacks.find(p => p.subjectId === stationSubject || normalizeSubjectName(p.subjectName) === normalizeSubjectName(stationSubject)) || readyPacks[0];
+    if (!targetPack || !targetPack.questions) return [];
+    const years = new Set<number>();
+    targetPack.questions.forEach((q: any) => {
+      if (q.year && Number(q.year) >= 1978 && Number(q.year) <= 2026) {
+        years.add(Number(q.year));
+      }
+    });
+    return Array.from(years).sort((a, b) => b - a);
+  }, [readyPacks, stationSubject]);
 
   const totalQuestionsStored = useMemo(() => {
     return uniquePacks.reduce((sum, p) => sum + (p.questionsCount || 0), 0);
@@ -614,7 +631,7 @@ export const OfflinePackManager = () => {
             </CardHeader>
 
             <CardContent className="space-y-6">
-              {downloadedCount === 0 ? (
+              {readyPacks.length === 0 ? (
                 <div className="bg-amber-500/10 border border-amber-500/30 p-4 rounded-xl text-center space-y-3">
                   <AlertCircle className="w-8 h-8 text-amber-500 mx-auto" />
                   <p className="font-bold text-foreground">You haven't downloaded any offline question packs yet.</p>
@@ -629,22 +646,33 @@ export const OfflinePackManager = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Left Column: Configuration */}
                   <div className="space-y-4">
-                    <div>
-                      <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                        Select Subject Pack
-                      </label>
-                      <select 
-                        value={stationSubject}
-                        onChange={(e) => setStationSubject(e.target.value)}
-                        className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm font-bold text-foreground focus:ring-2 focus:ring-primary focus:outline-none"
-                      >
-                        {Object.values(downloadedPacks).map((p) => (
-                          <option key={p.subjectId} value={p.subjectId}>
-                            {p.subjectName} ({p.questionsCount} Questions Ready)
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    {stationMode !== 'full_mock' ? (
+                      <div>
+                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                          Select Subject Pack
+                        </label>
+                        <select 
+                          value={stationSubject || readyPacks[0]?.subjectId}
+                          onChange={(e) => setStationSubject(e.target.value)}
+                          className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm font-bold text-foreground focus:ring-2 focus:ring-primary focus:outline-none"
+                        >
+                          {readyPacks.map((p) => (
+                            <option key={p.subjectId} value={p.subjectId}>
+                              {p.subjectName} ({p.questionsCount.toLocaleString()} Authentic Questions Ready)
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 rounded-xl bg-primary/10 border border-primary/20 space-y-1">
+                        <span className="font-extrabold text-xs text-primary uppercase tracking-wide block">
+                          Full 4-Subject UTME Mock Combination
+                        </span>
+                        <p className="text-xs text-muted-foreground">
+                          Combines all 4 registered UTME subjects ({profile?.utme_subjects?.join(', ') || 'Use of English, Mathematics, Physics, Chemistry'}) into a 180-Question, 2-Hour standardized JAMB simulation.
+                        </p>
+                      </div>
+                    )}
 
                     <div>
                       <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
@@ -659,7 +687,19 @@ export const OfflinePackManager = () => {
                           <button
                             key={m.id}
                             type="button"
-                            onClick={() => setStationMode(m.id as any)}
+                            onClick={() => {
+                              setStationMode(m.id as any);
+                              if (m.id === 'full_mock') {
+                                setStationQuestionCount(180);
+                                setStationTimerMinutes(120);
+                              } else if (m.id === 'past_questions') {
+                                setStationQuestionCount(40);
+                                setStationTimerMinutes(40);
+                              } else {
+                                setStationQuestionCount(20);
+                                setStationTimerMinutes(20);
+                              }
+                            }}
                             className={`p-3 rounded-xl text-xs font-bold border text-center transition-all ${
                               stationMode === m.id
                                 ? 'border-primary bg-primary/10 text-primary shadow-sm'
@@ -672,50 +712,75 @@ export const OfflinePackManager = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    {/* Mode-Specific Controls */}
+                    {stationMode === 'past_questions' && (
                       <div>
                         <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                          Questions Count
+                          Select Past Question Exam Year
                         </label>
                         <select
-                          value={stationQuestionCount}
-                          onChange={(e) => setStationQuestionCount(Number(e.target.value))}
-                          className="w-full bg-background border border-border rounded-xl px-3.5 py-2 text-sm font-bold text-foreground"
+                          value={stationYear}
+                          onChange={(e) => setStationYear(e.target.value)}
+                          className="w-full bg-background border border-border rounded-xl px-3.5 py-2.5 text-sm font-bold text-foreground"
                         >
-                          <option value={10}>10 Questions</option>
-                          <option value={20}>20 Questions (Standard)</option>
-                          <option value={40}>40 Questions (UTME Set)</option>
-                          <option value={60}>60 Questions (Use of English)</option>
+                          <option value="all">All Available Years (Mixed Drill)</option>
+                          {availableYearsInSelectedPack.map(yr => (
+                            <option key={yr} value={String(yr)}>JAMB UTME {yr} Past Paper</option>
+                          ))}
                         </select>
                       </div>
+                    )}
 
-                      <div>
-                        <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                          Timer (Minutes)
-                        </label>
-                        <select
-                          value={stationTimerMinutes}
-                          onChange={(e) => setStationTimerMinutes(Number(e.target.value))}
-                          className="w-full bg-background border border-border rounded-xl px-3.5 py-2 text-sm font-bold text-foreground"
-                        >
-                          <option value={10}>10 Minutes (Speed)</option>
-                          <option value={20}>20 Minutes</option>
-                          <option value={30}>30 Minutes</option>
-                          <option value={60}>60 Minutes (Standard)</option>
-                          <option value={120}>120 Minutes (Full Exam)</option>
-                        </select>
+                    {stationMode === 'subject_drill' && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                            Questions Count
+                          </label>
+                          <select
+                            value={stationQuestionCount}
+                            onChange={(e) => setStationQuestionCount(Number(e.target.value))}
+                            className="w-full bg-background border border-border rounded-xl px-3.5 py-2 text-sm font-bold text-foreground"
+                          >
+                            <option value={10}>10 Questions (Quick)</option>
+                            <option value={20}>20 Questions (Standard)</option>
+                            <option value={40}>40 Questions (UTME Set)</option>
+                            <option value={60}>60 Questions (Use of English)</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                            Timer (Minutes)
+                          </label>
+                          <select
+                            value={stationTimerMinutes}
+                            onChange={(e) => setStationTimerMinutes(Number(e.target.value))}
+                            className="w-full bg-background border border-border rounded-xl px-3.5 py-2 text-sm font-bold text-foreground"
+                          >
+                            <option value={10}>10 Minutes (Speed)</option>
+                            <option value={20}>20 Minutes</option>
+                            <option value={30}>30 Minutes</option>
+                            <option value={40}>40 Minutes (Standard)</option>
+                            <option value={60}>60 Minutes</option>
+                          </select>
+                        </div>
                       </div>
-                    </div>
+                    )}
 
                     <div className="pt-2">
                       <Button 
                         onClick={() => {
-                          const targetSubject = stationSubject || Object.keys(downloadedPacks)[0];
-                          if (!targetSubject) {
+                          const targetSubject = stationSubject || readyPacks[0]?.subjectId || '';
+                          if (stationMode !== 'full_mock' && !targetSubject) {
                             toast.error('Please select a subject pack.');
                             return;
                           }
-                          navigate(`/offline-cbt?subject=${encodeURIComponent(targetSubject)}&count=${stationQuestionCount}&timer=${stationTimerMinutes}`);
+                          const count = stationMode === 'full_mock' ? 180 : stationQuestionCount;
+                          const timer = stationMode === 'full_mock' ? 120 : stationTimerMinutes;
+                          const yrParam = stationMode === 'past_questions' && stationYear !== 'all' ? `&year=${stationYear}` : '';
+                          
+                          navigate(`/offline-cbt?mode=${stationMode}&subject=${encodeURIComponent(targetSubject)}&count=${count}&timer=${timer}${yrParam}`);
                         }}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 h-12 text-base shadow-md"
                       >

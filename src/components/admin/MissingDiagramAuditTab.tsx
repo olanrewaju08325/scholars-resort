@@ -125,10 +125,16 @@ export const MissingDiagramAuditTab: React.FC = () => {
         const target = questions.find(q => q.id === questionId);
         const flags = (target?.quality_flags || []).filter(f => f !== 'needs_diagram' && f !== 'missing_figure');
 
-        // Store diagram and remove flag
+        let updatedQuestionText = target?.question_text || '';
+        if (!updatedQuestionText.includes('![Diagram]')) {
+          updatedQuestionText = `![Diagram](${dataUrl})\n\n${updatedQuestionText}`;
+        }
+
+        // Store diagram in question stem and remove flags
         const { error } = await supabase
           .from('questions')
           .update({
+            question_text: updatedQuestionText,
             quality_flags: flags
           })
           .eq('id', questionId);

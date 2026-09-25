@@ -5,7 +5,7 @@ import {
   LayoutDashboard, Users, BookOpen, FileQuestion, CreditCard, 
   Settings, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronRight, 
   Search, Bell, Plus, MessageSquare, Menu, Sparkles, Trophy,
-  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2, ShieldCheck, AlertTriangle, Video
+  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2, ShieldCheck, AlertTriangle, Video, FileText
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
@@ -115,7 +115,7 @@ export default function Admin() {
       items: [
         { id: 'question-bank-studio', label: 'Question Bank & Content Studio', icon: FileQuestion },
         { id: 'pdf-visual-extractor', label: 'PDF Diagram & Question Extractor', icon: FileText },
-        { id: 'missing-diagrams', label: 'Missing Diagrams Audit (437)', icon: AlertTriangle },
+        { id: 'missing-diagrams', label: 'Missing Diagrams Audit Hub', icon: AlertTriangle },
         { id: 'academic-taxonomy', label: 'Academic Taxonomy Hub', icon: BookOpen },
         { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
         { id: 'materials', label: 'Resource Library', icon: BookOpen },

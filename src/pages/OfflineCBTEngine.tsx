@@ -24,15 +24,18 @@ export const OfflineCBTEngine: React.FC = () => {
   const navigate = useNavigate();
   const { profile } = useAuth();
 
+  const queryMode = searchParams.get('mode') || 'subject_drill';
   const querySubject = searchParams.get('subject') || searchParams.get('subjectId') || '';
-  const queryCount = Number(searchParams.get('count')) || 40;
-  const queryTimerMinutes = Number(searchParams.get('timer')) || 40;
+  const queryYear = searchParams.get('year') || '';
+  const queryCount = Number(searchParams.get('count')) || (queryMode === 'full_mock' ? 180 : 40);
+  const queryTimerMinutes = Number(searchParams.get('timer')) || (queryMode === 'full_mock' ? 120 : 40);
 
   // Engine state
   const [loading, setLoading] = useState(true);
   const [packs, setPacks] = useState<Record<string, OfflinePack>>({});
   const [selectedPack, setSelectedPack] = useState<OfflinePack | null>(null);
   const [questions, setQuestions] = useState<any[]>([]);
+  const [subjectTabs, setSubjectTabs] = useState<Array<{ name: string; startIndex: number; count: number }>>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<number, string>>({});
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
@@ -46,6 +49,7 @@ export const OfflineCBTEngine: React.FC = () => {
   const [timeLeft, setTimeLeft] = useState(queryTimerMinutes * 60);
   const [isExamCompleted, setIsExamCompleted] = useState(false);
   const [completedSessionData, setCompletedSessionData] = useState<CompletedOfflineSession | null>(null);
+  const [subjectBreakdownStats, setSubjectBreakdownStats] = useState<Record<string, { score: number; total: number }>>({});
   const [reviewMode, setReviewMode] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
@@ -62,21 +66,123 @@ export const OfflineCBTEngine: React.FC = () => {
         if (!isMounted) return;
         setPacks(storedPacks);
 
-        const packList = Array.from(new Set(Object.values(storedPacks)));
+        const packList = Array.from(new Set(Object.values(storedPacks))).filter(p => (p.questionsCount || 0) > 0);
         if (packList.length === 0) {
           setLoading(false);
           return;
         }
 
-        // Match requested subject or pick first available pack
-        let matched = querySubject ? findOfflinePackForSubject(querySubject, storedPacks) : null;
-        if (!matched && packList.length > 0) {
-          matched = packList[0];
-        }
+        if (queryMode === 'full_mock') {
+          // --- FULL 4-SUBJECT UTME MOCK COMBINATION ---
+          const registeredNames = (profile?.utme_subjects || ['Use of English', 'Mathematics', 'Physics', 'Chemistry']);
+          const combinedQuestions: any[] = [];
+          const tabs: Array<{ name: string; startIndex: number; count: number }> = [];
 
-        if (matched) {
-          setSelectedPack(matched);
-          initQuestionsForPack(matched, queryCount, filterMissingVisuals);
+          registeredNames.forEach((sName) => {
+            const matched = findOfflinePackForSubject(sName, storedPacks);
+            if (matched && matched.questions && matched.questions.length > 0) {
+              let pool = matched.questions;
+              if (filterMissingVisuals) {
+                const valid = pool.filter((q: any) => {
+                  const flags = q.quality_flags || [];
+                  return !flags.includes('needs_diagram') && !flags.includes('missing_figure');
+                });
+                if (valid.length >= 10) pool = valid;
+              }
+
+              const isEnglish = matched.subjectName.toLowerCase().includes('english');
+              const targetCount = isEnglish ? 60 : 40;
+              const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, targetCount);
+              const tagged = shuffled.map((q: any) => ({
+                ...q,
+                subject_name: matched.subjectName
+              }));
+
+              const startIndex = combinedQuestions.length;
+              combinedQuestions.push(...tagged);
+              tabs.push({
+                name: matched.subjectName,
+                startIndex,
+                count: tagged.length
+              });
+            }
+          });
+
+          // Fallback if not all 4 were downloaded: use available packs
+          if (combinedQuestions.length === 0 && packList.length > 0) {
+            packList.slice(0, 4).forEach((matched) => {
+              const tagged = (matched.questions || []).slice(0, 40).map((q: any) => ({
+                ...q,
+                subject_name: matched.subjectName
+              }));
+              const startIndex = combinedQuestions.length;
+              combinedQuestions.push(...tagged);
+              tabs.push({ name: matched.subjectName, startIndex, count: tagged.length });
+            });
+          }
+
+          setQuestions(combinedQuestions);
+          setSubjectTabs(tabs);
+          setSelectedPack(packList[0]);
+          setCurrentIndex(0);
+          setAnswers({});
+          setFlagged({});
+          setTimeLeft(120 * 60); // 2 hours standard
+        } else if (queryMode === 'past_questions') {
+          // --- PAST QUESTIONS DRILL (FILTERED BY YEAR) ---
+          let matched = querySubject ? findOfflinePackForSubject(querySubject, storedPacks) : null;
+          if (!matched && packList.length > 0) matched = packList[0];
+
+          if (matched) {
+            setSelectedPack(matched);
+            let pool = matched.questions || [];
+            
+            if (queryYear && queryYear !== 'all') {
+              const yearFiltered = pool.filter((q: any) => String(q.year) === String(queryYear));
+              if (yearFiltered.length > 0) pool = yearFiltered;
+            }
+
+            if (filterMissingVisuals) {
+              const valid = pool.filter((q: any) => {
+                const flags = q.quality_flags || [];
+                return !flags.includes('needs_diagram') && !flags.includes('missing_figure');
+              });
+              if (valid.length >= 10) pool = valid;
+            }
+
+            const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, queryCount);
+            setQuestions(shuffled);
+            setSubjectTabs([]);
+            setCurrentIndex(0);
+            setAnswers({});
+            setFlagged({});
+            setTimeLeft(queryTimerMinutes * 60);
+          }
+        } else {
+          // --- STANDARD SUBJECT DRILL ---
+          let matched = querySubject ? findOfflinePackForSubject(querySubject, storedPacks) : null;
+          if (!matched && packList.length > 0) matched = packList[0];
+
+          if (matched) {
+            setSelectedPack(matched);
+            let pool = matched.questions || [];
+
+            if (filterMissingVisuals) {
+              const valid = pool.filter((q: any) => {
+                const flags = q.quality_flags || [];
+                return !flags.includes('needs_diagram') && !flags.includes('missing_figure');
+              });
+              if (valid.length >= 10) pool = valid;
+            }
+
+            const shuffled = [...pool].sort(() => Math.random() - 0.5).slice(0, queryCount);
+            setQuestions(shuffled);
+            setSubjectTabs([]);
+            setCurrentIndex(0);
+            setAnswers({});
+            setFlagged({});
+            setTimeLeft(queryTimerMinutes * 60);
+          }
         }
       } catch (err) {
         console.warn('[OfflineCBTEngine] Init error:', err);
@@ -87,35 +193,7 @@ export const OfflineCBTEngine: React.FC = () => {
 
     loadData();
     return () => { isMounted = false; };
-  }, [querySubject, queryCount]);
-
-  // Filter and prepare questions
-  const initQuestionsForPack = (pack: OfflinePack, count: number, excludeBrokenVisuals: boolean) => {
-    let pool = pack.questions || [];
-    
-    // Filter out questions flagged with missing diagrams if enabled
-    if (excludeBrokenVisuals) {
-      const validVisualPool = pool.filter(q => {
-        const flags = q.quality_flags || [];
-        return !flags.includes('needs_diagram') && !flags.includes('missing_figure');
-      });
-      if (validVisualPool.length >= 10) {
-        pool = validVisualPool;
-      }
-    }
-
-    // Shuffle and pick target count
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, Math.min(count, shuffled.length));
-
-    setQuestions(selected);
-    setCurrentIndex(0);
-    setAnswers({});
-    setFlagged({});
-    setTimeLeft(queryTimerMinutes * 60);
-    setIsExamCompleted(false);
-    setCompletedSessionData(null);
-  };
+  }, [querySubject, queryCount, queryMode, queryYear]);
 
   // 2. High-reliability Timer with auto-submit
   useEffect(() => {
