@@ -24,6 +24,14 @@ interface FlaggedQuestion {
   subjectName?: string;
 }
 
+const VISUAL_KEYWORDS = [
+  'diagram', 'figure', 'fig.', 'fig ', 'circuit', 'apparatus', 
+  'shown above', 'shown below', 'structure above', 'structure below', 
+  'graph above', 'graph below', 'illustrated above', 'illustrated below',
+  'chart above', 'chart below', 'in the table above', 'in the table below',
+  'refer to diagram', 'as shown in the'
+];
+
 export const MissingDiagramAuditTab: React.FC = () => {
   const [questions, setQuestions] = useState<FlaggedQuestion[]>([]);
   const [subjectsMap, setSubjectsMap] = useState<Record<string, string>>({});
@@ -32,7 +40,7 @@ export const MissingDiagramAuditTab: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
-  // Load flagged questions from Supabase
+  // Load flagged questions from Supabase safely without postgrest json cast errors
   const loadFlaggedQuestions = async () => {
     setLoading(true);
     try {
@@ -44,14 +52,23 @@ export const MissingDiagramAuditTab: React.FC = () => {
       }
       setSubjectsMap(subMap);
 
-      // 2. Load all questions with 'needs_diagram' flag
+      // 2. Fetch all questions and audit for visual dependencies in memory
       const allQuestions = await fetchAllRowsPaginated<FlaggedQuestion>(() =>
         supabase.from('questions')
           .select('id, subject_id, question_text, options, correct_answer, explanation, year, quality_flags')
-          .contains('quality_flags', ['needs_diagram'])
       );
 
-      const decorated = allQuestions.map(q => ({
+      const missingDiagrams = allQuestions.filter(q => {
+        const text = ((q.question_text || '') + ' ' + (q.explanation || '')).toLowerCase();
+        const hasVisualRef = VISUAL_KEYWORDS.some(kw => text.includes(kw));
+        const hasImage = text.includes('data:image') || text.includes('http') || text.includes('![') || text.includes('<img') || Boolean(q.image_url);
+        const flags = Array.isArray(q.quality_flags) ? q.quality_flags : [];
+        const hasFlag = flags.includes('needs_diagram') || flags.includes('missing_figure');
+
+        return (hasVisualRef || hasFlag) && !hasImage;
+      });
+
+      const decorated = missingDiagrams.map(q => ({
         ...q,
         subjectName: subMap[q.subject_id] || 'Unknown Subject'
       }));
