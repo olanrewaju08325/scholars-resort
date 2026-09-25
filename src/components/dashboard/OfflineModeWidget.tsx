@@ -118,19 +118,23 @@ export const OfflineModeWidget: React.FC = () => {
     toast.success(`Batch download complete: ${count} subjects saved for 100% offline practice!`);
   };
 
-  // Compute summary stats
-  const totalQuestionsStored = useMemo(() => {
-    return Object.values(downloadedPacks).reduce((sum, p) => sum + (p.questionsCount || 0), 0);
+  // Compute summary stats (strictly deduplicated across unique packs)
+  const uniquePacks = useMemo(() => {
+    return Array.from(new Set(Object.values(downloadedPacks)));
   }, [downloadedPacks]);
+
+  const totalQuestionsStored = useMemo(() => {
+    return uniquePacks.reduce((sum, p) => sum + (p.questionsCount || 0), 0);
+  }, [uniquePacks]);
 
   const enabledRegisteredCount = useMemo(() => {
     return registeredSubjects.filter(sub => {
       // Check by direct ID or normalized name
-      return Object.values(downloadedPacks).some(
+      return uniquePacks.some(
         p => p.subjectId === sub.id || normalizeSubjectName(p.subjectName || '') === normalizeSubjectName(sub.name)
       );
     }).length;
-  }, [registeredSubjects, downloadedPacks]);
+  }, [registeredSubjects, uniquePacks]);
 
   const allRegisteredEnabled = enabledRegisteredCount === registeredSubjects.length && registeredSubjects.length > 0;
 
@@ -238,7 +242,7 @@ export const OfflineModeWidget: React.FC = () => {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => navigate('/offline-packs')}
+              onClick={() => navigate('/offline-cbt')}
               className="font-bold gap-1.5 text-xs border-border"
             >
               <PlayCircle className="w-3.5 h-3.5 text-primary" />

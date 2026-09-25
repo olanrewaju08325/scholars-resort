@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { useLiveFetch } from '@/hooks/useLiveFetch';
 import { DataLoading } from '@/components/DataLoading';
 import db from '@/lib/db';
+import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
 import { toast } from 'sonner';
 
 const WeeklyMocks = () => {
@@ -105,9 +106,9 @@ const WeeklyMocks = () => {
       const { data: subjects } = await supabase.from('subjects').select('*');
       if (subjects) await db.subjects_cache.bulkPut(subjects);
 
-      // 2. Fetch all questions
-      const { data: questions } = await supabase.from('questions').select('*');
-      if (questions) {
+      // 2. Fetch all questions with pagination to bypass PostgREST 1000 limit
+      const questions = await fetchAllRowsPaginated(() => supabase.from('questions').select('*'));
+      if (questions && questions.length > 0) {
         const parsed = questions.map(q => ({
           ...q,
           options: typeof q.options === 'string' ? JSON.parse(q.options) : q.options,

@@ -16,6 +16,7 @@ import {
   unifyDatabaseSubjects, 
   getSubjectQuestionCountsAggregation 
 } from '@/utils/subjectUtils';
+import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
 import { useConfirm } from '@/hooks/useConfirm';
 import { SubjectCoverageDashboard } from '@/components/admin/SubjectCoverageDashboard';
 
@@ -96,11 +97,16 @@ export const SubjectsTab = () => {
 
       // Fallback: Fetch questions and calculate counts client-side (legacy code)
       if (!usedServerCounts) {
-        // Fetch ALL dynamic questions without row caps (up to 50,000 records)
-        const { data: qData, count: totalDbCount } = await supabase
-          .from('questions')
-          .select('id, subject_id, year', { count: 'exact' })
-          .limit(50000);
+        // Fetch ALL dynamic questions with pagination (bypassing 1000 limit)
+        let qData: any[] = [];
+        let totalDbCount: number | null = null;
+        try {
+          const { count } = await supabase.from('questions').select('id', { count: 'exact', head: true });
+          totalDbCount = count;
+          qData = await fetchAllRowsPaginated(() => supabase.from('questions').select('id, subject_id, year'));
+        } catch (e: any) {
+          console.warn('[SubjectsTab] Fallback question fetch notice:', e?.message);
+        }
 
         totalQs = totalDbCount || qData?.length || 0;
 
@@ -266,17 +272,13 @@ export const SubjectsTab = () => {
     try {
       // Find all matching question IDs for this subject
       const canonical = normalizeSubjectName(selectedSubjectForYear.name);
-      let qList: any[] | null = null;
-      const { data: rawQList, error: qErr } = await supabase
-        .from('questions')
-        .select('id, subject_id, subjects!questions_subject_id_fkey(id, name)')
-        .limit(50000);
-
-      if (qErr) {
-        const { data: flatQ } = await supabase.from('questions').select('id, subject_id').limit(50000);
-        qList = flatQ;
-      } else {
-        qList = rawQList;
+      let qList: any[] = [];
+      try {
+        qList = await fetchAllRowsPaginated(() => 
+          supabase.from('questions').select('id, subject_id')
+        );
+      } catch (err: any) {
+        console.warn('[SubjectsTab] Questions fetch notice:', err?.message);
       }
 
       const targetIds: string[] = [];
@@ -341,17 +343,13 @@ export const SubjectsTab = () => {
         try {
           // 1. Remap questions
           const sourceCanonical = normalizeSubjectName(sourceObj.name);
-          let qList: any[] | null = null;
-          const { data: rawQList, error: qErr } = await supabase
-            .from('questions')
-            .select('id, subject_id, subjects!questions_subject_id_fkey(id, name)')
-            .limit(50000);
-
-          if (qErr) {
-            const { data: flatQ } = await supabase.from('questions').select('id, subject_id').limit(50000);
-            qList = flatQ;
-          } else {
-            qList = rawQList;
+          let qList: any[] = [];
+          try {
+            qList = await fetchAllRowsPaginated(() => 
+              supabase.from('questions').select('id, subject_id')
+            );
+          } catch (err: any) {
+            console.warn('[SubjectsTab] Merge question fetch notice:', err?.message);
           }
 
           const qToUpdate: string[] = [];

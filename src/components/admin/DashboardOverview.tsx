@@ -4,6 +4,7 @@ import {
   ArrowUpRight, Sparkles, Filter, RefreshCw
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -140,9 +141,9 @@ export function DashboardOverview() {
           }
         });
       } else {
-        // Query real question counts by subject from database instead of fake placeholder counts
+        // Query real question counts by subject across entire database with pagination
         try {
-          const { data: qData } = await supabase.from('questions').select('subject_id');
+          const qData = await fetchAllRowsPaginated(() => supabase.from('questions').select('subject_id'));
           if (qData && qData.length > 0) {
             qData.forEach((q: any) => {
               if (q.subject_id && subjectNameById[q.subject_id]) {

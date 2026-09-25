@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Trophy, Plus, Trash2, Users, Clock, Calendar, Edit2,
   CheckCircle, XCircle, Loader2, Sparkles, Lock, Unlock, ArrowLeft, RefreshCw, Database,
-  Gift, Coins, Check, Building2, Smartphone, Bell, Send, Mail
+  Gift, Coins, Check, Building2, Smartphone, Bell, Send, Mail, ShieldCheck, AlertCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';

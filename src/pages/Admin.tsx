@@ -56,6 +56,8 @@ import { QuestionBankContentStudioTab } from './admin-tabs/QuestionBankContentSt
 import { AcademicTaxonomyHubTab } from './admin-tabs/AcademicTaxonomyHubTab';
 import { AICommandCenterTab } from './admin-tabs/AICommandCenterTab';
 import { AdminPeerStudyRoomsTab } from './admin-tabs/AdminPeerStudyRoomsTab';
+import { PdfVisualQuestionExtractor } from '@/components/admin/PdfVisualQuestionExtractor';
+import { MissingDiagramAuditTab } from '@/components/admin/MissingDiagramAuditTab';
 
 export default function Admin() {
   const { profile, user, signOut } = useAuth();
@@ -112,6 +114,8 @@ export default function Admin() {
       group: 'Academic',
       items: [
         { id: 'question-bank-studio', label: 'Question Bank & Content Studio', icon: FileQuestion },
+        { id: 'pdf-visual-extractor', label: 'PDF Diagram & Question Extractor', icon: FileText },
+        { id: 'missing-diagrams', label: 'Missing Diagrams Audit (437)', icon: AlertTriangle },
         { id: 'academic-taxonomy', label: 'Academic Taxonomy Hub', icon: BookOpen },
         { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
         { id: 'materials', label: 'Resource Library', icon: BookOpen },
@@ -196,6 +200,8 @@ export default function Admin() {
       case 'syllabus': 
         return <AcademicTaxonomyHubTab />;
 
+      case 'pdf-visual-extractor': return <PdfVisualQuestionExtractor />;
+      case 'missing-diagrams': return <MissingDiagramAuditTab />;
       case 'literature': return <AdminLiteratureTab />;
       case 'materials': return <MaterialsTab />;
 

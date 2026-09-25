@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase';
+import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
 import { ContentNormalizer } from './ContentNormalizer';
 import {
   CANONICAL_UTME_SUBJECTS,
@@ -79,16 +80,25 @@ export const isUUID = (str: any): boolean => {
  * Resolves any subject name, alias, or ID string into an array of valid database UUIDs.
  */
 export const resolveSubjectIdsByNameOrAlias = async (subjectNameOrId: string): Promise<string[]> => {
-  if (isUUID(subjectNameOrId)) {
-    return [subjectNameOrId];
-  }
-
-  const canonical = normalizeSubjectName(subjectNameOrId);
-  const aliases = getSubjectAliases(canonical);
+  if (!subjectNameOrId) return [];
 
   try {
     const { data: dbSubjects } = await supabase.from('subjects').select('id, name');
-    if (!dbSubjects || dbSubjects.length === 0) return [];
+    if (!dbSubjects || dbSubjects.length === 0) {
+      return isUUID(subjectNameOrId) ? [subjectNameOrId] : [];
+    }
+
+    // If it's a UUID, find the subject name first if possible
+    let targetName = subjectNameOrId;
+    if (isUUID(subjectNameOrId)) {
+      const found = dbSubjects.find(s => s.id === subjectNameOrId);
+      if (found && found.name) {
+        targetName = found.name;
+      }
+    }
+
+    const canonical = normalizeSubjectName(targetName);
+    const aliases = getSubjectAliases(canonical);
 
     const matched = dbSubjects.filter(s => {
       if (!s.id || !isUUID(s.id)) return false;
@@ -97,10 +107,14 @@ export const resolveSubjectIdsByNameOrAlias = async (subjectNameOrId: string): P
       return normalizedName === canonical || aliases.includes((s.name || '').toLowerCase());
     }).map(s => s.id).filter(isUUID);
 
+    if (isUUID(subjectNameOrId) && !matched.includes(subjectNameOrId)) {
+      matched.push(subjectNameOrId);
+    }
+
     return Array.from(new Set(matched));
   } catch (err) {
     console.warn('Error resolving subject UUIDs:', err);
-    return [];
+    return isUUID(subjectNameOrId) ? [subjectNameOrId] : [];
   }
 };
 
@@ -170,10 +184,9 @@ export const unifyDatabaseSubjects = async (): Promise<{ updatedCount: number; s
 
     // 3a. Remap any string-alias or invalid/orphaned subject_ids in `questions` to master subject UUID
     try {
-      const { data: allQuestions } = await supabase
-        .from('questions')
-        .select('id, subject_id')
-        .limit(50000);
+      const allQuestions = await fetchAllRowsPaginated(() => 
+        supabase.from('questions').select('id, subject_id')
+      );
 
       if (allQuestions && allQuestions.length > 0) {
         for (const q of allQuestions) {

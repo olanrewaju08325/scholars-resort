@@ -43,6 +43,7 @@ const Onboarding = lazyWithRetry(() => import('./pages/Onboarding'), 'Onboarding
 const JambNovelHub = lazyWithRetry(() => import('./pages/JambNovelHub').then(m => ({ default: m.JambNovelHub })), 'JambNovelHub');
 const CourseEligibilityChecker = lazyWithRetry(() => import('./pages/CourseEligibilityChecker').then(m => ({ default: m.CourseEligibilityChecker })), 'CourseEligibilityChecker');
 const OfflinePackManager = lazyWithRetry(() => import('./pages/OfflinePackManager').then(m => ({ default: m.OfflinePackManager })), 'OfflinePackManager');
+const OfflineCBTEngine = lazyWithRetry(() => import('./pages/OfflineCBTEngine').then(m => ({ default: m.OfflineCBTEngine })), 'OfflineCBTEngine');
 const HealthCheck = lazyWithRetry(() => import('./pages/HealthCheck'), 'HealthCheck');
 const EducationalJourneyMapPage = lazyWithRetry(() => import('./pages/EducationalJourneyMapPage'), 'EducationalJourneyMapPage');
 const AdaptiveLearningPathPage = lazyWithRetry(() => import('./pages/AdaptiveLearningPathPage'), 'AdaptiveLearningPathPage');
@@ -141,6 +142,8 @@ function AppContent() {
             <Route path="/cbt/past-questions" element={<CBTExam defaultMode="past_questions" />} />
             <Route path="/cbt/ai-mock" element={<CBTExam defaultMode="ai_generated_mock" />} />
             <Route path="/practice/session" element={<PracticeSession />} />
+            <Route path="/offline-cbt" element={<OfflineCBTEngine />} />
+            <Route path="/offline-engine" element={<OfflineCBTEngine />} />
             <Route path="/tournaments/:id" element={<TournamentArena />} />
             <Route path="/results" element={<Results />} />
             

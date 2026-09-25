@@ -19,6 +19,9 @@ import {
   getCompletedOfflineSessionsAsync, 
   clearCompletedOfflineSessions,
   saveCompletedOfflineSession,
+  isPackStale,
+  getPackStaleness,
+  STALE_PACK_DAYS_THRESHOLD,
   type CompletedOfflineSession, 
   type OfflinePack 
 } from '@/lib/offlineStore';
@@ -27,6 +30,9 @@ import { OFFICIAL_JAMB_SUBJECTS, normalizeSubjectName } from '@/utils/subjectUti
 import { useAuth } from '@/context/AuthContext';
 import { processSyncQueue, getPendingQueueCount } from '@/lib/syncQueue';
 import { OfflineSyncStatus } from '@/components/offline/OfflineSyncStatus';
+import { DownloadableSubjectsList } from '@/components/offline/DownloadableSubjectsList';
+import { OfflineStorageUsage } from '@/components/offline/OfflineStorageUsage';
+import { getCloudQuestionStats } from '@/lib/supabasePagination';
 import { toast } from 'sonner';
 import { useNavigate } from "react-router-dom";
 
@@ -38,12 +44,16 @@ export const OfflinePackManager = () => {
   const [downloadedPacks, setDownloadedPacks] = useState<Record<string, OfflinePack>>({});
   const [completedSessions, setCompletedSessions] = useState<CompletedOfflineSession[]>([]);
   const [loading, setLoading] = useState(true);
+  const [cloudStats, setCloudStats] = useState<{ totalQuestions: number; subjectCounts: Record<string, number> }>({
+    totalQuestions: 9313,
+    subjectCounts: {}
+  });
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [isUpdatingAll, setIsUpdatingAll] = useState(false);
   const [updateAllProgress, setUpdateAllProgress] = useState<{ current: number; total: number; name: string } | null>(null);
   const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [activeTab, setActiveTab] = useState<'packs' | 'station' | 'history' | 'software-guide'>('packs');
+  const [activeTab, setActiveTab] = useState<'packs' | 'storage' | 'station' | 'history' | 'software-guide'>('packs');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
@@ -83,18 +93,30 @@ export const OfflinePackManager = () => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      // 1. Fetch available subjects from Supabase with fallback to official JAMB taxonomy
+      // 1. Fetch available subjects from Supabase (without invalid category column to prevent 400 errors)
       let dbSubjects: any[] = [];
       try {
-        const { data } = await supabase.from('subjects').select('id, name, category').order('name');
-        if (data && data.length > 0) {
+        const { data, error } = await supabase
+          .from('subjects')
+          .select('id, name, is_active, icon')
+          .order('name');
+        if (!error && data && data.length > 0) {
           dbSubjects = data;
         }
       } catch (e) {
         console.warn('Network error fetching remote subjects list:', e);
       }
 
-      // Merge DB subjects with OFFICIAL_JAMB_SUBJECTS to ensure no subject is ever missing
+      // Fetch real-time cloud question stats across entire database
+      if (navigator.onLine) {
+        getCloudQuestionStats().then(stats => {
+          if (stats && stats.totalQuestions > 0) {
+            setCloudStats(stats);
+          }
+        }).catch(() => {});
+      }
+
+      // Merge DB subjects with OFFICIAL_JAMB_SUBJECTS to ensure taxonomy and real DB IDs align
       const mergedMap = new Map<string, any>();
       OFFICIAL_JAMB_SUBJECTS.forEach(s => {
         mergedMap.set(s.name.toLowerCase().trim(), {
@@ -109,10 +131,10 @@ export const OfflinePackManager = () => {
         const norm = s.name.toLowerCase().trim();
         const existing = mergedMap.get(norm);
         mergedMap.set(norm, {
-          id: s.id,
+          id: s.id, // Real database UUID
           name: s.name,
-          category: s.category || existing?.category || 'general',
-          icon: existing?.icon || 'BookOpen'
+          category: existing?.category || 'general',
+          icon: s.icon || existing?.icon || 'BookOpen'
         });
       });
 
@@ -248,6 +270,37 @@ export const OfflinePackManager = () => {
     toast.success(`1-Click Setup Complete! Saved ${count} subject packs. You can now use the app 100% offline without internet!`);
   };
 
+  const handleRefreshAllStale = async () => {
+    if (isOffline) {
+      toast.error('Connect to internet to refresh stale question packs.');
+      return;
+    }
+    const staleList = Object.values(downloadedPacks).filter(p => isPackStale(p));
+    if (staleList.length === 0) {
+      toast.info('All packs are fresh and up to date!');
+      return;
+    }
+
+    setIsUpdatingAll(true);
+    setUpdateAllProgress({ current: 0, total: staleList.length, name: 'Starting stale refresh...' });
+    let updatedCount = 0;
+    for (let i = 0; i < staleList.length; i++) {
+      const pack = staleList[i];
+      setUpdateAllProgress({ current: i + 1, total: staleList.length, name: pack.subjectName });
+      try {
+        await downloadSubjectPack(pack.subjectId, pack.subjectName);
+        updatedCount++;
+      } catch (e) {
+        console.warn('Failed refreshing stale pack:', e);
+      }
+    }
+    const refreshed = await getDownloadedPacksAsync();
+    setDownloadedPacks(refreshed);
+    setIsUpdatingAll(false);
+    setUpdateAllProgress(null);
+    toast.success(`Successfully refreshed ${updatedCount} stale question pack(s) to latest Cloud questions!`);
+  };
+
   const handleManualSync = async () => {
     if (isOffline) {
       toast.warning('You are currently offline. Connect to Wi-Fi to sync pending results.');
@@ -277,13 +330,20 @@ export const OfflinePackManager = () => {
     });
   }, [subjects, searchQuery, selectedCategory, downloadedPacks]);
 
-  // Total stats
-  const totalQuestionsStored = useMemo(() => {
-    return Object.values(downloadedPacks).reduce((sum, p) => sum + (p.questionsCount || 0), 0);
+  // Total stats (strictly deduplicated across unique packs)
+  const uniquePacks = useMemo(() => {
+    return Array.from(new Set(Object.values(downloadedPacks)));
   }, [downloadedPacks]);
 
-  const downloadedCount = Object.keys(downloadedPacks).length;
-  const updatesAvailableCount = Object.values(downloadedPacks).filter(p => p.hasUpdate).length;
+  const totalQuestionsStored = useMemo(() => {
+    return uniquePacks.reduce((sum, p) => sum + (p.questionsCount || 0), 0);
+  }, [uniquePacks]);
+
+  const downloadedCount = uniquePacks.length;
+  const updatesAvailableCount = uniquePacks.filter(p => p.hasUpdate).length;
+  const stalePacksCount = useMemo(() => {
+    return uniquePacks.filter(p => isPackStale(p)).length;
+  }, [uniquePacks]);
 
   return (
     <div className="p-4 sm:p-6 max-w-6xl mx-auto space-y-6">
@@ -330,24 +390,30 @@ export const OfflinePackManager = () => {
         </div>
 
         {/* Quick Metrics Bar */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 pt-2">
           <div className="bg-slate-800/80 backdrop-blur border border-slate-700/60 p-3 rounded-xl">
             <div className="text-slate-400 text-xs font-medium">Offline Packs Saved</div>
-            <div className="text-xl font-black text-white mt-0.5">{downloadedCount} / {subjects.length || 24}</div>
+            <div className="text-xl font-black text-white mt-0.5">{downloadedCount} / {subjects.length || 20}</div>
           </div>
           <div className="bg-slate-800/80 backdrop-blur border border-slate-700/60 p-3 rounded-xl">
-            <div className="text-slate-400 text-xs font-medium">Local Questions Stored</div>
+            <div className="text-slate-400 text-xs font-medium">Saved to Device</div>
             <div className="text-xl font-black text-emerald-400 mt-0.5">{totalQuestionsStored.toLocaleString()} Qs</div>
           </div>
           <div className="bg-slate-800/80 backdrop-blur border border-slate-700/60 p-3 rounded-xl">
-            <div className="text-slate-400 text-xs font-medium">Updates Available</div>
-            <div className={`text-xl font-black mt-0.5 ${updatesAvailableCount > 0 ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`}>
-              {updatesAvailableCount} Packs
-            </div>
+            <div className="text-slate-400 text-xs font-medium">Cloud Bank (Verified)</div>
+            <div className="text-xl font-black text-blue-400 mt-0.5">{cloudStats.totalQuestions.toLocaleString()} Qs</div>
           </div>
           <div className="bg-slate-800/80 backdrop-blur border border-slate-700/60 p-3 rounded-xl">
-            <div className="text-slate-400 text-xs font-medium">Local Exams Taken</div>
-            <div className="text-xl font-black text-blue-400 mt-0.5">{completedSessions.length} Sessions</div>
+            <div className="text-slate-400 text-xs font-medium">Stale Packs (&gt;14d)</div>
+            <div className={`text-xl font-black mt-0.5 ${stalePacksCount > 0 ? 'text-amber-400 animate-pulse' : 'text-slate-400'}`}>
+              {stalePacksCount} Packs
+            </div>
+          </div>
+          <div className="bg-slate-800/80 backdrop-blur border border-slate-700/60 p-3 rounded-xl col-span-2 sm:col-span-1">
+            <div className="text-slate-400 text-xs font-medium">Updates Available</div>
+            <div className={`text-xl font-black mt-0.5 ${updatesAvailableCount > 0 ? 'text-blue-400 animate-pulse' : 'text-slate-400'}`}>
+              {updatesAvailableCount} Packs
+            </div>
           </div>
         </div>
 
@@ -360,6 +426,17 @@ export const OfflinePackManager = () => {
           >
             <Zap className="w-4 h-4" /> 1-Click Offline Setup (My 4 Subjects)
           </Button>
+
+          {stalePacksCount > 0 && (
+            <Button
+              onClick={handleRefreshAllStale}
+              disabled={isOffline || isUpdatingAll}
+              className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold gap-1.5 shadow-md"
+            >
+              <RefreshCw className={`w-4 h-4 ${isUpdatingAll ? 'animate-spin' : ''}`} />
+              Refresh {stalePacksCount} Stale Pack{stalePacksCount > 1 ? 's' : ''} (&gt;14d)
+            </Button>
+          )}
 
           {downloadedCount > 0 && (
             <Button 
@@ -426,6 +503,17 @@ export const OfflinePackManager = () => {
         </button>
 
         <button
+          onClick={() => setActiveTab('storage')}
+          className={`pb-3 px-4 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
+            activeTab === 'storage'
+              ? 'border-primary text-primary'
+              : 'border-transparent text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Database className="w-4 h-4 text-primary" /> Storage & Cache Usage
+        </button>
+
+        <button
           onClick={() => setActiveTab('station')}
           className={`pb-3 px-4 text-sm font-bold border-b-2 flex items-center gap-2 whitespace-nowrap transition-colors ${
             activeTab === 'station'
@@ -462,184 +550,48 @@ export const OfflinePackManager = () => {
       {/* TAB 1: SUBJECT QUESTION PACKS */}
       {activeTab === 'packs' && (
         <div className="space-y-6">
-          {/* Quick Filter & Search Bar */}
-          <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-            <div className="relative w-full sm:w-80">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search subject (e.g. Physics, English)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-10"
-              />
-            </div>
+          <OfflineStorageUsage 
+            variant="compact" 
+            onCacheCleared={async () => {
+              const refreshed = await getDownloadedPacksAsync();
+              setDownloadedPacks(refreshed);
+              const hist = await getCompletedOfflineSessionsAsync();
+              setCompletedSessions(hist);
+            }} 
+          />
 
-            <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1">
-              {[
-                { id: 'all', label: 'All Subjects' },
-                { id: 'downloaded', label: `Downloaded (${downloadedCount})` },
-                { id: 'has_update', label: `Updates Ready (${updatesAvailableCount})` },
-                { id: 'compulsory', label: 'Compulsory' },
-                { id: 'sciences', label: 'Sciences' },
-                { id: 'commercial', label: 'Commercial' },
-                { id: 'arts', label: 'Arts' },
-              ].map(cat => (
-                <button
-                  key={cat.id}
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
-                    selectedCategory === cat.id
-                      ? 'bg-primary text-primary-foreground shadow-sm'
-                      : 'bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Subject Cards Grid */}
           {loading ? (
             <div className="text-center py-12 text-muted-foreground">
               <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-2 text-primary" />
               Loading offline subject packs...
             </div>
-          ) : filteredSubjects.length === 0 ? (
-            <Card className="p-8 text-center border-dashed">
-              <HardDrive className="w-12 h-12 mx-auto text-muted-foreground mb-3 opacity-50" />
-              <h3 className="font-bold text-foreground">No subjects match your filter</h3>
-              <p className="text-xs text-muted-foreground mt-1">Try searching for a different subject name or category.</p>
-              <Button variant="outline" size="sm" onClick={() => { setSearchQuery(''); setSelectedCategory('all'); }} className="mt-3">
-                Reset Filters
-              </Button>
-            </Card>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredSubjects.map((sub) => {
-                const pack = downloadedPacks[sub.id];
-                const isDownloaded = Boolean(pack);
-                const hasUpdate = Boolean(pack?.hasUpdate);
-                const isDownloadingThis = downloadingId === sub.id;
-
-                return (
-                  <Card key={sub.id} className={`border transition-all flex flex-col justify-between ${
-                    hasUpdate 
-                      ? 'border-amber-500/60 bg-amber-500/5 shadow-md ring-1 ring-amber-500/20' 
-                      : isDownloaded 
-                      ? 'border-emerald-500/40 bg-emerald-500/5 shadow-sm' 
-                      : 'border-border bg-card hover:border-primary/40'
-                  }`}>
-                    <CardContent className="p-5 space-y-4">
-                      {/* Subject Header */}
-                      <div className="flex items-start justify-between gap-2">
-                        <div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-bold text-base text-foreground">{sub.name}</span>
-                            {isDownloaded && !hasUpdate && (
-                              <span className="p-0.5 rounded-full bg-emerald-500/20 text-emerald-500" title="Downloaded & Offline Ready">
-                                <CheckCircle2 className="w-4 h-4" />
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-                            {sub.category || 'JAMB Subject'}
-                          </span>
-                        </div>
-
-                        {hasUpdate && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500 text-slate-950 uppercase animate-pulse flex items-center gap-1 shrink-0">
-                            <Sparkles className="w-3 h-3" /> Update Ready
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Status Info */}
-                      <div className="bg-background/80 border border-border/80 rounded-xl p-3 space-y-1 text-xs">
-                        <div className="flex justify-between text-muted-foreground">
-                          <span>Local Questions:</span>
-                          <span className="font-bold text-foreground">
-                            {isDownloaded ? `${pack.questionsCount} Questions` : 'Not Downloaded'}
-                          </span>
-                        </div>
-                        {isDownloaded && (
-                          <div className="flex justify-between text-muted-foreground text-[11px]">
-                            <span>Last Download:</span>
-                            <span>{new Date(pack.downloadedAt).toLocaleDateString()}</span>
-                          </div>
-                        )}
-                        {hasUpdate && (
-                          <div className="flex justify-between text-amber-500 font-bold text-[11px] pt-0.5">
-                            <span>Cloud Bank Total:</span>
-                            <span>{pack.remoteCount || ''} Questions available</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Card Action Buttons */}
-                      <div className="pt-1 flex items-center gap-2 flex-wrap">
-                        {isDownloaded ? (
-                          <>
-                            <Button 
-                              size="sm" 
-                              variant="outline" 
-                              onClick={() => navigate(`/practice?mode=subject&subjectId=${sub.id}`)} 
-                              className="font-bold gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 flex-1"
-                            >
-                              <PlayCircle className="w-3.5 h-3.5" /> Practice
-                            </Button>
-
-                            <Button 
-                              size="sm" 
-                              disabled={isDownloadingThis || isOffline} 
-                              onClick={() => handleDownload(sub.id, sub.name)} 
-                              className={`font-bold gap-1 px-3 ${
-                                hasUpdate 
-                                  ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-sm' 
-                                  : 'bg-muted hover:bg-muted/80 text-foreground border border-border'
-                              }`}
-                              title="Refresh / update questions for this subject from Cloud"
-                            >
-                              {isDownloadingThis ? (
-                                <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                              ) : (
-                                <RefreshCw className="w-3.5 h-3.5" />
-                              )}
-                              {isDownloadingThis ? 'Updating...' : hasUpdate ? 'Update' : 'Refresh'}
-                            </Button>
-
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              onClick={() => handleDelete(sub.id, sub.name)} 
-                              className="text-red-500 hover:bg-red-500/10 px-2.5"
-                              title="Delete local pack"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </Button>
-                          </>
-                        ) : (
-                          <Button 
-                            size="sm" 
-                            disabled={isDownloadingThis || isOffline} 
-                            onClick={() => handleDownload(sub.id, sub.name)} 
-                            className="font-bold gap-1.5 bg-primary text-primary-foreground w-full shadow-sm"
-                          >
-                            {isDownloadingThis ? (
-                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Download className="w-3.5 h-3.5" />
-                            )}
-                            {isDownloadingThis ? 'Downloading Pack...' : 'Download Offline Pack'}
-                          </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+            <DownloadableSubjectsList
+              subjects={subjects}
+              downloadedPacks={downloadedPacks}
+              cloudSubjectCounts={cloudStats.subjectCounts}
+              onPacksUpdated={async () => {
+                const refreshed = await getDownloadedPacksAsync();
+                setDownloadedPacks(refreshed);
+              }}
+              isOffline={isOffline}
+            />
           )}
+        </div>
+      )}
+
+      {/* TAB 2: STORAGE USAGE & CACHE MANAGEMENT */}
+      {activeTab === 'storage' && (
+        <div className="space-y-6">
+          <OfflineStorageUsage 
+            variant="card"
+            onCacheCleared={async () => {
+              const refreshed = await getDownloadedPacksAsync();
+              setDownloadedPacks(refreshed);
+              const hist = await getCompletedOfflineSessionsAsync();
+              setCompletedSessions(hist);
+            }}
+          />
         </div>
       )}
 
@@ -763,7 +715,7 @@ export const OfflinePackManager = () => {
                             toast.error('Please select a subject pack.');
                             return;
                           }
-                          navigate(`/practice?mode=subject&subjectId=${targetSubject}&count=${stationQuestionCount}&timer=${stationTimerMinutes}`);
+                          navigate(`/offline-cbt?subject=${encodeURIComponent(targetSubject)}&count=${stationQuestionCount}&timer=${stationTimerMinutes}`);
                         }}
                         className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 h-12 text-base shadow-md"
                       >

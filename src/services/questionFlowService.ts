@@ -954,4 +954,25 @@ export class QuestionFlowService {
       results: results as Record<ExamMode, QuestionFlowResult>,
     };
   }
+
+  /**
+   * Helper specifically for past questions queries with strict real Supabase data.
+   */
+  public static async fetchPastQuestions(params: {
+    subjectId?: string;
+    subjectName?: string;
+    year?: number;
+    limit?: number;
+    topicName?: string;
+  }): Promise<CleanQuestion[]> {
+    const res = await QuestionFlowService.fetchQuestionsForMode({
+      mode: 'past_questions',
+      subjectId: params.subjectId,
+      subjectName: params.subjectName,
+      year: params.year,
+      count: params.limit || 40,
+      topicName: params.topicName
+    });
+    return res.questions || [];
+  }
 }

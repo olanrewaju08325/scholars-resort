@@ -15,6 +15,7 @@ import { extractAllQuestionsFromPdfText } from '@/services/aiService';
 import { extractDocumentWithOcrOrText } from '@/lib/pdfExtractor';
 import { saveCustomQuestions } from '@/lib/offlineStore';
 import { normalizeSubjectName } from '@/utils/subjectUtils';
+import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
 import { authFetch } from '@/lib/apiAuth';
 import { MathText } from '@/components/MathText';
 
@@ -70,16 +71,16 @@ export const ContentStudioTab = () => {
     }
   }, [selectedSubjectId]);
 
-  const fetchTopicsForSubject = async (subId: string) => {
+  async function fetchTopicsForSubject(subId: string) {
     try {
       const { data } = await supabase.from('topics').select('id, name').eq('subject_id', subId).order('name');
       setTopics(data || []);
     } catch {
       setTopics([]);
     }
-  };
+  }
 
-  const fetchInitialData = async () => {
+  async function fetchInitialData() {
     setLoading(true);
     try {
       const { data: subData } = await supabase.from('subjects').select('id, name').order('name');
@@ -99,17 +100,12 @@ export const ContentStudioTab = () => {
       setTotalQuestionsCount(totalCount || 0);
 
       let allQuestions: any[] | null = null;
-      const { data: qData, error: qErr } = await supabase
-        .from('questions')
-        .select('id, subject_id, subjects!questions_subject_id_fkey(id, name)')
-        .limit(50000);
-
-      if (qErr) {
-        console.warn('ContentStudioTab questions join notice, using flat fetch:', qErr.message);
-        const { data: flatQ } = await supabase.from('questions').select('id, subject_id').limit(50000);
-        allQuestions = flatQ;
-      } else {
-        allQuestions = qData;
+      try {
+        allQuestions = await fetchAllRowsPaginated(() => 
+          supabase.from('questions').select('id, subject_id')
+        );
+      } catch (qErr: any) {
+        console.warn('ContentStudioTab questions fetch notice:', qErr?.message);
       }
 
       const counts: { [id: string]: { name: string; count: number } } = {};
