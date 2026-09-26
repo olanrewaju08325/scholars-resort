@@ -167,10 +167,11 @@ export function escapeHtml(str: string): string {
 /**
  * Universal Academic Text Parser:
  * Processes rich text containing natural English, explicit LaTeX ($...$, $$...$$),
- * un-delimited mathematical expressions (4a^2-9b^2), and chemical formulas.
+ * un-delimited mathematical expressions (4a^2-9b^2), physics units & variables,
+ * chemistry reaction arrows & molecular formulas, and biology nomenclature.
  * Uses placeholder token substitution to completely prevent HTML tag corruption or regex collisions.
  */
-export function processAcademicContent(rawText: string): string {
+export function processAcademicContent(rawText: string, subjectHint?: string): string {
   if (!rawText) return '';
 
   let text = sanitizeAndRepairMathLatex(String(rawText));
@@ -183,19 +184,21 @@ export function processAcademicContent(rawText: string): string {
     return `___SCHOLARS_MATH_SLOT_${id}___`;
   };
 
-  // 1. Explicit LaTeX blocks
+  const normSub = subjectHint ? subjectHint.toLowerCase() : '';
+
+  // 1. Explicit LaTeX blocks ($$...$$, \[...\], $...$, \(...\))
   text = text.replace(/\$\$([\s\S]+?)\$\$/g, (_, math) => addSlot(math, true));
   text = text.replace(/\\\[([\s\S]+?)\\\]/g, (_, math) => addSlot(math, true));
   text = text.replace(/\$([^\$\n]+?)\$/g, (_, math) => addSlot(math, false));
   text = text.replace(/\\\(([\s\S]+?)\\\)/g, (_, math) => addSlot(math, false));
 
-  // 2. Pure algebraic options (e.g. "4a+6b", "4a^2-9b^2", "x^2+5x+6", "1/2 mv^2") - strict check so English sentences are never treated as pure math
+  // 2. Pure algebraic options (e.g. "4a+6b", "4a^2-9b^2", "x^2+5x+6", "1/2 mv^2") - strict check
   const trimmed = text.trim();
   const englishWordCount = (trimmed.match(/\b[a-zA-Z]{3,}\b/g) || []).length;
   const isPureAlgebraic = englishWordCount <= 1 && 
     /^[0-9a-zA-Z^_/*().,\s+-]+$/.test(trimmed) && 
     /[+*/^-]/.test(trimmed) && 
-    !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both|because|since|when|with|find|correct|decimal|places)\b/i.test(trimmed);
+    !/\b(the|is|of|and|which|what|where|who|when|or|none|all|both|because|since|when|with|find|correct|decimal|places|state|define|calculate|explain)\b/i.test(trimmed);
 
   if (isPureAlgebraic) {
     const formatted = formatRawMathToLatex(trimmed);
@@ -203,20 +206,45 @@ export function processAcademicContent(rawText: string): string {
     return token.replace(/___SCHOLARS_MATH_SLOT_(\d+)___/g, (_, idx) => renderedSlots[Number(idx)] || '');
   }
 
-  // 3. Chemical formulas (matching exact tokens safely even with parens)
-  for (const formula of COMMON_CHEM_FORMULAS) {
-    if (text.includes(formula)) {
-      const chemLatex = formatChemicalFormulaToLatex(formula);
-      const token = addSlot(chemLatex, false);
-      
-      // Escape for regex safely
-      const escapedFormula = formula.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      // Look for boundary that handles parens and spaces
-      text = text.replace(new RegExp(`(?<=^|[^a-zA-Z0-9])${escapedFormula}(?=[^a-zA-Z0-9]|$)`, 'g'), token);
+  // 3. Chemistry specific enhancements (Reaction equations, reversible arrows, ions, equilibrium)
+  if (!normSub || normSub.includes('chem') || normSub.includes('science')) {
+    for (const formula of COMMON_CHEM_FORMULAS) {
+      if (text.includes(formula)) {
+        const chemLatex = formatChemicalFormulaToLatex(formula);
+        const token = addSlot(chemLatex, false);
+        const escapedFormula = formula.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        text = text.replace(new RegExp(`(?<=^|[^a-zA-Z0-9])${escapedFormula}(?=[^a-zA-Z0-9]|$)`, 'g'), token);
+      }
     }
+
+    // Convert ions like Ca2+, SO4 2-, Fe3+, OH-, Na+, Cl-
+    text = text.replace(/\b([A-Z][a-z]?(?:\d+)?)\s*(\d*[+-])\b/g, (match, elem, charge) => {
+      return addSlot(`\\mathrm{${elem}^{${charge}}}`, false);
+    });
+
+    // Format reversible arrows or state symbols (aq), (s), (g), (l)
+    text = text.replace(/\((aq|s|g|l)\)/gi, '_{( $1 )}');
   }
 
-  // 4. Inline mathematical clauses (powers, roots, division fractions, scientific notation, LaTeX macros)
+  // 4. Physics specific enhancements (Ohms, micro-units, velocities, accelerations)
+  if (!normSub || normSub.includes('phys') || normSub.includes('math') || normSub.includes('further')) {
+    // Format units like m/s^2, kg*m/s, rad/s
+    text = text.replace(/\b(\d+(?:\.\d+)?)\s*(m\/s\^2|ms\^-2|m\/s|ms\^-1|kg\/m\^3|N\/m\^2|N\/m|J\/s|W\/m\^2)\b/gi, (_, val, unit) => {
+      const formattedUnit = unit.replace(/\^2/g, '^{2}').replace(/\^-1/g, '^{-1}').replace(/\^-2/g, '^{-2}').replace(/\^3/g, '^{3}');
+      return addSlot(`${val}\\text{ ${formattedUnit}}`, false);
+    });
+
+    // Format micro Farads, micro Coulombs, Ohms, Volts, Amperes (e.g. 50uF, 20 uC, 100 ohms, 100 \Omega)
+    text = text.replace(/\b(\d+(?:\.\d+)?)\s*(uF|uC|mA|kV|MHz|kHz|GHz|ohms?|k\u03A9|M\u03A9|\u03A9)\b/gi, (_, val, unit) => {
+      let latexUnit = unit;
+      if (unit.toLowerCase().startsWith('ohm') || unit === 'Ω') latexUnit = '\\Omega';
+      if (unit === 'uF') latexUnit = '\\mu\\text{F}';
+      if (unit === 'uC') latexUnit = '\\mu\\text{C}';
+      return addSlot(`${val}\\text{ }${latexUnit}`, false);
+    });
+  }
+
+  // 5. Inline mathematical clauses (powers, roots, division fractions, scientific notation, LaTeX macros)
   const mathClauseRegex = /(?:\\(?:frac|sqrt|sum|int|alpha|beta|gamma|theta|pi|omega|lambda|Delta|pm|times|div)(?:\{[^}]*\}|[a-zA-Z0-9\s()_^*+-])+|\(\s*[a-zA-Z0-9\s()_^*+-\/\\^{}]+\s*\)\s*\/\s*\(\s*[a-zA-Z0-9\s()_^*+-\/\\^{}]+\s*\)|\(?[0-9a-zA-Z+-]+\)?\^[0-9a-zA-Z+-]+|\bsqrt\s*\([^)]+\)|\d+(?:\.\d+)?\s*[xX×]\s*10\^[-+]?\d+|\b\d+(?:\.\d+)?\s*°[CF]?\b)/g;
 
   text = text.replace(mathClauseRegex, (match) => {
@@ -228,10 +256,10 @@ export function processAcademicContent(rawText: string): string {
     return addSlot(formattedLatex, false);
   });
 
-  // 5. Escape remaining HTML around formulas
+  // 6. Escape remaining HTML around formulas
   let escaped = escapeHtml(text);
 
-  // 6. Substitute rendered KaTeX back into slots
+  // 7. Substitute rendered KaTeX back into slots
   escaped = escaped.replace(/___SCHOLARS_MATH_SLOT_(\d+)___/g, (_, idx) => renderedSlots[Number(idx)] || '');
 
   return escaped;

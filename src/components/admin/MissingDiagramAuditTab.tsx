@@ -39,6 +39,7 @@ export const MissingDiagramAuditTab: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [isPurging, setIsPurging] = useState<boolean>(false);
 
   // Load flagged questions from Supabase safely without postgrest json cast errors
   const loadFlaggedQuestions = async () => {
@@ -107,6 +108,65 @@ export const MissingDiagramAuditTab: React.FC = () => {
     });
     return counts;
   }, [questions]);
+
+  // Delete single question from database
+  const handleDeleteQuestion = async (questionId: string) => {
+    if (!window.confirm('Permanently delete this broken question from the database?')) {
+      return;
+    }
+
+    setResolvingId(questionId);
+    try {
+      const { error } = await supabase.from('questions').delete().eq('id', questionId);
+      if (error) throw error;
+
+      setQuestions(prev => prev.filter(q => q.id !== questionId));
+      toast.success('Question deleted successfully from database.');
+    } catch (err: any) {
+      toast.error('Failed to delete question: ' + err.message);
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  // Bulk Purge / Delete all missing diagram questions from database
+  const handleBulkPurge = async () => {
+    const targetQuestions = filteredQuestions;
+    if (targetQuestions.length === 0) return;
+
+    const count = targetQuestions.length;
+    const scopeLabel = selectedSubject === 'all' 
+      ? `all ${count} missing diagram questions` 
+      : `all ${count} ${selectedSubject} questions missing diagrams`;
+    
+    if (!window.confirm(`Are you sure you want to permanently DELETE ${scopeLabel} from the database? This action cannot be undone.`)) {
+      return;
+    }
+
+    setIsPurging(true);
+    toast.info(`Purging ${count} questions from database...`);
+
+    try {
+      const idsToDelete = targetQuestions.map(q => q.id);
+      const CHUNK_SIZE = 100;
+      let deletedCount = 0;
+
+      for (let i = 0; i < idsToDelete.length; i += CHUNK_SIZE) {
+        const chunk = idsToDelete.slice(i, i + CHUNK_SIZE);
+        const { error } = await supabase.from('questions').delete().in('id', chunk);
+        if (error) throw error;
+        deletedCount += chunk.length;
+      }
+
+      setQuestions(prev => prev.filter(q => !idsToDelete.includes(q.id)));
+      toast.success(`Successfully deleted ${deletedCount} broken visual questions from the database!`);
+    } catch (err: any) {
+      console.error('Bulk purge error:', err);
+      toast.error('Purge failed: ' + err.message);
+    } finally {
+      setIsPurging(false);
+    }
+  };
 
   // Remove flag (resolve question)
   const handleRemoveFlag = async (questionId: string) => {
@@ -187,16 +247,33 @@ export const MissingDiagramAuditTab: React.FC = () => {
               </div>
             </div>
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={loadFlaggedQuestions}
-              disabled={loading}
-              className="font-bold text-xs gap-1.5"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-              <span>Refresh Audit</span>
-            </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              {filteredQuestions.length > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleBulkPurge}
+                  disabled={loading || isPurging}
+                  className="font-bold text-xs gap-1.5 shadow-sm"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>
+                    {isPurging ? 'Purging...' : `Purge ${filteredQuestions.length} Questions from DB`}
+                  </span>
+                </Button>
+              )}
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadFlaggedQuestions}
+                disabled={loading || isPurging}
+                className="font-bold text-xs gap-1.5"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh Audit</span>
+              </Button>
+            </div>
           </div>
         </CardHeader>
 
@@ -261,7 +338,7 @@ export const MissingDiagramAuditTab: React.FC = () => {
             <Card key={q.id || idx} className="border-border bg-card hover:border-amber-500/40 transition-all">
               <CardContent className="p-4 space-y-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-6 h-6 rounded-md bg-amber-500/20 text-amber-600 dark:text-amber-400 font-bold text-xs flex items-center justify-center">
                       #{idx + 1}
                     </span>
@@ -276,7 +353,7 @@ export const MissingDiagramAuditTab: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {/* Attach Image Upload Button */}
                     <label className="cursor-pointer">
                       <input
@@ -297,7 +374,7 @@ export const MissingDiagramAuditTab: React.FC = () => {
                         className="h-8 text-xs font-bold text-primary border-primary/30 hover:bg-primary/10 gap-1.5"
                       >
                         <span>
-                          <Upload className="w-3.5 h-3.5" /> Attach Diagram Image
+                          <Upload className="w-3.5 h-3.5" /> Attach Diagram
                         </span>
                       </Button>
                     </label>
@@ -312,13 +389,25 @@ export const MissingDiagramAuditTab: React.FC = () => {
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" /> Mark Resolved
                     </Button>
+
+                    {/* Delete Question from Database Button */}
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDeleteQuestion(q.id)}
+                      disabled={resolvingId === q.id}
+                      className="h-8 text-xs font-bold text-red-500 hover:text-red-600 hover:bg-red-500/10 gap-1"
+                      title="Permanently delete from database"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" /> Delete
+                    </Button>
                   </div>
                 </div>
 
                 {/* Question Text */}
-                <p className="text-xs sm:text-sm text-foreground leading-relaxed bg-muted/20 p-3 rounded-lg border border-border/60">
-                  {q.question_text}
-                </p>
+                <div className="text-xs sm:text-sm text-foreground leading-relaxed bg-muted/20 p-3 rounded-lg border border-border/60">
+                  <p>{q.question_text}</p>
+                </div>
 
                 {/* Options List */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground">

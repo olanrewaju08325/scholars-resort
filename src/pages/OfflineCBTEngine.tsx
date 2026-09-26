@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
 
 export const OfflineCBTEngine: React.FC = () => {
@@ -647,7 +648,12 @@ export const OfflineCBTEngine: React.FC = () => {
 
             {/* Question Text */}
             <div className={`${fontClasses[fontSize]} text-slate-100 font-normal space-y-4`}>
-              <p className="whitespace-pre-wrap">{currentQ?.question_text || 'Loading question...'}</p>
+              <div className="prose-cbt-text overflow-x-auto max-w-full">
+                <MathText 
+                  text={currentQ?.question_text || 'Loading question...'} 
+                  subject={currentQ?.subject_name || selectedPack?.subjectName} 
+                />
+              </div>
 
               {/* Embedded Diagram / Image if present */}
               {(currentQ?.image_url || currentQ?.diagram_image) && (
@@ -701,7 +707,7 @@ export const OfflineCBTEngine: React.FC = () => {
                       {letter}
                     </span>
                     <span className={`flex-1 ${fontClasses[fontSize]}`}>
-                      {optText}
+                      <MathText text={optText} subject={currentQ?.subject_name || selectedPack?.subjectName} />
                     </span>
                   </button>
                 );
@@ -714,9 +720,9 @@ export const OfflineCBTEngine: React.FC = () => {
                 <div className="flex items-center gap-2 font-bold text-xs text-emerald-400 uppercase tracking-wider">
                   <Sparkles className="w-4 h-4" /> Explanation & Verification
                 </div>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed whitespace-pre-wrap">
-                  {currentQ.explanation}
-                </p>
+                <div className="text-xs sm:text-sm text-slate-300 leading-relaxed">
+                  <MathText text={currentQ.explanation} subject={currentQ?.subject_name || selectedPack?.subjectName} />
+                </div>
                 <div className="text-[11px] text-slate-400 pt-1">
                   <strong>Correct Answer:</strong> {currentQ.correct_answer}
                 </div>

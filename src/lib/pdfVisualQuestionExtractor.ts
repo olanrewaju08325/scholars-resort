@@ -1,10 +1,12 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import { normalizeSubjectName } from '@/utils/subjectUtils';
 
-// Configure pdfjs worker safely
+// Configure pdfjs worker dynamically to match the exact installed pdfjs-dist runtime version
 try {
-  if (typeof window !== 'undefined' && 'Worker' in window) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+  if (typeof window !== 'undefined') {
+    const installedVersion = (pdfjsLib as any).version || '6.2.108';
+    // Use jsdelivr matching the exact API version of pdfjs-dist
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
   }
 } catch (e) {
   console.warn('Could not set workerSrc for pdfjs:', e);
@@ -221,4 +223,95 @@ function parseQuestionsFromText(
 
   finalizeCurrentQuestion();
   return questions;
+}
+
+export interface RenderedPdfPage {
+  pageNumber: number;
+  dataUrl: string;
+  width: number;
+  height: number;
+}
+
+/**
+ * Renders all pages of a PDF into high-resolution images for visual inspection and cropping.
+ */
+export async function renderPdfPagesForVisualSnapping(
+  file: File,
+  scale = 1.8,
+  onProgress?: (current: number, total: number) => void
+): Promise<RenderedPdfPage[]> {
+  const arrayBuffer = await file.arrayBuffer();
+  const loadingTask = pdfjsLib.getDocument({
+    data: arrayBuffer,
+    useWorkerFetch: false,
+    isEvalSupported: false,
+    useSystemFonts: true,
+  });
+
+  const pdf = await loadingTask.promise;
+  const numPages = pdf.numPages;
+  const pages: RenderedPdfPage[] = [];
+
+  for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+    onProgress?.(pageNum, numPages);
+    const page = await pdf.getPage(pageNum);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      pages.push({
+        pageNumber: pageNum,
+        dataUrl: canvas.toDataURL('image/jpeg', 0.90),
+        width: viewport.width,
+        height: viewport.height
+      });
+    }
+  }
+
+  return pages;
+}
+
+/**
+ * Crops a bounding region from a base64 image data URL and returns the cropped image.
+ */
+export function cropRegionFromPageDataUrl(
+  pageDataUrl: string,
+  cropArea: { x: number; y: number; width: number; height: number }
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(10, Math.round(cropArea.width));
+        canvas.height = Math.max(10, Math.round(cropArea.height));
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          throw new Error('Could not create canvas 2D context');
+        }
+
+        ctx.drawImage(
+          img,
+          cropArea.x,
+          cropArea.y,
+          cropArea.width,
+          cropArea.height,
+          0,
+          0,
+          canvas.width,
+          canvas.height
+        );
+
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.onerror = () => reject(new Error('Failed to load base image for cropping'));
+    img.src = pageDataUrl;
+  });
 }

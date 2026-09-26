@@ -13,12 +13,14 @@ import {
 } from '@/lib/pdfVisualQuestionExtractor';
 import { OFFICIAL_JAMB_SUBJECTS, normalizeSubjectName } from '@/utils/subjectUtils';
 import { supabase } from '@/lib/supabase';
+import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
 
 export const PdfVisualQuestionExtractor: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [selectedSubject, setSelectedSubject] = useState<string>('Physics');
   const [examYear, setExamYear] = useState<number>(2024);
+  const [extractVisualOnly, setExtractVisualOnly] = useState<boolean>(true);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -38,6 +40,19 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
         return;
       }
       setSelectedFile(file);
+
+      // Auto-detect exam year from filename (e.g. 2024, 2023, 2022)
+      const yearMatch = file.name.match(/(19[8-9]\d|20[0-2]\d)/);
+      if (yearMatch && yearMatch[1]) {
+        setExamYear(parseInt(yearMatch[1], 10));
+      }
+
+      // Auto-detect subject from filename
+      const lowerName = file.name.toLowerCase();
+      const detectedSub = OFFICIAL_JAMB_SUBJECTS.find(s => lowerName.includes(s.name.toLowerCase()) || lowerName.includes(s.id.toLowerCase()));
+      if (detectedSub) {
+        setSelectedSubject(detectedSub.name);
+      }
     }
   };
 
@@ -48,7 +63,7 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
     }
 
     setIsProcessing(true);
-    setProgressStatus('Initializing PDF parser...');
+    setProgressStatus('Initializing PDF parser engine...');
     setProgressPercent(5);
 
     try {
@@ -62,14 +77,27 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
       );
 
       setExtractionResult(result);
+      
       // Attach selected subject and year to all extracted questions
-      const initializedQuestions = result.questions.map(q => ({
+      let processedQuestions = result.questions.map(q => ({
         ...q,
         year: examYear
       }));
-      setExtractedQuestions(initializedQuestions);
 
-      toast.success(`Extracted ${result.totalQuestions} questions! (${result.questionsWithDiagrams} with diagrams isolated)`);
+      // If Visual Only is active, filter to questions referencing visuals or having diagrams
+      if (extractVisualOnly) {
+        const visualQuestions = processedQuestions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl));
+        if (visualQuestions.length > 0) {
+          processedQuestions = visualQuestions;
+          toast.success(`Found ${visualQuestions.length} visual questions with diagram figures!`);
+        } else {
+          toast.info('No explicit diagram references detected. Showing all extracted questions.');
+        }
+      } else {
+        toast.success(`Extracted ${result.totalQuestions} questions! (${result.questionsWithDiagrams} with diagrams isolated)`);
+      }
+
+      setExtractedQuestions(processedQuestions);
     } catch (err: any) {
       console.error('PDF extraction failed:', err);
       toast.error(`Extraction failed: ${err.message}`);
@@ -235,6 +263,42 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
             </div>
           </div>
 
+          {/* Extraction Mode Filter */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/30 border border-border rounded-xl">
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-foreground">Extraction Mode:</span>
+              <span className="text-xs text-muted-foreground">
+                {extractVisualOnly 
+                  ? 'Filtering for visual-dependent questions (Chemistry apparatus, Physics circuits, Math graphs)' 
+                  : 'Extracting all questions (Visual + Standard Text)'}
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setExtractVisualOnly(true)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  extractVisualOnly
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-background text-muted-foreground border border-border hover:text-foreground'
+                }`}
+              >
+                Visual & Diagram Questions Only
+              </button>
+              <button
+                type="button"
+                onClick={() => setExtractVisualOnly(false)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  !extractVisualOnly
+                    ? 'bg-primary text-primary-foreground shadow-xs'
+                    : 'bg-background text-muted-foreground border border-border hover:text-foreground'
+                }`}
+              >
+                All Questions
+              </button>
+            </div>
+          </div>
+
           {/* Action Button & Progress */}
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
             <Button
@@ -343,14 +407,21 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Question Stem Text Area */}
-                  <div>
+                  {/* Question Stem Text Area & Live Academic Math/Formula Preview */}
+                  <div className="space-y-2">
                     <textarea
                       value={q.questionText}
                       onChange={(e) => updateQuestionField(idx, 'questionText', e.target.value)}
                       rows={2}
                       className="w-full bg-background border border-border rounded-lg p-2.5 text-xs sm:text-sm text-foreground focus:ring-1 focus:ring-primary focus:outline-none"
+                      placeholder="Question text..."
                     />
+                    <div className="p-2.5 rounded-lg bg-card border border-border/80 text-xs sm:text-sm text-foreground">
+                      <span className="text-[10px] font-extrabold uppercase tracking-wider text-muted-foreground block mb-1">
+                        Academic Formatted Preview ({selectedSubject}):
+                      </span>
+                      <MathText text={q.questionText} subject={selectedSubject} />
+                    </div>
                   </div>
 
                   {/* Diagram Preview if present */}

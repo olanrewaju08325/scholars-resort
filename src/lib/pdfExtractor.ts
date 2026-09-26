@@ -1,9 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure pdfjs worker safely
+// Configure pdfjs worker dynamically to match installed version
 try {
-  if (typeof window !== 'undefined' && 'Worker' in window) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+  if (typeof window !== 'undefined') {
+    const installedVersion = (pdfjsLib as any).version || '6.2.108';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
   }
 } catch (e) {
   console.warn('Could not set workerSrc for pdfjs:', e);

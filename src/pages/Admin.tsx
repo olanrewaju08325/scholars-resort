@@ -113,9 +113,7 @@ export default function Admin() {
     {
       group: 'Academic',
       items: [
-        { id: 'question-bank-studio', label: 'Question Bank & Content Studio', icon: FileQuestion },
-        { id: 'pdf-visual-extractor', label: 'PDF Diagram & Question Extractor', icon: FileText },
-        { id: 'missing-diagrams', label: 'Missing Diagrams Audit Hub', icon: AlertTriangle },
+        { id: 'question-bank-studio', label: 'Academic Content Studio', icon: FileQuestion },
         { id: 'academic-taxonomy', label: 'Academic Taxonomy Hub', icon: BookOpen },
         { id: 'literature', label: 'Literature & Novel Hub', icon: BookOpen },
         { id: 'materials', label: 'Resource Library', icon: BookOpen },

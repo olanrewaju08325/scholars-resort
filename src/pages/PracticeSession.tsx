@@ -1017,7 +1017,7 @@ D) ...
             >
               <div className="cbt-question-content text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium space-y-4">
                 <div className="prose-cbt-text overflow-x-auto max-w-full">
-                  <MathText text={cleanQuestionText(q.question_text || q.question)} />
+                  <MathText text={cleanQuestionText(q.question_text || q.question)} subject={activeSubject} />
                 </div>
 
                 {q.image_url && (
@@ -1115,7 +1115,7 @@ D) ...
                           {optionLetter}.
                         </span>
                         <span className={`flex-1 ${isEliminated ? 'line-through opacity-55' : ''}`}>
-                          <MathText text={cleanOptionText(opt)} />
+                          <MathText text={cleanOptionText(opt)} subject={activeSubject} />
                         </span>
                         {OptionTag}
                         {Icon}

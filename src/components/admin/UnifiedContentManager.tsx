@@ -1,15 +1,18 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { FileQuestion, Image as ImageIcon, Sparkles, Database, Layers, CheckCircle, RefreshCw } from 'lucide-react';
+import { FileQuestion, Image as ImageIcon, Sparkles, Database, Layers, CheckCircle, RefreshCw, FileText, AlertTriangle, Compass } from 'lucide-react';
 import { QuestionBankTab } from '@/pages/admin-tabs/QuestionBankTab';
-import { ImageQuestionManagerTab } from '@/pages/admin-tabs/ImageQuestionManagerTab';
+import { VisualQuestionDiagramStudio } from '@/components/admin/VisualQuestionDiagramStudio';
 import { ContentStudioTab } from '@/pages/admin-tabs/ContentStudioTab';
+import { MissingDiagramAuditTab } from '@/components/admin/MissingDiagramAuditTab';
 import { authFetch } from '@/lib/apiAuth';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
+export type ContentSubView = 'questions' | 'visual-studio' | 'missing-diagrams' | 'studio';
+
 interface UnifiedContentContextType {
-  activeSubView: 'questions' | 'diagrams' | 'studio';
-  setActiveSubView: (view: 'questions' | 'diagrams' | 'studio') => void;
+  activeSubView: ContentSubView;
+  setActiveSubView: (view: ContentSubView) => void;
   sharedSubjectFilter: string;
   setSharedSubjectFilter: (subId: string) => void;
   subjects: any[];
@@ -29,7 +32,7 @@ export const useUnifiedContent = () => {
 };
 
 export function UnifiedContentManager() {
-  const [activeSubView, setActiveSubView] = useState<'questions' | 'diagrams' | 'studio'>('questions');
+  const [activeSubView, setActiveSubView] = useState<ContentSubView>('visual-studio');
   const [sharedSubjectFilter, setSharedSubjectFilter] = useState('all');
   const [subjects, setSubjects] = useState<any[]>([]);
   const [syncedStats, setSyncedStats] = useState({ totalQuestions: 0, aiGeneratedToday: 0, pendingReview: 0, diagramCount: 0 });
@@ -98,9 +101,9 @@ export function UnifiedContentManager() {
                 <Database className="w-6 h-6" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold font-display text-white">Unified Content Manager</h1>
+                <h1 className="text-2xl font-bold font-display text-white">Unified Academic Content Studio</h1>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Centralized service bridge combining Canonical Question Bank, Diagram & Image Studio, and AI Content Generation pipeline.
+                  Centralized academic engine uniting Question Bank Inventory, Automated PDF Diagram & Question Extraction, Visual Cropping Studio, and Missing Diagrams Resolution.
                 </p>
               </div>
             </div>
@@ -110,11 +113,11 @@ export function UnifiedContentManager() {
           <div className="flex flex-wrap items-center gap-3">
             <div className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs flex items-center gap-2 text-slate-300">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-              <span>Total Qs: <strong className="text-white">{syncedStats.totalQuestions}</strong></span>
+              <span>Total Questions: <strong className="text-white">{syncedStats.totalQuestions}</strong></span>
             </div>
             <div className="px-3 py-1.5 bg-slate-950 border border-slate-800 rounded-lg text-xs flex items-center gap-2 text-slate-300">
-              <ImageIcon className="w-3.5 h-3.5 text-blue-400" />
-              <span>Diagrams: <strong className="text-white">{syncedStats.diagramCount}</strong></span>
+              <ImageIcon className="w-3.5 h-3.5 text-emerald-400" />
+              <span>Diagram Ready</span>
             </div>
             <button
               onClick={() => { refreshUnifiedData(); toast.success('Content sync refreshed successfully!'); }}
@@ -131,8 +134,19 @@ export function UnifiedContentManager() {
         <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/60 p-1.5 rounded-xl border border-slate-800">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
-              onClick={() => setActiveSubView('questions')}
+              onClick={() => setActiveSubView('visual-studio')}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeSubView === 'visual-studio'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" /> Visual Diagram & Question Studio
+            </button>
+
+            <button
+              onClick={() => setActiveSubView('questions')}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeSubView === 'questions'
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
@@ -140,29 +154,31 @@ export function UnifiedContentManager() {
             >
               <FileQuestion className="w-4 h-4" /> Question Bank Inventory
             </button>
+
             <button
-              onClick={() => setActiveSubView('diagrams')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                activeSubView === 'diagrams'
-                  ? 'bg-primary text-primary-foreground shadow-sm'
+              onClick={() => setActiveSubView('missing-diagrams')}
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all ${
+                activeSubView === 'missing-diagrams'
+                  ? 'bg-amber-600 text-white shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <ImageIcon className="w-4 h-4" /> Diagrams & Image Questions
+              <AlertTriangle className="w-4 h-4 text-amber-400" /> Missing Diagrams Audit Hub
             </button>
+
             <button
               onClick={() => setActiveSubView('studio')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-xs font-bold transition-all ${
+              className={`flex items-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-bold transition-all ${
                 activeSubView === 'studio'
                   ? 'bg-primary text-primary-foreground shadow-sm'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >
-              <Sparkles className="w-4 h-4" /> AI Content Studio & Bulk Gen
+              <Sparkles className="w-4 h-4" /> AI Studio & Bulk Gen
             </button>
           </div>
 
-          <div className="text-xs text-slate-400 px-3 hidden lg:flex items-center gap-2">
+          <div className="text-xs text-slate-400 px-3 hidden xl:flex items-center gap-2">
             <span>Bridge Status:</span>
             <span className="text-emerald-400 font-semibold">Active Sync ({syncedStats.totalQuestions} records)</span>
           </div>
@@ -170,8 +186,9 @@ export function UnifiedContentManager() {
 
         {/* Module Content Area */}
         <div className="min-w-0 w-full bg-slate-950/40 rounded-xl p-1">
+          {activeSubView === 'visual-studio' && <VisualQuestionDiagramStudio />}
           {activeSubView === 'questions' && <QuestionBankTab />}
-          {activeSubView === 'diagrams' && <ImageQuestionManagerTab />}
+          {activeSubView === 'missing-diagrams' && <MissingDiagramAuditTab />}
           {activeSubView === 'studio' && <ContentStudioTab />}
         </div>
       </div>
