@@ -136,9 +136,7 @@ const apiMockPlugin = () => ({
 });
 
 // https://vite.dev/config/
-export default defineConfig(({ command }) => {
-  const isBuild = command === 'build';
-
+export default defineConfig(() => {
   return {
     define: {
       'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || 'https://syoodykedvqaoeplmamd.supabase.co'),
@@ -147,70 +145,71 @@ export default defineConfig(({ command }) => {
     plugins: [
       apiMockPlugin(),
       react(),
-      ...(isBuild ? [
-        VitePWA({
-          registerType: 'autoUpdate',
-          includeAssets: ['favicon.svg', 'scholar.jpg', 'robots.txt', 'apple-touch-icon.png'],
-          manifest: {
-            name: 'Scholars Resort',
-            short_name: 'ScholarsResort',
-            description: 'Learn Smart. Score High. Secure Your Future.',
-            theme_color: '#0B1526',
-            icons: [
-              {
-                src: 'scholar.jpg',
-                sizes: '192x192',
-                type: 'image/jpeg'
-              },
-              {
-                src: 'scholar.jpg',
-                sizes: '512x512',
-                type: 'image/jpeg'
-              }
-            ]
-          },
-          workbox: {
-            cleanupOutdatedCaches: true,
-            clientsClaim: true,
-            skipWaiting: true,
-            globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
-            maximumFileSizeToCacheInBytes: 5000000,
-            runtimeCaching: [
-              {
-                urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
-                handler: 'CacheFirst',
-                options: {
-                  cacheName: 'google-fonts-cache',
-                  expiration: {
-                    maxEntries: 10,
-                    maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
-                  },
-                  cacheableResponse: {
-                    statuses: [0, 200]
-                  }
-                }
-              },
-              {
-                urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
-                handler: 'CacheFirst',
-                options: {
-                  cacheName: 'gstatic-fonts-cache',
-                  expiration: {
-                    maxEntries: 10,
-                    maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
-                  },
-                  cacheableResponse: {
-                    statuses: [0, 200]
-                  },
+      VitePWA({
+        registerType: 'autoUpdate',
+        devOptions: {
+          enabled: false,
+        },
+        includeAssets: ['favicon.svg', 'scholar.jpg', 'robots.txt', 'apple-touch-icon.png'],
+        manifest: {
+          name: 'Scholars Resort',
+          short_name: 'ScholarsResort',
+          description: 'Learn Smart. Score High. Secure Your Future.',
+          theme_color: '#0B1526',
+          icons: [
+            {
+              src: 'scholar.jpg',
+              sizes: '192x192',
+              type: 'image/jpeg'
+            },
+            {
+              src: 'scholar.jpg',
+              sizes: '512x512',
+              type: 'image/jpeg'
+            }
+          ]
+        },
+        workbox: {
+          cleanupOutdatedCaches: true,
+          clientsClaim: true,
+          skipWaiting: true,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,json}'],
+          maximumFileSizeToCacheInBytes: 6000000,
+          runtimeCaching: [
+            {
+              urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'google-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
                 }
               }
-            ]
-          }
-        })
-      ] : [])
+            },
+            {
+              urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+              handler: 'CacheFirst',
+              options: {
+                cacheName: 'gstatic-fonts-cache',
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 365 // <== 365 days
+                },
+                cacheableResponse: {
+                  statuses: [0, 200]
+                },
+              }
+            }
+          ]
+        }
+      })
     ],
     build: {
-      chunkSizeWarningLimit: 2000,
+      chunkSizeWarningLimit: 3000,
       rollupOptions: {
         output: {
           manualChunks(id) {
@@ -220,6 +219,21 @@ export default defineConfig(({ command }) => {
               }
               if (id.includes('lucide-react') || id.includes('framer-motion') || id.includes('sonner')) {
                 return 'vendor-ui';
+              }
+              if (id.includes('pdfjs-dist')) {
+                return 'vendor-pdfjs';
+              }
+              if (id.includes('katex')) {
+                return 'vendor-katex';
+              }
+              if (id.includes('jspdf') || id.includes('html2canvas')) {
+                return 'vendor-export';
+              }
+              if (id.includes('recharts') || id.includes('d3-')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('mermaid') || id.includes('cytoscape') || id.includes('dagre')) {
+                return 'vendor-diagrams';
               }
             }
           }

@@ -202,7 +202,7 @@ class SupabaseConnectionManager {
   /**
    * Teardown socket cleanly without throwing errors or leaking connection handles
    */
-  private teardownSocketGracefully(): void {
+  public teardownSocketGracefully(): void {
     if (this.reconnectTimer) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
@@ -212,21 +212,35 @@ class SupabaseConnectionManager {
     try {
       if (supabase && supabase.realtime) {
         const rt = supabase.realtime as any;
-        const socket = rt?.conn;
+        const socket = rt?.conn || rt?.socket;
         if (socket) {
           // If socket is in CONNECTING state (readyState === 0), do NOT call .close() or .disconnect() immediately!
           // Calling close() while CONNECTING triggers browser console error:
           // "WebSocket is closed before the connection is established"
           if (socket.readyState === 0) { // WebSocket.CONNECTING
+            socket.onerror = () => {};
+            socket.onclose = () => {};
             socket.onopen = () => {
               try {
-                supabase.realtime.disconnect();
+                socket.close();
+                if (typeof rt.disconnect === 'function') {
+                  rt.disconnect();
+                }
               } catch {}
             };
             return;
           }
+          if (socket.readyState === 1) { // WebSocket.OPEN
+            socket.onerror = () => {};
+            socket.onclose = () => {};
+            try {
+              socket.close();
+            } catch {}
+          }
         }
-        supabase.realtime.disconnect();
+        if (typeof rt.disconnect === 'function') {
+          rt.disconnect();
+        }
       }
     } catch {}
   }

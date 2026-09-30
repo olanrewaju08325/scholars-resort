@@ -89,11 +89,7 @@ export const initSupabaseLifecycle = (): void => {
       // CRITICAL: Ensure that on restoration, we do NOT attempt to resume stale
       // WebSocket connections. Stale connections trigger "WebSocket is closed" and
       // 400 Bad Request handshake failures.
-      try {
-        if (supabase && supabase.realtime) {
-          supabase.realtime.disconnect();
-        }
-      } catch {}
+      supabaseConnectionManager.teardownSocketGracefully();
 
       // Do NOT call reconnect or scheduleReconnection here!
       // We wait strictly until the tab becomes active.
@@ -120,11 +116,7 @@ export const initSupabaseLifecycle = (): void => {
 
   // 3. Clean teardown on pagehide & freeze before entering bfcache
   const handlePageHide = () => {
-    try {
-      if (supabase && supabase.realtime) {
-        supabase.realtime.disconnect();
-      }
-    } catch {}
+    supabaseConnectionManager.teardownSocketGracefully();
   };
 
   window.addEventListener('pageshow', handlePageShow);

@@ -1058,7 +1058,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                 <div className="space-y-1">
                   <h4 className="font-bold text-sm text-foreground">Review Academic KaTeX Formatted Preview</h4>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Verify the extracted stems and options in the Live Academic Preview. Formulas for Chemistry ($H_2SO_4$), Physics ($m/s^2, \Omega$), and Math ($\frac{a}{b}, x^2$) are rendered automatically.
+                    Verify the extracted stems and options in the Live Academic Preview. Formulas for Chemistry (H₂SO₄), Physics (m/s², Ω), and Mathematics (fractions, powers, roots) are rendered automatically.
                   </p>
                 </div>
               </div>

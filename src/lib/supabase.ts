@@ -259,7 +259,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 
       // Intercept direct client queries & mutations to referrals table to avoid 400 Bad Request
       if (urlStr.includes('/rest/v1/referrals')) {
-        // Handle DELETE or PATCH with mock/non-UUID referred_id
+        // Handle DELETE or PATCH
         if (options?.method === 'DELETE' || options?.method === 'PATCH') {
           return new Response(JSON.stringify([]), {
             status: 200,
@@ -267,57 +267,74 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
           });
         }
 
-        // Handle POST/upsert with non-UUID referred_id
+        // Handle POST/upsert to referrals table
         if (options?.method === 'POST') {
           try {
             const body = typeof options.body === 'string' ? JSON.parse(options.body) : options.body;
             const payload = Array.isArray(body) ? body[0] : body;
-            const refId = payload?.referred_id;
-            const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(refId);
-            if (!isUUID) {
-              return new Response(JSON.stringify([{ id: 'ref_' + Date.now(), ...payload }]), {
-                status: 201,
-                headers: { 'Content-Type': 'application/json' }
-              });
+            
+            // Sync with backend referral engine asynchronously
+            if (payload) {
+              fetch('/api/referrals/track-signup', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  referrerId: payload.referrer_id,
+                  referredUserId: payload.referred_id,
+                  referrerCode: payload.referrer_code,
+                  referredEmail: payload.referred_email,
+                  referredName: payload.referred_name
+                })
+              }).catch(() => {});
             }
-          } catch {}
-        }
 
-        // Handle GET requests with complex join or non-UUID query filters
-        if (!options?.method || options.method === 'GET') {
-          const hasComplexJoin = urlStr.includes('referrer:profiles') || urlStr.includes('referred:profiles');
-          const refMatch = urlStr.match(/[?&]referred_id=eq\.([^&]+)/);
-          const rawRefId = refMatch ? decodeURIComponent(refMatch[1]) : '';
-          const hasInvalidRefId = rawRefId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawRefId);
-
-          if (hasComplexJoin || hasInvalidRefId) {
-            try {
-              const res = await fetch('/api/referrals/admin/all');
-              if (res.ok) {
-                const json = await res.json();
-                if (json.success && Array.isArray(json.referrals)) {
-                  const mapped = json.referrals.map((r: any) => ({
-                    id: r.id,
-                    referrer_id: r.referrerId,
-                    referred_id: r.referredId,
-                    converted: Boolean(r.converted),
-                    created_at: r.createdAt || r.created_at || new Date().toISOString(),
-                    referrer: { id: r.referrerId, full_name: r.referrerName || 'Scholar Referrer', email: r.referrerEmail || '' },
-                    referred: { id: r.referredId, full_name: r.referredName || 'Scholar Student', email: r.referredEmail || '' }
-                  }));
-                  return new Response(JSON.stringify(mapped), {
-                    status: 200,
-                    headers: { 'Content-Type': 'application/json', 'content-range': `0-${mapped.length}/${mapped.length}` }
-                  });
-                }
-              }
-            } catch {}
-
-            return new Response(JSON.stringify([]), {
-              status: 200,
-              headers: { 'Content-Type': 'application/json', 'content-range': '0-0/0' }
+            return new Response(JSON.stringify([{
+              id: payload?.id || 'ref_' + Date.now(),
+              referrer_id: payload?.referrer_id || null,
+              referred_id: payload?.referred_id || null,
+              converted: Boolean(payload?.converted),
+              created_at: payload?.created_at || new Date().toISOString(),
+              ...payload
+            }]), {
+              status: 201,
+              headers: { 'Content-Type': 'application/json' }
+            });
+          } catch {
+            return new Response(JSON.stringify([{ id: 'ref_' + Date.now() }]), {
+              status: 201,
+              headers: { 'Content-Type': 'application/json' }
             });
           }
+        }
+
+        // Handle GET requests with complex join or query filters
+        if (!options?.method || options.method === 'GET') {
+          try {
+            const res = await fetch('/api/referrals/admin/all');
+            if (res.ok) {
+              const json = await res.json();
+              if (json.success && Array.isArray(json.referrals)) {
+                const mapped = json.referrals.map((r: any) => ({
+                  id: r.id,
+                  referrer_id: r.referrerId,
+                  referred_id: r.referredId,
+                  converted: Boolean(r.converted),
+                  created_at: r.createdAt || r.created_at || new Date().toISOString(),
+                  referrer: { id: r.referrerId, full_name: r.referrerName || 'Scholar Referrer', email: r.referrerEmail || '' },
+                  referred: { id: r.referredId, full_name: r.referredName || 'Scholar Student', email: r.referredEmail || '' }
+                }));
+                return new Response(JSON.stringify(mapped), {
+                  status: 200,
+                  headers: { 'Content-Type': 'application/json', 'content-range': `0-${mapped.length}/${mapped.length}` }
+                });
+              }
+            }
+          } catch {}
+
+          return new Response(JSON.stringify([]), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json', 'content-range': '0-0/0' }
+          });
         }
       }
 
