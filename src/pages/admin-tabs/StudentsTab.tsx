@@ -339,6 +339,8 @@ export const StudentsTab = () => {
     }
   };
 
+  const handleRoleChange = handleUpdateRole;
+
   // Grant Subscription
   const handleGiftAccess = async (user: Profile) => {
     confirmAction(
@@ -846,14 +848,32 @@ export const StudentsTab = () => {
 
                       {/* Subscription Status */}
                       <td className="px-4 py-3">
-                        {user.has_paid || isMasterAdmin ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-green-500/20 text-green-400 border border-green-500/30 inline-flex items-center gap-1">
-                            <CheckCircle className="w-3 h-3 text-green-400" /> Premium
+                        {isMasterAdmin ? (
+                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-purple-500/20 text-purple-400 border border-purple-500/30 inline-flex items-center gap-1">
+                            <Shield className="w-3 h-3 text-purple-400" /> Admin Access
                           </span>
                         ) : (
-                          <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase bg-slate-800 text-slate-400 border border-slate-700 inline-flex items-center gap-1">
-                            <XCircle className="w-3 h-3 text-slate-500" /> Free Plan
-                          </span>
+                          <select
+                            value={user.has_paid ? 'premium' : 'free'}
+                            onChange={(e) => {
+                              const makePremium = e.target.value === 'premium';
+                              if (makePremium !== !!user.has_paid) {
+                                if (makePremium) {
+                                  handleGiftAccess(user);
+                                } else {
+                                  handleRevokeAccess(user);
+                                }
+                              }
+                            }}
+                            className={`rounded px-2 py-1 text-xs font-semibold outline-none cursor-pointer border ${
+                              user.has_paid 
+                                ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60 hover:border-emerald-500' 
+                                : 'bg-slate-900 text-slate-300 border-slate-700 hover:border-slate-500'
+                            }`}
+                          >
+                            <option value="free">Free Plan (Unpaid)</option>
+                            <option value="premium">Premium (Lifetime)</option>
+                          </select>
                         )}
                       </td>
 
@@ -1190,14 +1210,32 @@ export const StudentsTab = () => {
                 </div>
 
                 <div>
-                  <p className="text-[11px] text-slate-500 uppercase font-semibold">Payment Status</p>
-                  <p className="font-semibold text-xs mt-1">
-                    {selectedUser.has_paid ? (
-                      <span className="text-green-400">Verified Premium</span>
-                    ) : (
-                      <span className="text-red-400">Unpaid / Free Plan</span>
-                    )}
-                  </p>
+                  <p className="text-[11px] text-slate-500 uppercase font-semibold">Subscription / Tier</p>
+                  {['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'].includes(selectedUser.email?.toLowerCase().trim() || '') ? (
+                    <span className="text-purple-400 font-semibold text-xs mt-1 block">Master Admin</span>
+                  ) : (
+                    <select
+                      value={selectedUser.has_paid ? 'premium' : 'free'}
+                      onChange={(e) => {
+                        const makePremium = e.target.value === 'premium';
+                        if (makePremium !== !!selectedUser.has_paid) {
+                          if (makePremium) {
+                            handleGiftAccess(selectedUser);
+                          } else {
+                            handleRevokeAccess(selectedUser);
+                          }
+                        }
+                      }}
+                      className={`mt-1 rounded px-2 py-1 text-xs font-semibold outline-none cursor-pointer border ${
+                        selectedUser.has_paid 
+                          ? 'bg-emerald-950/60 text-emerald-300 border-emerald-700/60' 
+                          : 'bg-slate-900 text-slate-300 border-slate-700'
+                      }`}
+                    >
+                      <option value="free">Free Plan (Unpaid)</option>
+                      <option value="premium">Premium (Lifetime)</option>
+                    </select>
+                  )}
                 </div>
 
                 <div>

@@ -7841,7 +7841,7 @@ app.post('/api/onboarding/complete', async (req, res) => {
   }
 });
 
-// API Route: Server-Side Premium Subscription Grant (Bypasses Client-Side RLS)
+// API Route: Server-Side Premium Subscription Grant (Bypasses Client-Side RLS with Direct Postgres & Supabase Writes)
 app.post('/api/admin/subscriptions/grant', verifyAdminToken, async (req, res) => {
   const { user_id, plan_name = 'Lifetime Access (Gifted)', duration_years = 100 } = req.body;
   if (!user_id) {
@@ -7849,27 +7849,47 @@ app.post('/api/admin/subscriptions/grant', verifyAdminToken, async (req, res) =>
   }
 
   try {
-    // 1. Save in server-side persistent store
+    const expiresAt = new Date(Date.now() + duration_years * 365 * 24 * 60 * 60 * 1000).toISOString();
+
+    // 1. Authoritative direct PostgreSQL update
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `UPDATE public.profiles 
+           SET has_paid = true, subscription_plan = $1, subscription_expires_at = $2, updated_at = NOW() 
+           WHERE id = $3`,
+          [plan_name, expiresAt, user_id]
+        );
+        await pgPool.query(
+          `INSERT INTO public.subscriptions (id, user_id, plan_name, status, expires_at, created_at)
+           VALUES (gen_random_uuid(), $1, $2, 'active', $3, NOW())
+           ON CONFLICT (id) DO NOTHING`,
+          [user_id, plan_name, expiresAt]
+        );
+      } catch (pgErr: any) {
+        console.warn('[Direct DB Subscription Grant warning]:', pgErr.message);
+      }
+    }
+
+    // 2. Save in server-side persistent store
     const existing = persistentUserOverrides.get(user_id) || {};
     persistentUserOverrides.set(user_id, {
       ...existing,
       has_paid: true,
       subscription_plan: plan_name,
+      subscription_expires_at: expiresAt,
       updated_at: new Date().toISOString()
     });
 
-    // 2. Update profile in database
-    const { error: profError } = await supabase
-      .from('profiles')
-      .update({ has_paid: true, updated_at: new Date().toISOString() })
-      .eq('id', user_id);
+    // 3. Update profile in database client
+    try {
+      await supabase
+        .from('profiles')
+        .update({ has_paid: true, subscription_plan: plan_name, updated_at: new Date().toISOString() })
+        .eq('id', user_id);
+    } catch {}
 
-    if (profError) {
-      console.warn('[Server Grant Access] Profile update warning:', profError.message);
-    }
-
-    // 3. Try inserting into subscriptions table
-    const expiresAt = new Date(Date.now() + duration_years * 365 * 24 * 60 * 60 * 1000).toISOString();
+    // 4. Try inserting into subscriptions table
     try {
       await supabase.from('subscriptions').insert({
         user_id,
@@ -7879,7 +7899,7 @@ app.post('/api/admin/subscriptions/grant', verifyAdminToken, async (req, res) =>
       });
     } catch {}
 
-    // 4. Send email notification to user
+    // 5. Send email notification to user
     try {
       const { data: prof } = await supabase.from('profiles').select('email, full_name').eq('id', user_id).maybeSingle();
       if (prof?.email) {
@@ -7906,7 +7926,7 @@ app.post('/api/admin/subscriptions/grant', verifyAdminToken, async (req, res) =>
       }
     } catch {}
 
-    // 5. Trigger referral conversion if student was referred
+    // 6. Trigger referral conversion if student was referred
     try {
       const { data: prof } = await supabase.from('profiles').select('email').eq('id', user_id).maybeSingle();
       await triggerReferralConversion(user_id, prof?.email, 3000);
@@ -7934,18 +7954,41 @@ app.post('/api/admin/subscriptions/revoke', verifyAdminToken, async (req, res) =
   }
 
   try {
-    // 1. Update in-memory persistent store
+    // 1. Authoritative direct PostgreSQL update
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `UPDATE public.profiles 
+           SET has_paid = false, subscription_plan = 'Free Tier', subscription_expires_at = NULL, updated_at = NOW() 
+           WHERE id = $1`,
+          [user_id]
+        );
+        await pgPool.query(
+          `UPDATE public.subscriptions 
+           SET status = 'revoked' 
+           WHERE user_id = $1`,
+          [user_id]
+        );
+      } catch (pgErr: any) {
+        console.warn('[Direct DB Subscription Revoke warning]:', pgErr.message);
+      }
+    }
+
+    // 2. Update in-memory persistent store
     const existing = persistentUserOverrides.get(user_id) || {};
     persistentUserOverrides.set(user_id, {
       ...existing,
       has_paid: false,
       subscription_plan: 'Free Tier',
+      subscription_expires_at: null,
       updated_at: new Date().toISOString()
     });
 
-    // 2. Update database
-    await supabase.from('profiles').update({ has_paid: false, updated_at: new Date().toISOString() }).eq('id', user_id);
-    await supabase.from('subscriptions').update({ status: 'revoked' }).eq('user_id', user_id);
+    // 3. Update database via client
+    try {
+      await supabase.from('profiles').update({ has_paid: false, subscription_plan: 'Free Tier', updated_at: new Date().toISOString() }).eq('id', user_id);
+      await supabase.from('subscriptions').update({ status: 'revoked' }).eq('user_id', user_id);
+    } catch {}
 
     return res.json({ success: true, message: 'Subscription revoked successfully.', user_id, has_paid: false });
   } catch (err: any) {
@@ -7954,23 +7997,37 @@ app.post('/api/admin/subscriptions/revoke', verifyAdminToken, async (req, res) =
   }
 });
 
-// API Route: Full User Directory for Admin (Merged with Real-Time Server Overrides)
+// API Route: Full User Directory for Admin (Merged with PostgreSQL & Real-Time Server Overrides)
 app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
   try {
     await loadDeletedUserIds();
 
-    const scopedClient = getScopedSupabaseClient(req);
-    let { data: dbProfiles, error } = await scopedClient
-      .from('profiles')
-      .select('*')
-      .order('created_at', { ascending: false });
+    let dbProfiles: any[] = [];
+    if (pgPool) {
+      try {
+        const pgRes = await pgPool.query(`SELECT * FROM public.profiles ORDER BY created_at DESC`);
+        dbProfiles = pgRes.rows || [];
+      } catch (pgErr: any) {
+        console.warn('[Admin User Directory pgPool query warning]', pgErr.message);
+      }
+    }
 
     if (!dbProfiles || dbProfiles.length === 0) {
-      const { data: baseProf } = await supabase
+      const scopedClient = getScopedSupabaseClient(req);
+      let { data: scopedProf } = await scopedClient
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
-      dbProfiles = baseProf;
+
+      if (!scopedProf || scopedProf.length === 0) {
+        const { data: baseProf } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        dbProfiles = baseProf || [];
+      } else {
+        dbProfiles = scopedProf;
+      }
     }
 
     if (error) {
@@ -8615,41 +8672,57 @@ app.post('/api/admin/users/status', verifyAdminToken, async (req, res) => {
   try {
     const isBanned = status === 'banned';
     const isSuspended = status === 'suspended';
+    const effectiveReason = (isBanned || isSuspended) ? (reason || 'Administrative action') : null;
 
     const updates: any = {
       status,
       is_banned: isBanned,
       is_suspended: isSuspended,
-      ban_reason: (isBanned || isSuspended) ? (reason || 'Administrative action') : null,
+      ban_reason: effectiveReason,
       updated_at: new Date().toISOString()
     };
 
-    // Update in-memory persistent store
+    // 1. Authoritative direct PostgreSQL update
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `UPDATE public.profiles 
+           SET status = $1, is_banned = $2, is_suspended = $3, ban_reason = $4, updated_at = NOW() 
+           WHERE id = $5`,
+          [status, isBanned, isSuspended, effectiveReason, user_id]
+        );
+      } catch (pgErr: any) {
+        console.warn('[Direct DB User Status update warning]:', pgErr.message);
+      }
+    }
+
+    // 2. Update in-memory persistent store
     const existing = persistentUserOverrides.get(user_id) || {};
     persistentUserOverrides.set(user_id, {
       ...existing,
       ...updates
     });
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', user_id)
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      console.warn('[Admin User Status Update Warning]', error.message);
-    }
+    let data: any = null;
+    try {
+      const { data: dbData } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user_id)
+        .select()
+        .maybeSingle();
+      data = dbData;
+    } catch {}
 
     // Try logging into security/audit logs
     try {
-      await supabase.from('admin_audit_logs').insert({
-        action: `USER_${status.toUpperCase()}`,
-        details: `User ${user_id} set to ${status}. Reason: ${reason || 'None provided'}`,
-        target_id: user_id,
-        created_at: new Date().toISOString()
-      });
+      if (pgPool) {
+        await pgPool.query(
+          `INSERT INTO public.audit_logs (id, action, details, user_id, created_at)
+           VALUES (gen_random_uuid(), $1, $2, $3, NOW())`,
+          [`USER_${status.toUpperCase()}`, `User ${user_id} set to ${status}. Reason: ${reason || 'None provided'}`, user_id]
+        );
+      }
     } catch {}
 
     const merged = mergeProfileWithOverrides(data || { id: user_id, ...updates }, user_id);
@@ -8711,23 +8784,46 @@ app.post('/api/admin/users/role', verifyAdminToken, async (req, res) => {
       updates.onboarding_completed = true;
     }
 
-    // Update in-memory persistent store
+    // 1. Authoritative direct PostgreSQL update
+    if (pgPool) {
+      try {
+        if (role === 'admin') {
+          await pgPool.query(
+            `UPDATE public.profiles 
+             SET role = $1, has_paid = true, onboarding_completed = true, updated_at = NOW() 
+             WHERE id = $2`,
+            [role, user_id]
+          );
+        } else {
+          await pgPool.query(
+            `UPDATE public.profiles 
+             SET role = $1, updated_at = NOW() 
+             WHERE id = $2`,
+            [role, user_id]
+          );
+        }
+      } catch (pgErr: any) {
+        console.warn('[Direct DB User Role update warning]:', pgErr.message);
+      }
+    }
+
+    // 2. Update in-memory persistent store
     const existing = persistentUserOverrides.get(user_id) || {};
     persistentUserOverrides.set(user_id, {
       ...existing,
       ...updates
     });
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', user_id)
-      .select()
-      .maybeSingle();
-
-    if (error) {
-      console.warn('[Admin User Role Update Warning]', error.message);
-    }
+    let data: any = null;
+    try {
+      const { data: dbData } = await supabase
+        .from('profiles')
+        .update(updates)
+        .eq('id', user_id)
+        .select()
+        .maybeSingle();
+      data = dbData;
+    } catch {}
 
     const merged = mergeProfileWithOverrides(data || { id: user_id, ...updates }, user_id);
     return res.json({ success: true, message: `User role updated to ${role}.`, profile: merged });

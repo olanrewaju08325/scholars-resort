@@ -149,8 +149,14 @@ function parseQuestionsFromText(
   const questionStartRegex = /^(\d{1,3})[\.\)\:\s]\s*(.+)/i;
   // Regex to detect options like: "A.", "A)", "[A]", "(A)"
   const optionRegex = /^[\(\[]?([A-D])[\)\]\.\:]\s*(.+)/i;
-  // Regex to detect correct answer like: "Answer: A" or "Ans: B"
-  const answerRegex = /(?:Answer|Ans|Correct)\s*[:=\-]?\s*([A-D])/i;
+  // Regex to detect 4 inline options on a single or dual line: "A. xxx B. yyy C. zzz D. www"
+  const inlineOptionsRegex = /[\(\[]?A[\)\]\.\:]\s*(.+?)\s+[\(\[]?B[\)\]\.\:]\s*(.+?)\s+[\(\[]?C[\)\]\.\:]\s*(.+?)\s+[\(\[]?D[\)\]\.\:]\s*(.+)/i;
+  // Regex to detect 2 inline options: "A. xxx B. yyy"
+  const inlineABRegex = /[\(\[]?A[\)\]\.\:]\s*(.+?)\s+[\(\[]?B[\)\]\.\:]\s*(.+)/i;
+  // Regex to detect 2 inline options: "C. xxx D. yyy"
+  const inlineCDRegex = /[\(\[]?C[\)\]\.\:]\s*(.+?)\s+[\(\[]?D[\)\]\.\:]\s*(.+)/i;
+  // Regex to detect correct answer like: "Answer: A" or "Ans: B" or "[Ans: C]"
+  const answerRegex = /(?:Answer|Ans|Correct)\s*[:=\-]?\s*[\(\[]?([A-D])[\)\]]?/i;
   // Regex to detect topic headers like: "TOPIC 1: Organic Chemistry", "Chapter 3: Motion"
   const topicHeaderRegex = /(?:TOPIC|CHAPTER|SECTION)\s*(?:\d+)?\s*[:\-–]?\s*([A-Za-z\s,\-&]{3,50})/i;
   // Regex to detect per-question year tags (e.g. [JAMB 2018 Q14], (UTME 2022/3), [2004], (1998 No. 5))
@@ -213,8 +219,34 @@ function parseQuestionsFromText(
       continue;
     }
 
+    // Check for 4 inline options on one line: A. xx B. yy C. zz D. ww
+    const fourOptsMatch = line.match(inlineOptionsRegex);
+    if (fourOptsMatch && currentQ) {
+      currentOptions = [
+        fourOptsMatch[1].trim(),
+        fourOptsMatch[2].trim(),
+        fourOptsMatch[3].trim(),
+        fourOptsMatch[4].trim()
+      ];
+      continue;
+    }
+
+    // Check for pair inline options: A. xx B. yy
+    const abMatch = line.match(inlineABRegex);
+    if (abMatch && currentQ && currentOptions.length === 0) {
+      currentOptions.push(abMatch[1].trim(), abMatch[2].trim());
+      continue;
+    }
+
+    // Check for pair inline options: C. xx D. yy
+    const cdMatch = line.match(inlineCDRegex);
+    if (cdMatch && currentQ && currentOptions.length === 2) {
+      currentOptions.push(cdMatch[1].trim(), cdMatch[2].trim());
+      continue;
+    }
+
     const qMatch = line.match(questionStartRegex);
-    if (qMatch && !line.match(optionRegex)) {
+    if (qMatch && !line.match(optionRegex) && !line.match(inlineOptionsRegex)) {
       finalizeCurrentQuestion();
       
       let stem = qMatch[2].trim();

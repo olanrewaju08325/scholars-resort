@@ -78,10 +78,10 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
 
       setExtractionResult(result);
       
-      // Attach selected subject and year to all extracted questions
+      // Attach selected subject and year to all extracted questions (preserve individual detected question years)
       let processedQuestions = result.questions.map(q => ({
         ...q,
-        year: examYear
+        year: q.year || examYear
       }));
 
       // If Visual Only is active, filter to questions referencing visuals or having diagrams

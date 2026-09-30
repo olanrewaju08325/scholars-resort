@@ -282,7 +282,7 @@ export const ScholarshipTab = () => {
 
           // Notify backend API to register server overrides and trigger referral conversion if applicable
           try {
-            await authFetch('/api/admin/subscriptions/grant', {
+            await authFetch(getApiUrl('/api/admin/subscriptions/grant'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
