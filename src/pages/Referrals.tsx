@@ -13,7 +13,7 @@ import {
   Users, Gift, Copy, Check, Share2, DollarSign,
   ArrowUpRight, Clock, CheckCircle2, AlertCircle,
   Smartphone, Building2, HelpCircle, Sparkles, Send,
-  Trophy, Medal, Award, TrendingUp, BarChart2, Crown, Zap
+  Trophy, Medal, Award, TrendingUp, BarChart2, Crown, Zap, ShieldAlert
 } from 'lucide-react';
 import {
   ResponsiveContainer,
@@ -590,6 +590,21 @@ export const Referrals = () => {
                 Request a withdrawal anytime your balance reaches ₦{config.minWithdrawal.toLocaleString()}. Receive money straight to your Moniepoint, OPay, PalmPay, Kuda, or Bank!
               </p>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Anti-Fraud Security & Legal Compliance Notice */}
+      <Card className="border-amber-500/30 bg-amber-500/5 text-foreground">
+        <CardContent className="p-4 flex items-start gap-3">
+          <ShieldAlert className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="space-y-1 text-xs">
+            <p className="font-bold text-amber-500 uppercase tracking-wide">
+              Security Notice & Anti-Fraud Policy
+            </p>
+            <p className="text-muted-foreground leading-relaxed">
+              All referral conversions and bank payout requests are protected by automated audit safeguards. Self-referrals, bot automation, fake email registrations, proxy manipulation, or payment bypass attempts are strictly prohibited and actively logged. Any individual or entity attempting fraudulent manipulation will face immediate and irreversible account termination, forfeiture of all wallet balances, and criminal reporting under relevant Cybercrime provisions.
+            </p>
           </div>
         </CardContent>
       </Card>

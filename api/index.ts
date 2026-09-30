@@ -9608,6 +9608,22 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
       referrerId = `ref_usr_${cleanCode}`;
     }
 
+    // Anti-Fraud: Prevent Self-Referral
+    const isSelfReferral = (
+      (referredId && referrerId && referredId === referrerId) ||
+      (cleanReferredEmail && referrerEmail && cleanReferredEmail.toLowerCase() === referrerEmail.toLowerCase())
+    );
+
+    if (isSelfReferral) {
+      return res.status(400).json({
+        success: false,
+        error: 'Self-referral is not permitted. You cannot use your own referral code.'
+      });
+    }
+
+    const config = await getReferralConfig();
+    const signupReward = Number(config.rewardPerSignup) || 0;
+
     // Save to local referral store
     const referrals = getLocalReferrals();
     const existingEntry = referrals.find(r => 
@@ -9627,10 +9643,30 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
         referredEmail: cleanReferredEmail,
         referredPhone: referredPhone || '',
         converted: false,
+        rewardEarned: signupReward,
         createdAt: new Date().toISOString()
       };
       referrals.unshift(newRecord);
       saveLocalReferrals(referrals);
+
+      // If a signup reward is configured, credit the referrer immediately
+      if (signupReward > 0 && referrerId && !referrerId.startsWith('ref_usr_')) {
+        try {
+          const { data: curProf } = await supabase
+            .from('profiles')
+            .select('referral_balance, wallet_balance')
+            .eq('id', referrerId)
+            .maybeSingle();
+
+          if (curProf) {
+            await supabase.from('profiles').update({
+              referral_balance: Number(curProf.referral_balance || 0) + signupReward,
+              wallet_balance: Number(curProf.wallet_balance || 0) + signupReward,
+              updated_at: new Date().toISOString()
+            }).eq('id', referrerId);
+          }
+        } catch {}
+      }
 
       // Attempt Supabase insert
       try {
@@ -9646,6 +9682,23 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
           }).eq('id', referredId);
         }
       } catch {}
+
+      // Notify referrer via Email about candidate registration
+      if (referrerEmail) {
+        sendServerSmtpEmail(
+          referrerEmail,
+          `🎓 New Referral Registered: ${cleanReferredName} joined Scholars Resort!`,
+          `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
+             <h2 style="color: #4F46E5; margin-top: 0;">New Student Joined via Your Link!</h2>
+             <p>Hi ${referrerName},</p>
+             <p><strong>${cleanReferredName}</strong> just created an account using your referral link.</p>
+             <p>As soon as they activate their UTME CBT access, your wallet will automatically receive your <strong>₦${(config.rewardPerPaid || 500).toLocaleString()}</strong> referral commission.</p>
+             <p style="margin-top: 20px;">
+               <a href="https://scholarsresort.com/referrals" style="background: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Track Your Referrals</a>
+             </p>
+           </div>`
+        ).catch(() => {});
+      }
     }
 
     return res.json({ success: true, message: 'Referral tracking successfully registered.' });
