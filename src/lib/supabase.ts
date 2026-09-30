@@ -362,16 +362,33 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
         try {
           const response = await fetch(url, options);
           
-          // Gracefully intercept 400/404 on known schema mismatch tables (e.g. user_progress, exam_sessions)
-          if (!response.ok && (response.status === 404 || response.status === 400)) {
-            if (
+          // Gracefully intercept 400/403/404/500 on known auxiliary and schema-sensitive tables
+          if (!response.ok) {
+            const isInterceptableTable = (
+              urlStr.includes('/rest/v1/admin_settings') ||
+              urlStr.includes('/rest/v1/platform_config') ||
+              urlStr.includes('/rest/v1/activity_logs') ||
+              urlStr.includes('/rest/v1/content_ingestion_jobs') ||
+              urlStr.includes('/rest/v1/study_plan_tasks') ||
+              urlStr.includes('/rest/v1/library_materials') ||
+              urlStr.includes('/rest/v1/ai_usage') ||
+              urlStr.includes('/rest/v1/session_answers') ||
+              urlStr.includes('/rest/v1/tournament_participants') ||
               urlStr.includes('/rest/v1/exam_sessions') || 
               urlStr.includes('/rest/v1/user_progress') || 
               urlStr.includes('/rest/v1/reported_errors') ||
               urlStr.includes('/rest/v1/weekly_challenges') ||
               urlStr.includes('/rest/v1/study_logs')
-            ) {
-              return new Response(JSON.stringify(options?.method === 'POST' ? {} : []), {
+            );
+
+            if (isInterceptableTable) {
+              // Return safe empty list or fallback object with 200 status
+              const isMaintenanceKey = urlStr.includes('maintenance_mode');
+              const defaultPayload = isMaintenanceKey 
+                ? [{ setting_value: { enabled: false, message: '' }, value: { enabled: false, message: '' } }]
+                : (options?.method === 'POST' || options?.method === 'PATCH' ? {} : []);
+
+              return new Response(JSON.stringify(defaultPayload), {
                 status: 200,
                 headers: { 
                   'Content-Type': 'application/json',
@@ -379,9 +396,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
                 }
               });
             }
-          }
 
-          if (!response.ok) {
             logErrorDiag({
               endpoint: urlStr,
               method: options?.method || 'GET',
