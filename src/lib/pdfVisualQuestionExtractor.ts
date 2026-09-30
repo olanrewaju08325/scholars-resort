@@ -134,7 +134,8 @@ export async function extractQuestionsAndDiagramsFromPdf(
 }
 
 /**
- * Intelligent parser that identifies question numbers, stems, options A-D, and answers.
+ * Intelligent parser that identifies question numbers, stems, options A-D, answers, and year tags.
+ * Specially tuned for JAMB Series Remix (grouped by topics and years per question) and standard UTME past papers.
  */
 function parseQuestionsFromText(
   text: string, 
@@ -150,13 +151,29 @@ function parseQuestionsFromText(
   const optionRegex = /^[\(\[]?([A-D])[\)\]\.\:]\s*(.+)/i;
   // Regex to detect correct answer like: "Answer: A" or "Ans: B"
   const answerRegex = /(?:Answer|Ans|Correct)\s*[:=\-]?\s*([A-D])/i;
+  // Regex to detect topic headers like: "TOPIC 1: Organic Chemistry", "Chapter 3: Motion"
+  const topicHeaderRegex = /(?:TOPIC|CHAPTER|SECTION)\s*(?:\d+)?\s*[:\-–]?\s*([A-Za-z\s,\-&]{3,50})/i;
+  // Regex to detect per-question year tags (e.g. [JAMB 2018 Q14], (UTME 2022/3), [2004], (1998 No. 5))
+  const yearTagRegex = /(?:\[|\(|\b)(?:JAMB|UTME|UME|SSCE|WAEC|NECO)?\s*(19[7-9]\d|20[0-2]\d)\s*(?:[\/,]\s*(?:Q|No\.?|Question)?\s*\d+)?\s*(?:\]|\)|\b)/i;
 
+  let currentTopic = '';
   let currentQ: Partial<ExtractedVisualQuestion> | null = null;
   let currentOptions: string[] = [];
 
   const finalizeCurrentQuestion = () => {
     if (currentQ && currentQ.questionText && currentQ.questionText.length > 5) {
-      const qTextLower = currentQ.questionText.toLowerCase();
+      let rawText = currentQ.questionText.trim();
+      let extractedYear = currentQ.year;
+
+      // Extract year tag from question stem if present (e.g., "[JAMB 2021 Q4] What is the formula...")
+      const stemYearMatch = rawText.match(yearTagRegex);
+      if (stemYearMatch && stemYearMatch[1]) {
+        extractedYear = parseInt(stemYearMatch[1], 10);
+        // Clean out leading/trailing bracketed year tags from stem
+        rawText = rawText.replace(yearTagRegex, '').replace(/^[\s:\-\.–]+/, '').trim();
+      }
+
+      const qTextLower = rawText.toLowerCase();
       const hasVisualRef = VISUAL_KEYWORDS.some(kw => qTextLower.includes(kw));
 
       // Clean up options or create sensible defaults
@@ -175,11 +192,11 @@ function parseQuestionsFromText(
       questions.push({
         id: `extracted_${pageNumber}_${currentQ.questionNumber || questions.length + 1}_${Date.now()}`,
         questionNumber: currentQ.questionNumber || questions.length + 1,
-        questionText: currentQ.questionText.trim(),
+        questionText: rawText,
         options: cleanOpts,
         correctAnswer: finalAnswer,
-        explanation: currentQ.explanation || 'Step-by-step past question solution.',
-        year: currentQ.year || 2024,
+        explanation: currentQ.explanation || (currentTopic ? `JAMB Past Question Solution (${currentTopic}).` : 'Step-by-step past question solution.'),
+        year: extractedYear || 2024,
         hasVisualReference: hasVisualRef,
         diagramImageUrl: hasVisualRef ? pageDiagramUrl : undefined,
         pageNumber,
@@ -189,12 +206,28 @@ function parseQuestionsFromText(
   };
 
   for (const line of lines) {
+    // Check for Topic / Chapter header in page
+    const topMatch = line.match(topicHeaderRegex);
+    if (topMatch && topMatch[1]) {
+      currentTopic = topMatch[1].trim();
+      continue;
+    }
+
     const qMatch = line.match(questionStartRegex);
     if (qMatch && !line.match(optionRegex)) {
       finalizeCurrentQuestion();
+      
+      let stem = qMatch[2].trim();
+      let detectedYear: number | undefined = undefined;
+      const yMatch = stem.match(yearTagRegex);
+      if (yMatch && yMatch[1]) {
+        detectedYear = parseInt(yMatch[1], 10);
+      }
+
       currentQ = {
         questionNumber: parseInt(qMatch[1], 10),
-        questionText: qMatch[2],
+        questionText: stem,
+        year: detectedYear,
         pageNumber
       };
       currentOptions = [];

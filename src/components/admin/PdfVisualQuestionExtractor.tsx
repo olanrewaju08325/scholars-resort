@@ -227,8 +227,9 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
             </div>
 
             <div>
-              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5">
-                Past Question Year
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1.5 flex items-center justify-between">
+                <span>Default / Fallback Year</span>
+                <span className="text-[10px] text-primary lowercase font-normal">(auto-detected from tags)</span>
               </label>
               <Input
                 type="number"
@@ -236,6 +237,7 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
                 max={2026}
                 value={examYear}
                 onChange={(e) => setExamYear(Number(e.target.value))}
+                placeholder="2024"
                 className="h-10 text-sm font-bold"
               />
             </div>
