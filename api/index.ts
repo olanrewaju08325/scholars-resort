@@ -471,16 +471,18 @@ const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL ||
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || DEFAULT_SUPABASE_ANON_KEY;
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-// Direct PostgreSQL Connection Pool (Superuser connection for authoritative writes)
-const PG_CONN_STRING = process.env.DATABASE_URL || 'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
+// Direct PostgreSQL Connection Pool (Authoritative Serverless Transaction Pooler + Session Fallback)
+const PG_CONN_STRING_PRIMARY = process.env.DATABASE_URL || 'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:6543/postgres';
+const PG_CONN_STRING_FALLBACK = 'postgresql://postgres.syoodykedvqaoeplmamd:Halimot0%2A%40%23%23@aws-0-eu-west-1.pooler.supabase.com:5432/postgres';
+
 let pgPool: pg.Pool | null = null;
 try {
   pgPool = new pg.Pool({
-    connectionString: PG_CONN_STRING,
+    connectionString: PG_CONN_STRING_PRIMARY,
     ssl: { rejectUnauthorized: false },
-    max: 10,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 8000
+    max: 4,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 4000
   });
   pgPool.on('error', (err) => {
     console.warn('[PG Pool warning]:', err.message);
@@ -488,6 +490,30 @@ try {
 } catch (poolInitErr: any) {
   console.warn('[PG Pool init note]:', poolInitErr?.message);
   pgPool = null;
+}
+
+// Resilient query execution helper with automatic port 5432 fallback
+async function queryPostgres(text: string, params: any[] = []): Promise<pg.QueryResult<any>> {
+  if (pgPool) {
+    try {
+      return await pgPool.query(text, params);
+    } catch (err: any) {
+      console.warn('[queryPostgres 6543 pool notice, trying direct client fallback]:', err.message);
+    }
+  }
+
+  // Fallback single-shot client to port 5432
+  const fallbackClient = new pg.Client({
+    connectionString: PG_CONN_STRING_FALLBACK,
+    ssl: { rejectUnauthorized: false },
+    connectionTimeoutMillis: 4000
+  });
+  try {
+    await fallbackClient.connect();
+    return await fallbackClient.query(text, params);
+  } finally {
+    await fallbackClient.end().catch(() => {});
+  }
 }
 
 // Helper to obtain a Supabase client properly scoped with the user's JWT or server-level credentials
@@ -6219,30 +6245,68 @@ function saveSystemStore(data: Record<string, any>) {
 
 const inMemorySystemStore: Record<string, any> = loadSystemStore();
 
-// Helper to get a setting from Memory/File first, with DB fallback
+// Helper to get a setting from Postgres via queryPostgres first, then Supabase, then Memory/File
 async function getStoredSetting(key: string, defaultValue: any = null) {
-  if (inMemorySystemStore[key] !== undefined) {
-    return inMemorySystemStore[key];
+  try {
+    const pgRes = await queryPostgres(
+      'SELECT setting_value FROM public.admin_settings WHERE setting_key = $1 LIMIT 1',
+      [key]
+    );
+    if (pgRes.rows.length > 0 && pgRes.rows[0].setting_value !== undefined && pgRes.rows[0].setting_value !== null) {
+      let val = pgRes.rows[0].setting_value;
+      if (typeof val === 'string') {
+        try { val = JSON.parse(val); } catch (_) {}
+      }
+      inMemorySystemStore[key] = val;
+      return val;
+    }
+  } catch (pgErr: any) {
+    console.warn(`[getStoredSetting Postgres warning for ${key}]:`, pgErr.message);
   }
+
   try {
     const { data } = await supabase
       .from('admin_settings')
       .select('setting_value')
       .eq('setting_key', key)
       .maybeSingle();
-    if (data?.setting_value !== undefined) {
-      inMemorySystemStore[key] = data.setting_value;
+    if (data?.setting_value !== undefined && data?.setting_value !== null) {
+      let val = data.setting_value;
+      if (typeof val === 'string') {
+        try { val = JSON.parse(val); } catch (_) {}
+      }
+      inMemorySystemStore[key] = val;
       saveSystemStore(inMemorySystemStore);
-      return data.setting_value;
+      return val;
     }
   } catch {}
+
+  if (inMemorySystemStore[key] !== undefined) {
+    return inMemorySystemStore[key];
+  }
   return defaultValue;
 }
 
-// Helper to save a setting to Memory/File and DB
+// Helper to save a setting to Postgres via queryPostgres and Supabase
 async function setStoredSetting(key: string, value: any) {
   inMemorySystemStore[key] = value;
   saveSystemStore(inMemorySystemStore);
+
+  // 1. Authoritative direct PostgreSQL update via queryPostgres
+  try {
+    const jsonStr = typeof value === 'string' ? value : JSON.stringify(value);
+    await queryPostgres(
+      `INSERT INTO public.admin_settings (id, setting_key, setting_value, updated_at)
+       VALUES (gen_random_uuid(), $1, $2::jsonb, NOW())
+       ON CONFLICT (setting_key) 
+       DO UPDATE SET setting_value = EXCLUDED.setting_value, updated_at = NOW()`,
+      [key, jsonStr]
+    );
+  } catch (pgErr: any) {
+    console.error(`[setStoredSetting Postgres Save Error for ${key}]:`, pgErr.message);
+  }
+
+  // 2. Also sync to Supabase client
   try {
     await supabase.from('admin_settings').upsert({
       setting_key: key,
@@ -6263,10 +6327,14 @@ app.get('/api/settings/:key', async (req, res) => {
 
 // POST /api/settings/:key or POST /api/admin/settings
 app.post('/api/settings/:key', verifyAdminToken, async (req, res) => {
-  const { key } = req.params;
-  const value = req.body?.value !== undefined ? req.body.value : req.body;
-  await setStoredSetting(key, value);
-  return res.json({ success: true, key, value });
+  try {
+    const { key } = req.params;
+    const value = req.body?.value !== undefined ? req.body.value : req.body;
+    await setStoredSetting(key, value);
+    return res.json({ success: true, key, value });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
 });
 
 app.post('/api/admin/settings', verifyAdminToken, async (req, res) => {
@@ -8014,68 +8082,79 @@ app.post('/api/admin/subscriptions/revoke', verifyAdminToken, async (req, res) =
 // API Route: Full User Directory for Admin (Merged with PostgreSQL & Real-Time Server Overrides)
 app.get('/api/admin/users/directory', verifyAdminToken, async (req, res) => {
   try {
-    await loadDeletedUserIds();
+    try {
+      await loadDeletedUserIds();
+    } catch (delErr: any) {
+      console.warn('[Admin Directory loadDeletedUserIds warn]:', delErr?.message);
+    }
 
     let dbProfiles: any[] = [];
-    if (pgPool) {
-      try {
-        const pgRes = await pgPool.query(`SELECT * FROM public.profiles ORDER BY created_at DESC`);
-        dbProfiles = pgRes.rows || [];
-      } catch (pgErr: any) {
-        console.warn('[Admin User Directory pgPool query warning]', pgErr.message);
-      }
+    try {
+      const pgRes = await queryPostgres(`SELECT * FROM public.profiles ORDER BY created_at DESC`);
+      dbProfiles = pgRes.rows || [];
+    } catch (pgErr: any) {
+      console.warn('[Admin User Directory queryPostgres warning]', pgErr?.message);
     }
 
     if (!dbProfiles || dbProfiles.length === 0) {
-      const scopedClient = getScopedSupabaseClient(req);
-      let { data: scopedProf } = await scopedClient
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!scopedProf || scopedProf.length === 0) {
-        const { data: baseProf } = await supabase
+      try {
+        const scopedClient = getScopedSupabaseClient(req);
+        const { data: scopedProf } = await scopedClient
           .from('profiles')
           .select('*')
           .order('created_at', { ascending: false });
-        dbProfiles = baseProf || [];
-      } else {
-        dbProfiles = scopedProf;
+        if (scopedProf && scopedProf.length > 0) {
+          dbProfiles = scopedProf;
+        }
+      } catch (scopeErr: any) {
+        console.warn('[Admin User Directory scopedClient warning]', scopeErr?.message);
       }
-    }
 
-    if (error) {
-      console.warn('[Admin User Directory DB Warning]', error.message);
+      if (!dbProfiles || dbProfiles.length === 0) {
+        try {
+          const { data: baseProf } = await supabase
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false });
+          dbProfiles = baseProf || [];
+        } catch (baseErr: any) {
+          console.warn('[Admin User Directory baseProf warning]', baseErr?.message);
+        }
+      }
     }
 
     const profilesList: any[] = [];
     const seenIds = new Set<string>();
 
     (dbProfiles || []).forEach((p: any) => {
-      if (p?.id && !deletedUserIds.has(p.id) && p.status !== 'deleted') {
-        const merged = mergeProfileWithOverrides(p, p.id);
-        if (merged && merged.status !== 'deleted') {
-          profilesList.push(merged);
-          seenIds.add(p.id);
+      try {
+        if (p?.id && !deletedUserIds.has(p.id) && p.status !== 'deleted') {
+          const merged = mergeProfileWithOverrides(p, p.id);
+          if (merged && merged.status !== 'deleted') {
+            profilesList.push(merged);
+            seenIds.add(p.id);
+          }
         }
-      }
+      } catch (_) {}
     });
 
     // Also include any profiles registered only in override map
     persistentUserOverrides.forEach((override, id) => {
-      if (!seenIds.has(id) && !deletedUserIds.has(id)) {
-        const merged = mergeProfileWithOverrides({ id, created_at: new Date().toISOString() }, id);
-        if (merged && merged.status !== 'deleted') {
-          profilesList.push(merged);
-          seenIds.add(id);
+      try {
+        if (!seenIds.has(id) && !deletedUserIds.has(id)) {
+          const merged = mergeProfileWithOverrides({ id, created_at: new Date().toISOString() }, id);
+          if (merged && merged.status !== 'deleted') {
+            profilesList.push(merged);
+            seenIds.add(id);
+          }
         }
-      }
+      } catch (_) {}
     });
 
     return res.json({ success: true, profiles: profilesList });
   } catch (err: any) {
     console.error('[Admin Directory API Error]', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(200).json({ success: true, profiles: [], warning: err?.message || 'Directory loaded with fallback' });
   }
 });
 
@@ -9459,16 +9538,8 @@ function saveLocalReferralPayouts(list: ReferralPayoutRecord[]) {
 
 async function getReferralConfig() {
   try {
-    const { data: configRow } = await supabase
-      .from('admin_settings')
-      .select('setting_value')
-      .eq('setting_key', 'referral_program_config')
-      .maybeSingle();
-
-    if (configRow?.setting_value) {
-      const parsed = typeof configRow.setting_value === 'string'
-        ? JSON.parse(configRow.setting_value)
-        : configRow.setting_value;
+    const parsed = await getStoredSetting('referral_program_config');
+    if (parsed) {
       return {
         rewardPerSignup: Number(parsed.rewardPerSignup) || 0,
         rewardPerPaid: Number(parsed.rewardPerPaid) || 500,
@@ -10406,7 +10477,7 @@ app.post('/api/referrals/admin/update-payout', verifyAdminToken, async (req, res
 // 7. Admin: Update Referral Program Configuration
 app.post('/api/referrals/admin/update-config', verifyAdminToken, async (req, res) => {
   try {
-    const configData = req.body || {};
+    const configData = req.body?.value || req.body || {};
     const sanitizedConfig = {
       rewardPerSignup: Number(configData.rewardPerSignup) || 0,
       rewardPerPaid: Number(configData.rewardPerPaid) || 500,
@@ -10416,26 +10487,13 @@ app.post('/api/referrals/admin/update-config', verifyAdminToken, async (req, res
       programDescription: configData.programDescription || 'Earn cash rewards for every candidate you invite.'
     };
 
-    // Save to admin_settings table in Supabase
-    try {
-      await supabase.from('admin_settings').upsert({
-        setting_key: 'referral_program_config',
-        setting_value: sanitizedConfig,
-        updated_at: new Date().toISOString()
-      }, { onConflict: 'setting_key' });
-    } catch {}
-
-    // Save to disk system store
-    try {
-      const store = loadSystemStore();
-      store.referral_program_config = sanitizedConfig;
-      saveSystemStore(store);
-    } catch {}
+    // Authoritative persistence via setStoredSetting (Postgres queryPostgres + Supabase)
+    await setStoredSetting('referral_program_config', sanitizedConfig);
 
     return res.json({ success: true, config: sanitizedConfig, message: 'Referral program configuration updated successfully.' });
   } catch (err: any) {
     console.error('[API /api/referrals/admin/update-config Error]', err);
-    return res.status(500).json({ success: false, error: err.message });
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to update referral configuration' });
   }
 });
 

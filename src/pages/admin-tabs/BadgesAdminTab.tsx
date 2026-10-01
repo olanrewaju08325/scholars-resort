@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { logAdminActivity } from '@/services/adminActivityService';
-import { authFetch } from '@/lib/apiAuth';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 
 export const BadgesAdminTab = () => {
   const [activeSubTab, setActiveSubTab] = useState<'settings' | 'badges'>('settings');
@@ -115,6 +115,11 @@ export const BadgesAdminTab = () => {
     e.preventDefault();
     setSavingSettings(true);
     try {
+      await authFetch(getApiUrl('/api/settings/gamification_engine_config'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: gamificationSettings })
+      }).catch(() => {});
       await supabase.from('admin_settings').upsert({
         setting_key: 'gamification_engine_config',
         setting_value: gamificationSettings,
@@ -154,9 +159,9 @@ export const BadgesAdminTab = () => {
         ? badges.map(b => b.id === currentBadgeId ? { ...b, ...payload } : b)
         : [...badges, { id: crypto.randomUUID(), ...payload, created_at: new Date().toISOString() }];
 
-      // Save to Supabase admin_settings
+      // Save to Supabase admin_settings and server store
       try {
-        await authFetch('/api/settings/gamification_badges_config', {
+        await authFetch(getApiUrl('/api/settings/gamification_badges_config'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: updatedList })
@@ -216,7 +221,7 @@ export const BadgesAdminTab = () => {
       localStorage.setItem('scholar_custom_badges', JSON.stringify(updatedList));
       
       try {
-        await authFetch('/api/settings/gamification_badges_config', {
+        await authFetch(getApiUrl('/api/settings/gamification_badges_config'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: updatedList })

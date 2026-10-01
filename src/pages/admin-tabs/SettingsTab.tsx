@@ -20,7 +20,7 @@ import {
 } from '@/services/systemConfigService';
 import { ApiKeyManager } from '@/lib/apiKeyManager';
 import { getSecureGroqKey, setSecureGroqKey } from '@/lib/secureStorage';
-import { authFetch } from '@/lib/apiAuth';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 
 export const SettingsTab = () => {
   // Platform & Feature Toggles
@@ -235,12 +235,12 @@ export const SettingsTab = () => {
 
       // 2. Save landing page configuration and payment keys via server API
       await Promise.allSettled([
-        authFetch('/api/settings/landing_config', {
+        authFetch(getApiUrl('/api/settings/landing_config'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: landingPayload })
         }),
-        authFetch('/api/settings/payment_keys', {
+        authFetch(getApiUrl('/api/settings/payment_keys'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -250,7 +250,7 @@ export const SettingsTab = () => {
             }
           })
         }),
-        authFetch('/api/settings/api_keys', {
+        authFetch(getApiUrl('/api/settings/api_keys'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -267,7 +267,7 @@ export const SettingsTab = () => {
             }
           })
         }),
-        authFetch('/api/settings/ai_api_keys', {
+        authFetch(getApiUrl('/api/settings/ai_api_keys'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

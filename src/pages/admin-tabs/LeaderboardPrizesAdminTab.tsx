@@ -11,7 +11,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/apiAuth';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 
 export interface LeaderboardPrizeConfig {
   frequency: 'weekly' | 'monthly';
@@ -104,7 +104,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
     try {
       // 1. Fetch prize config from server
       try {
-        const res = await fetch('/api/settings/leaderboard_prize_config');
+        const res = await authFetch(getApiUrl('/api/settings/leaderboard_prize_config'));
         const json = await res.json();
         if (json?.success && json.value) {
           const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;
@@ -114,7 +114,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
 
       // 2. Fetch platform pricing from server
       try {
-        const res = await fetch('/api/settings/platform_pricing');
+        const res = await authFetch(getApiUrl('/api/settings/platform_pricing'));
         const json = await res.json();
         if (json?.success && json.value) {
           const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;
@@ -124,11 +124,32 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
 
       // 3. Fetch weekly mock config from server
       try {
-        const res = await fetch('/api/settings/weekly_mock_config');
+        const res = await authFetch(getApiUrl('/api/settings/weekly_mock_config'));
         const json = await res.json();
         if (json?.success && json.value) {
           const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;
           setMockConfig({ ...DEFAULT_MOCK_CONFIG, ...parsed });
+        }
+      } catch {}
+
+      // Supabase direct fallback
+      try {
+        const { data: dbRows } = await supabase
+          .from('admin_settings')
+          .select('setting_key, setting_value')
+          .in('setting_key', ['leaderboard_prize_config', 'platform_pricing', 'weekly_mock_config']);
+
+        if (dbRows && dbRows.length > 0) {
+          dbRows.forEach(row => {
+            const parsed = typeof row.setting_value === 'string' ? JSON.parse(row.setting_value) : row.setting_value;
+            if (row.setting_key === 'leaderboard_prize_config' && parsed) {
+              setPrizeConfig(prev => ({ ...prev, ...parsed }));
+            } else if (row.setting_key === 'platform_pricing' && parsed) {
+              setPricingConfig(prev => ({ ...prev, ...parsed }));
+            } else if (row.setting_key === 'weekly_mock_config' && parsed) {
+              setMockConfig(prev => ({ ...prev, ...parsed }));
+            }
+          });
         }
       } catch {}
 
@@ -199,7 +220,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
     setSaving(true);
     try {
       // 1. Save prize config
-      await authFetch('/api/settings/leaderboard_prize_config', {
+      await authFetch(getApiUrl('/api/settings/leaderboard_prize_config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: prizeConfig })
@@ -213,7 +234,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
       } catch (_) {}
 
       // 2. Save platform pricing
-      await authFetch('/api/settings/platform_pricing', {
+      await authFetch(getApiUrl('/api/settings/platform_pricing'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: pricingConfig })
@@ -227,7 +248,7 @@ export const LeaderboardPrizesAdminTab: React.FC = () => {
       } catch (_) {}
 
       // 3. Save weekly mock config
-      await authFetch('/api/settings/weekly_mock_config', {
+      await authFetch(getApiUrl('/api/settings/weekly_mock_config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: mockConfig })

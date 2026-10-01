@@ -12,7 +12,7 @@ import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI } from '@/services/aiService';
-import { authFetch } from '@/lib/apiAuth';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 
 const isValidUUID = (val?: string | null): boolean => {
   if (!val || typeof val !== 'string') return false;
@@ -148,7 +148,7 @@ async function saveTournamentAdaptive(
 
     // Also persist into admin_settings and server disk store
     try {
-      await authFetch('/api/settings/tournaments_db', {
+      await authFetch(getApiUrl('/api/settings/tournaments_db'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: localList })
@@ -589,7 +589,7 @@ Return STRICT JSON format:
       if (localRaw) {
         const list = JSON.parse(localRaw).map((t: any) => t.id === tournament.id ? { ...t, status: newStatus } : t);
         localStorage.setItem('scholar_tournaments', JSON.stringify(list));
-        await authFetch('/api/settings/tournaments_db', {
+        await authFetch(getApiUrl('/api/settings/tournaments_db'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: list })
@@ -610,7 +610,7 @@ Return STRICT JSON format:
       'Are you sure? This will remove all participant and leaderboard records.',
       async () => {
         try {
-          await authFetch('/api/admin/tournaments/delete', {
+          await authFetch(getApiUrl('/api/admin/tournaments/delete'), {
             method: 'POST',
             body: JSON.stringify({ id })
           });
@@ -626,7 +626,7 @@ Return STRICT JSON format:
           if (localRaw) {
             const list = JSON.parse(localRaw).filter((t: any) => t.id !== id);
             localStorage.setItem('scholar_tournaments', JSON.stringify(list));
-            await authFetch('/api/settings/tournaments_db', {
+            await authFetch(getApiUrl('/api/settings/tournaments_db'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ value: list })

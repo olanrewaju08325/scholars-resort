@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { Swords, Plus, Trash2, CheckCircle, XCircle, Sparkles, RefreshCw, Calendar, Clock, Database, ShieldAlert } from 'lucide-react';
 import { useConfirm } from '@/hooks/useConfirm';
 import { callGroqAPI } from '@/services/aiService';
-import { authFetch } from '@/lib/apiAuth';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 
 const SUBJECTS = ['English', 'Mathematics', 'Physics', 'Chemistry', 'Biology', 'Economics', 'Government', 'Literature', 'Geography', 'Commerce', 'Accounting'];
 
@@ -43,7 +43,7 @@ export const WeeklyChallengesAdminTab = () => {
 
     // Check server API first
     try {
-      const res = await fetch('/api/settings/weekly_challenges_db');
+      const res = await authFetch(getApiUrl('/api/settings/weekly_challenges_db'));
       const json = await res.json();
       if (json?.success && Array.isArray(json.value)) {
         items = json.value;
@@ -219,7 +219,7 @@ Return STRICT JSON format:
       // 3. Always sync to admin_settings and local storage
       try {
         const existing = [...challenges, newChallenge];
-        await authFetch('/api/settings/weekly_challenges_db', {
+        await authFetch(getApiUrl('/api/settings/weekly_challenges_db'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: existing })
@@ -254,7 +254,7 @@ Return STRICT JSON format:
     const updated = challenges.map(c => c.id === id ? { ...c, is_active: !currentState } : c);
     setChallenges(updated);
     try {
-      await authFetch('/api/settings/weekly_challenges_db', {
+      await authFetch(getApiUrl('/api/settings/weekly_challenges_db'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ value: updated })
@@ -272,14 +272,14 @@ Return STRICT JSON format:
   const handleDelete = (id: string) => {
     confirmAction('Delete Challenge', 'Delete this weekly challenge and all student submissions?', async () => {
       try {
-        await authFetch(`/api/admin/challenges/${id}`, { method: 'DELETE' });
+        await authFetch(getApiUrl(`/api/admin/challenges/${id}`), { method: 'DELETE' });
         await supabase.from('weekly_challenges').delete().eq('id', id);
       } catch {}
 
       const updated = challenges.filter(c => c.id !== id);
       setChallenges(updated);
       try {
-        await authFetch('/api/settings/weekly_challenges_db', {
+        await authFetch(getApiUrl('/api/settings/weekly_challenges_db'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ value: updated })

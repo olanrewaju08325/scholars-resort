@@ -11,7 +11,7 @@ import {
   Smartphone, Building2, ShieldCheck, RefreshCw, Trash2
 } from 'lucide-react';
 import { logAdminActivity } from '@/services/adminActivityService';
-import { authFetch } from '@/lib/apiAuth';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 import { ReferralDiagnosticTester } from '@/components/admin/ReferralDiagnosticTester';
 
 interface ReferralConfig {
@@ -70,19 +70,41 @@ export const ReferralTab = () => {
   const fetchReferralData = useCallback(async () => {
     setLoading(true);
 
+    // 0. Instant localStorage cache preview
     try {
-      const res = await authFetch('/api/referrals/admin/all');
+      const cached = localStorage.getItem('sr_admin_referral_config');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (parsed && typeof parsed === 'object') {
+          setConfig(prev => ({
+            ...prev,
+            rewardPerPaid: Number(parsed.rewardPerPaid) || prev.rewardPerPaid,
+            minWithdrawal: Number(parsed.minWithdrawal) || prev.minWithdrawal,
+            isActive: parsed.isActive !== false,
+            programTitle: parsed.programTitle || prev.programTitle,
+            programDescription: parsed.programDescription || prev.programDescription
+          }));
+        }
+      }
+    } catch (_) {}
+
+    try {
+      const res = await authFetch(getApiUrl('/api/referrals/admin/all'));
       if (res.ok) {
         const data = await res.json();
         if (data.success) {
           if (data.config) {
-            setConfig({
+            const nextConfig = {
               rewardPerPaid: Number(data.config.rewardPerPaid) || 500,
               minWithdrawal: Number(data.config.minWithdrawal) || 2000,
               isActive: data.config.isActive !== false,
               programTitle: data.config.programTitle || 'UTME Student Referral & Ambassador Program',
               programDescription: data.config.programDescription || 'Earn cash rewards for every UTME candidate you invite.'
-            });
+            };
+            setConfig(nextConfig);
+            try {
+              localStorage.setItem('sr_admin_referral_config', JSON.stringify(nextConfig));
+            } catch (_) {}
           }
           if (Array.isArray(data.referrals)) {
             setReferrals(data.referrals);
@@ -100,7 +122,7 @@ export const ReferralTab = () => {
       console.warn('Admin referral server fetch notice, falling back to direct query:', e);
     }
 
-    // 1. Fallback: Fetch Config
+    // 1. Fallback: Fetch Config from Supabase admin_settings
     try {
       const { data: configRow } = await supabase
         .from('admin_settings')
@@ -112,13 +134,17 @@ export const ReferralTab = () => {
         const parsed = typeof configRow.setting_value === 'string'
           ? JSON.parse(configRow.setting_value)
           : configRow.setting_value;
-        setConfig({
+        const nextConfig = {
           rewardPerPaid: Number(parsed.rewardPerPaid) || 500,
           minWithdrawal: Number(parsed.minWithdrawal) || 2000,
           isActive: parsed.isActive !== false,
           programTitle: parsed.programTitle || 'UTME Student Referral & Ambassador Program',
           programDescription: parsed.programDescription || 'Earn cash rewards for every UTME candidate you invite.'
-        });
+        };
+        setConfig(nextConfig);
+        try {
+          localStorage.setItem('sr_admin_referral_config', JSON.stringify(nextConfig));
+        } catch (_) {}
       }
     } catch {}
 
@@ -197,7 +223,7 @@ export const ReferralTab = () => {
     }
     setLoading(true);
     try {
-      const res = await authFetch('/api/referrals/admin/clear-mock-data', { method: 'POST' });
+      const res = await authFetch(getApiUrl('/api/referrals/admin/clear-mock-data'), { method: 'POST' });
       const data = await res.json();
       if (data.success) {
         toast.success(data.message || 'Mock referral records successfully purged.');
@@ -217,19 +243,39 @@ export const ReferralTab = () => {
     e.preventDefault();
     setSavingConfig(true);
     try {
-      const res = await authFetch('/api/referrals/admin/update-config', {
+      // 0. Instant localStorage cache update
+      try {
+        localStorage.setItem('sr_admin_referral_config', JSON.stringify(config));
+      } catch (_) {}
+
+      // 1. Post to authoritative server endpoint
+      const res = await authFetch(getApiUrl('/api/referrals/admin/update-config'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(config)
       });
 
       if (!res.ok) {
-        // Fallback to /api/settings/referral_program_config
-        await authFetch('/api/settings/referral_program_config', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ value: config })
-        });
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.error || `Server error ${res.status}`);
+      }
+
+      // 2. Also sync to /api/settings/referral_program_config for dual persistence
+      await authFetch(getApiUrl('/api/settings/referral_program_config'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ value: config })
+      }).catch(() => {});
+
+      // 3. Direct Supabase admin_settings upsert (now permitted by RLS)
+      try {
+        await supabase.from('admin_settings').upsert({
+          setting_key: 'referral_program_config',
+          setting_value: config,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'setting_key' });
+      } catch (dbErr) {
+        console.warn('Direct Supabase upsert notice:', dbErr);
       }
 
       logAdminActivity('UPDATE_REFERRAL_CONFIG', `Updated reward to ₦${config.rewardPerPaid}/friend and min withdrawal to ₦${config.minWithdrawal}`, 'finance');
@@ -247,7 +293,7 @@ export const ReferralTab = () => {
     try {
       const note = adminNoteInput[payoutId] || (status === 'approved' ? 'Disbursed via direct transfer' : 'Rejected by admin');
       
-      const res = await authFetch('/api/referrals/admin/update-payout', {
+      const res = await authFetch(getApiUrl('/api/referrals/admin/update-payout'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ payoutId, status, adminNote: note })

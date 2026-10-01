@@ -31,9 +31,10 @@
   "referral_program_config": {
     "isActive": true,
     "programTitle": "UTME Student Referral & Ambassador Program",
-    "minWithdrawal": 1000,
-    "rewardPerPaid": 200,
-    "programDescription": "Earn cash rewards for every UTME candidate or friend you invite to Scholars Resort."
+    "minWithdrawal": 1500,
+    "rewardPerPaid": 500,
+    "rewardPerSignup": 0,
+    "programDescription": "Earn ₦500 cash for every candidate you invite."
   },
   "weekly_mock_config": {
     "title": "National JAMB UTME Grand Mock Exam (Week 1)",
@@ -46,5 +47,9 @@
     "cash_prize_summary": "₦5,000 for 1st Place | ₦3,000 for 2nd Place | ₦1,000 Airtime for 3rd Place",
     "rolling_mock_closes": "Every Sunday at 11:59 PM",
     "contact_instructions": "Prizes disbursed every Sunday night. Winners will be contacted directly or should message Admin on WhatsApp."
+  },
+  "leaderboard_prize_config": {
+    "frequency": "monthly",
+    "cash_prize_summary": "₦5,000 for 1st Place | ₦3,000 for 2nd Place | ₦1,000 Airtime for 3rd Place"
   }
 }

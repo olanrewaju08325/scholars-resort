@@ -9,6 +9,8 @@ import { useLiveFetch } from '@/hooks/useLiveFetch';
 import { DataLoading } from '@/components/DataLoading';
 import { useAuth } from '@/context/AuthContext';
 
+import { getApiUrl } from '@/lib/apiAuth';
+
 const DEFAULT_PRIZE_CONFIG = {
   frequency: 'monthly' as 'weekly' | 'monthly' | 'all',
   distribution_method: 'both',
@@ -32,7 +34,7 @@ const Leaderboard = () => {
 
   const fetchPrizeConfig = async () => {
     try {
-      const res = await fetch('/api/settings/leaderboard_prize_config');
+      const res = await fetch(getApiUrl('/api/settings/leaderboard_prize_config'));
       const json = await res.json();
       if (json?.success && json.value) {
         const parsed = typeof json.value === 'string' ? JSON.parse(json.value) : json.value;

@@ -1,6 +1,6 @@
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { authFetch } from '@/lib/apiAuth';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 import { ApiKeyManager } from '@/lib/apiKeyManager';
 import { getSecureGroqKey, setSecureGroqKey } from '@/lib/secureStorage';
 
@@ -179,7 +179,7 @@ export async function saveAllSystemConfigs(configs: FullSystemConfig): Promise<{
     // 1. Post to Server-Side API Endpoint for immediate runtime synchronization
     let apiSuccess = false;
     try {
-      const apiRes = await authFetch('/api/admin/system-configs', {
+      const apiRes = await authFetch(getApiUrl('/api/admin/system-configs'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(configs)
