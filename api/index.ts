@@ -9478,144 +9478,152 @@ async function getReferralConfig() {
 // Convert referral & credit referrer wallet
 async function triggerReferralConversion(userId: string, userEmail?: string, amountPaid?: number) {
   try {
-    const referrals = getLocalReferrals();
     const config = await getReferralConfig();
     const reward = config.rewardPerPaid || 500;
-
     const cleanUserEmail = (userEmail || '').toLowerCase().trim();
 
-    // Find if this student was referred
-    let matchIdx = referrals.findIndex(r => 
-      (userId && r.referredId === userId) || 
-      (cleanUserEmail && r.referredEmail && r.referredEmail.toLowerCase() === cleanUserEmail)
-    );
+    let referrerId: string | null = null;
+    let referrerProfile: any = null;
+    let studentProfile: any = null;
 
-    // If not found in local, check Supabase profiles for referred_by or referral_code
-    if (matchIdx === -1 && userId) {
+    // 1. Direct PostgreSQL check for the student profile
+    if (pgPool) {
       try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('id, full_name, email, referred_by, referral_code, referral_code_used')
-          .eq('id', userId)
-          .maybeSingle();
-
-        let referrerProfile: any = null;
-
-        if (profile?.referred_by) {
-          const { data: rProf } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, referral_code')
-            .eq('id', profile.referred_by)
-            .maybeSingle();
-          if (rProf) referrerProfile = rProf;
+        let q = '';
+        if (userId && cleanUserEmail) {
+          q = `SELECT id, full_name, email, referred_by, referral_code_used, has_paid FROM public.profiles WHERE id = '${userId}' OR (email IS NOT NULL AND LOWER(email) = '${cleanUserEmail}') LIMIT 1`;
+        } else if (userId) {
+          q = `SELECT id, full_name, email, referred_by, referral_code_used, has_paid FROM public.profiles WHERE id = '${userId}' LIMIT 1`;
+        } else if (cleanUserEmail) {
+          q = `SELECT id, full_name, email, referred_by, referral_code_used, has_paid FROM public.profiles WHERE email IS NOT NULL AND LOWER(email) = '${cleanUserEmail}' LIMIT 1`;
         }
-
-        if (!referrerProfile && (profile as any)?.referral_code_used) {
-          const usedCode = String((profile as any).referral_code_used).trim().toUpperCase();
-          const { data: rProf } = await supabase
-            .from('profiles')
-            .select('id, full_name, email, referral_code')
-            .ilike('referral_code', usedCode)
-            .maybeSingle();
-          if (rProf) referrerProfile = rProf;
+        if (q) {
+          const res = await pgPool.query(q);
+          if (res.rows.length > 0) studentProfile = res.rows[0];
         }
-
-        if (!referrerProfile) {
-          const { data: sbRef } = await supabase
-            .from('referrals')
-            .select('referrer_id')
-            .eq('referred_id', userId)
-            .maybeSingle();
-          if (sbRef?.referrer_id) {
-            const { data: rProf } = await supabase
-              .from('profiles')
-              .select('id, full_name, email, referral_code')
-              .eq('id', sbRef.referrer_id)
-              .maybeSingle();
-            if (rProf) referrerProfile = rProf;
-          }
-        }
-
-        if (referrerProfile) {
-          const newRecord: ReferralRecord = {
-            id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-            referrerId: referrerProfile.id,
-            referrerCode: referrerProfile.referral_code || 'REF',
-            referrerName: referrerProfile.full_name || 'Scholar Referrer',
-            referrerEmail: referrerProfile.email || '',
-            referredId: userId,
-            referredName: profile?.full_name || cleanUserEmail.split('@')[0] || 'Scholar Student',
-            referredEmail: cleanUserEmail || profile?.email || '',
-            converted: true,
-            conversionAmount: Number(amountPaid || 3000),
-            rewardEarned: reward,
-            createdAt: new Date().toISOString(),
-            convertedAt: new Date().toISOString()
-          };
-          referrals.unshift(newRecord);
-          saveLocalReferrals(referrals);
-          matchIdx = 0;
-        }
-      } catch (profErr) {
-        console.warn('[Referral lookup error]:', profErr);
+      } catch (err: any) {
+        console.warn('[triggerReferralConversion student query warning]:', err.message);
       }
     }
 
-    if (matchIdx !== -1) {
-      const target = referrals[matchIdx];
-      target.converted = true;
-      target.convertedAt = new Date().toISOString();
-      target.conversionAmount = Number(amountPaid || 3000);
-      target.rewardEarned = reward;
-      saveLocalReferrals(referrals);
+    const effectiveStudentId = studentProfile?.id || userId;
+    const effectiveStudentEmail = studentProfile?.email || cleanUserEmail;
+    const effectiveStudentName = studentProfile?.full_name || effectiveStudentEmail.split('@')[0] || 'Scholar Student';
 
-      // 1. Sync with Supabase referrals table
+    // 2. Check if already attributed in public.referrals table
+    if (pgPool && effectiveStudentId) {
       try {
-        await supabase.from('referrals').upsert({
-          referrer_id: target.referrerId,
-          referred_id: target.referredId,
-          converted: true
-        });
-      } catch {}
-
-      // 2. Credit Referrer Wallet in Supabase profiles
-      try {
-        if (target.referrerId && !target.referrerId.startsWith('ref_usr_')) {
-          const { data: curProf } = await supabase
-            .from('profiles')
-            .select('id, referral_balance, wallet_balance')
-            .eq('id', target.referrerId)
-            .maybeSingle();
-
-          if (curProf) {
-            const newRefBal = Number(curProf.referral_balance || 0) + reward;
-            const newWalletBal = Number(curProf.wallet_balance || 0) + reward;
-
-            await supabase.from('profiles').update({
-              referral_balance: newRefBal,
-              wallet_balance: newWalletBal,
-              updated_at: new Date().toISOString()
-            }).eq('id', target.referrerId);
-          }
+        const refRes = await pgPool.query(
+          `SELECT referrer_id FROM public.referrals WHERE referred_id = '${effectiveStudentId}' OR (referred_email IS NOT NULL AND LOWER(referred_email) = '${effectiveStudentEmail}') LIMIT 1`
+        );
+        if (refRes.rows.length > 0 && refRes.rows[0].referrer_id) {
+          referrerId = refRes.rows[0].referrer_id;
         }
-      } catch (balErr) {
-        console.warn('[Referral wallet credit notice]:', balErr);
+      } catch (err: any) {
+        console.warn('[triggerReferralConversion referrals lookup warning]:', err.message);
+      }
+    }
+
+    // 3. Check referred_by or referral_code_used in student profile
+    if (!referrerId && studentProfile?.referred_by) {
+      referrerId = studentProfile.referred_by;
+    }
+
+    if (!referrerId && studentProfile?.referral_code_used && pgPool) {
+      const code = String(studentProfile.referral_code_used).trim().toUpperCase();
+      try {
+        const pRes = await pgPool.query(
+          `SELECT id, full_name, email, referral_code FROM public.profiles WHERE referral_code ILIKE '${code}' OR email ILIKE '${code}' LIMIT 1`
+        );
+        if (pRes.rows.length > 0) referrerId = pRes.rows[0].id;
+      } catch {}
+    }
+
+    // Fallback: Check local referrals in-memory list
+    const referrals = getLocalReferrals();
+    let localIdx = referrals.findIndex(r => 
+      (effectiveStudentId && r.referredId === effectiveStudentId) || 
+      (effectiveStudentEmail && r.referredEmail && r.referredEmail.toLowerCase() === effectiveStudentEmail)
+    );
+
+    if (!referrerId && localIdx !== -1) {
+      referrerId = referrals[localIdx].referrerId;
+    }
+
+    // 4. If referrer found, credit wallet in PostgreSQL and update referrals table
+    if (referrerId && pgPool) {
+      try {
+        const rRes = await pgPool.query(
+          `SELECT id, full_name, email, referral_code, referral_balance, wallet_balance FROM public.profiles WHERE id = '${referrerId}' LIMIT 1`
+        );
+        if (rRes.rows.length > 0) referrerProfile = rRes.rows[0];
+      } catch {}
+    }
+
+    if (referrerProfile) {
+      const paidAmount = Number(amountPaid || 3000);
+
+      // A. Update Referrer Wallet Balance in PostgreSQL
+      if (pgPool) {
+        try {
+          await pgPool.query(
+            `UPDATE public.profiles 
+             SET referral_balance = COALESCE(referral_balance, 0) + ${reward},
+                 wallet_balance = COALESCE(wallet_balance, 0) + ${reward},
+                 updated_at = NOW() 
+             WHERE id = '${referrerProfile.id}'`
+          );
+
+          // B. Upsert into public.referrals
+          await pgPool.query(
+            `INSERT INTO public.referrals (id, referrer_id, referred_id, converted, reward_amount, status, referred_email, referred_name, amount_paid, converted_at, created_at)
+             VALUES (gen_random_uuid(), '${referrerProfile.id}', '${effectiveStudentId}', true, ${reward}, 'completed', '${effectiveStudentEmail}', '${effectiveStudentName}', ${paidAmount}, NOW(), NOW())
+             ON CONFLICT (id) DO NOTHING`
+          );
+        } catch (dbErr: any) {
+          console.warn('[Direct DB referral conversion write notice]:', dbErr.message);
+        }
       }
 
-      // 3. Notify Referrer via Email
-      if (target.referrerEmail) {
+      // C. Update in-memory local list
+      if (localIdx !== -1) {
+        referrals[localIdx].converted = true;
+        referrals[localIdx].rewardEarned = reward;
+        referrals[localIdx].conversionAmount = paidAmount;
+        referrals[localIdx].convertedAt = new Date().toISOString();
+      } else {
+        referrals.unshift({
+          id: `ref_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          referrerId: referrerProfile.id,
+          referrerCode: referrerProfile.referral_code || 'REF',
+          referrerName: referrerProfile.full_name || 'Scholar Referrer',
+          referrerEmail: referrerProfile.email || '',
+          referredId: effectiveStudentId,
+          referredName: effectiveStudentName,
+          referredEmail: effectiveStudentEmail,
+          converted: true,
+          conversionAmount: paidAmount,
+          rewardEarned: reward,
+          createdAt: new Date().toISOString(),
+          convertedAt: new Date().toISOString()
+        });
+      }
+      saveLocalReferrals(referrals);
+
+      // D. Send email notification to referrer
+      if (referrerProfile.email) {
         sendServerSmtpEmail(
-          target.referrerEmail,
+          referrerProfile.email,
           `🎉 Referral Reward Earned: ₦${reward.toLocaleString()} credited to your balance!`,
           `<div style="font-family: sans-serif; padding: 24px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
              <h2 style="color: #10B981; margin-top: 0;">🎉 You've Earned ₦${reward.toLocaleString()}!</h2>
-             <p>Hi ${target.referrerName || 'Scholar'},</p>
-             <p>Great news! Your referred candidate <strong>${target.referredName || 'A student'}</strong> just successfully upgraded their account on Scholars Resort.</p>
+             <p>Hi ${referrerProfile.full_name || 'Scholar'},</p>
+             <p>Great news! Your referred candidate <strong>${effectiveStudentName}</strong> just successfully upgraded their account on Scholars Resort.</p>
              <div style="background: #F0FDF4; border: 1px solid #BBF7D0; padding: 16px; border-radius: 8px; margin: 16px 0;">
                <p style="margin: 0; font-weight: bold; color: #166534;">Reward Credited: ₦${reward.toLocaleString()}</p>
-               <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803D;">Your reward has been added to your Referral Wallet and is ready for withdrawal.</p>
+               <p style="margin: 4px 0 0 0; font-size: 13px; color: #15803D;">Your reward has been credited directly to your Referral Wallet and is ready for withdrawal.</p>
              </div>
-             <p>Keep sharing your link to earn more rewards!</p>
+             <p>Keep sharing your link to earn unlimited rewards!</p>
              <p style="margin-top: 24px;">
                <a href="https://scholarsresort.com/referrals" style="background: #10B981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">View My Earnings & Withdraw</a>
              </p>
@@ -9623,10 +9631,10 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
         ).catch(() => {});
       }
 
-      return { success: true, reward, referrerId: target.referrerId };
+      return { success: true, reward, referrerId: referrerProfile.id };
     }
 
-    return { success: false, message: 'No referral link found for user.' };
+    return { success: false, message: 'No referrer found for this student.' };
   } catch (err: any) {
     console.warn('[triggerReferralConversion error]:', err);
     return { success: false, error: err.message };
@@ -9648,66 +9656,65 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
     const cleanReferredEmail = String(referredEmail || '').toLowerCase().trim();
     const cleanReferredName = String(referredName || 'New Student').trim();
 
-    // Look up Referrer by code, user ID, email, or partial code
-    let referrerId: string | null = null;
-    let referrerName = 'Scholar Referrer';
-    let referrerEmail = '';
-
-    // Search in Supabase profiles
-    try {
-      // 1. Search by case-insensitive referral_code or id
-      const { data: refProfile } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, referral_code')
-        .or(`referral_code.ilike.${cleanCode},id.eq.${cleanCode}`)
-        .maybeSingle();
-
-      if (refProfile) {
-        referrerId = refProfile.id;
-        referrerName = refProfile.full_name || 'Scholar Referrer';
-        referrerEmail = refProfile.email || '';
-      }
-    } catch {}
-
-    // 2. Search all profiles if code contains user ID substring (e.g. SR-NAME-XXXX)
-    if (!referrerId && cleanCode.startsWith('SR-')) {
+    // Look up Referrer in PostgreSQL
+    let referrerProfile: any = null;
+    if (pgPool) {
       try {
-        const parts = cleanCode.split('-');
-        const idSuffix = parts[parts.length - 1];
-        if (idSuffix && idSuffix.length >= 3) {
-          const { data: allProfs } = await supabase.from('profiles').select('id, full_name, email, referral_code');
-          const matched = (allProfs || []).find(p => 
-            (p.id && p.id.toUpperCase().startsWith(idSuffix)) ||
-            (p.referral_code && p.referral_code.toUpperCase() === cleanCode)
-          );
-          if (matched) {
-            referrerId = matched.id;
-            referrerName = matched.full_name || 'Scholar Referrer';
-            referrerEmail = matched.email || '';
+        // Search by referral_code exact match or email
+        const res1 = await pgPool.query(
+          `SELECT id, full_name, email, referral_code FROM public.profiles WHERE UPPER(referral_code) = '${cleanCode}' OR LOWER(email) = '${cleanCode.toLowerCase()}' LIMIT 1`
+        );
+        if (res1.rows.length > 0) {
+          referrerProfile = res1.rows[0];
+        }
+
+        // If not found, match by prefix / suffix (e.g. SR-NAME-XXXX)
+        if (!referrerProfile && cleanCode.startsWith('SR-')) {
+          const parts = cleanCode.split('-');
+          const idSuffix = parts[parts.length - 1];
+          if (idSuffix && idSuffix.length >= 3) {
+            const res2 = await pgPool.query(
+              `SELECT id, full_name, email, referral_code FROM public.profiles WHERE REPLACE(UPPER(id::text), '-', '') LIKE '%${idSuffix}%' OR UPPER(referral_code) LIKE '%${idSuffix}%' LIMIT 1`
+            );
+            if (res2.rows.length > 0) referrerProfile = res2.rows[0];
           }
         }
-      } catch {}
+      } catch (err: any) {
+        console.warn('[track-signup pgPool query warning]:', err.message);
+      }
     }
 
-    // 3. Fallback: Check local profiles or local referrals
-    if (!referrerId) {
+    if (!referrerProfile) {
+      // Check existing local referrals for cached referrer
       const existingRefs = getLocalReferrals();
       const match = existingRefs.find(r => r.referrerCode === cleanCode || (r.referrerEmail && r.referrerEmail.toLowerCase() === cleanCode.toLowerCase()));
       if (match) {
-        referrerId = match.referrerId;
-        referrerName = match.referrerName || 'Scholar Referrer';
-        referrerEmail = match.referrerEmail || '';
+        referrerProfile = {
+          id: match.referrerId,
+          full_name: match.referrerName,
+          email: match.referrerEmail,
+          referral_code: cleanCode
+        };
       }
     }
 
-    if (!referrerId) {
-      referrerId = `ref_usr_${cleanCode}`;
+    if (!referrerProfile) {
+      referrerProfile = {
+        id: `ref_usr_${cleanCode}`,
+        full_name: 'Scholar Referrer',
+        email: '',
+        referral_code: cleanCode
+      };
     }
+
+    const referrerId = referrerProfile.id;
+    const referrerEmail = referrerProfile.email || '';
+    const referrerName = referrerProfile.full_name || 'Scholar Referrer';
 
     // Anti-Fraud: Prevent Self-Referral
     const isSelfReferral = (
       (referredId && referrerId && referredId === referrerId) ||
-      (cleanReferredEmail && referrerEmail && cleanReferredEmail.toLowerCase() === referrerEmail.toLowerCase())
+      (cleanReferredEmail && referrerEmail && cleanReferredEmail === referrerEmail.toLowerCase())
     );
 
     if (isSelfReferral) {
@@ -9720,11 +9727,31 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
     const config = await getReferralConfig();
     const signupReward = Number(config.rewardPerSignup) || 0;
 
-    // Save to local referral store
+    // 1. Direct PostgreSQL Insert into public.referrals and update student's profile
+    if (pgPool && !referrerId.startsWith('ref_usr_')) {
+      try {
+        if (referredId) {
+          await pgPool.query(
+            `UPDATE public.profiles 
+             SET referred_by = '${referrerId}', referral_code_used = '${cleanCode}', updated_at = NOW() 
+             WHERE id = '${referredId}'`
+          );
+        }
+        await pgPool.query(
+          `INSERT INTO public.referrals (id, referrer_id, referred_id, converted, reward_amount, status, referred_email, referred_name, created_at)
+           VALUES (gen_random_uuid(), '${referrerId}', '${referredId || null}', false, ${signupReward}, 'pending', '${cleanReferredEmail}', '${cleanReferredName}', NOW())
+           ON CONFLICT (id) DO NOTHING`
+        );
+      } catch (dbErr: any) {
+        console.warn('[track-signup db write warning]:', dbErr.message);
+      }
+    }
+
+    // 2. Save in local referrals list
     const referrals = getLocalReferrals();
     const existingEntry = referrals.find(r => 
       (referredId && r.referredId === referredId) || 
-      (cleanReferredEmail && r.referredEmail.toLowerCase() === cleanReferredEmail)
+      (cleanReferredEmail && r.referredEmail && r.referredEmail.toLowerCase() === cleanReferredEmail)
     );
 
     if (!existingEntry) {
@@ -9744,60 +9771,9 @@ app.post('/api/referrals/track-signup', express.json(), async (req, res) => {
       };
       referrals.unshift(newRecord);
       saveLocalReferrals(referrals);
-
-      // If a signup reward is configured, credit the referrer immediately
-      if (signupReward > 0 && referrerId && !referrerId.startsWith('ref_usr_')) {
-        try {
-          const { data: curProf } = await supabase
-            .from('profiles')
-            .select('referral_balance, wallet_balance')
-            .eq('id', referrerId)
-            .maybeSingle();
-
-          if (curProf) {
-            await supabase.from('profiles').update({
-              referral_balance: Number(curProf.referral_balance || 0) + signupReward,
-              wallet_balance: Number(curProf.wallet_balance || 0) + signupReward,
-              updated_at: new Date().toISOString()
-            }).eq('id', referrerId);
-          }
-        } catch {}
-      }
-
-      // Attempt Supabase insert
-      try {
-        if (referredId && referrerId && !referrerId.startsWith('ref_usr_')) {
-          await supabase.from('referrals').insert({
-            referrer_id: referrerId,
-            referred_id: referredId,
-            converted: false
-          });
-          await supabase.from('profiles').update({
-            referred_by: referrerId,
-            referral_code_used: cleanCode
-          }).eq('id', referredId);
-        }
-      } catch {}
-
-      // Notify referrer via Email about candidate registration
-      if (referrerEmail) {
-        sendServerSmtpEmail(
-          referrerEmail,
-          `🎓 New Referral Registered: ${cleanReferredName} joined Scholars Resort!`,
-          `<div style="font-family: sans-serif; padding: 20px; line-height: 1.6; border: 1px solid #e2e8f0; border-radius: 12px;">
-             <h2 style="color: #4F46E5; margin-top: 0;">New Student Joined via Your Link!</h2>
-             <p>Hi ${referrerName},</p>
-             <p><strong>${cleanReferredName}</strong> just created an account using your referral link.</p>
-             <p>As soon as they activate their UTME CBT access, your wallet will automatically receive your <strong>₦${(config.rewardPerPaid || 500).toLocaleString()}</strong> referral commission.</p>
-             <p style="margin-top: 20px;">
-               <a href="https://scholarsresort.com/referrals" style="background: #4F46E5; color: white; padding: 10px 20px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">Track Your Referrals</a>
-             </p>
-           </div>`
-        ).catch(() => {});
-      }
     }
 
-    return res.json({ success: true, message: 'Referral tracking successfully registered.' });
+    return res.json({ success: true, message: 'Referral tracking successfully registered.', referrer: referrerName });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
   }
@@ -9829,195 +9805,154 @@ app.post('/api/referrals/convert-payment', express.json(), async (req, res) => {
   }
 });
 
-// 3. Get User Referral Stats & History
+// 3. Get User Referral Stats & History (Authoritative PostgreSQL Data with Auto-Reconciliation)
 app.get('/api/referrals/user/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
     const config = await getReferralConfig();
-    const allReferrals = getLocalReferrals();
-    const allPayouts = getLocalReferralPayouts();
 
-    // Query user's referral code from profiles if available
-    let referralCode = '';
-    let userName = 'Scholar';
-    let userEmail = '';
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, referral_code')
-        .eq('id', userId)
-        .maybeSingle();
+    let userProfile: any = null;
+    let dbReferrals: any[] = [];
+    let dbPayouts: any[] = [];
 
-      if (profile) {
-        userName = profile.full_name || 'Scholar';
-        userEmail = (profile.email || '').toLowerCase().trim();
-        referralCode = profile.referral_code || `SR-${(profile.full_name || 'SCHOLAR').substring(0, 4).toUpperCase()}-${userId.substring(0, 4).toUpperCase()}`;
-        
-        // Ensure referral_code is persisted to profiles
-        if (!profile.referral_code) {
-          supabase.from('profiles').update({ referral_code: referralCode }).eq('id', userId).then();
+    // Query user profile directly from PostgreSQL
+    if (pgPool) {
+      try {
+        const uRes = await pgPool.query(
+          `SELECT id, full_name, email, referral_code, referral_balance, wallet_balance FROM public.profiles WHERE id = '${userId}' LIMIT 1`
+        );
+        if (uRes.rows.length > 0) userProfile = uRes.rows[0];
+
+        // Ensure user has an active referral_code in database
+        if (userProfile && !userProfile.referral_code) {
+          const namePart = (userProfile.full_name || userProfile.email?.split('@')[0] || 'SCHOLAR').replace(/[^a-zA-Z0-9]/g, '').substring(0, 4).toUpperCase() || 'USER';
+          const idSuffix = userProfile.id.replace(/-/g, '').substring(0, 4).toUpperCase();
+          const generatedCode = `SR-${namePart}-${idSuffix}`;
+          await pgPool.query(`UPDATE public.profiles SET referral_code = '${generatedCode}' WHERE id = '${userId}'`);
+          userProfile.referral_code = generatedCode;
         }
-      }
-    } catch {}
 
-    if (!referralCode) {
-      referralCode = `SR-${userId.substring(0, 4).toUpperCase()}`;
+        // Query all referrals for this user from public.referrals joined with public.profiles
+        const rRes = await pgPool.query(
+          `SELECT r.id, r.referrer_id, r.referred_id, r.converted, r.reward_amount, r.status, 
+                  r.referred_email, r.referred_name, r.amount_paid, r.created_at, r.converted_at,
+                  p.full_name as profile_name, p.email as profile_email, p.has_paid as profile_has_paid
+           FROM public.referrals r
+           LEFT JOIN public.profiles p ON r.referred_id = p.id
+           WHERE r.referrer_id = '${userId}'
+           ORDER BY r.created_at DESC`
+        );
+        dbReferrals = rRes.rows || [];
+
+        // Query payout requests from public.payout_requests
+        const pRes = await pgPool.query(
+          `SELECT * FROM public.payout_requests WHERE user_id = '${userId}' ORDER BY created_at DESC`
+        );
+        dbPayouts = pRes.rows || [];
+      } catch (pgErr: any) {
+        console.warn('[User referrals pgPool query warning]:', pgErr.message);
+      }
     }
 
-    const cleanRefCode = referralCode.toUpperCase();
+    if (!userProfile) {
+      const { data: p } = await supabase.from('profiles').select('id, full_name, email, referral_code, referral_balance, wallet_balance').eq('id', userId).maybeSingle();
+      userProfile = p;
+    }
 
-    // Auto-heal and claim unlinked referrals that match this user's code, user ID, or email
-    let touchedLocal = false;
-    allReferrals.forEach(r => {
-      const isCodeMatch = (r.referrerCode && (
-        r.referrerCode.toUpperCase() === cleanRefCode ||
-        r.referrerCode.toUpperCase() === userId.toUpperCase() ||
-        (referralCode && r.referrerCode.toUpperCase() === referralCode.toUpperCase())
-      ));
-      const isIdMatch = (
-        r.referrerId === userId ||
-        r.referrerId === `ref_usr_${cleanRefCode}` ||
-        r.referrerId === `ref_usr_${userId.toUpperCase()}`
-      );
-      const isEmailMatch = Boolean(userEmail && r.referrerEmail && r.referrerEmail.toLowerCase() === userEmail);
+    const referralCode = userProfile?.referral_code || `SR-SCHOLAR-${userId.substring(0, 4).toUpperCase()}`;
+    const userName = userProfile?.full_name || 'Scholar';
 
-      if (isCodeMatch || isIdMatch || isEmailMatch) {
-        if (r.referrerId !== userId || (userEmail && !r.referrerEmail)) {
-          r.referrerId = userId;
-          r.referrerName = userName;
-          if (userEmail) r.referrerEmail = userEmail;
-          touchedLocal = true;
+    // Auto-reconciliation: Check if any student registered with referred_by = userId has paid but not yet converted
+    if (pgPool) {
+      try {
+        const referredStudentsRes = await pgPool.query(
+          `SELECT id, full_name, email, has_paid, created_at FROM public.profiles WHERE referred_by = '${userId}'`
+        );
+        for (const s of referredStudentsRes.rows) {
+          const existing = dbReferrals.find(dr => dr.referred_id === s.id);
+          if (!existing) {
+            // Student is referred in profile but not yet recorded in referrals table
+            const isPaid = !!s.has_paid;
+            const reward = isPaid ? config.rewardPerPaid : (config.rewardPerSignup || 0);
+            await pgPool.query(
+              `INSERT INTO public.referrals (id, referrer_id, referred_id, converted, reward_amount, status, referred_email, referred_name, created_at, converted_at)
+               VALUES (gen_random_uuid(), '${userId}', '${s.id}', ${isPaid}, ${reward}, '${isPaid ? 'completed' : 'pending'}', '${s.email}', '${s.full_name || 'Scholar'}', NOW(), ${isPaid ? 'NOW()' : 'NULL'})
+               ON CONFLICT (id) DO NOTHING`
+            );
+            if (isPaid) {
+              await pgPool.query(
+                `UPDATE public.profiles SET referral_balance = COALESCE(referral_balance, 0) + ${config.rewardPerPaid}, wallet_balance = COALESCE(wallet_balance, 0) + ${config.rewardPerPaid} WHERE id = '${userId}'`
+              );
+            }
+            dbReferrals.push({
+              id: `ref_${s.id}`,
+              referrer_id: userId,
+              referred_id: s.id,
+              converted: isPaid,
+              reward_amount: reward,
+              referred_email: s.email,
+              referred_name: s.full_name || 'Scholar Student',
+              created_at: s.created_at
+            });
+          } else if (s.has_paid && !existing.converted) {
+            // Student paid but referral row was not marked converted -> Convert now!
+            await pgPool.query(
+              `UPDATE public.referrals SET converted = true, status = 'completed', reward_amount = ${config.rewardPerPaid}, converted_at = NOW() WHERE id = '${existing.id}'`
+            );
+            await pgPool.query(
+              `UPDATE public.profiles SET referral_balance = COALESCE(referral_balance, 0) + ${config.rewardPerPaid}, wallet_balance = COALESCE(wallet_balance, 0) + ${config.rewardPerPaid} WHERE id = '${userId}'`
+            );
+            existing.converted = true;
+            existing.reward_amount = config.rewardPerPaid;
+          }
+        }
+      } catch (autoErr: any) {
+        console.warn('[Referral auto-reconciliation notice]:', autoErr.message);
+      }
+    }
+
+    // Merge in-memory local referrals as additional fallback
+    const localRefs = getLocalReferrals();
+    localRefs.forEach(lr => {
+      if (lr.referrerId === userId || lr.referrerCode === referralCode) {
+        if (!dbReferrals.some(dr => dr.referred_id === lr.referredId || dr.referred_email === lr.referredEmail)) {
+          dbReferrals.push({
+            id: lr.id,
+            referrer_id: userId,
+            referred_id: lr.referredId,
+            converted: lr.converted,
+            reward_amount: lr.rewardEarned || (lr.converted ? config.rewardPerPaid : 0),
+            referred_email: lr.referredEmail,
+            referred_name: lr.referredName,
+            created_at: lr.createdAt
+          });
         }
       }
     });
-    if (touchedLocal) saveLocalReferrals(allReferrals);
 
-    // Filter referrals for this user
-    let userReferrals = allReferrals.filter(r => 
-      r.referrerId === userId || 
-      r.referrerCode === cleanRefCode || 
-      (r.referrerCode && r.referrerCode.toUpperCase() === userId.toUpperCase())
-    );
+    const formattedReferrals = dbReferrals.map(r => ({
+      id: r.id,
+      referrerId: userId,
+      referrerCode: referralCode,
+      referredId: r.referred_id,
+      referredName: r.referred_name || r.profile_name || 'Scholar Student',
+      referredEmail: r.referred_email || r.profile_email || '',
+      converted: r.converted || r.profile_has_paid || false,
+      rewardEarned: (r.converted || r.profile_has_paid) ? (Number(r.reward_amount) || config.rewardPerPaid) : (config.rewardPerSignup || 0),
+      createdAt: r.created_at || new Date().toISOString()
+    }));
 
-    // Also merge from Supabase referrals table if any
-    try {
-      const { data: sbRefs } = await supabase
-        .from('referrals')
-        .select('id, created_at, converted, referred_id')
-        .eq('referrer_id', userId);
-
-      if (sbRefs && sbRefs.length > 0) {
-        const referredIds = sbRefs.map(r => r.referred_id);
-        const { data: profs } = await supabase
-          .from('profiles')
-          .select('id, full_name, email, has_paid, created_at')
-          .in('id', referredIds);
-
-        const profMap = new Map((profs || []).map(p => [p.id, p]));
-        sbRefs.forEach(sr => {
-          if (!userReferrals.some(ur => ur.referredId === sr.referred_id)) {
-            const p = profMap.get(sr.referred_id);
-            userReferrals.push({
-              id: sr.id,
-              referrerId: userId,
-              referrerCode: referralCode,
-              referredId: sr.referred_id,
-              referredName: p?.full_name || 'Scholar Student',
-              referredEmail: p?.email || '',
-              converted: sr.converted || p?.has_paid || false,
-              rewardEarned: (sr.converted || p?.has_paid) ? config.rewardPerPaid : 0,
-              createdAt: sr.created_at
-            });
-          }
-        });
-      }
-    } catch {}
-
-    // Auto-reconcile with database profiles: ensure any referred candidate with has_paid=true is converted
-    try {
-      const candidateIds = userReferrals.map(r => r.referredId).filter(Boolean);
-      const candidateEmails = userReferrals.map(r => r.referredEmail).filter(Boolean);
-      const paidCandidates = new Set<string>();
-
-      if (candidateIds.length > 0) {
-        const { data: profsById } = await supabase
-          .from('profiles')
-          .select('id, email, has_paid')
-          .in('id', candidateIds)
-          .eq('has_paid', true);
-        (profsById || []).forEach(p => {
-          paidCandidates.add(p.id);
-          if (p.email) paidCandidates.add(p.email.toLowerCase());
-        });
-      }
-
-      if (candidateEmails.length > 0) {
-        const { data: profsByEmail } = await supabase
-          .from('profiles')
-          .select('id, email, has_paid')
-          .in('email', candidateEmails)
-          .eq('has_paid', true);
-        (profsByEmail || []).forEach(p => {
-          paidCandidates.add(p.id);
-          if (p.email) paidCandidates.add(p.email.toLowerCase());
-        });
-      }
-
-      let stateModified = false;
-      let newlyEarnedRewards = 0;
-
-      userReferrals.forEach(r => {
-        const isPaid = (r.referredId && paidCandidates.has(r.referredId)) || 
-                       (r.referredEmail && paidCandidates.has(r.referredEmail.toLowerCase()));
-        if (isPaid && !r.converted) {
-          r.converted = true;
-          r.rewardEarned = config.rewardPerPaid;
-          r.convertedAt = new Date().toISOString();
-          newlyEarnedRewards += config.rewardPerPaid;
-          stateModified = true;
-        }
-      });
-
-      if (stateModified) {
-        saveLocalReferrals(allReferrals);
-
-        // Credit newly converted rewards into user's wallet in profiles
-        if (newlyEarnedRewards > 0) {
-          const { data: curProf } = await supabase
-            .from('profiles')
-            .select('referral_balance, wallet_balance')
-            .eq('id', userId)
-            .maybeSingle();
-
-          const updatedRefBal = Number(curProf?.referral_balance || 0) + newlyEarnedRewards;
-          const updatedWalletBal = Number(curProf?.wallet_balance || 0) + newlyEarnedRewards;
-
-          await supabase.from('profiles').update({
-            referral_balance: updatedRefBal,
-            wallet_balance: updatedWalletBal,
-            updated_at: new Date().toISOString()
-          }).eq('id', userId);
-        }
-      }
-    } catch (recErr) {
-      console.warn('[Referral auto-reconciliation notice]:', recErr);
-    }
-
-    // Calculate financials
-    const totalReferred = userReferrals.length;
-    const convertedCount = userReferrals.filter(r => r.converted).length;
+    const totalReferred = formattedReferrals.length;
+    const convertedCount = formattedReferrals.filter(r => r.converted).length;
     const totalEarned = (convertedCount * config.rewardPerPaid) + (totalReferred * (config.rewardPerSignup || 0));
 
-    // Filter user's payout requests
-    const userPayouts = allPayouts.filter(p => p.userId === userId);
-
-    const totalPaidOut = userPayouts
+    const totalPaidOut = dbPayouts
       .filter(p => p.status === 'approved')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-    const totalPending = userPayouts
+    const totalPending = dbPayouts
       .filter(p => p.status === 'pending')
-      .reduce((sum, p) => sum + (p.amount || 0), 0);
+      .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
     const availableBalance = Math.max(0, totalEarned - totalPaidOut - totalPending);
 
@@ -10032,8 +9967,8 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
       totalPaidOut,
       totalPending,
       availableBalance,
-      referrals: userReferrals,
-      payoutRequests: userPayouts
+      referrals: formattedReferrals,
+      payoutRequests: dbPayouts
     });
   } catch (err: any) {
     return res.status(500).json({ success: false, error: err.message });
@@ -10201,6 +10136,21 @@ app.post('/api/referrals/request-payout', express.json(), async (req, res) => {
 
     allPayouts.unshift(newPayout);
     saveLocalReferralPayouts(allPayouts);
+
+    // Direct PostgreSQL write to public.payout_requests
+    if (pgPool) {
+      try {
+        await pgPool.query(
+          `INSERT INTO public.payout_requests 
+           (id, user_id, amount, payout_type, bank_name, account_number, account_name, airtime_network, airtime_phone, status, created_at)
+           VALUES (gen_random_uuid(), '${userId}', ${reqAmount}, '${payoutType === 'airtime' ? 'airtime' : 'bank'}', 
+                   '${(bankName || '').replace(/'/g, "''")}', '${(accountNumber || '').replace(/'/g, "''")}', '${(accountName || '').replace(/'/g, "''")}',
+                   '${(airtimeNetwork || '').replace(/'/g, "''")}', '${(airtimePhone || '').replace(/'/g, "''")}', 'pending', NOW())`
+        );
+      } catch (pgErr: any) {
+        console.warn('[Direct DB payout request write warning]:', pgErr.message);
+      }
+    }
 
     // Sync with Supabase admin_settings
     try {
