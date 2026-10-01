@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Activity, Users, Zap, BookOpen, TrendingUp, Calendar, Trophy, ArrowUpRight, ArrowDownRight, Server, Database, AlertTriangle, ShieldCheck, Sparkles, Check, RefreshCw, GraduationCap } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { authFetch, getApiUrl } from '@/lib/apiAuth';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { toast } from 'sonner';
 import { DashboardOverview } from '@/components/admin/DashboardOverview';
@@ -73,12 +74,27 @@ export const DashboardTab = () => {
   const handleApprovePayment = async (paymentId: string, userId: string, amount: number) => {
     setApprovingId(paymentId);
     try {
-      const { error } = await supabase
+      // 1. Call Backend API to trigger authoritative Postgres update & referral conversion
+      try {
+        await authFetch(getApiUrl('/api/manual-payments/update-status'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            paymentId,
+            userId,
+            status: 'approved',
+            amount: amount || 3000
+          })
+        });
+      } catch (apiErr) {
+        console.warn('Backend payment status update notice:', apiErr);
+      }
+
+      // 2. Direct Supabase updates
+      await supabase
         .from('manual_payments')
         .update({ status: 'approved', approved_at: new Date().toISOString() })
         .eq('id', paymentId);
-
-      if (error) throw error;
 
       // Update profile access permissions
       await supabase

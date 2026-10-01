@@ -31,6 +31,12 @@ export interface Profile {
   created_at?: string;
   updated_at?: string;
   referral_code?: string;
+  referral_balance?: number | string;
+  wallet_balance?: number | string;
+  referred_by?: string;
+  referral_code_used?: string;
+  status?: string;
+  subscription_plan?: string;
 }
 
 interface AuthContextType {

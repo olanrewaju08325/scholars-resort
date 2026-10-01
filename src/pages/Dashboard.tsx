@@ -22,6 +22,7 @@ import { LearningProgressDashboard } from '@/components/dashboard/LearningProgre
 import { MistakeBankQuickCard } from '@/components/dashboard/MistakeBankQuickCard';
 import { PeerStudyRoomWidget } from '@/components/dashboard/PeerStudyRoomWidget';
 import { OfflineModeWidget } from '@/components/dashboard/OfflineModeWidget';
+import { ReferralWalletCard } from '@/components/dashboard/ReferralWalletCard';
 
 export default function Dashboard() {
   usePerfMonitoring('Dashboard');
@@ -73,6 +74,16 @@ export default function Dashboard() {
           className="min-w-0 w-full"
         >
           <WelcomeHero profile={profile} stats={stats} />
+        </motion.div>
+
+        {/* Referral & Rewards Wallet Quick Card */}
+        <motion.div 
+          initial={{ opacity: 0, y: 15 }} 
+          animate={{ opacity: 1, y: 0 }} 
+          transition={{ duration: 0.3, delay: 0.03 }} 
+          className="min-w-0 w-full"
+        >
+          <ReferralWalletCard profile={profile} />
         </motion.div>
 
         {/* 4 UTME Registered Subjects Quick Launcher */}

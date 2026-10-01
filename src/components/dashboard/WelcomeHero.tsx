@@ -1,6 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Target, CalendarDays, Zap, Flame } from 'lucide-react';
+import { Target, CalendarDays, Zap, Flame, Gift } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { calculateLevel } from '@/lib/gamification';
 
@@ -46,6 +46,13 @@ export const WelcomeHero = ({ profile, stats: _stats }: WelcomeHeroProps) => {
               <Zap className="w-3.5 h-3.5 fill-slate-950 text-slate-950" />
               <span>{(profile?.xp || 0).toLocaleString()} XP</span>
             </div>
+
+            {profile?.referral_balance != null && Number(profile.referral_balance) > 0 && (
+              <Link to="/referrals" className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-bold transition-all shadow-xs" title="Click to view referral earnings & withdrawal">
+                <Gift className="w-3.5 h-3.5 text-slate-950" />
+                <span>₦{Number(profile.referral_balance).toLocaleString()} Wallet</span>
+              </Link>
+            )}
           </div>
           
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-display font-extrabold tracking-tight text-primary-foreground">

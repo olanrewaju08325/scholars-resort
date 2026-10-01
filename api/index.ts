@@ -7708,14 +7708,28 @@ app.get('/api/profile/:id', async (req, res) => {
 
     let dbProf: any = null;
 
-    // 1. Attempt using scoped client with 3.5s timeout
-    try {
-      const queryPromise = dbClient.from('profiles').select('*').eq('id', id).maybeSingle();
-      const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 3500));
-      const { data: scopedProf } = await Promise.race([queryPromise, timeoutPromise]);
-      if (scopedProf) dbProf = scopedProf;
-    } catch (e: any) {
-      console.warn(`[API /api/profile/${id}] Scoped client exception:`, e?.message);
+    // 0. Primary direct PostgreSQL query via pgPool (fastest & authoritative)
+    if (pgPool) {
+      try {
+        const pgRes = await pgPool.query('SELECT * FROM public.profiles WHERE id = $1 LIMIT 1', [id]);
+        if (pgRes.rows.length > 0) {
+          dbProf = pgRes.rows[0];
+        }
+      } catch (pgErr: any) {
+        console.warn(`[API /api/profile/${id}] pgPool error:`, pgErr.message);
+      }
+    }
+
+    // 1. Attempt using scoped client with 3.5s timeout (if not found in pgPool)
+    if (!dbProf) {
+      try {
+        const queryPromise = dbClient.from('profiles').select('*').eq('id', id).maybeSingle();
+        const timeoutPromise = new Promise<any>((resolve) => setTimeout(() => resolve({ data: null, error: new Error('Timeout') }), 3500));
+        const { data: scopedProf } = await Promise.race([queryPromise, timeoutPromise]);
+        if (scopedProf) dbProf = scopedProf;
+      } catch (e: any) {
+        console.warn(`[API /api/profile/${id}] Scoped client exception:`, e?.message);
+      }
     }
 
     // 2. Fallback to base server client if scoped query failed or timed out
@@ -9563,8 +9577,24 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
     if (referrerProfile) {
       const paidAmount = Number(amountPaid || 3000);
 
-      // A. Update Referrer Wallet Balance in PostgreSQL
+      // Check if this referral was already converted to avoid double-crediting
+      let alreadyConverted = false;
       if (pgPool) {
+        try {
+          const checkRef = await pgPool.query(
+            `SELECT id, converted FROM public.referrals 
+             WHERE referrer_id = '${referrerProfile.id}' 
+               AND (referred_id = '${effectiveStudentId}' OR (referred_email IS NOT NULL AND LOWER(referred_email) = '${effectiveStudentEmail}'))
+             LIMIT 1`
+          );
+          if (checkRef.rows.length > 0 && checkRef.rows[0].converted) {
+            alreadyConverted = true;
+          }
+        } catch {}
+      }
+
+      // A. Update Referrer Wallet Balance in PostgreSQL (only if not already converted)
+      if (pgPool && !alreadyConverted) {
         try {
           await pgPool.query(
             `UPDATE public.profiles 
@@ -9573,17 +9603,58 @@ async function triggerReferralConversion(userId: string, userEmail?: string, amo
                  updated_at = NOW() 
              WHERE id = '${referrerProfile.id}'`
           );
-
-          // B. Upsert into public.referrals
-          await pgPool.query(
-            `INSERT INTO public.referrals (id, referrer_id, referred_id, converted, reward_amount, status, referred_email, referred_name, amount_paid, converted_at, created_at)
-             VALUES (gen_random_uuid(), '${referrerProfile.id}', '${effectiveStudentId}', true, ${reward}, 'completed', '${effectiveStudentEmail}', '${effectiveStudentName}', ${paidAmount}, NOW(), NOW())
-             ON CONFLICT (id) DO NOTHING`
-          );
         } catch (dbErr: any) {
           console.warn('[Direct DB referral conversion write notice]:', dbErr.message);
         }
       }
+
+      // B. Update existing referral or insert into public.referrals
+      if (pgPool) {
+        try {
+          const existingRef = await pgPool.query(
+            `SELECT id FROM public.referrals 
+             WHERE (referred_id IS NOT NULL AND referred_id = '${effectiveStudentId}')
+                OR (referred_email IS NOT NULL AND LOWER(referred_email) = '${effectiveStudentEmail}')
+             LIMIT 1`
+          );
+          if (existingRef.rows.length > 0) {
+            await pgPool.query(
+              `UPDATE public.referrals 
+               SET referrer_id = '${referrerProfile.id}',
+                   converted = true,
+                   reward_amount = ${reward},
+                   status = 'completed',
+                   amount_paid = ${paidAmount},
+                   referred_email = '${effectiveStudentEmail}',
+                   referred_name = '${effectiveStudentName}',
+                   converted_at = NOW()
+               WHERE id = '${existingRef.rows[0].id}'`
+            );
+          } else {
+            await pgPool.query(
+              `INSERT INTO public.referrals (id, referrer_id, referred_id, converted, reward_amount, status, referred_email, referred_name, amount_paid, converted_at, created_at)
+               VALUES (gen_random_uuid(), '${referrerProfile.id}', '${effectiveStudentId}', true, ${reward}, 'completed', '${effectiveStudentEmail}', '${effectiveStudentName}', ${paidAmount}, NOW(), NOW())`
+            );
+          }
+
+          // Ensure student has_paid is true in PostgreSQL
+          await pgPool.query(
+            `UPDATE public.profiles 
+             SET has_paid = true, subscription_plan = 'Lifetime Premium', updated_at = NOW() 
+             WHERE id = '${effectiveStudentId}' OR (email IS NOT NULL AND LOWER(email) = '${effectiveStudentEmail}')`
+          );
+        } catch (dbErr: any) {
+          console.warn('[Direct DB referral upsert notice]:', dbErr.message);
+        }
+      }
+
+      // C. Also update Supabase student has_paid
+      try {
+        await supabase
+          .from('profiles')
+          .update({ has_paid: true, subscription_plan: 'Lifetime Premium', updated_at: new Date().toISOString() })
+          .eq('id', effectiveStudentId);
+      } catch {}
 
       // C. Update in-memory local list
       if (localIdx !== -1) {
@@ -9930,21 +10001,33 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
       }
     });
 
-    const formattedReferrals = dbReferrals.map(r => ({
-      id: r.id,
-      referrerId: userId,
-      referrerCode: referralCode,
-      referredId: r.referred_id,
-      referredName: r.referred_name || r.profile_name || 'Scholar Student',
-      referredEmail: r.referred_email || r.profile_email || '',
-      converted: r.converted || r.profile_has_paid || false,
-      rewardEarned: (r.converted || r.profile_has_paid) ? (Number(r.reward_amount) || config.rewardPerPaid) : (config.rewardPerSignup || 0),
-      createdAt: r.created_at || new Date().toISOString()
-    }));
+    // Deduplicate referrals by referred_id or referred_email (favoring completed ones)
+    const seenReferred = new Map<string, any>();
+    for (const r of dbReferrals) {
+      const key = (r.referred_id || r.referred_email || r.id || '').toLowerCase();
+      const isConverted = Boolean(r.converted || r.profile_has_paid);
+      if (!seenReferred.has(key) || (!seenReferred.get(key).converted && isConverted)) {
+        seenReferred.set(key, {
+          id: r.id,
+          referrerId: userId,
+          referrerCode: referralCode,
+          referredId: r.referred_id,
+          referredName: r.referred_name || r.profile_name || 'Scholar Student',
+          referredEmail: r.referred_email || r.profile_email || '',
+          converted: isConverted,
+          rewardEarned: isConverted ? (Number(r.reward_amount) || config.rewardPerPaid) : (config.rewardPerSignup || 0),
+          createdAt: r.created_at || new Date().toISOString()
+        });
+      }
+    }
+
+    const formattedReferrals = Array.from(seenReferred.values());
 
     const totalReferred = formattedReferrals.length;
     const convertedCount = formattedReferrals.filter(r => r.converted).length;
-    const totalEarned = (convertedCount * config.rewardPerPaid) + (totalReferred * (config.rewardPerSignup || 0));
+    const computedEarned = (convertedCount * config.rewardPerPaid) + (totalReferred * (config.rewardPerSignup || 0));
+    const profileBalance = Number(userProfile?.referral_balance || userProfile?.wallet_balance || 0);
+    const totalEarned = Math.max(computedEarned, profileBalance);
 
     const totalPaidOut = dbPayouts
       .filter(p => p.status === 'approved')
@@ -9954,7 +10037,13 @@ app.get('/api/referrals/user/:userId', async (req, res) => {
       .filter(p => p.status === 'pending')
       .reduce((sum, p) => sum + Number(p.amount || 0), 0);
 
-    const availableBalance = Math.max(0, totalEarned - totalPaidOut - totalPending);
+    const availableBalance = Math.max(
+      0, 
+      Math.max(
+        totalEarned - totalPaidOut - totalPending,
+        profileBalance - totalPaidOut - totalPending
+      )
+    );
 
     return res.json({
       success: true,

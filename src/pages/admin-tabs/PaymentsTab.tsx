@@ -125,7 +125,7 @@ export const PaymentsTab = () => {
   const handleVerify = async (paymentId: string, userId: string, amount: number, planType: string) => {
     try {
       // 1. Call Backend API
-      await authFetch('/api/manual-payments/update-status', {
+      await authFetch(getApiUrl('/api/manual-payments/update-status'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -215,7 +215,7 @@ export const PaymentsTab = () => {
       "Reject this manual payment submission?",
       async () => {
         // 1. Call Backend API
-        await authFetch('/api/manual-payments/update-status', {
+        await authFetch(getApiUrl('/api/manual-payments/update-status'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

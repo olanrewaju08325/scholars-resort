@@ -83,6 +83,8 @@ export const Referrals = () => {
   const [referralsList, setReferralsList] = useState<any[]>([]);
   const [payoutRequests, setPayoutRequests] = useState<PayoutRequest[]>([]);
   const [topReferrers, setTopReferrers] = useState<TopReferrer[]>([]);
+  const [serverBalance, setServerBalance] = useState<number | null>(null);
+  const [serverEarned, setServerEarned] = useState<number | null>(null);
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [submittingWithdrawal, setSubmittingWithdrawal] = useState(false);
 
@@ -138,14 +140,29 @@ export const Referrals = () => {
               });
             }
             if (data.referralCode) setReferralCode(data.referralCode);
+            if (data.availableBalance !== undefined && data.availableBalance !== null) {
+              setServerBalance(Number(data.availableBalance));
+            }
+            if (data.totalEarned !== undefined && data.totalEarned !== null) {
+              setServerEarned(Number(data.totalEarned));
+            }
             if (Array.isArray(data.referrals)) {
-              setReferralsList(data.referrals.map((r: any) => ({
-                id: r.id,
-                created_at: r.createdAt || r.created_at,
-                converted: r.converted,
-                name: r.referredName || 'UTME Student',
-                email: r.referredEmail ? `${r.referredEmail.substring(0, 3)}***@${r.referredEmail.split('@')[1] || 'email.com'}` : 'Anonymous'
-              })));
+              const seen = new Set<string>();
+              const deduped: any[] = [];
+              for (const r of data.referrals) {
+                const key = (r.referredId || r.referredEmail || r.id || '').toLowerCase();
+                if (!seen.has(key)) {
+                  seen.add(key);
+                  deduped.push({
+                    id: r.id,
+                    created_at: r.createdAt || r.created_at,
+                    converted: Boolean(r.converted),
+                    name: r.referredName || 'UTME Student',
+                    email: r.referredEmail ? `${r.referredEmail.substring(0, 3)}***@${r.referredEmail.split('@')[1] || 'email.com'}` : 'Anonymous'
+                  });
+                }
+              }
+              setReferralsList(deduped);
             }
             if (Array.isArray(data.payoutRequests)) {
               setPayoutRequests(data.payoutRequests.map((p: any) => ({
@@ -266,19 +283,24 @@ export const Referrals = () => {
   }, [user, profile]);
 
   // Derived financial computations
+  const profileBalance = Number(profile?.referral_balance ?? profile?.wallet_balance ?? 0);
   const totalReferred = referralsList.length;
   const convertedCount = referralsList.filter(r => r.converted).length;
-  const totalEarned = convertedCount * config.rewardPerPaid;
+  const computedEarned = convertedCount * config.rewardPerPaid;
+  const totalEarned = Math.max(computedEarned, serverEarned ?? 0, profileBalance);
   
   const totalPaidOut = payoutRequests
     .filter(req => req.status === 'approved')
-    .reduce((sum, req) => sum + (req.amount || 0), 0);
+    .reduce((sum, req) => sum + (Number(req.amount) || 0), 0);
   
   const totalPending = payoutRequests
     .filter(req => req.status === 'pending')
-    .reduce((sum, req) => sum + (req.amount || 0), 0);
+    .reduce((sum, req) => sum + (Number(req.amount) || 0), 0);
 
-  const availableBalance = Math.max(0, totalEarned - totalPaidOut - totalPending);
+  const calculatedBalance = Math.max(0, totalEarned - totalPaidOut - totalPending);
+  const availableBalance = serverBalance !== null 
+    ? Math.max(serverBalance, calculatedBalance, profileBalance - totalPaidOut - totalPending)
+    : Math.max(calculatedBalance, profileBalance - totalPaidOut - totalPending);
 
   // Copy Link Handler
   const handleCopy = () => {
