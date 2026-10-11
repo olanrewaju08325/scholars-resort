@@ -2,8 +2,19 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark, CheckSquare, Square, Search, Zap, Upload, FileUp, X, Lock, Unlock, ShieldAlert } from 'lucide-react';
-import { fetchJambBooks, saveJambBooks, fetchLiteratureLockStatus, saveLiteratureLockStatus, uploadTextbookFileToSupabaseStorage } from '@/services/novelService';
+import { BookOpen, Plus, Trash2, Edit3, Save, RefreshCw, HelpCircle, Layers, Bookmark, CheckSquare, Square, Search, Zap, Upload, FileUp, X, Lock, Unlock, ShieldAlert, Sparkles, Sliders, CheckCircle2, BookMarked, Library } from 'lucide-react';
+import { 
+  fetchJambBooks, 
+  saveJambBooks, 
+  fetchLiteratureLockStatus, 
+  saveLiteratureLockStatus, 
+  uploadTextbookFileToSupabaseStorage,
+  fetchRecommendedTextsExamConfig,
+  saveRecommendedTextsExamConfig,
+  generateNovelQuestionsWithAI,
+  type RecommendedTextsExamConfig,
+  DEFAULT_RECOMMENDED_TEXTS_CONFIG
+} from '@/services/novelService';
 import type { LiteratureBook, NovelChapter, NovelQuestion } from '@/data/jambNovelsData';
 import { DeleteConfirmationDialog } from '@/components/DeleteConfirmationDialog';
 import { VirtualList } from '@/components/VirtualList';
@@ -69,6 +80,32 @@ export const AdminLiteratureTab = () => {
     isDeleting: false
   });
 
+  // Recommended Texts Exam Config
+  const [recConfig, setRecConfig] = useState<RecommendedTextsExamConfig>(DEFAULT_RECOMMENDED_TEXTS_CONFIG);
+  const [savingRecConfig, setSavingRecConfig] = useState(false);
+
+  // AI Question Generation Modal State
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiTextSource, setAiTextSource] = useState<'chapter' | 'custom'>('chapter');
+  const [customAiText, setCustomAiText] = useState('');
+  const [aiQuestionCount, setAiQuestionCount] = useState(5);
+  const [aiFocusType, setAiFocusType] = useState('comprehensive');
+  const [generatingAi, setGeneratingAi] = useState(false);
+  const [generatedQuestionsPreview, setGeneratedQuestionsPreview] = useState<NovelQuestion[]>([]);
+
+  // Manual Custom Question Authoring Modal (Without AI)
+  const [customQModalOpen, setCustomQModalOpen] = useState(false);
+  const [customQText, setCustomQText] = useState('');
+  const [customQPassage, setCustomQPassage] = useState('');
+  const [customQOptionA, setCustomQOptionA] = useState('');
+  const [customQOptionB, setCustomQOptionB] = useState('');
+  const [customQOptionC, setCustomQOptionC] = useState('');
+  const [customQOptionD, setCustomQOptionD] = useState('');
+  const [customQCorrect, setCustomQCorrect] = useState<'A' | 'B' | 'C' | 'D'>('A');
+  const [customQExplanation, setCustomQExplanation] = useState('');
+  const [customQTargetChapterId, setCustomQTargetChapterId] = useState<number>(1);
+  const [editingCustomQIndex, setEditingCustomQIndex] = useState<number | null>(null);
+
   // Delete Dialog State
   const [deleteConfig, setDeleteConfig] = useState<{
     isOpen: boolean;
@@ -95,6 +132,10 @@ export const AdminLiteratureTab = () => {
       setIsLiteratureLocked(lockData.isLocked);
       if (lockData.lockReason) setLockReason(lockData.lockReason);
 
+      // Fetch recommended texts CBT exam config
+      const examCfg = await fetchRecommendedTextsExamConfig();
+      setRecConfig(examCfg);
+
       const data = await fetchJambBooks();
       setBooks(data);
       if (data.length > 0) {
@@ -102,6 +143,7 @@ export const AdminLiteratureTab = () => {
         if (data[0].chapters.length > 0) {
           setSelectedChapterId(data[0].chapters[0].id);
           setEditingChapter({ ...data[0].chapters[0] });
+          setCustomQTargetChapterId(data[0].chapters[0].id);
         }
       }
     } catch {
@@ -159,6 +201,161 @@ export const AdminLiteratureTab = () => {
     } else {
       toast.error(`Error: ${res.error}`);
     }
+  };
+
+  const handleSaveRecConfig = async () => {
+    setSavingRecConfig(true);
+    const res = await saveRecommendedTextsExamConfig(recConfig);
+    setSavingRecConfig(false);
+    if (res.success) {
+      toast.success('JAMB Mock CBT Recommended Texts integration settings saved successfully!');
+      logAdminActivity('UPDATE_LITERATURE_CBT_CONFIG', `Updated recommended texts in Use of English mock (${recConfig.includeNovelInEnglishMock ? 'Enabled' : 'Disabled'}, ${recConfig.novelQuestionCountInEnglish} Qs)`);
+    } else {
+      toast.error(`Failed to save CBT settings: ${res.error}`);
+    }
+  };
+
+  const handleOpenCustomQModal = (existingQ?: NovelQuestion, existingIndex?: number) => {
+    if (existingQ && existingIndex !== undefined) {
+      setCustomQText(existingQ.question);
+      setCustomQPassage(existingQ.passage || '');
+      setCustomQOptionA(existingQ.options[0]?.replace(/^[A-D]\)\s*/, '') || '');
+      setCustomQOptionB(existingQ.options[1]?.replace(/^[A-D]\)\s*/, '') || '');
+      setCustomQOptionC(existingQ.options[2]?.replace(/^[A-D]\)\s*/, '') || '');
+      setCustomQOptionD(existingQ.options[3]?.replace(/^[A-D]\)\s*/, '') || '');
+      setCustomQCorrect((existingQ.correct as any) || 'A');
+      setCustomQExplanation(existingQ.explanation || '');
+      setEditingCustomQIndex(existingIndex);
+    } else {
+      setCustomQText('');
+      setCustomQPassage(editingChapter?.summary?.slice(0, 200) || '');
+      setCustomQOptionA('');
+      setCustomQOptionB('');
+      setCustomQOptionC('');
+      setCustomQOptionD('');
+      setCustomQCorrect('A');
+      setCustomQExplanation('');
+      setEditingCustomQIndex(null);
+    }
+    setCustomQTargetChapterId(selectedChapterId);
+    setCustomQModalOpen(true);
+  };
+
+  const handleSaveCustomManualQuestion = async () => {
+    if (!customQText.trim()) {
+      toast.error('Question text is required.');
+      return;
+    }
+    if (!customQOptionA.trim() || !customQOptionB.trim() || !customQOptionC.trim() || !customQOptionD.trim()) {
+      toast.error('All 4 options (A, B, C, D) are required for authentic JAMB format.');
+      return;
+    }
+    if (!currentBook) return;
+
+    const formattedQ: NovelQuestion = {
+      id: `custom_q_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+      question: customQText.trim(),
+      passage: customQPassage.trim() || undefined,
+      options: [
+        customQOptionA.trim().startsWith('A)') ? customQOptionA.trim() : `A) ${customQOptionA.trim()}`,
+        customQOptionB.trim().startsWith('B)') ? customQOptionB.trim() : `B) ${customQOptionB.trim()}`,
+        customQOptionC.trim().startsWith('C)') ? customQOptionC.trim() : `C) ${customQOptionC.trim()}`,
+        customQOptionD.trim().startsWith('D)') ? customQOptionD.trim() : `D) ${customQOptionD.trim()}`
+      ],
+      correct: customQCorrect,
+      explanation: customQExplanation.trim() || `Reference: ${currentBook.title}`,
+      bookTitle: currentBook.title,
+      chapterTitle: editingChapter?.title || undefined
+    };
+
+    const targetChId = customQTargetChapterId || selectedChapterId;
+    const updatedBooks = books.map(b => {
+      if (b.id === selectedBookId) {
+        return {
+          ...b,
+          chapters: b.chapters.map(c => {
+            if (c.id === targetChId) {
+              const prevQs = [...(c.sampleQuestions || [])];
+              if (editingCustomQIndex !== null) {
+                prevQs[editingCustomQIndex] = formattedQ;
+              } else {
+                prevQs.unshift(formattedQ);
+              }
+              return { ...c, sampleQuestions: prevQs };
+            }
+            return c;
+          })
+        };
+      }
+      return b;
+    });
+
+    setBooks(updatedBooks);
+    const targetCh = updatedBooks.find(b => b.id === selectedBookId)?.chapters.find(c => c.id === targetChId);
+    if (targetCh) setEditingChapter({ ...targetCh });
+
+    await handleSaveAll(updatedBooks);
+    setCustomQModalOpen(false);
+    toast.success(editingCustomQIndex !== null ? 'Question updated successfully!' : 'Personal custom question created and added to book!');
+  };
+
+  const handleRunAIGeneration = async () => {
+    const context = aiTextSource === 'chapter' ? (editingChapter?.summary || currentBook?.description || '') : customAiText;
+    if (!context || context.trim().length < 20) {
+      toast.error('Please provide at least 20 characters of textbook content or chapter summary for the AI.');
+      return;
+    }
+    setGeneratingAi(true);
+    try {
+      const generated = await generateNovelQuestionsWithAI({
+        bookTitle: currentBook?.title || 'Prescribed Novel',
+        chapterTitle: editingChapter?.title || 'Chapter Excerpt',
+        contextText: context,
+        questionCount: aiQuestionCount,
+        focusType: aiFocusType
+      });
+      setGeneratedQuestionsPreview(generated);
+      if (generated.length > 0) {
+        toast.success(`Synthesized ${generated.length} JAMB-standard questions! Review and save below.`);
+      } else {
+        toast.info('No questions generated. Check excerpt and try again.');
+      }
+    } catch (err: any) {
+      toast.error(`Generation failed: ${err.message}`);
+    } finally {
+      setGeneratingAi(false);
+    }
+  };
+
+  const handleAddGeneratedQuestionsToBook = async () => {
+    if (generatedQuestionsPreview.length === 0 || !editingChapter || !currentBook) return;
+
+    const updatedBooks = books.map(b => {
+      if (b.id === selectedBookId) {
+        return {
+          ...b,
+          chapters: b.chapters.map(c => {
+            if (c.id === editingChapter.id) {
+              return {
+                ...c,
+                sampleQuestions: [...generatedQuestionsPreview, ...(c.sampleQuestions || [])]
+              };
+            }
+            return c;
+          })
+        };
+      }
+      return b;
+    });
+
+    setBooks(updatedBooks);
+    const refreshed = updatedBooks.find(b => b.id === selectedBookId)?.chapters.find(c => c.id === editingChapter.id);
+    if (refreshed) setEditingChapter({ ...refreshed });
+
+    await handleSaveAll(updatedBooks);
+    setAiModalOpen(false);
+    setGeneratedQuestionsPreview([]);
+    toast.success(`Successfully saved ${generatedQuestionsPreview.length} questions into "${currentBook.title}" (${editingChapter.title})!`);
   };
 
   const handleUpdateChapterField = (field: keyof NovelChapter, value: any) => {
@@ -693,6 +890,137 @@ export const AdminLiteratureTab = () => {
         </div>
       </div>
 
+      {/* JAMB Mock CBT Integration Engine Card */}
+      <Card className="border-border bg-card shadow-sm">
+        <CardHeader className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent border-b border-border pb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div>
+              <CardTitle className="text-base font-bold flex items-center gap-2">
+                <Sliders className="w-4 h-4 text-primary" /> JAMB Mock CBT Recommended Texts Integration Engine
+              </CardTitle>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Configure whether questions from prescribed novels and literature texts automatically appear in the Full Mock CBT exams for Use of English & Literature in English.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={handleSaveRecConfig}
+              disabled={savingRecConfig}
+              className="bg-primary hover:bg-primary/90 text-xs font-bold gap-1.5 shrink-0"
+            >
+              <Save className="w-3.5 h-3.5" />
+              {savingRecConfig ? 'Saving...' : 'Save CBT Exam Settings'}
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-5 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Section 1: Use of English (Compulsory Novel) */}
+            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <BookOpen className="w-4 h-4 text-primary" />
+                  <span>Use of English: Compulsory Novel</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={recConfig.includeNovelInEnglishMock}
+                    onChange={(e) => setRecConfig(prev => ({ ...prev, includeNovelInEnglishMock: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                When enabled, the full mock exam for Use of English seamlessly includes questions directly from the active prescribed novel as Section A.
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">
+                    Questions Count in Mock
+                  </label>
+                  <Input
+                    type="number"
+                    min={5}
+                    max={25}
+                    value={recConfig.novelQuestionCountInEnglish}
+                    onChange={(e) => setRecConfig(prev => ({ ...prev, novelQuestionCountInEnglish: Number(e.target.value) || 10 }))}
+                    className="h-8 text-xs font-bold"
+                  />
+                  <span className="text-[10px] text-muted-foreground mt-0.5 block">Default: 10 Qs (Out of 60 total)</span>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">
+                    Active Prescribed Novel
+                  </label>
+                  <select
+                    value={recConfig.activeEnglishNovelId}
+                    onChange={(e) => setRecConfig(prev => ({ ...prev, activeEnglishNovelId: e.target.value }))}
+                    className="w-full h-8 text-xs font-semibold rounded-md border border-border bg-background px-2"
+                  >
+                    {books.map(b => (
+                      <option key={b.id} value={b.id}>{b.title} ({b.genre})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-background/80 border border-border text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>Structure: <strong>{recConfig.novelQuestionCountInEnglish} Novel Qs</strong> + <strong>{60 - recConfig.novelQuestionCountInEnglish} Grammar/Lexis Qs</strong></span>
+                <span className="font-bold text-primary">= 60 Questions Total</span>
+              </div>
+            </div>
+
+            {/* Section 2: Literature in English */}
+            <div className="p-4 rounded-xl border border-secondary/20 bg-secondary/5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-bold text-sm text-foreground">
+                  <Library className="w-4 h-4 text-primary" />
+                  <span>Literature in English: Prescribed Texts</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={recConfig.includePrescribedTextsInLitMock}
+                    onChange={(e) => setRecConfig(prev => ({ ...prev, includePrescribedTextsInLitMock: e.target.checked }))}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                </label>
+              </div>
+
+              <p className="text-xs text-muted-foreground">
+                Integrates African/Non-African prose, drama, and poetry questions into the Literature in English CBT mock.
+              </p>
+
+              <div>
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wide block mb-1">
+                  Prescribed Questions Count
+                </label>
+                <Input
+                  type="number"
+                  min={5}
+                  max={30}
+                  value={recConfig.litPrescribedQuestionCount}
+                  onChange={(e) => setRecConfig(prev => ({ ...prev, litPrescribedQuestionCount: Number(e.target.value) || 15 }))}
+                  className="h-8 text-xs font-bold max-w-[200px]"
+                />
+                <span className="text-[10px] text-muted-foreground mt-0.5 block">Default: 15 Qs (Out of 40 total)</span>
+              </div>
+
+              <div className="p-2.5 rounded-lg bg-background/80 border border-border text-[11px] text-muted-foreground flex items-center justify-between">
+                <span>Structure: <strong>{recConfig.litPrescribedQuestionCount} Prescribed Qs</strong> + <strong>{40 - recConfig.litPrescribedQuestionCount} Literary Appreciation Qs</strong></span>
+                <span className="font-bold text-primary">= 40 Questions Total</span>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Book Tabs & Upload Button */}
       <div className="flex items-center justify-between gap-2 overflow-x-auto pb-2 no-scrollbar">
         <div className="flex gap-2 items-center flex-wrap">
@@ -960,8 +1288,23 @@ export const AdminLiteratureTab = () => {
                             <><Square className="w-3.5 h-3.5" /> Select All</>
                           )}
                         </Button>
-                        <Button size="sm" onClick={handleAddQuestion} className="h-7 text-xs font-bold gap-1 bg-primary">
-                          <Plus className="w-3.5 h-3.5" /> Add Question
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleOpenCustomQModal()} 
+                          className="h-7 text-xs font-bold gap-1 bg-emerald-600 hover:bg-emerald-500 text-white shadow-xs"
+                        >
+                          <Plus className="w-3.5 h-3.5" /> + Custom Question (Manual)
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          onClick={() => {
+                            setAiModalOpen(true);
+                            setGeneratedQuestionsPreview([]);
+                            setCustomAiText(editingChapter.summary || '');
+                          }} 
+                          className="h-7 text-xs font-bold gap-1 bg-gradient-to-r from-amber-600 to-primary hover:opacity-95 text-white shadow-xs"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> ⚡ Generate with AI
                         </Button>
                       </div>
                     </div>
@@ -1056,14 +1399,25 @@ export const AdminLiteratureTab = () => {
                                     className="text-xs font-bold bg-background h-8"
                                     placeholder="Enter JAMB style question..."
                                   />
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-500/10 shrink-0"
-                                    onClick={() => openDeleteQuestionModal(qIdx, q.question)}
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </Button>
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      title="Edit in Dialog"
+                                      className="h-7 w-7 text-primary hover:bg-primary/10"
+                                      onClick={() => handleOpenCustomQModal(q, qIdx)}
+                                    >
+                                      <Edit3 className="w-3.5 h-3.5" />
+                                    </Button>
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-7 w-7 text-red-400 hover:text-red-600 hover:bg-red-500/10 shrink-0"
+                                      onClick={() => openDeleteQuestionModal(qIdx, q.question)}
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </Button>
+                                  </div>
                                 </div>
 
                                 {/* Options */}
@@ -1424,6 +1778,306 @@ export const AdminLiteratureTab = () => {
                   <Save className="w-4 h-4 mr-1.5" /> Save Changes
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Manual Custom Question Authoring Modal (Without AI) */}
+      {customQModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-border w-full max-w-2xl rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-emerald-500" />
+                  {editingCustomQIndex !== null ? 'Edit Question' : 'Create Custom Question (Without AI)'}
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Author your own personal JAMB-style question for "{currentBook?.title}".
+                </p>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => setCustomQModalOpen(false)} className="h-8 w-8">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="font-bold text-muted-foreground block mb-1">Target Chapter / Section</label>
+                <select
+                  value={customQTargetChapterId}
+                  onChange={(e) => setCustomQTargetChapterId(Number(e.target.value))}
+                  className="w-full h-9 rounded-md border border-border bg-background px-3 font-semibold"
+                >
+                  {currentBook?.chapters.map(c => (
+                    <option key={c.id} value={c.id}>Ch {c.chapterNumber || c.id}: {c.title}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="font-bold text-muted-foreground block mb-1">Reading Passage / Excerpt (Optional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Paste excerpt or quote from the novel that students must read before answering..."
+                  value={customQPassage}
+                  onChange={(e) => setCustomQPassage(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background p-2.5 font-medium resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="font-bold text-muted-foreground block mb-1">Question Text *</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. What major event in Chapter 2 led to Talle's unexpected arrest in Lafayette?"
+                  value={customQText}
+                  onChange={(e) => setCustomQText(e.target.value)}
+                  className="w-full rounded-md border border-input bg-background p-2.5 font-medium resize-none font-bold"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Option A *</label>
+                  <Input
+                    placeholder="Enter Option A..."
+                    value={customQOptionA}
+                    onChange={(e) => setCustomQOptionA(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Option B *</label>
+                  <Input
+                    placeholder="Enter Option B..."
+                    value={customQOptionB}
+                    onChange={(e) => setCustomQOptionB(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Option C *</label>
+                  <Input
+                    placeholder="Enter Option C..."
+                    value={customQOptionC}
+                    onChange={(e) => setCustomQOptionC(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Option D *</label>
+                  <Input
+                    placeholder="Enter Option D..."
+                    value={customQOptionD}
+                    onChange={(e) => setCustomQOptionD(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Correct Option *</label>
+                  <select
+                    value={customQCorrect}
+                    onChange={(e) => setCustomQCorrect(e.target.value as any)}
+                    className="w-full h-9 rounded-md border border-border bg-background px-3 font-bold text-green-500"
+                  >
+                    <option value="A">Option A</option>
+                    <option value="B">Option B</option>
+                    <option value="C">Option C</option>
+                    <option value="D">Option D</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="font-bold text-muted-foreground block mb-1">Pedagogical Explanation *</label>
+                  <Input
+                    placeholder="Why this answer is correct based on the prescribed text..."
+                    value={customQExplanation}
+                    onChange={(e) => setCustomQExplanation(e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end items-center gap-2 pt-3 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setCustomQModalOpen(false)}>Cancel</Button>
+              <Button size="sm" onClick={handleSaveCustomManualQuestion} className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold gap-1.5">
+                <Save className="w-3.5 h-3.5" /> Save Question to Book
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Question Generation Modal */}
+      {aiModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-card border border-border w-full max-w-3xl rounded-2xl shadow-2xl p-6 space-y-4 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between border-b border-border pb-3">
+              <div>
+                <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary animate-pulse" />
+                  Generate Questions with AI from Prescribed Text
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Synthesize authentic JAMB UTME questions using AI from "{currentBook?.title}".
+                </p>
+              </div>
+              <Button size="icon" variant="ghost" onClick={() => setAiModalOpen(false)} className="h-8 w-8">
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Source Material</label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAiTextSource('chapter')}
+                      className={`flex-1 py-1.5 px-3 rounded-md font-bold border transition-colors ${
+                        aiTextSource === 'chapter' ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 border-border text-muted-foreground'
+                      }`}
+                    >
+                      Chapter Summary ({editingChapter?.title || 'Chapter'})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAiTextSource('custom')}
+                      className={`flex-1 py-1.5 px-3 rounded-md font-bold border transition-colors ${
+                        aiTextSource === 'custom' ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 border-border text-muted-foreground'
+                      }`}
+                    >
+                      Upload / Paste Text
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="font-bold text-muted-foreground block mb-1">Questions Count</label>
+                    <select
+                      value={aiQuestionCount}
+                      onChange={(e) => setAiQuestionCount(Number(e.target.value))}
+                      className="w-full h-9 rounded-md border border-border bg-background px-3 font-semibold"
+                    >
+                      <option value={5}>5 Questions</option>
+                      <option value={10}>10 Questions</option>
+                      <option value={15}>15 Questions</option>
+                      <option value={20}>20 Questions</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-muted-foreground block mb-1">Question Focus</label>
+                    <select
+                      value={aiFocusType}
+                      onChange={(e) => setAiFocusType(e.target.value)}
+                      className="w-full h-9 rounded-md border border-border bg-background px-3 font-semibold"
+                    >
+                      <option value="comprehensive">JAMB Comprehensive Mix</option>
+                      <option value="plot">Plot & Major Events</option>
+                      <option value="characters">Character Analysis</option>
+                      <option value="themes">Themes & Moral Lessons</option>
+                      <option value="literary_devices">Literary Devices & Figures</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {aiTextSource === 'custom' ? (
+                <div>
+                  <label className="font-bold text-muted-foreground block mb-1">Textbook Excerpt / Notes *</label>
+                  <textarea
+                    rows={4}
+                    placeholder="Paste paragraphs or scenes from the textbook here for the AI to analyze..."
+                    value={customAiText}
+                    onChange={(e) => setCustomAiText(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background p-2.5 font-medium resize-none"
+                  />
+                </div>
+              ) : (
+                <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                  <p className="font-bold text-foreground mb-1">Current Chapter Summary Excerpt:</p>
+                  <p className="text-muted-foreground italic line-clamp-3">
+                    {editingChapter?.summary || 'No chapter summary recorded.'}
+                  </p>
+                </div>
+              )}
+
+              <Button
+                onClick={handleRunAIGeneration}
+                disabled={generatingAi}
+                className="w-full bg-gradient-to-r from-primary to-amber-600 hover:opacity-90 text-white font-bold gap-2 h-10 shadow-sm"
+              >
+                {generatingAi ? (
+                  <><RefreshCw className="w-4 h-4 animate-spin" /> Synthesizing JAMB Questions with AI...</>
+                ) : (
+                  <><Sparkles className="w-4 h-4" /> Generate {aiQuestionCount} Questions</>
+                )}
+              </Button>
+
+              {/* Preview Section */}
+              {generatedQuestionsPreview.length > 0 && (
+                <div className="space-y-3 pt-3 border-t border-border">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-extrabold text-foreground flex items-center gap-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                      Generated Questions Preview ({generatedQuestionsPreview.length})
+                    </h4>
+                    <Button
+                      size="sm"
+                      onClick={handleAddGeneratedQuestionsToBook}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs gap-1.5 shadow-sm"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Save All to Book
+                    </Button>
+                  </div>
+
+                  <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
+                    {generatedQuestionsPreview.map((gq, idx) => (
+                      <div key={idx} className="p-3 rounded-xl border border-border bg-card space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-bold text-foreground">
+                            <span className="text-primary font-mono mr-1">Q{idx + 1}.</span> {gq.question}
+                          </p>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => setGeneratedQuestionsPreview(prev => prev.filter((_, i) => i !== idx))}
+                            className="h-6 w-6 text-red-400 hover:text-red-600 shrink-0"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                        {gq.passage && (
+                          <p className="text-[11px] text-muted-foreground italic border-l-2 border-primary/40 pl-2">
+                            "{gq.passage}"
+                          </p>
+                        )}
+                        <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                          {gq.options.map((opt, oIdx) => {
+                            const letter = String.fromCharCode(65 + oIdx);
+                            const isCorrect = gq.correct === letter;
+                            return (
+                              <div key={oIdx} className={`p-1.5 rounded border ${isCorrect ? 'border-emerald-500/50 bg-emerald-500/10 font-bold text-emerald-700 dark:text-emerald-300' : 'border-border text-muted-foreground'}`}>
+                                {opt}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          <strong>Explanation:</strong> {gq.explanation}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-border">
+              <Button variant="outline" size="sm" onClick={() => setAiModalOpen(false)}>Close</Button>
             </div>
           </div>
         </div>

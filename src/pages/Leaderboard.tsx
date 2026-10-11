@@ -30,6 +30,7 @@ const Leaderboard = () => {
   const { profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPeriod, setFilterPeriod] = useState<'weekly' | 'monthly' | 'all'>('monthly');
+  const [filterCategory, setFilterCategory] = useState<'proctored' | 'practice'>('proctored');
   const [prizeConfig, setPrizeConfig] = useState(DEFAULT_PRIZE_CONFIG);
 
   const fetchPrizeConfig = async () => {
@@ -68,7 +69,6 @@ const Leaderboard = () => {
   useEffect(() => {
     fetchPrizeConfig();
 
-    // Subscribe to real-time changes on admin_settings
     const settingsChannel = supabase
       .channel('realtime_leaderboard_admin_settings')
       .on('postgres_changes', {
@@ -88,9 +88,9 @@ const Leaderboard = () => {
 
   const { data: boardData, loading, refetch } = useLiveFetch<any[]>(
     async () => {
-      // 1. Try server-side verified leaderboard API first
+      // 1. Try server-side verified partitioned leaderboard API first
       try {
-        const res = await fetch(`/api/leaderboard?period=${filterPeriod}`);
+        const res = await fetch(`/api/leaderboard?period=${filterPeriod}&category=${filterCategory}`);
         if (res.ok) {
           const json = await res.json();
           if (json?.success && Array.isArray(json.rankings)) {
@@ -101,13 +101,16 @@ const Leaderboard = () => {
         console.warn('[Leaderboard API Notice]', apiErr);
       }
 
-      // 2. Direct Supabase query fallback (100% Real verified data)
+      // 2. Direct Supabase query fallback
       let query = supabase
         .from('exam_sessions')
         .select('user_id, score, total_questions, status, started_at')
         .gt('score', 0);
 
-      // Period filter
+      if (filterCategory === 'proctored') {
+        query = query.gte('total_questions', 40);
+      }
+
       if (filterPeriod === 'weekly') {
         const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
         query = query.gte('started_at', oneWeekAgo);
@@ -123,7 +126,6 @@ const Leaderboard = () => {
       const validExams = (exams || []).filter(e => e.status === 'submitted' || e.status === 'completed' || !e.status);
       const userIds = Array.from(new Set(validExams.map(e => e.user_id).filter(Boolean)));
 
-      // Fetch real student profiles
       const { data: profiles } = userIds.length > 0 
         ? await supabase.from('profiles').select('id, full_name, avatar_url, target_score, phone').in('id', userIds)
         : { data: [] };
@@ -133,18 +135,14 @@ const Leaderboard = () => {
 
       validExams.forEach(exam => {
         const currentBest = userBestScores.get(exam.user_id)?.score || 0;
-        
-        // Realistic JAMB / UTME Scaled Scoring Logic
         let calculatedScore = 0;
         const totalQ = Number(exam.total_questions) || 1;
         const rawScore = Number(exam.score) || 0;
         const accuracy = Math.min(rawScore / totalQ, 1);
 
         if (totalQ >= 40) {
-          // Full UTME Mock or Subject Exam: Standard scaled score out of 400
           calculatedScore = Math.min(400, Math.round(accuracy * 400));
         } else {
-          // Practice drill or speed test with fewer questions: weighted score reflecting session size
           const volumeWeight = Math.min(totalQ / 40, 1);
           calculatedScore = Math.min(360, Math.round((accuracy * 0.75 + volumeWeight * 0.25) * 360));
         }
@@ -175,13 +173,13 @@ const Leaderboard = () => {
         .map((student, i) => ({
           ...student,
           rank: i + 1,
-          prize: i === 0 ? firstPrize : i === 1 ? secondPrize : i === 2 ? thirdPrize : null
+          prize: filterCategory === 'proctored' ? (i === 0 ? firstPrize : i === 1 ? secondPrize : i === 2 ? thirdPrize : null) : null
         }));
 
       return { data: sortedBoard, error: null };
     },
     {
-      contextName: `GlobalLeaderboard_${filterPeriod}`,
+      contextName: `GlobalLeaderboard_${filterPeriod}_${filterCategory}`,
       fallbackData: []
     }
   );
@@ -254,6 +252,30 @@ const Leaderboard = () => {
           <p className="text-muted-foreground max-w-2xl mx-auto mb-6">
             Real-time top performers from UTME Mock Exams & CBT Drills. Scores and prizes are configured live from the administrative command center.
           </p>
+
+          {/* Category Partition Tabs */}
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <button
+              onClick={() => setFilterCategory('proctored')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                filterCategory === 'proctored'
+                  ? 'bg-amber-500 text-slate-950 border-amber-600 shadow-md font-extrabold'
+                  : 'bg-card text-muted-foreground border-border hover:text-foreground'
+              }`}
+            >
+              <Trophy className="w-3.5 h-3.5" /> Proctored Official Mocks (Cash Prizes Eligible)
+            </button>
+            <button
+              onClick={() => setFilterCategory('practice')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${
+                filterCategory === 'practice'
+                  ? 'bg-primary text-primary-foreground border-primary shadow-md font-extrabold'
+                  : 'bg-card text-muted-foreground border-border hover:text-foreground'
+              }`}
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Practice Drills & Warmups
+            </button>
+          </div>
 
           {/* Period Filter Selector */}
           <div className="inline-flex items-center p-1 bg-muted rounded-xl border border-border gap-1 mb-6">

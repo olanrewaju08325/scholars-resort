@@ -115,6 +115,8 @@ function AppContent() {
               <Route path="/flashcards" element={<Flashcards />} />
               <Route path="/library" element={<Library />} />
               <Route path="/novel-hub" element={<JambNovelHub />} />
+              <Route path="/novel-practice" element={<JambNovelHub />} />
+              <Route path="/literature-hub" element={<JambNovelHub />} />
               <Route path="/journey-map" element={<EducationalJourneyMapPage />} />
               <Route path="/my-learning" element={<EducationalJourneyMapPage />} />
               <Route path="/adaptive-path" element={<AdaptiveLearningPathPage />} />

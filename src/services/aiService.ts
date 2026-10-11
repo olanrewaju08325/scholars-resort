@@ -395,11 +395,10 @@ export const callGroqAPI = async (messages: any, model = 'openai/gpt-oss-120b', 
   const candidateModels = [
     model,
     'openai/gpt-oss-120b',
-    'openai/gpt-oss-20b',
     'qwen/qwen3.8-27b',
-    'groq/compound-mini',
-    'groq/compound',
-    'qwen/qwen3.6-27b'
+    'openai/gpt-oss-20b',
+    'llama-3.3-70b-versatile',
+    'llama-3.1-8b-instant'
   ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
   // 1. Primary: Server Proxy (/api/groq-chat) which uses Server env or Supabase DB keys securely

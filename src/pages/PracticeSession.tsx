@@ -1016,6 +1016,21 @@ D) ...
               transition={{ duration: 0.18, ease: "easeOut" }}
             >
               <div className="cbt-question-content text-base sm:text-lg md:text-xl mb-8 leading-relaxed font-medium space-y-4">
+                {(q.book_title || q.passage || (q as any).passage_text) && (
+                  <div className="rounded-xl border border-primary/25 bg-primary/5 dark:bg-primary/10 p-3.5 md:p-5 mb-4 text-sm md:text-base">
+                    <div className="flex items-center gap-2 font-semibold text-primary mb-2 text-xs md:text-sm">
+                      <BookOpen className="w-4 h-4 shrink-0" />
+                      <span>{q.book_title ? `Prescribed Text: ${q.book_title}` : 'Reading Passage / Comprehension'}</span>
+                      {q.chapter_title && <span className="text-muted-foreground font-normal">({q.chapter_title})</span>}
+                    </div>
+                    {(q.passage || (q as any).passage_text) && (
+                      <div className="text-foreground/90 leading-relaxed italic border-l-2 border-primary/40 pl-3.5 py-1 text-xs md:text-sm whitespace-pre-line">
+                        {q.passage || (q as any).passage_text}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="prose-cbt-text overflow-x-auto max-w-full">
                   <MathText text={cleanQuestionText(q.question_text || q.question)} subject={activeSubject} />
                 </div>

@@ -95,8 +95,8 @@ export const ReferralTab = () => {
         if (data.success) {
           if (data.config) {
             const nextConfig = {
-              rewardPerPaid: Number(data.config.rewardPerPaid) || 500,
-              minWithdrawal: Number(data.config.minWithdrawal) || 2000,
+              rewardPerPaid: data.config.rewardPerPaid !== undefined ? Number(data.config.rewardPerPaid) : 500,
+              minWithdrawal: data.config.minWithdrawal !== undefined ? Number(data.config.minWithdrawal) : 2000,
               isActive: data.config.isActive !== false,
               programTitle: data.config.programTitle || 'UTME Student Referral & Ambassador Program',
               programDescription: data.config.programDescription || 'Earn cash rewards for every UTME candidate you invite.'
@@ -135,8 +135,8 @@ export const ReferralTab = () => {
           ? JSON.parse(configRow.setting_value)
           : configRow.setting_value;
         const nextConfig = {
-          rewardPerPaid: Number(parsed.rewardPerPaid) || 500,
-          minWithdrawal: Number(parsed.minWithdrawal) || 2000,
+          rewardPerPaid: parsed.rewardPerPaid !== undefined ? Number(parsed.rewardPerPaid) : 500,
+          minWithdrawal: parsed.minWithdrawal !== undefined ? Number(parsed.minWithdrawal) : 2000,
           isActive: parsed.isActive !== false,
           programTitle: parsed.programTitle || 'UTME Student Referral & Ambassador Program',
           programDescription: parsed.programDescription || 'Earn cash rewards for every UTME candidate you invite.'

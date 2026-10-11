@@ -9,7 +9,7 @@ import {
   Timer, BrainCircuit, Calendar, Swords, BookOpen, 
   History, Trophy, Target, Zap, RotateCcw, Monitor, CheckCircle2, ArrowRight,
   CheckCircle, XCircle, AlertCircle, Trash2, Filter, Sparkles, ChevronDown, ChevronUp,
-  Loader2, PlayCircle, Play
+  Loader2, PlayCircle, Play, BookMarked
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
@@ -205,6 +205,7 @@ export default function CBTCenter() {
 
   const practiceModes = [
     { title: 'Subject Practice', desc: 'Focus on a single subject (e.g. Physics)', icon: BookOpen, color: 'text-blue-500', bg: 'bg-blue-500/10', path: '/practice?mode=subject' },
+    { title: 'Prescribed Novel & Texts Drill', desc: 'Master Section A novel & literature questions with timed drills.', icon: BookMarked, color: 'text-amber-500', bg: 'bg-amber-500/10', path: '/novel-hub' },
     { title: 'Topic Drill', desc: 'Master specific topics (e.g. Kinematics)', icon: Target, color: 'text-green-500', bg: 'bg-green-500/10', path: '/practice?mode=topic' },
     { title: 'Speed Test', desc: '20 questions in 10 minutes. Test your reflexes.', icon: Zap, color: 'text-yellow-500', bg: 'bg-yellow-500/10', path: '/practice?mode=speed' },
     { title: 'Daily Quiz', desc: 'Your personalized 15-minute daily challenge.', icon: Calendar, color: 'text-purple-500', bg: 'bg-purple-500/10', path: '/practice?mode=daily' },

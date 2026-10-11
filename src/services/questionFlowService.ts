@@ -10,6 +10,7 @@ import {
   OFFICIAL_JAMB_SUBJECTS, 
   isUUID 
 } from '@/utils/subjectUtils';
+import { fetchRecommendedTextsExamConfig, getExamNovelQuestions } from '@/services/novelService';
 
 export const QUESTION_SELECT_FIELDS = 'id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_active, year, created_at, subjects!questions_subject_id_fkey(id, name), topics(id, name)';
 export const QUESTION_FLAT_FIELDS = 'id, subject_id, topic_id, question_text, options, correct_answer, explanation, difficulty, is_active, year, created_at';
@@ -21,7 +22,8 @@ export type ExamMode =
   | 'full_mock' 
   | 'daily_quiz' 
   | 'past_questions' 
-  | 'ai_generated_mock';
+  | 'ai_generated_mock'
+  | 'novel_drill';
 
 export interface ModeQuestionQueryConfig {
   mode: ExamMode;
@@ -325,6 +327,50 @@ export class QuestionFlowService {
                 warnings.push(`Specific ${config.difficulty} difficulty questions being expanded for ${canonical}; presenting standard difficulty set.`);
               }
             }
+
+            // Integrate Prescribed Novel or Prescribed Literature Texts if enabled
+            try {
+              const recConfig = await fetchRecommendedTextsExamConfig();
+              if (canonical === 'Use of English' && recConfig.includeNovelInEnglishMock) {
+                const targetNovelCount = Math.min(10, Math.max(3, Math.round(targetCount * 0.25)));
+                const novelQs = await getExamNovelQuestions('Use of English', targetNovelCount);
+                if (novelQs.length > 0) {
+                  const dbRemainder = (rawQuestions || []).slice(0, Math.max(0, targetCount - novelQs.length));
+                  rawQuestions = [...novelQs, ...dbRemainder];
+                }
+              } else if (canonical === 'Literature in English' && recConfig.includePrescribedTextsInLitMock) {
+                const targetLitCount = Math.min(15, Math.max(4, Math.round(targetCount * 0.35)));
+                const litQs = await getExamNovelQuestions('Literature in English', targetLitCount);
+                if (litQs.length > 0) {
+                  const dbRemainder = (rawQuestions || []).slice(0, Math.max(0, targetCount - litQs.length));
+                  rawQuestions = [...litQs, ...dbRemainder];
+                }
+              }
+            } catch (recErr) {
+              console.warn('Prescribed text integration notice in subject practice:', recErr);
+            }
+            break;
+          }
+
+          case 'novel_drill': {
+            const subId = config.subjectId || 'Use of English';
+            const canonical = normalizeSubjectName(subId);
+            const isLit = canonical.toLowerCase().includes('lit') || subId.toLowerCase().includes('lit');
+            const targetSubject = isLit ? 'Literature in English' : 'Use of English';
+            subjectsQueried.push(`Prescribed Texts (${targetSubject})`);
+
+            const novelQs = await getExamNovelQuestions(targetSubject as any, targetCount || 20);
+            if (novelQs.length > 0) {
+              rawQuestions = novelQs;
+            } else {
+              // Fallback to general subject questions if no specific novel questions exist yet
+              const matchedIds = await resolveSubjectIdsByNameOrAlias(targetSubject);
+              const validUuids = matchedIds.filter(isUUID);
+              let query = supabase.from('questions').select(QUESTION_SELECT_FIELDS).eq('is_active', true);
+              if (validUuids.length > 0) query = query.in('subject_id', validUuids);
+              const { data } = await query.limit(targetCount || 20);
+              rawQuestions = data || [];
+            }
             break;
           }
 
@@ -473,6 +519,25 @@ export class QuestionFlowService {
 
             const subjectPromises = finalSubjects.map(async (subjName) => {
               const limit = subjName === 'Use of English' ? 60 : 40;
+              let novelQs: any[] = [];
+              let dbLimitNeeded = limit;
+
+              // Check if Recommended Novel / Prescribed Texts should be included
+              try {
+                const recConfig = await fetchRecommendedTextsExamConfig();
+                if (subjName === 'Use of English' && recConfig.includeNovelInEnglishMock) {
+                  const targetNovelCount = Math.min(20, Math.max(5, recConfig.novelQuestionCountInEnglish || 10));
+                  novelQs = await getExamNovelQuestions('Use of English', targetNovelCount);
+                  dbLimitNeeded = Math.max(30, limit - novelQs.length);
+                } else if (subjName === 'Literature in English' && recConfig.includePrescribedTextsInLitMock) {
+                  const targetLitCount = Math.min(25, Math.max(5, recConfig.litPrescribedQuestionCount || 15));
+                  novelQs = await getExamNovelQuestions('Literature in English', targetLitCount);
+                  dbLimitNeeded = Math.max(15, limit - novelQs.length);
+                }
+              } catch (recErr) {
+                console.warn('Prescribed text integration notice:', recErr);
+              }
+
               const matchedIds = await resolveSubjectIdsByNameOrAlias(subjName);
               const validUuids = matchedIds.filter(isUUID);
 
@@ -488,14 +553,17 @@ export class QuestionFlowService {
               const { data, error } = await subQuery.limit(limit * 2);
               if (error) {
                 warnings.push(`Failed querying ${subjName} for mock: ${error.message}`);
-                return [];
+                return novelQs;
               }
               
-              const shuffled = (data || []).sort(() => Math.random() - 0.5).slice(0, limit);
-              return shuffled.map(q => ({
+              const shuffledDb = (data || []).sort(() => Math.random() - 0.5).slice(0, dbLimitNeeded);
+              const formattedDb = shuffledDb.map(q => ({
                 ...q,
                 subject_name: subjName
               }));
+
+              // Novel questions appear as Section A of the mock, followed by general questions
+              return [...novelQs, ...formattedDb];
             });
 
             const results = await Promise.all(subjectPromises);
@@ -535,8 +603,25 @@ export class QuestionFlowService {
 
             const subjectPromises = finalSubjects.map(async (subjName) => {
               const totalNeeded = subjName === 'Use of English' ? 60 : 40;
-              const aiCount = aiRatioPercent > 0 ? Math.min(8, Math.max(2, Math.round(totalNeeded * (aiRatioPercent / 100)))) : 0;
-              const dbCountNeeded = totalNeeded - aiCount;
+              let novelQs: any[] = [];
+
+              // Check if Recommended Novel / Prescribed Texts should be included
+              try {
+                const recConfig = await fetchRecommendedTextsExamConfig();
+                if (subjName === 'Use of English' && recConfig.includeNovelInEnglishMock) {
+                  const targetNovelCount = Math.min(20, Math.max(5, recConfig.novelQuestionCountInEnglish || 10));
+                  novelQs = await getExamNovelQuestions('Use of English', targetNovelCount);
+                } else if (subjName === 'Literature in English' && recConfig.includePrescribedTextsInLitMock) {
+                  const targetLitCount = Math.min(25, Math.max(5, recConfig.litPrescribedQuestionCount || 15));
+                  novelQs = await getExamNovelQuestions('Literature in English', targetLitCount);
+                }
+              } catch (recErr) {
+                console.warn('Prescribed text integration notice in AI mock:', recErr);
+              }
+
+              const remainingTotal = Math.max(10, totalNeeded - novelQs.length);
+              const aiCount = aiRatioPercent > 0 ? Math.min(8, Math.max(2, Math.round(remainingTotal * (aiRatioPercent / 100)))) : 0;
+              const dbCountNeeded = remainingTotal - aiCount;
 
               // 1. Fetch DB past questions
               const matchedIds = await resolveSubjectIdsByNameOrAlias(subjName);
@@ -582,14 +667,15 @@ export class QuestionFlowService {
               }
 
               // Combine AI questions and DB questions to reach totalNeeded
-              const finalDbSlice = dbPool.slice(0, totalNeeded - aiQuestions.length).map(q => ({
+              const finalDbSlice = dbPool.slice(0, Math.max(0, dbCountNeeded)).map(q => ({
                 ...q,
                 subject_name: subjName,
                 is_ai_generated: false
               }));
 
               const mergedSubjQuestions = [...aiQuestions, ...finalDbSlice];
-              return mergedSubjQuestions.sort(() => Math.random() - 0.5);
+              const shuffledSubj = mergedSubjQuestions.sort(() => Math.random() - 0.5);
+              return [...novelQs, ...shuffledSubj];
             });
 
             const results = await Promise.all(subjectPromises);
@@ -728,10 +814,16 @@ export class QuestionFlowService {
         return sanitizeQuestionForRendering(q);
       });
       
-      // Shuffle and slice to target count (unless empty)
-      const finalQuestions = (config.mode === 'full_mock' || config.mode === 'ai_generated_mock')
-        ? normalizedList // Keep subject-ordered grouping for mocks
-        : normalizedList.sort(() => Math.random() - 0.5).slice(0, targetCount);
+      // Preserve Section A (prescribed novel / passage questions) at the front if present
+      let finalQuestions = normalizedList;
+      if (config.mode === 'full_mock' || config.mode === 'ai_generated_mock' || config.mode === 'novel_drill') {
+        finalQuestions = normalizedList.slice(0, targetCount);
+      } else {
+        const novelSection = normalizedList.filter(q => q.book_title || q.passage);
+        const standardSection = normalizedList.filter(q => !q.book_title && !q.passage);
+        const shuffledStandard = standardSection.sort(() => Math.random() - 0.5);
+        finalQuestions = [...novelSection, ...shuffledStandard].slice(0, targetCount);
+      }
 
       // Preload available explanations and automatically route questions without detailed explanations to AI enrichment
       if (finalQuestions.length > 0) {

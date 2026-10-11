@@ -91,10 +91,10 @@ export async function authFetch(url: string, options: RequestInit = {}): Promise
       networkTimeout: true
     });
 
-    // Return safe fallback response object to prevent UI crashes
+    // Return safe fallback response object with error status code
     return new Response(
       JSON.stringify({ success: false, error: netErr?.message || 'Network request failed' }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
+      { status: 503, headers: { 'Content-Type': 'application/json' } }
     );
   }
 }

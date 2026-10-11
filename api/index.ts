@@ -1945,7 +1945,79 @@ app.post('/api/cbt/check-answer', async (req, res) => {
   }
 });
 
-// API Route: Secure CBT Session Submission
+// API Route: Secure CBT Session Start & Question Sanitization (Server-Side Cheat Protection)
+app.post('/api/cbt/start-session', async (req, res) => {
+  try {
+    const { mode = 'exam', subjects = [], targetQuestions = 180, sessionId: requestedSessionId, questionIds } = req.body;
+    let userId: string | null = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.split(' ')[1]?.trim();
+        if (token) {
+          const { data: { user } } = await supabase.auth.getUser(token);
+          if (user?.id) userId = user.id;
+        }
+      } catch (_) {}
+    }
+
+    const sessionId = requestedSessionId || crypto.randomUUID();
+    const db = getScopedSupabaseClient(req) || supabase;
+
+    // Record verified session start server-side
+    if (userId) {
+      try {
+        await db.from('exam_sessions').upsert({
+          id: sessionId,
+          user_id: userId,
+          status: 'in_progress',
+          mode: mode || 'exam',
+          score: 0,
+          total_questions: Number(targetQuestions) || 180,
+          started_at: new Date().toISOString(),
+          is_ai_tutor_locked: true
+        });
+      } catch (sessErr: any) {
+        console.warn('[Start Session Upsert Notice]', sessErr?.message);
+      }
+    }
+
+    // Server-Side Question Sanitization:
+    // Strip correct_answer and explanation so answers NEVER leak in DevTools or memory
+    let sanitizedQuestions: any[] = [];
+    if (Array.isArray(questionIds) && questionIds.length > 0) {
+      const { data: qRows } = await db
+        .from('questions')
+        .select('id, subject_id, topic_id, question_text, options, difficulty, year, is_active, subjects!questions_subject_id_fkey(id, name), topics(id, name)')
+        .in('id', questionIds);
+
+      sanitizedQuestions = (qRows || []).map((q: any) => ({
+        id: q.id,
+        subject_id: q.subject_id,
+        topic_id: q.topic_id,
+        question_text: q.question_text,
+        options: q.options,
+        difficulty: q.difficulty,
+        year: q.year,
+        is_active: q.is_active,
+        subjects: q.subjects,
+        topics: q.topics
+      }));
+    }
+
+    return res.json({
+      success: true,
+      sessionId,
+      sanitizedQuestions,
+      message: 'Exam session initialized securely. Questions sanitized against client tampering.'
+    });
+  } catch (err: any) {
+    console.error('[API /api/cbt/start-session Error]', err);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// API Route: Secure CBT Session Submission (Authoritative Server-Side Grading)
 app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
   const { sessionId, mode, answers, timeSpentSeconds, subjectId, isPractice } = req.body;
   const userId = (req as any).user.id;
@@ -1960,10 +2032,10 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
     const questionsMap: Record<string, any> = {};
     
     if (questionIds.length > 0) {
-      // Securely fetch correct answers and options from the database
+      // Securely fetch correct answers, options, and pedagogical explanations from the database
       const { data: questions, error } = await db
         .from('questions')
-        .select('id, correct_answer, options')
+        .select('id, correct_answer, options, explanation')
         .in('id', questionIds);
         
       if (error) throw error;
@@ -1973,7 +2045,7 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
       });
     }
 
-    let score = 0;
+    let rawScore = 0;
     const totalQuestions = questionIds.length;
     const sessionAnswersInsert = [];
 
@@ -1982,7 +2054,7 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
       const q = questionsMap[qId];
       const isCorrect = q ? backendCheckIsCorrect(studentAns, q) : false;
       
-      if (isCorrect) score++;
+      if (isCorrect) rawScore++;
 
       sessionAnswersInsert.push({
         user_id: userId,
@@ -1994,7 +2066,12 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
       });
     }
 
-    // Persist answers securely on the server
+    // Standard UTME Scaled Score (out of 400)
+    const scaledScore = totalQuestions > 0 
+      ? Math.min(400, Math.round((rawScore / totalQuestions) * 400))
+      : rawScore;
+
+    // Persist individual answer audit trail securely
     if (sessionAnswersInsert.length > 0) {
       const { error: insertError } = await db.from('session_answers').insert(sessionAnswersInsert);
       if (insertError) {
@@ -2002,11 +2079,12 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
       }
     }
 
-    // Update session status and score
+    // Authoritative Server-Side Update of exam_sessions
     if (sessionId) {
       const { error: updateError } = await db.from('exam_sessions').update({
         status: 'completed',
-        score: score,
+        score: scaledScore,
+        raw_score: rawScore,
         total_questions: totalQuestions,
         submitted_at: new Date().toISOString()
       }).eq('id', sessionId);
@@ -2014,14 +2092,17 @@ app.post('/api/cbt/submit-session', verifyUserToken, async (req, res) => {
       if (updateError) console.warn('[Secure Scoring] Error updating session:', updateError.message);
     }
 
+    // Now securely disclose correct answers and explanations for the review interface
     return res.json({
       success: true,
-      score,
+      score: scaledScore,
+      rawScore,
       totalQuestions,
       results: Object.keys(answers).map(qId => ({
         id: qId,
         is_correct: questionsMap[qId] ? backendCheckIsCorrect(answers[qId], questionsMap[qId]) : false,
-        correct_answer: questionsMap[qId]?.correct_answer
+        correct_answer: questionsMap[qId]?.correct_answer || '',
+        explanation: questionsMap[qId]?.explanation || 'Review your syllabus study notes for this question.'
       }))
     });
   } catch (err: any) {
@@ -2168,11 +2249,10 @@ app.post('/api/groq-chat', async (req, res) => {
     const candidateModels = [
       model,
       'openai/gpt-oss-120b',
-      'openai/gpt-oss-20b',
       'qwen/qwen3.8-27b',
-      'groq/compound-mini',
-      'groq/compound',
-      'qwen/qwen3.6-27b'
+      'openai/gpt-oss-20b',
+      'llama-3.3-70b-versatile',
+      'llama-3.1-8b-instant'
     ].filter(Boolean).filter((m, i, arr) => arr.indexOf(m) === i);
 
     if (groqKey && groqKey.trim()) {
@@ -4256,16 +4336,23 @@ app.post('/api/admin/materials/delete', verifyAdminToken, async (req, res) => {
   }
 });
 
-// API Route: Global Leaderboard (100% Real Student Data with RLS Bypass)
+// API Route: Global Leaderboard (Partitioned for Proctored Official Mocks vs Practice & Drills)
 app.get('/api/leaderboard', async (req, res) => {
   try {
     const period = String(req.query.period || 'all').toLowerCase();
+    const category = String(req.query.category || req.query.type || 'proctored').toLowerCase();
     
     // 1. Fetch real completed/submitted exam sessions
     let query = supabase
       .from('exam_sessions')
-      .select('user_id, score, total_questions, status, created_at')
+      .select('user_id, score, total_questions, status, mode, created_at')
       .gt('score', 0);
+
+    // Partition logic:
+    // Proctored Official Mocks require full mock scale (>= 40 questions), preventing casual or offline drills from claiming cash prizes
+    if (category === 'proctored') {
+      query = query.gte('total_questions', 40);
+    }
 
     if (period === 'weekly') {
       const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -4292,7 +4379,7 @@ app.get('/api/leaderboard', async (req, res) => {
       : { data: [] };
 
     const profileMap = new Map((profiles || []).map(p => [p.id, p]));
-    const userBestScores = new Map<string, { id: string; name: string; score: number; hasPhone: boolean; accuracy: number; totalExams: number }>();
+    const userBestScores = new Map<string, { id: string; name: string; score: number; hasPhone: boolean; accuracy: number; totalExams: number; isProctored: boolean }>();
 
     validExams.forEach(exam => {
       const totalQ = Number(exam.total_questions) || 1;
@@ -4322,7 +4409,8 @@ app.get('/api/leaderboard', async (req, res) => {
           score: calculatedScore,
           hasPhone: Boolean(prof?.phone),
           accuracy: Math.round(accuracy * 100),
-          totalExams: (existing?.totalExams || 0) + 1
+          totalExams: (existing?.totalExams || 0) + 1,
+          isProctored: totalQ >= 40
         });
       } else {
         existing.totalExams += 1;
@@ -4349,12 +4437,14 @@ app.get('/api/leaderboard', async (req, res) => {
       .map((student, idx) => ({
         ...student,
         rank: idx + 1,
-        prize: idx === 0 ? firstPrize : idx === 1 ? secondPrize : idx === 2 ? thirdPrize : null
+        prize: category === 'proctored' ? (idx === 0 ? firstPrize : idx === 1 ? secondPrize : idx === 2 ? thirdPrize : null) : null
       }));
 
     return res.json({
       success: true,
       period,
+      category,
+      isProctoredTier: category === 'proctored',
       totalRankedStudents: rankings.length,
       rankings,
       prizeConfig
@@ -6623,6 +6713,200 @@ Respond STRICTLY in valid JSON format:
   }
 });
 
+// API Route: AI Generate Questions from Prescribed Textbooks / Chapters
+app.post('/api/admin/generate-novel-questions', verifyAdminToken, async (req, res) => {
+  try {
+    const { bookTitle, chapterTitle, contextText, questionCount = 5, focusType = 'comprehensive' } = req.body || {};
+    if (!bookTitle || !contextText) {
+      return res.status(400).json({ success: false, error: 'bookTitle and contextText are required.' });
+    }
+
+    const count = Math.min(25, Math.max(1, Number(questionCount) || 5));
+
+    // 1. Resolve active Groq or Gemini API Key
+    let groqKey = process.env.GROQ_API_KEY || process.env.VITE_GROQ_API_KEY;
+    let geminiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+    if ((!groqKey || groqKey.trim().length < 10) || (!geminiKey || geminiKey.trim().length < 10)) {
+      try {
+        const { data: dbKeys } = await supabase
+          .from('admin_settings')
+          .select('setting_key, setting_value')
+          .in('setting_key', ['ai_api_keys', 'api_keys', 'system_config']);
+        if (dbKeys) {
+          for (const row of dbKeys) {
+            const k = row.setting_value?.groq || row.setting_value?.apiKey || row.setting_value?.groq?.apiKey;
+            if (typeof k === 'string' && k.trim().length > 10 && !groqKey) {
+              groqKey = k.trim();
+            }
+            const gk = row.setting_value?.gemini || row.setting_value?.geminiApiKey;
+            if (typeof gk === 'string' && gk.trim().length > 10 && !geminiKey) {
+              geminiKey = gk.trim();
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    const systemPrompt = `You are a Chief Examiner for the Nigerian JAMB UTME board, specializing in the Compulsory Use of English novel and Literature in English prescribed texts.
+Your task is to generate exactly ${count} authentic, challenging JAMB-standard four-option multiple choice questions based strictly on the provided prescribed work and excerpt.
+Prescribed Work: "${bookTitle}"
+Chapter/Section: "${chapterTitle || 'General Excerpt'}"
+Question Focus: "${focusType}"
+
+Guidelines:
+1. Each question must test comprehension, specific character actions, dialogue, moral themes, or literary techniques (e.g., irony, metaphors, similes, symbolism, dramatic conflict).
+2. Four options prefixed with 'A) ', 'B) ', 'C) ', 'D) '.
+3. A single correct letter ('A', 'B', 'C', or 'D').
+4. A detailed pedagogical explanation citing the text.
+5. Provide a short 'passage' context excerpt (1-3 sentences) where applicable.
+
+Respond STRICTLY with valid JSON. Do not include markdown codeblocks or conversational text:
+{
+  "questions": [
+    {
+      "question": "Question text here?",
+      "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+      "correct": "A",
+      "explanation": "Detailed explanation here...",
+      "passage": "Context passage or quote here..."
+    }
+  ]
+}`;
+
+    if (groqKey && groqKey.trim().length > 10) {
+      const groqModels = ['openai/gpt-oss-120b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-20b', 'llama-3.3-70b-versatile'];
+      for (const m of groqModels) {
+        try {
+          const groqRes = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${groqKey.trim()}`
+            },
+            body: JSON.stringify({
+              model: m,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: `Textbook Excerpt / Notes:\n\n${contextText.slice(0, 4500)}` }
+              ],
+              temperature: 0.5,
+              response_format: { type: 'json_object' }
+            })
+          });
+
+          if (groqRes.ok) {
+            const data = await groqRes.json();
+            const content = data?.choices?.[0]?.message?.content || '{}';
+            const parsed = JSON.parse(content);
+            const qList = Array.isArray(parsed?.questions) ? parsed.questions : (Array.isArray(parsed) ? parsed : []);
+            
+            if (qList.length > 0) {
+              const sanitized = qList.map((q: any, i: number) => ({
+                id: `ai_gen_${Date.now()}_${i}`,
+                question: String(q.question || '').trim(),
+                options: Array.isArray(q.options) && q.options.length >= 4 
+                  ? q.options.slice(0, 4).map((opt: string) => String(opt).trim())
+                  : ['A) Option A', 'B) Option B', 'C) Option C', 'D) Option D'],
+                correct: ['A', 'B', 'C', 'D'].includes(String(q.correct).toUpperCase().trim()) 
+                  ? String(q.correct).toUpperCase().trim() 
+                  : 'A',
+                explanation: String(q.explanation || `Reference: ${bookTitle}`).trim(),
+                passage: q.passage ? String(q.passage).trim() : undefined,
+                chapterTitle: chapterTitle || undefined,
+                bookTitle: bookTitle
+              }));
+
+              return res.json({ success: true, questions: sanitized, modelUsed: m });
+            }
+          }
+        } catch (groqErr) {
+          console.warn(`[Generate Novel Questions Groq ${m} warning]:`, groqErr);
+        }
+      }
+    }
+
+    if (geminiKey && geminiKey.trim().length > 10) {
+      try {
+        const geminiPrompt = `${systemPrompt}\n\nTextbook Excerpt / Notes:\n${contextText.slice(0, 4500)}\n\nRespond with strictly valid JSON only:`;
+        const gemRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey.trim()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ parts: [{ text: geminiPrompt }] }],
+            generationConfig: { responseMimeType: 'application/json' }
+          })
+        });
+
+        if (gemRes.ok) {
+          const gemData = await gemRes.json();
+          const rawText = gemData?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
+          const parsed = JSON.parse(rawText.replace(/```json/g, '').replace(/```/g, '').trim());
+          const qList = Array.isArray(parsed?.questions) ? parsed.questions : (Array.isArray(parsed) ? parsed : []);
+          if (qList.length > 0) {
+            const sanitized = qList.map((q: any, i: number) => ({
+              id: `ai_gen_gemini_${Date.now()}_${i}`,
+              question: String(q.question || '').trim(),
+              options: Array.isArray(q.options) && q.options.length >= 4 
+                ? q.options.slice(0, 4).map((opt: string) => String(opt).trim())
+                : ['A) Option A', 'B) Option B', 'C) Option C', 'D) Option D'],
+              correct: ['A', 'B', 'C', 'D'].includes(String(q.correct).toUpperCase().trim()) 
+                ? String(q.correct).toUpperCase().trim() 
+                : 'A',
+              explanation: String(q.explanation || `Reference: ${bookTitle}`).trim(),
+              passage: q.passage ? String(q.passage).trim() : undefined,
+              chapterTitle: chapterTitle || undefined,
+              bookTitle: bookTitle
+            }));
+            return res.json({ success: true, questions: sanitized });
+          }
+        }
+      } catch (gemErr) {
+        console.warn('[Generate Novel Questions Gemini warning]:', gemErr);
+      }
+    }
+
+    // Contextual fallback generation if Groq is unavailable
+    const sentences = contextText.split(/(?<=[.!?])\s+/).filter(s => s.trim().length > 20);
+    const fallbackQuestions = [
+      {
+        id: `ai_gen_fallback_${Date.now()}_1`,
+        question: `According to the excerpt from "${bookTitle}" (${chapterTitle || 'Prescribed Text'}), what is the primary significance of the events described?`,
+        options: [
+          `A) ${sentences[0]?.trim() || 'Characters must balance personal ambition with moral integrity.'}`,
+          `B) Material wealth is celebrated without regard to character or truth.`,
+          `C) The protagonist disavows their background entirely.`,
+          `D) Traditional leadership refuses to engage with youth.`
+        ],
+        correct: 'A',
+        explanation: `In "${bookTitle}", the core takeaway highlights: ${sentences[0]?.trim() || 'the moral and educational progression of the characters'}.`,
+        passage: sentences.slice(0, 2).join(' ') || undefined,
+        bookTitle,
+        chapterTitle
+      },
+      {
+        id: `ai_gen_fallback_${Date.now()}_2`,
+        question: `What primary theme is explored in "${bookTitle}" as demonstrated in this chapter?`,
+        options: [
+          'A) Moral discipline, integrity, and the consequences of deception',
+          'B) Naval commerce in 19th-century Europe',
+          'C) Astronomical navigation and cartography',
+          'D) Indifference towards education and family values'
+        ],
+        correct: 'A',
+        explanation: `A central theme throughout "${bookTitle}" emphasizes how integrity, moral responsibility, and caution protect students from pitfalls.`,
+        passage: sentences.slice(1, 3).join(' ') || undefined,
+        bookTitle,
+        chapterTitle
+      }
+    ];
+
+    return res.json({ success: true, questions: fallbackQuestions.slice(0, count) });
+  } catch (err: any) {
+    console.error('[API /api/admin/generate-novel-questions Error]', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Failed to generate questions' });
+  }
+});
+
 // ─── PAST QUESTION YEARS & METADATA API ───
 app.get('/api/cbt/past-questions/years', async (req, res) => {
   try {
@@ -7520,87 +7804,74 @@ async function executeUserPurge(userId: string, reqOrToken?: any): Promise<{ suc
 
   // Strict safety check: Never delete master administrator accounts
   const MASTER_ADMINS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
+  let targetEmail = '';
   try {
     const { data: targetProf } = await supabase
       .from('profiles')
       .select('email')
       .eq('id', userId)
       .maybeSingle();
-    if (targetProf?.email && MASTER_ADMINS.includes(targetProf.email.toLowerCase().trim())) {
-      return { success: false, error: 'Master administrator accounts cannot be deleted.' };
+    if (targetProf?.email) {
+      targetEmail = targetProf.email.toLowerCase().trim();
+      if (MASTER_ADMINS.includes(targetEmail)) {
+        return { success: false, error: 'Master administrator accounts cannot be deleted.' };
+      }
     }
   } catch (_) {}
 
-  // 1. Immediately register in in-memory and disk deletion registry
+  // 1. Immediately register in deletion registry
   await markUserAsDeleted(userId);
 
-  // 2. Create authenticated scoped client (respects admin or user RLS delete policies)
+  // 2. Authoritative direct PostgreSQL deletion across all relation tables and auth.users
+  try {
+    await queryPostgres('DELETE FROM public.referrals WHERE referred_id = $1 OR referrer_id = $1', [userId]);
+    if (targetEmail) {
+      await queryPostgres('DELETE FROM public.referrals WHERE LOWER(referred_email) = LOWER($1)', [targetEmail]);
+    }
+    await queryPostgres('DELETE FROM public.payout_requests WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.subscriptions WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.manual_payments WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.session_answers WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.exam_sessions WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.practice_sessions WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.study_logs WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.study_plans WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.study_plan_tasks WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.study_goals WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.user_stats WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.user_badges WHERE student_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.achievements WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.bookmarks WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.flashcards WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.weekly_challenge_submissions WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.device_sessions WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.activity_logs WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.support_tickets WHERE user_id = $1', [userId]);
+    await queryPostgres('DELETE FROM public.tournament_participants WHERE student_id = $1', [userId]);
+
+    // Hard delete from public.profiles
+    await queryPostgres('DELETE FROM public.profiles WHERE id = $1', [userId]);
+    if (targetEmail) {
+      await queryPostgres('DELETE FROM public.profiles WHERE LOWER(email) = LOWER($1)', [targetEmail]);
+    }
+
+    // Hard delete from auth.users so that the user is completely free to create a fresh new account with that same email!
+    await queryPostgres('DELETE FROM auth.users WHERE id = $1', [userId]);
+    if (targetEmail) {
+      await queryPostgres('DELETE FROM auth.users WHERE LOWER(email) = LOWER($1)', [targetEmail]);
+    }
+  } catch (pgPurgeErr: any) {
+    console.warn('[executeUserPurge Postgres purge note]:', pgPurgeErr.message);
+  }
+
+  // 3. Fallback scoped & service role client purge
   const scopedClient = getScopedSupabaseClient(reqOrToken);
-
-  // 3. Purge from all dependent and relation tables
-  const purgeTables = async (db: any) => {
-    return Promise.allSettled([
-      db.from('guardian_links').delete().or(`guardian_id.eq.${userId},student_id.eq.${userId}`),
-      db.from('guardian_student_relationships').delete().or(`guardian_id.eq.${userId},student_id.eq.${userId}`),
-      db.from('guardian_messages').delete().eq('student_id', userId),
-      db.from('session_answers').delete().eq('user_id', userId),
-      db.from('exam_sessions').delete().eq('user_id', userId),
-      db.from('practice_sessions').delete().eq('user_id', userId),
-      db.from('study_logs').delete().eq('user_id', userId),
-      db.from('study_plans').delete().eq('user_id', userId),
-      db.from('study_plan_tasks').delete().eq('user_id', userId),
-      db.from('study_goals').delete().eq('user_id', userId),
-      db.from('user_stats').delete().eq('user_id', userId),
-      db.from('user_badges').delete().eq('student_id', userId),
-      db.from('achievements').delete().eq('user_id', userId),
-      db.from('xp_transactions').delete().eq('user_id', userId),
-      db.from('bookmarks').delete().eq('user_id', userId),
-      db.from('flashcards').delete().eq('user_id', userId),
-      db.from('weekly_challenge_submissions').delete().eq('user_id', userId),
-      db.from('manual_payments').delete().eq('user_id', userId),
-      db.from('subscriptions').delete().eq('user_id', userId),
-      db.from('device_sessions').delete().eq('user_id', userId),
-      db.from('offline_sync_queue').delete().eq('user_id', userId),
-      db.from('activity_logs').delete().eq('user_id', userId),
-      db.from('support_tickets').delete().eq('user_id', userId),
-      db.from('study_streaks').delete().eq('user_id', userId),
-      db.from('tournament_participants').delete().eq('student_id', userId),
-      db.from('communication_logs').delete().eq('recipient_id', userId),
-      db.from('profiles').delete().eq('id', userId)
-    ]);
-  };
-
-  // Run with both scoped admin/user credentials AND server client
-  await purgeTables(scopedClient);
-  await purgeTables(supabase);
-
-  // 4. Update profiles row as backup in case database foreign keys prevented hard deletion
-  const sanitizedEmail = `deleted_${userId.slice(0, 8)}@scholarsresort.com`;
   try {
-    await scopedClient.from('profiles').update({
-      status: 'deleted',
-      full_name: '[Deleted User]',
-      email: sanitizedEmail,
-      phone: null,
-      is_banned: true,
-      has_paid: false,
-      updated_at: new Date().toISOString()
-    }).eq('id', userId);
+    await scopedClient.from('profiles').delete().eq('id', userId);
+    await supabase.from('profiles').delete().eq('id', userId);
   } catch (_) {}
 
-  try {
-    await supabase.from('profiles').update({
-      status: 'deleted',
-      full_name: '[Deleted User]',
-      email: sanitizedEmail,
-      phone: null,
-      is_banned: true,
-      has_paid: false,
-      updated_at: new Date().toISOString()
-    }).eq('id', userId);
-  } catch (_) {}
-
-  // 5. Delete from Supabase auth.users if service role key is available
+  // 4. Delete from Supabase auth.users via admin API if available
   try {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY;
     if (serviceRoleKey) {
@@ -9541,9 +9812,9 @@ async function getReferralConfig() {
     const parsed = await getStoredSetting('referral_program_config');
     if (parsed) {
       return {
-        rewardPerSignup: Number(parsed.rewardPerSignup) || 0,
-        rewardPerPaid: Number(parsed.rewardPerPaid) || 500,
-        minWithdrawal: Number(parsed.minWithdrawal) || 2000,
+        rewardPerSignup: parsed.rewardPerSignup !== undefined ? Number(parsed.rewardPerSignup) : 0,
+        rewardPerPaid: parsed.rewardPerPaid !== undefined ? Number(parsed.rewardPerPaid) : 500,
+        minWithdrawal: parsed.minWithdrawal !== undefined ? Number(parsed.minWithdrawal) : 2000,
         isActive: parsed.isActive !== false,
         programTitle: parsed.programTitle || 'UTME Student Referral & Ambassador Program',
         programDescription: parsed.programDescription || 'Earn cash rewards for every candidate you invite.'
@@ -10479,9 +10750,9 @@ app.post('/api/referrals/admin/update-config', verifyAdminToken, async (req, res
   try {
     const configData = req.body?.value || req.body || {};
     const sanitizedConfig = {
-      rewardPerSignup: Number(configData.rewardPerSignup) || 0,
-      rewardPerPaid: Number(configData.rewardPerPaid) || 500,
-      minWithdrawal: Number(configData.minWithdrawal) || 2000,
+      rewardPerSignup: configData.rewardPerSignup !== undefined ? Number(configData.rewardPerSignup) : 0,
+      rewardPerPaid: configData.rewardPerPaid !== undefined ? Number(configData.rewardPerPaid) : 500,
+      minWithdrawal: configData.minWithdrawal !== undefined ? Number(configData.minWithdrawal) : 2000,
       isActive: configData.isActive !== false,
       programTitle: configData.programTitle || 'UTME Student Referral & Ambassador Program',
       programDescription: configData.programDescription || 'Earn cash rewards for every candidate you invite.'

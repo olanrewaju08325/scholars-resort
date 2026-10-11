@@ -29,12 +29,12 @@
     "telegram_announcement_link": "https://t.me/+9WU6HrQE6DJhYTRk"
   },
   "referral_program_config": {
+    "rewardPerSignup": 0,
+    "rewardPerPaid": 600,
+    "minWithdrawal": 1200,
     "isActive": true,
     "programTitle": "UTME Student Referral & Ambassador Program",
-    "minWithdrawal": 1500,
-    "rewardPerPaid": 500,
-    "rewardPerSignup": 0,
-    "programDescription": "Earn ₦500 cash for every candidate you invite."
+    "programDescription": "Earn cash rewards for every candidate you invite."
   },
   "weekly_mock_config": {
     "title": "National JAMB UTME Grand Mock Exam (Week 1)",

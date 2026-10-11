@@ -25,6 +25,10 @@ export interface NormalizedQuestion {
   year?: number | string;
   image_url?: string;
   source: string;
+  passage?: string;
+  passage_text?: string;
+  book_title?: string;
+  chapter_title?: string;
   raw?: any;
 }
 
@@ -255,6 +259,10 @@ export class ContentNormalizer {
       year: rawQuestion.year || rawQuestion.exam_year,
       image_url: rawQuestion.image_url || rawQuestion.imageUrl || rawQuestion.image,
       source: 'Scholars Resort CBT Bank',
+      passage: rawQuestion.passage || rawQuestion.passage_text || rawQuestion.reading_passage,
+      passage_text: rawQuestion.passage_text || rawQuestion.passage,
+      book_title: rawQuestion.book_title || rawQuestion.bookTitle,
+      chapter_title: rawQuestion.chapter_title || rawQuestion.chapterTitle,
       raw: rawQuestion,
     };
   }

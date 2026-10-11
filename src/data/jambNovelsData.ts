@@ -4,6 +4,9 @@ export interface NovelQuestion {
   options: string[];
   correct: string;
   explanation: string;
+  passage?: string;
+  chapterTitle?: string;
+  bookTitle?: string;
 }
 
 export interface NovelChapter {
@@ -346,6 +349,79 @@ export const DEFAULT_JAMB_BOOKS: LiteratureBook[] = [
             ],
             correct: 'B',
             explanation: 'Lakunle claims modern Western civilization considers bride price an oppressive and outdated custom.'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'look-back-in-anger',
+    title: 'Look Back in Anger',
+    author: 'John Osborne',
+    genre: 'Drama (Non-African)',
+    description: 'A pivotal post-war British drama following Jimmy Porter, an angry young man who lashes out at upper-middle-class complacency and social inequality in 1950s England.',
+    coverColor: 'from-rose-600/30 to-red-950/30',
+    chapters: [
+      {
+        id: 1,
+        chapterNumber: 1,
+        title: 'Act 1: Sunday Morning in the Attic Flat',
+        summary: 'Introduces the one-room attic flat in the English Midlands shared by Jimmy Porter, his stoic aristocratic wife Alison, and their working-class Welsh friend Cliff Lewis. Jimmy launches bitter intellectual attacks against the church, the press, and Alison\'s privileged family.',
+        keyThemes: ['Post-War Disillusionment', 'Class Conflict & Resentment', 'The Angry Young Man Syndrome'],
+        charactersInvolved: ['Jimmy Porter (Protagonist)', 'Alison Porter (Jimmy\'s wife)', 'Cliff Lewis (Peacemaker / Welsh roommate)'],
+        sampleQuestions: [
+          {
+            question: 'What is Jimmy Porter\'s primary occupation in the play?',
+            options: [
+              'A) University Professor',
+              'B) Sweet Stall Proprietor',
+              'C) Newspaper Columnist',
+              'D) British Army Officer'
+            ],
+            correct: 'B',
+            explanation: 'Despite holding a university degree, Jimmy runs a humble sweet stall in the local market, symbolizing his rejection of middle-class bourgeois careers.'
+          },
+          {
+            question: 'How is Cliff Lewis positioned in the relationship between Jimmy and Alison?',
+            options: [
+              'A) He acts as an instigator who fuels their fights',
+              'B) He acts as an affectionate, neutral buffer and peacemaker',
+              'C) He secretly conspires to deport Jimmy',
+              'D) He is Alison\'s legal representative'
+            ],
+            correct: 'B',
+            explanation: 'Cliff serves as the gentle, stabilizing buffer who defuses Jimmy\'s volatile temper and shows tender affection to Alison.'
+          }
+        ]
+      }
+    ]
+  },
+  {
+    id: 'wuthering-heights',
+    title: 'Wuthering Heights',
+    author: 'Emily Brontë',
+    genre: 'Prose (Non-African)',
+    description: 'A dark, tempestuous Gothic masterpiece set in the Yorkshire moors examining the destructive, all-consuming passion and vengeful wrath of Heathcliff after losing Catherine Earnshaw.',
+    coverColor: 'from-purple-600/30 to-indigo-950/30',
+    chapters: [
+      {
+        id: 1,
+        chapterNumber: 1,
+        title: 'Chapters 1-3: Lockwood\'s Arrival at the Heights',
+        summary: 'Mr. Lockwood, the new tenant of Thrushcross Grange, visits his forbidding landlord Heathcliff at Wuthering Heights. A snowstorm traps Lockwood overnight, where he encounters a spectral vision of Catherine Linton sobbing at the window, setting the stage for Nelly Dean\'s historical chronicle.',
+        keyThemes: ['Destructive Obsession and Vengeance', 'Nature vs Civilization', 'Social Class and Heredity'],
+        charactersInvolved: ['Heathcliff', 'Mr. Lockwood', 'Catherine Earnshaw', 'Nelly Dean', 'Hareton Earnshaw'],
+        sampleQuestions: [
+          {
+            question: 'What terrifying nocturnal encounter does Lockwood experience in the oak-closet bed?',
+            options: [
+              'A) An armed robber breaking through the skylight',
+              'B) The icy spectral hand and voice of Catherine Linton begging to come in',
+              'C) A fierce attack by Heathcliff\'s guard dogs',
+              'D) A hallucination of Hindley Earnshaw'
+            ],
+            correct: 'B',
+            explanation: 'Lockwood has a nightmarish vision of Catherine Linton\'s ghost rubbing her icy wrist against the broken windowpane, crying that she has been lost on the moors for twenty years.'
           }
         ]
       }

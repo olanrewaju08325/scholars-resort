@@ -282,7 +282,11 @@ export function sanitizeQuestionForRendering(rawQuestion: any): PlainQuestion {
     year: typeof rawQuestion.year === 'number' || typeof rawQuestion.year === 'string' ? rawQuestion.year : undefined,
     image_url: typeof rawQuestion.image_url === 'string' ? rawQuestion.image_url : undefined,
     is_ai_generated: Boolean(rawQuestion.is_ai_generated),
-    source_type: typeof rawQuestion.source_type === 'string' ? rawQuestion.source_type : undefined
+    source_type: typeof rawQuestion.source_type === 'string' ? rawQuestion.source_type : undefined,
+    passage: typeof (rawQuestion.passage ?? rawQuestion.passage_text ?? rawQuestion.reading_passage) === 'string' ? (rawQuestion.passage ?? rawQuestion.passage_text ?? rawQuestion.reading_passage) : undefined,
+    passage_text: typeof (rawQuestion.passage_text ?? rawQuestion.passage) === 'string' ? (rawQuestion.passage_text ?? rawQuestion.passage) : undefined,
+    book_title: typeof (rawQuestion.book_title ?? rawQuestion.bookTitle) === 'string' ? (rawQuestion.book_title ?? rawQuestion.bookTitle) : undefined,
+    chapter_title: typeof (rawQuestion.chapter_title ?? rawQuestion.chapterTitle) === 'string' ? (rawQuestion.chapter_title ?? rawQuestion.chapterTitle) : undefined
   };
 }
 

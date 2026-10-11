@@ -6,7 +6,8 @@ import { Input } from '@/components/ui/input';
 import { 
   BookOpen, Sparkles, CheckCircle2, UserCheck, 
   Bookmark, ArrowRight, ArrowLeft, Search, RefreshCw, Layers, Quote, BookA,
-  FileText, Eye, Download, Maximize2, Lock, ShieldAlert
+  FileText, Eye, Download, Maximize2, Lock, ShieldAlert,
+  Timer, Flag, CheckCircle, XCircle, AlertCircle, Filter, Trophy, Play, BookMarked, PlayCircle, Target, Clock, RotateCcw, Sliders
 } from 'lucide-react';
 import { fetchJambBooks, fetchLiteratureLockStatus } from '@/services/novelService';
 import type { LiteratureBook, NovelChapter } from '@/data/jambNovelsData';
@@ -31,6 +32,24 @@ export const JambNovelHub = () => {
   const [selectedMatrixAns, setSelectedMatrixAns] = useState<string | null>(null);
   const [showMatrixExplanation, setShowMatrixExplanation] = useState(false);
   const [matrixScore, setMatrixScore] = useState(0);
+
+  // Top-Level Hub View: 'study' | 'cbt_drill'
+  const [hubTab, setHubTab] = useState<'study' | 'cbt_drill'>('study');
+
+  // Dedicated Novel CBT Drill Arena State
+  const [drillStatus, setDrillStatus] = useState<'setup' | 'testing' | 'submitted'>('setup');
+  const [drillBookId, setDrillBookId] = useState<string>('the-life-changer');
+  const [drillChapterScope, setDrillChapterScope] = useState<number | 'all'>('all');
+  const [drillPacing, setDrillPacing] = useState<'timed' | 'untimed'>('timed');
+  const [drillTimeLimitMinutes, setDrillTimeLimitMinutes] = useState<number>(15);
+  const [drillQuestionCount, setDrillQuestionCount] = useState<number>(20);
+  const [drillQuestions, setDrillQuestions] = useState<any[]>([]);
+  const [drillCurrentIdx, setDrillCurrentIdx] = useState<number>(0);
+  const [drillAnswers, setDrillAnswers] = useState<Record<number, string>>({});
+  const [drillFlagged, setDrillFlagged] = useState<Record<number, boolean>>({});
+  const [drillSecondsLeft, setDrillSecondsLeft] = useState<number>(900);
+  const [drillReviewFilter, setDrillReviewFilter] = useState<'all' | 'incorrect' | 'flagged'>('all');
+  const [drillPaletteOpen, setDrillPaletteOpen] = useState(false);
 
   const matrixQuestions = [
     {
@@ -223,6 +242,104 @@ export const JambNovelHub = () => {
     setScore(0);
   };
 
+  useEffect(() => {
+    if (drillStatus !== 'testing' || drillPacing !== 'timed') return;
+    const interval = setInterval(() => {
+      setDrillSecondsLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          setDrillStatus('submitted');
+          toast.warning("Time's up! Your novel exam has been submitted.");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [drillStatus, drillPacing]);
+
+  const handleStartCbtDrill = () => {
+    const targetBook = books.find(b => b.id === drillBookId) || currentBook;
+    if (!targetBook) {
+      toast.error('Selected novel could not be found.');
+      return;
+    }
+
+    let candidateQuestions: any[] = [];
+    if (drillChapterScope === 'all') {
+      targetBook.chapters.forEach(ch => {
+        if (Array.isArray(ch.sampleQuestions)) {
+          ch.sampleQuestions.forEach((q, idx) => {
+            candidateQuestions.push({
+              ...q,
+              id: q.id || `drill_${targetBook.id}_ch${ch.id}_${idx}`,
+              bookTitle: targetBook.title,
+              chapterTitle: ch.title,
+              passage: q.passage || ch.summary?.slice(0, 280) || `Based on "${targetBook.title}" (${ch.title})`
+            });
+          });
+        }
+      });
+    } else {
+      const targetCh = targetBook.chapters.find(c => c.id === drillChapterScope);
+      if (targetCh && Array.isArray(targetCh.sampleQuestions)) {
+        targetCh.sampleQuestions.forEach((q, idx) => {
+          candidateQuestions.push({
+            ...q,
+            id: q.id || `drill_${targetBook.id}_ch${targetCh.id}_${idx}`,
+            bookTitle: targetBook.title,
+            chapterTitle: targetCh.title,
+            passage: q.passage || targetCh.summary?.slice(0, 280) || `Based on "${targetBook.title}" (${targetCh.title})`
+          });
+        });
+      }
+    }
+
+    if (candidateQuestions.length === 0) {
+      toast.error('No questions found for this selection. Try selecting all chapters or another novel.');
+      return;
+    }
+
+    const shuffled = [...candidateQuestions].sort(() => Math.random() - 0.5);
+    const finalQs = shuffled.slice(0, Math.min(candidateQuestions.length, drillQuestionCount));
+
+    setDrillQuestions(finalQs);
+    setDrillCurrentIdx(0);
+    setDrillAnswers({});
+    setDrillFlagged({});
+    setDrillSecondsLeft(drillTimeLimitMinutes * 60);
+    setDrillStatus('testing');
+    toast.success(`Novel CBT Drill started with ${finalQs.length} questions!`);
+  };
+
+  const handleSelectDrillAnswer = (optionLetter: string) => {
+    setDrillAnswers(prev => ({
+      ...prev,
+      [drillCurrentIdx]: optionLetter
+    }));
+  };
+
+  const handleToggleDrillFlag = (idx: number) => {
+    setDrillFlagged(prev => ({
+      ...prev,
+      [idx]: !prev[idx]
+    }));
+  };
+
+  const formatDrillTime = (secs: number) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const currentDrillBook = books.find(b => b.id === drillBookId) || currentBook;
+
+  const drillScore = drillQuestions.reduce((acc, q, idx) => {
+    const userAns = drillAnswers[idx];
+    const correctLetter = q.correct?.replace(/^[A-D]\)\s*/, '') || 'A';
+    return acc + (userAns === correctLetter ? 1 : 0);
+  }, 0);
+
   if (loading) {
     return (
       <div className="p-12 text-center text-muted-foreground flex flex-col items-center justify-center gap-3">
@@ -303,7 +420,29 @@ export const JambNovelHub = () => {
           <p className="text-muted-foreground text-xs sm:text-sm max-w-3xl leading-relaxed">
             Master every chapter of official JAMB UTME literature texts, prose, drama, and prescribed reading books with chapter summaries, character analyses, key themes, and UTME practice questions.
           </p>
-          <div className="pt-2 flex gap-3">
+          <div className="pt-2 flex flex-wrap gap-2.5">
+            <Button 
+              onClick={() => {
+                setHubTab('cbt_drill');
+                setDrillStatus('setup');
+              }}
+              className={`font-bold gap-2 text-xs h-9 px-4 ${
+                hubTab === 'cbt_drill'
+                  ? 'bg-amber-500 hover:bg-amber-600 text-slate-950 shadow-md ring-2 ring-amber-400/40'
+                  : 'bg-amber-500/90 hover:bg-amber-500 text-slate-950'
+              }`}
+            >
+              <Target className="w-4 h-4 text-slate-950" /> Dedicated Novel CBT Drill & Mock Arena
+            </Button>
+
+            <Button 
+              onClick={() => setHubTab('study')}
+              variant={hubTab === 'study' ? 'secondary' : 'outline'}
+              className="font-bold gap-2 text-xs h-9 px-4"
+            >
+              <BookOpen className="w-4 h-4" /> Chapter Study & Plot Summaries
+            </Button>
+
             <Button 
               onClick={() => {
                 setShowMatrixGame(true);
@@ -312,48 +451,597 @@ export const JambNovelHub = () => {
                 setShowMatrixExplanation(false);
                 setMatrixScore(0);
               }}
-              className="bg-amber-500 hover:bg-amber-600 font-bold gap-2 text-xs h-9 px-4 text-slate-950"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold gap-2 text-xs h-9 px-4"
             >
-              <Sparkles className="w-4 h-4 text-slate-950" /> Launch 5-Minute Concept Matrix Quiz Game
+              <Sparkles className="w-4 h-4" /> 5-Minute Concept Matrix Quiz Game
             </Button>
           </div>
         </div>
       </div>
 
-      {/* Book Selector Tabs */}
-      <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-        {books.map((bk) => (
-          <button
-            key={bk.id}
-            onClick={() => handleSelectBook(bk.id)}
-            className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
-              selectedBookId === bk.id
-                ? 'bg-primary text-primary-foreground border-primary shadow-md ring-2 ring-primary/20'
-                : 'bg-card text-muted-foreground hover:text-foreground border-border hover:border-primary/40'
-            }`}
-          >
-            <Bookmark className="w-3.5 h-3.5" />
-            <span>{bk.title}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono">
-              {bk.genre}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* DEDICATED NOVEL CBT DRILL & TESTING ARENA */}
+      {hubTab === 'cbt_drill' && (
+        <div className="space-y-6">
+          {drillStatus === 'setup' && (
+            <Card className="border-border bg-card text-card-foreground shadow-xl overflow-hidden">
+              <CardHeader className="bg-gradient-to-r from-amber-500/10 via-primary/5 to-transparent border-b border-border pb-5">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div>
+                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500/15 text-amber-500 border border-amber-500/30 uppercase tracking-wider mb-2">
+                      <Target className="w-3.5 h-3.5" /> Official JAMB UTME Prescribed Texts Testing Arena
+                    </div>
+                    <CardTitle className="text-xl sm:text-2xl font-bold font-display text-foreground">
+                      Dedicated Novel & Literature CBT Simulator
+                    </CardTitle>
+                    <CardDescription className="text-xs sm:text-sm mt-1 max-w-2xl leading-relaxed">
+                      Practice official JAMB UTME questions extracted directly from prescribed novels (e.g. <em>The Life Changer</em>) and literature texts. Answer passage comprehension excerpts and character scenarios under timed exam conditions.
+                    </CardDescription>
+                  </div>
 
-      {/* Search Bar */}
-      <div className="relative">
-        <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
-        <Input
-          placeholder="Search by chapter title, character (e.g. Omar, Talle, Salma), theme, or plot keyword..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 h-10 text-xs bg-card border-border"
-        />
-      </div>
+                  <Button asChild variant="outline" className="border-primary/40 text-primary hover:bg-primary/10 font-bold text-xs h-9 shrink-0 gap-1.5">
+                    <Link to="/cbt?mode=novel_drill&subject=Use%20of%20English&count=20">
+                      <Maximize2 className="w-3.5 h-3.5" /> Launch Full-Screen National CBT Engine
+                    </Link>
+                  </Button>
+                </div>
+              </CardHeader>
 
-      {/* Main Content Layout */}
-      {currentBook && (
+              <CardContent className="p-6 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Option 1: Select Book */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide block">
+                      Target Prescribed Novel / Book
+                    </label>
+                    <select
+                      value={drillBookId}
+                      onChange={(e) => {
+                        setDrillBookId(e.target.value);
+                        setDrillChapterScope('all');
+                      }}
+                      className="w-full h-10 rounded-xl border border-border bg-background px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      {books.map(b => (
+                        <option key={b.id} value={b.id}>
+                          {b.title} ({b.genre})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Option 2: Scope */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide block">
+                      Chapter Scope
+                    </label>
+                    <select
+                      value={drillChapterScope}
+                      onChange={(e) => setDrillChapterScope(e.target.value === 'all' ? 'all' : Number(e.target.value))}
+                      className="w-full h-10 rounded-xl border border-border bg-background px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="all">Full Novel Master Mock (All Chapters)</option>
+                      {currentDrillBook?.chapters.map(ch => (
+                        <option key={ch.id} value={ch.id}>
+                          Chapter {ch.chapterNumber || ch.id}: {ch.title.split(': ')[1] || ch.title} ({ch.sampleQuestions?.length || 0} Qs)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* Option 3: Question Count */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide block">
+                      Question Count
+                    </label>
+                    <select
+                      value={drillQuestionCount}
+                      onChange={(e) => setDrillQuestionCount(Number(e.target.value))}
+                      className="w-full h-10 rounded-xl border border-border bg-background px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="10">10 Questions (Quick Sprint)</option>
+                      <option value="15">15 Questions (Standard Section A)</option>
+                      <option value="20">20 Questions (Intensive Drill)</option>
+                      <option value="30">30 Questions (Full Novel Mock)</option>
+                      <option value="50">All Available Book Questions</option>
+                    </select>
+                  </div>
+
+                  {/* Option 4: Pacing */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold text-muted-foreground uppercase tracking-wide block">
+                      Exam Pacing
+                    </label>
+                    <select
+                      value={drillPacing}
+                      onChange={(e) => setDrillPacing(e.target.value as any)}
+                      className="w-full h-10 rounded-xl border border-border bg-background px-3 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary"
+                    >
+                      <option value="timed">Timed Sprint (15 Minutes)</option>
+                      <option value="untimed">Untimed Study Mode (No Clock)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Information Card */}
+                <div className="p-4 rounded-xl border border-border bg-muted/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-500 flex items-center justify-center shrink-0 border border-amber-500/20">
+                      <BookMarked className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-bold text-foreground">
+                        {currentDrillBook?.title} ({currentDrillBook?.genre})
+                      </h4>
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        Author: {currentDrillBook?.author} • Total chapters: {currentDrillBook?.chapters.length || 0} • Features reading passages and character citations
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    onClick={handleStartCbtDrill}
+                    className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold gap-2 text-xs h-10 px-6 shrink-0 shadow-lg"
+                  >
+                    <Play className="w-4 h-4 fill-current" /> Start Novel CBT Exam Drill
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {drillStatus === 'testing' && drillQuestions.length > 0 && (
+            <div className="space-y-4">
+              {/* Sticky Top Test Control Bar */}
+              <div className="p-3.5 rounded-xl border border-border bg-card text-card-foreground shadow-md flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg text-xs font-extrabold bg-primary/10 text-primary border border-primary/20">
+                    Question {drillCurrentIdx + 1} of {drillQuestions.length}
+                  </span>
+                  <span className="text-xs font-bold text-muted-foreground hidden sm:inline">
+                    {drillQuestions[drillCurrentIdx]?.bookTitle}
+                  </span>
+                  {drillQuestions[drillCurrentIdx]?.chapterTitle && (
+                    <span className="text-[11px] text-muted-foreground/80 hidden md:inline">
+                      ({drillQuestions[drillCurrentIdx]?.chapterTitle})
+                    </span>
+                  )}
+                </div>
+
+                {drillPacing === 'timed' && (
+                  <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-mono font-bold ${
+                    drillSecondsLeft < 180 ? 'bg-destructive/10 text-destructive border border-destructive/30 animate-pulse' : 'bg-muted text-foreground'
+                  }`}>
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>Time Left: {formatDrillTime(drillSecondsLeft)}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleToggleDrillFlag(drillCurrentIdx)}
+                    className={`text-xs h-8 gap-1.5 font-bold ${
+                      drillFlagged[drillCurrentIdx]
+                        ? 'border-amber-500/60 text-amber-500 bg-amber-500/10'
+                        : 'border-border text-muted-foreground'
+                    }`}
+                  >
+                    <Flag className={`w-3.5 h-3.5 ${drillFlagged[drillCurrentIdx] ? 'fill-current' : ''}`} />
+                    <span className="hidden sm:inline">{drillFlagged[drillCurrentIdx] ? 'Flagged' : 'Flag'}</span>
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setDrillPaletteOpen(!drillPaletteOpen)}
+                    className="text-xs h-8 gap-1 font-bold"
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span className="hidden sm:inline">Palette</span>
+                  </Button>
+
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (window.confirm("Are you sure you want to submit your novel CBT test?")) {
+                        setDrillStatus('submitted');
+                      }
+                    }}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 font-bold gap-1"
+                  >
+                    <CheckCircle className="w-3.5 h-3.5" />
+                    Submit Test
+                  </Button>
+                </div>
+              </div>
+
+              {/* Collapsible Palette Drawer */}
+              {drillPaletteOpen && (
+                <Card className="border-border bg-card p-4">
+                  <div className="flex items-center justify-between pb-2 mb-3 border-b border-border text-xs">
+                    <span className="font-bold text-foreground">Question Navigator ({drillQuestions.length} Total)</span>
+                    <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block"></span> Answered</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block"></span> Flagged</span>
+                      <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-muted-foreground/30 inline-block"></span> Pending</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-5 sm:grid-cols-10 md:grid-cols-15 gap-2">
+                    {drillQuestions.map((_, i) => {
+                      const isAnswered = drillAnswers[i] !== undefined;
+                      const isFlg = drillFlagged[i];
+                      const isCurr = i === drillCurrentIdx;
+
+                      let cellBg = "bg-muted/40 text-muted-foreground border-border";
+                      if (isFlg) cellBg = "bg-amber-500/20 text-amber-500 border-amber-500/50 font-bold";
+                      else if (isAnswered) cellBg = "bg-emerald-500/20 text-emerald-500 border-emerald-500/50 font-bold";
+
+                      return (
+                        <button
+                          key={i}
+                          onClick={() => {
+                            setDrillCurrentIdx(i);
+                            setDrillPaletteOpen(false);
+                          }}
+                          className={`h-8 rounded-lg text-xs font-bold border transition-all ${cellBg} ${
+                            isCurr ? 'ring-2 ring-primary scale-105' : ''
+                          }`}
+                        >
+                          {i + 1}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Card>
+              )}
+
+              {/* Question & Passage Area */}
+              <Card className="border-border bg-card text-card-foreground shadow-lg overflow-hidden">
+                <CardContent className="p-5 sm:p-7 space-y-6">
+                  {/* Reading Passage / Excerpt Card */}
+                  {drillQuestions[drillCurrentIdx]?.passage && (
+                    <div className="rounded-xl border border-primary/25 bg-primary/5 dark:bg-primary/10 p-4 sm:p-5 text-xs sm:text-sm">
+                      <div className="flex items-center gap-2 font-bold text-primary mb-2">
+                        <BookOpen className="w-4 h-4 shrink-0" />
+                        <span>Prescribed Text Excerpt: {drillQuestions[drillCurrentIdx]?.bookTitle}</span>
+                        {drillQuestions[drillCurrentIdx]?.chapterTitle && (
+                          <span className="text-muted-foreground font-normal">
+                            ({drillQuestions[drillCurrentIdx]?.chapterTitle})
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-foreground/90 leading-relaxed italic border-l-2 border-primary/40 pl-3.5 py-1 whitespace-pre-line">
+                        "{drillQuestions[drillCurrentIdx]?.passage}"
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Question Text */}
+                  <div className="text-base sm:text-lg font-semibold text-foreground leading-relaxed">
+                    <span className="text-primary font-bold mr-2">{drillCurrentIdx + 1}.</span>
+                    {drillQuestions[drillCurrentIdx]?.question}
+                  </div>
+
+                  {/* Options List */}
+                  <div className="space-y-3 pt-2">
+                    {drillQuestions[drillCurrentIdx]?.options.map((opt: string, optIdx: number) => {
+                      const letter = ['A', 'B', 'C', 'D'][optIdx];
+                      const isSelected = drillAnswers[drillCurrentIdx] === letter;
+
+                      return (
+                        <button
+                          key={optIdx}
+                          onClick={() => handleSelectDrillAnswer(letter)}
+                          className={`w-full p-4 rounded-xl border text-left text-xs sm:text-sm font-medium transition-all flex items-center gap-3.5 ${
+                            isSelected
+                              ? 'border-primary bg-primary/10 text-foreground ring-2 ring-primary/40 shadow-sm'
+                              : 'border-border bg-card hover:bg-muted/40 text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          <span className={`w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs shrink-0 transition-colors ${
+                            isSelected
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted text-foreground'
+                          }`}>
+                            {letter}
+                          </span>
+                          <span className="flex-1 leading-relaxed">
+                            {opt.replace(/^[A-D]\)\s*/, '')}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Bottom Navigation Buttons */}
+                  <div className="flex items-center justify-between pt-4 border-t border-border">
+                    <Button
+                      variant="outline"
+                      onClick={() => setDrillCurrentIdx(prev => Math.max(0, prev - 1))}
+                      disabled={drillCurrentIdx === 0}
+                      className="text-xs font-bold gap-1.5 h-9"
+                    >
+                      <ArrowLeft className="w-3.5 h-3.5" /> Previous
+                    </Button>
+
+                    <span className="text-xs text-muted-foreground font-semibold">
+                      {Object.keys(drillAnswers).length} of {drillQuestions.length} Answered
+                    </span>
+
+                    {drillCurrentIdx < drillQuestions.length - 1 ? (
+                      <Button
+                        onClick={() => setDrillCurrentIdx(prev => Math.min(drillQuestions.length - 1, prev + 1))}
+                        className="text-xs font-bold gap-1.5 h-9 bg-primary hover:bg-primary/90"
+                      >
+                        Next <ArrowRight className="w-3.5 h-3.5" />
+                      </Button>
+                    ) : (
+                      <Button
+                        onClick={() => {
+                          if (window.confirm("Submit your novel CBT exam and view your score breakdown?")) {
+                            setDrillStatus('submitted');
+                          }
+                        }}
+                        className="text-xs font-bold gap-1.5 h-9 bg-emerald-600 hover:bg-emerald-700 text-white"
+                      >
+                        Finish & Submit <CheckCircle className="w-3.5 h-3.5" />
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {drillStatus === 'submitted' && drillQuestions.length > 0 && (
+            <div className="space-y-6">
+              {/* Score Summary Card */}
+              <Card className="border-border bg-card text-card-foreground shadow-2xl overflow-hidden">
+                <CardHeader className="bg-gradient-to-r from-primary/10 via-amber-500/10 to-transparent border-b border-border pb-6 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-primary/15 text-primary flex items-center justify-center mx-auto mb-3 border border-primary/30">
+                    <Trophy className="w-8 h-8 text-amber-500" />
+                  </div>
+                  <CardTitle className="text-2xl sm:text-3xl font-extrabold font-display text-foreground">
+                    Novel CBT Exam Result
+                  </CardTitle>
+                  <p className="text-xs sm:text-sm text-muted-foreground max-w-md mx-auto mt-1">
+                    Performance review for prescribed text <strong>"{currentDrillBook?.title}"</strong>
+                  </p>
+                </CardHeader>
+
+                <CardContent className="p-6 sm:p-8 space-y-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto text-center">
+                    <div className="p-4 rounded-xl border border-border bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Final Score</p>
+                      <p className="text-2xl sm:text-3xl font-black text-foreground mt-1">
+                        {drillScore} <span className="text-sm font-normal text-muted-foreground">/ {drillQuestions.length}</span>
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-xl border border-border bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Accuracy</p>
+                      <p className={`text-2xl sm:text-3xl font-black mt-1 ${
+                        (drillScore / drillQuestions.length) >= 0.7 ? 'text-emerald-500' : 'text-amber-500'
+                      }`}>
+                        {Math.round((drillScore / drillQuestions.length) * 100)}%
+                      </p>
+                    </div>
+
+                    <div className="p-4 rounded-xl border border-border bg-muted/30">
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wide">Performance Tier</p>
+                      <p className="text-xs font-bold text-foreground mt-2">
+                        {(drillScore / drillQuestions.length) >= 0.8 ? 'Distinction • UTME Ready' : (drillScore / drillQuestions.length) >= 0.5 ? 'Credit • Solid Grounding' : 'Needs Review • Read Summaries'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                    <Button
+                      onClick={handleStartCbtDrill}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-bold gap-1.5 h-10 px-5"
+                    >
+                      <RotateCcw className="w-4 h-4" /> Retake Full Test
+                    </Button>
+
+                    {drillScore < drillQuestions.length && (
+                      <Button
+                        onClick={() => {
+                          const missed = drillQuestions.filter((q, idx) => {
+                            const correctLetter = q.correct?.replace(/^[A-D]\)\s*/, '') || 'A';
+                            return drillAnswers[idx] !== correctLetter;
+                          });
+                          setDrillQuestions(missed);
+                          setDrillCurrentIdx(0);
+                          setDrillAnswers({});
+                          setDrillFlagged({});
+                          setDrillSecondsLeft(missed.length * 60);
+                          setDrillStatus('testing');
+                          toast.info(`Retaking ${missed.length} missed questions!`);
+                        }}
+                        variant="destructive"
+                        className="text-xs font-bold gap-1.5 h-10 px-5"
+                      >
+                        <RefreshCw className="w-4 h-4" /> Retake {drillQuestions.length - drillScore} Missed Questions
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      onClick={() => setDrillStatus('setup')}
+                      className="text-xs font-semibold h-10 px-4"
+                    >
+                      Change Settings / Book
+                    </Button>
+
+                    <Button
+                      variant="secondary"
+                      asChild
+                      className="text-xs font-semibold h-10 px-4"
+                    >
+                      <Link to="/cbt/full-mock">Take Full 4-Subject Mock</Link>
+                    </Button>
+                  </div>
+
+                  {/* Question Review Section */}
+                  <div className="pt-6 border-t border-border space-y-4">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-primary" /> Question-by-Question Pedagogical Review
+                      </h3>
+
+                      <div className="flex items-center gap-1.5">
+                        <Button
+                          variant={drillReviewFilter === 'all' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDrillReviewFilter('all')}
+                          className="text-[11px] h-7 px-2.5 font-bold"
+                        >
+                          All ({drillQuestions.length})
+                        </Button>
+                        <Button
+                          variant={drillReviewFilter === 'incorrect' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDrillReviewFilter('incorrect')}
+                          className="text-[11px] h-7 px-2.5 font-bold text-rose-500"
+                        >
+                          Incorrect ({drillQuestions.length - drillScore})
+                        </Button>
+                        <Button
+                          variant={drillReviewFilter === 'flagged' ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => setDrillReviewFilter('flagged')}
+                          className="text-[11px] h-7 px-2.5 font-bold text-amber-500"
+                        >
+                          Flagged ({Object.values(drillFlagged).filter(Boolean).length})
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      {drillQuestions
+                        .map((q, idx) => ({ q, idx }))
+                        .filter(({ q, idx }) => {
+                          const correctLetter = q.correct?.replace(/^[A-D]\)\s*/, '') || 'A';
+                          const isCorrect = drillAnswers[idx] === correctLetter;
+                          if (drillReviewFilter === 'incorrect') return !isCorrect;
+                          if (drillReviewFilter === 'flagged') return Boolean(drillFlagged[idx]);
+                          return true;
+                        })
+                        .map(({ q, idx }) => {
+                          const userAns = drillAnswers[idx];
+                          const correctLetter = q.correct?.replace(/^[A-D]\)\s*/, '') || 'A';
+                          const isCorrect = userAns === correctLetter;
+
+                          return (
+                            <Card key={idx} className={`border p-4.5 space-y-3.5 rounded-xl ${
+                              isCorrect ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-rose-500/30 bg-rose-500/5'
+                            }`}>
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="font-bold text-foreground">
+                                  Question {idx + 1} • {q.chapterTitle || q.bookTitle}
+                                </span>
+                                <span className={`font-bold px-2.5 py-0.5 rounded-full text-[10px] uppercase ${
+                                  isCorrect ? 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/20 text-rose-600 dark:text-rose-400'
+                                }`}>
+                                  {isCorrect ? 'Correct' : userAns ? 'Incorrect' : 'Unanswered'}
+                                </span>
+                              </div>
+
+                              {q.passage && (
+                                <div className="p-3 rounded-lg bg-background/80 border border-border text-xs italic text-foreground/90 leading-relaxed border-l-2 border-primary/50">
+                                  "{q.passage}"
+                                </div>
+                              )}
+
+                              <p className="text-xs sm:text-sm font-semibold text-foreground">
+                                {q.question}
+                              </p>
+
+                              <div className="space-y-2 text-xs">
+                                {q.options.map((opt: string, optIdx: number) => {
+                                  const letter = ['A', 'B', 'C', 'D'][optIdx];
+                                  const isUserSelected = userAns === letter;
+                                  const isCorrectOpt = correctLetter === letter;
+
+                                  let optClass = "border-border bg-card text-muted-foreground";
+                                  if (isCorrectOpt) {
+                                    optClass = "border-emerald-500/50 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-bold";
+                                  } else if (isUserSelected && !isCorrect) {
+                                    optClass = "border-rose-500/50 bg-rose-500/15 text-rose-700 dark:text-rose-300 font-bold";
+                                  }
+
+                                  return (
+                                    <div key={optIdx} className={`p-2.5 rounded-lg border flex items-center justify-between ${optClass}`}>
+                                      <span>{opt}</span>
+                                      {isCorrectOpt && <span className="text-[10px] font-bold text-emerald-600 uppercase ml-2">Correct Answer</span>}
+                                      {isUserSelected && !isCorrect && <span className="text-[10px] font-bold text-rose-600 uppercase ml-2">Your Answer</span>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+
+                              {q.explanation && (
+                                <div className="p-3 rounded-lg bg-background border border-border text-xs space-y-1">
+                                  <p className="font-bold text-primary flex items-center gap-1.5">
+                                    <Sparkles className="w-3.5 h-3.5" /> Syllabus Explanation:
+                                  </p>
+                                  <p className="text-muted-foreground leading-relaxed">
+                                    {q.explanation}
+                                  </p>
+                                </div>
+                              )}
+                            </Card>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Book Selector Tabs (When In Study Mode) */}
+      {hubTab === 'study' && (
+        <>
+          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+            {books.map((bk) => (
+              <button
+                key={bk.id}
+                onClick={() => handleSelectBook(bk.id)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all border flex items-center gap-2 ${
+                  selectedBookId === bk.id
+                    ? 'bg-primary text-primary-foreground border-primary shadow-md ring-2 ring-primary/20'
+                    : 'bg-card text-muted-foreground hover:text-foreground border-border hover:border-primary/40'
+                }`}
+              >
+                <Bookmark className="w-3.5 h-3.5" />
+                <span>{bk.title}</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/20 font-mono">
+                  {bk.genre}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative">
+            <Search className="w-4 h-4 text-muted-foreground absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Input
+              placeholder="Search by chapter title, character (e.g. Omar, Talle, Salma), theme, or plot keyword..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 text-xs bg-card border-border"
+            />
+          </div>
+        </>
+      )}
+
+      {/* Main Content Layout (When in Study Mode) */}
+      {hubTab === 'study' && currentBook && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           {/* Chapter Navigation Sidebar */}
           <div className="lg:col-span-4 space-y-3">
