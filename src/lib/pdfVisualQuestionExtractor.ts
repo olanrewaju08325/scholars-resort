@@ -1,12 +1,18 @@
 import * as pdfjsLib from 'pdfjs-dist';
-import { normalizeSubjectName } from '@/utils/subjectUtils';
+import { normalizeSubjectName, OFFICIAL_JAMB_SUBJECTS } from '@/utils/subjectUtils';
 
-// Configure pdfjs worker dynamically to match the exact installed pdfjs-dist runtime version
+// Configure pdfjs worker dynamically with fallback
 try {
   if (typeof window !== 'undefined') {
     const installedVersion = (pdfjsLib as any).version || '6.2.108';
-    // Use jsdelivr matching the exact API version of pdfjs-dist
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
+    try {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).href;
+    } catch {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
+    }
   }
 } catch (e) {
   console.warn('Could not set workerSrc for pdfjs:', e);
@@ -20,6 +26,7 @@ export interface ExtractedVisualQuestion {
   correctAnswer: string;
   explanation: string;
   year?: number;
+  subject?: string;
   hasVisualReference: boolean;
   diagramImageUrl?: string;
   pageNumber: number;
@@ -31,16 +38,178 @@ export interface PdfVisualExtractionResult {
   numPages: number;
   totalQuestions: number;
   questionsWithDiagrams: number;
+  detectedSubject: string;
+  detectedSubjectConfidence: number;
+  isChemistry: boolean;
   questions: ExtractedVisualQuestion[];
   extractedDiagrams: Array<{ pageNumber: number; dataUrl: string; label: string }>;
 }
 
 const VISUAL_KEYWORDS = [
-  'diagram', 'figure', 'shown above', 'shown below', 'circuit', 
+  'diagram', 'figure', 'fig.', 'fig ', 'shown above', 'shown below', 'circuit', 
   'structure above', 'structure below', 'in the apparatus', 'illustrated above', 
   'illustrated below', 'graph above', 'graph below', 'chart above', 'chart below',
-  'refer to diagram', 'as shown in', 'following table'
+  'refer to diagram', 'as shown in', 'following table', 'formula above', 'setup above',
+  'titration', 'beaker', 'flask', 'burner', 'galvanometer', 'ammeter', 'voltmeter'
 ];
+
+/**
+ * Authoritative 20-Subject JAMB Domain Vocabulary Classifier
+ */
+const JAMB_SUBJECT_KEYWORDS: Record<string, { weightWords: string[]; titleTriggers: string[] }> = {
+  'Chemistry': {
+    titleTriggers: ['chemistry', 'chm', 'chem'],
+    weightWords: [
+      'acid', 'base', 'oxidation', 'reduction', 'redox', 'mole', 'molar', 'molarity', 'electrolysis',
+      'cathode', 'anode', 'electrolyte', 'alkane', 'alkene', 'alkyne', 'benzene', 'hydrocarbon',
+      'periodic table', 'halogen', 'allotrope', 'precipitate', 'titration', 'indicator', 'catalyst',
+      'equilibrium', 'enthalpy', 'endothermic', 'exothermic', 'distillation', 'apparatus', 'compound',
+      'reaction', 'valency', 'covalent', 'ionic', 'orbital', 'ester', 'alcohol', 'isomer', 'fractional'
+    ]
+  },
+  'Physics': {
+    titleTriggers: ['physics', 'phy'],
+    weightWords: [
+      'velocity', 'acceleration', 'resistor', 'resistance', 'circuit', 'current', 'voltage', 'potential difference',
+      'capacitance', 'refraction', 'reflection', 'lens', 'mirror', 'frequency', 'wavelength', 'amplitude',
+      'gravity', 'newton', 'friction', 'momentum', 'torque', 'thermodynamics', 'kinetic energy', 'potential energy',
+      'magnetic field', 'flux', 'transformer', 'radioactivity', 'half-life', 'isotope', 'sound wave', 'optics'
+    ]
+  },
+  'Biology': {
+    titleTriggers: ['biology', 'bio'],
+    weightWords: [
+      'photosynthesis', 'chlorophyll', 'respiration', 'mitosis', 'meiosis', 'chromosome', 'dna', 'rna',
+      'organism', 'cell', 'mitochondria', 'membrane', 'enzyme', 'digestive', 'circulatory', 'pollination',
+      'ecology', 'habitat', 'ecosystem', 'trophic', 'evolution', 'taxonomy', 'phylum', 'vertebrate', 'mammal',
+      'parasite', 'bacteria', 'fungi', 'homeostasis', 'heredity', 'genetics', 'osmosis', 'diffusion'
+    ]
+  },
+  'Mathematics': {
+    titleTriggers: ['mathematics', 'maths', 'math'],
+    weightWords: [
+      'quadratic', 'logarithm', 'polynomial', 'matrix', 'matrices', 'determinant', 'trigonometry', 'sine',
+      'cosine', 'tangent', 'calculus', 'differentiation', 'derivative', 'integration', 'probability',
+      'permutation', 'combination', 'geometric progression', 'arithmetic progression', 'indices', 'surds',
+      'circle theorem', 'simultaneous equations', 'bearing', 'elevation', 'depression', 'standard deviation'
+    ]
+  },
+  'Use of English': {
+    titleTriggers: ['use of english', 'english language', 'general english'],
+    weightWords: [
+      'comprehension', 'passage', 'nearest in meaning', 'opposite in meaning', 'antonym', 'synonym',
+      'vowel', 'consonant', 'stress pattern', 'syllable', 'rhyme', 'register', 'idiom', 'clause',
+      'sentence', 'grammatical', 'punctuation', 'underline', 'most appropriate interpretation'
+    ]
+  },
+  'Economics': {
+    titleTriggers: ['economics', 'econs'],
+    weightWords: [
+      'demand', 'supply', 'elasticity', 'monopoly', 'inflation', 'gdp', 'gnp', 'fiscal', 'monetary policy',
+      'utility', 'production function', 'central bank', 'balance of payment', 'market structure', 'opportunity cost'
+    ]
+  },
+  'Government': {
+    titleTriggers: ['government', 'govt'],
+    weightWords: [
+      'constitution', 'democracy', 'federalism', 'sovereignty', 'electoral', 'judiciary', 'legislature',
+      'executive', 'colonial rule', 'indirect rule', 'political party', 'citizenship', 'republic', 'separation of powers'
+    ]
+  },
+  'Literature in English': {
+    titleTriggers: ['literature in english', 'literature'],
+    weightWords: [
+      'poem', 'poet', 'stanza', 'drama', 'playwright', 'prose', 'protagonist', 'antagonist', 'metaphor',
+      'simile', 'irony', 'soliloquy', 'personification', 'theme', 'rhyme scheme', 'literary device'
+    ]
+  },
+  'Commerce': {
+    titleTriggers: ['commerce'],
+    weightWords: [
+      'trade', 'wholesaler', 'retailer', 'warehousing', 'marine insurance', 'banking', 'transport',
+      'advertising', 'stock exchange', 'bill of exchange', 'chamber of commerce', 'export', 'import'
+    ]
+  },
+  'Principles of Accounts': {
+    titleTriggers: ['principles of accounts', 'financial accounting', 'accounting'],
+    weightWords: [
+      'balance sheet', 'ledger', 'debit', 'credit', 'journal', 'trial balance', 'depreciation',
+      'profit and loss', 'accrual', 'prepayment', 'bank reconciliation', 'cash book', 'bad debt'
+    ]
+  },
+  'Agricultural Science': {
+    titleTriggers: ['agricultural science', 'agric'],
+    weightWords: [
+      'crop', 'soil', 'fertilizer', 'tillage', 'livestock', 'ruminant', 'poultry', 'irrigation',
+      'pest', 'weed', 'pasture', 'forestry', 'horticulture', 'agronomy', 'animal husbandry'
+    ]
+  },
+  'Geography': {
+    titleTriggers: ['geography', 'geo'],
+    weightWords: [
+      'latitude', 'longitude', 'contour', 'topography', 'climate', 'vegetation', 'drainage',
+      'erosion', 'rock', 'settlement', 'weathering', 'scale', 'grid reference', 'river basin'
+    ]
+  },
+  'Christian Religious Studies': {
+    titleTriggers: ['christian religious studies', 'crs', 'crk'],
+    weightWords: ['covenant', 'israel', 'apostle', 'jesus', 'paul', 'prophet', 'gospel', 'resurrection', 'salvation', 'moses', 'david']
+  },
+  'Islamic Studies': {
+    titleTriggers: ['islamic studies', 'irs', 'irk'],
+    weightWords: ['allah', 'prophet', 'muhammad', 'quran', 'hadith', 'surah', 'zakat', 'hajj', 'ramadan', 'salat', 'tawhid']
+  }
+};
+
+/**
+ * Intelligent detector that identifies which of the 20 official JAMB subjects a document or question belongs to
+ */
+export function detectJambSubjectFromContent(text: string, fileName = ''): { subject: string; confidence: number; isChemistry: boolean } {
+  const lowerText = (text + ' ' + fileName).toLowerCase();
+  
+  let bestSubject = 'Chemistry'; // Sensible science/visual default
+  let highestScore = 0;
+  const totalKeywordsFound: Record<string, number> = {};
+
+  for (const [subName, def] of Object.entries(JAMB_SUBJECT_KEYWORDS)) {
+    let score = 0;
+
+    // 1. Explicit title or header match gives large boost
+    for (const trig of def.titleTriggers) {
+      const regex = new RegExp(`(?:\\b|subject\\s*:\\s*|jamb\\s+|utme\\s+)${trig}\\b`, 'i');
+      if (regex.test(lowerText)) {
+        score += 80;
+      } else if (lowerText.includes(trig)) {
+        score += 25;
+      }
+    }
+
+    // 2. Count technical domain vocabulary
+    for (const kw of def.weightWords) {
+      const kwRegex = new RegExp(`\\b${kw}\\b`, 'gi');
+      const matches = lowerText.match(kwRegex);
+      if (matches) {
+        score += matches.length * 3;
+      }
+    }
+
+    totalKeywordsFound[subName] = score;
+    if (score > highestScore) {
+      highestScore = score;
+      bestSubject = subName;
+    }
+  }
+
+  // Calculate percentage confidence (capped between 40% and 99%)
+  const confidence = Math.min(99, Math.max(50, Math.round((highestScore / 100) * 85) + 15));
+  const isChemistry = bestSubject.toLowerCase() === 'chemistry';
+
+  return {
+    subject: bestSubject,
+    confidence: highestScore > 0 ? confidence : 65,
+    isChemistry
+  };
+}
 
 /**
  * Extracts question text, multiple choice options, and renders diagrams directly from a PDF.
@@ -63,12 +232,13 @@ export async function extractQuestionsAndDiagramsFromPdf(
   const numPages = pdf.numPages;
   const extractedDiagrams: Array<{ pageNumber: number; dataUrl: string; label: string }> = [];
   const allExtractedQuestions: ExtractedVisualQuestion[] = [];
+  let fullAccumulatedText = '';
 
-  onProgress?.(`Loaded PDF with ${numPages} pages. Processing pages...`, 10);
+  onProgress?.(`Loaded PDF with ${numPages} pages. Processing and auto-detecting subject...`, 10);
 
   // Process each page: Extract text items and render visual page snapshots for diagrams
   for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-    onProgress?.(`Processing page ${pageNum} of ${numPages}...`, 10 + Math.round((pageNum / numPages) * 70));
+    onProgress?.(`Analyzing page ${pageNum} of ${numPages} & isolating visual diagrams...`, 10 + Math.round((pageNum / numPages) * 70));
     
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
@@ -92,22 +262,23 @@ export async function extractQuestionsAndDiagramsFromPdf(
     }
     if (currentLine.trim()) textLines.push(currentLine.trim());
     const fullPageText = textLines.join('\n');
+    fullAccumulatedText += ' ' + fullPageText;
 
     // Render page to canvas to isolate visual diagrams
     let pageDiagramDataUrl = '';
     try {
-      const viewport = page.getViewport({ scale: 1.5 });
+      const viewport = page.getViewport({ scale: 1.6 });
       const canvas = document.createElement('canvas');
       canvas.width = viewport.width;
       canvas.height = viewport.height;
       const ctx = canvas.getContext('2d');
       if (ctx) {
         await page.render({ canvasContext: ctx, viewport }).promise;
-        pageDiagramDataUrl = canvas.toDataURL('image/jpeg', 0.85);
+        pageDiagramDataUrl = canvas.toDataURL('image/jpeg', 0.88);
         extractedDiagrams.push({
           pageNumber: pageNum,
           dataUrl: pageDiagramDataUrl,
-          label: `Page ${pageNum} Visual Snapshot`
+          label: `Page ${pageNum} Visual Diagram Snapshot`
         });
       }
     } catch (renderErr) {
@@ -119,7 +290,22 @@ export async function extractQuestionsAndDiagramsFromPdf(
     allExtractedQuestions.push(...pageQuestions);
   }
 
-  onProgress?.('Finalizing extraction & linking visual diagrams...', 95);
+  onProgress?.('Classifying official JAMB subject & linking diagrams...', 92);
+
+  // Auto-detect overall subject from accumulated document content
+  const detectionResult = detectJambSubjectFromContent(fullAccumulatedText, file.name);
+  const resolvedSubject = (subjectHint && subjectHint !== 'General' && subjectHint !== 'Physics')
+    ? subjectHint
+    : detectionResult.subject;
+
+  // Tag questions with detected subject
+  allExtractedQuestions.forEach(q => {
+    if (!q.subject) {
+      // Also test individual question for mixed PDFs
+      const qDetect = detectJambSubjectFromContent(q.questionText);
+      q.subject = qDetect.confidence > 75 ? qDetect.subject : resolvedSubject;
+    }
+  });
 
   const questionsWithDiagrams = allExtractedQuestions.filter(q => Boolean(q.diagramImageUrl)).length;
 
@@ -128,6 +314,9 @@ export async function extractQuestionsAndDiagramsFromPdf(
     numPages,
     totalQuestions: allExtractedQuestions.length,
     questionsWithDiagrams,
+    detectedSubject: resolvedSubject,
+    detectedSubjectConfidence: detectionResult.confidence,
+    isChemistry: resolvedSubject.toLowerCase() === 'chemistry',
     questions: allExtractedQuestions,
     extractedDiagrams
   };

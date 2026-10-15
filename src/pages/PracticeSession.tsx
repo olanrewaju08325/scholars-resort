@@ -662,6 +662,40 @@ const PracticeSession = () => {
     }
   };
 
+  // JAMB 8-Key Physical Layout Shortcuts (A, B, C, D for options, P for prev, N for next, S for finish)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      if (activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || (activeEl as HTMLElement).isContentEditable)) {
+        return;
+      }
+
+      const key = e.key.toUpperCase();
+      if (!currentQ) return;
+
+      const opts: any[] = Array.isArray(currentQ.options) && currentQ.options.length > 0 
+        ? currentQ.options 
+        : [currentQ.option_a, currentQ.option_b, currentQ.option_c, currentQ.option_d].filter(Boolean);
+
+      if (['A', 'B', 'C', 'D'].includes(key)) {
+        const idx = key.charCodeAt(0) - 65;
+        if (opts[idx] && !answersMap[currentQ.id] && !isPaused) {
+          handleSelect(opts[idx]);
+        }
+      } else if (key === 'N' || e.key === 'ArrowRight') {
+        handleNext(false);
+      } else if (key === 'P' || e.key === 'ArrowLeft') {
+        handlePrev();
+      } else if (key === 'S') {
+        e.preventDefault();
+        handleNext(true); // submit / finish practice
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentQ, answersMap, isPaused, handleNext, handlePrev]);
+
   const handleAIAction = async (action: string) => {
     setIsGeneratingAi(true);
     try {

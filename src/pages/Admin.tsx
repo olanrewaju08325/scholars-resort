@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { 
   LayoutDashboard, Users, BookOpen, FileQuestion, CreditCard, 
   Settings, Activity, ShieldAlert, LogOut, ChevronLeft, ChevronRight, 
   Search, Bell, Plus, MessageSquare, Menu, Sparkles, Trophy,
-  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2, ShieldCheck, AlertTriangle, Video, FileText
+  BarChart, List, Shield, DatabaseBackup, Megaphone, Mail, DollarSign, Gift, Calendar, Network, Globe, Brain, Swords, Key, Trash2, ShieldCheck, AlertTriangle, Video, FileText, RefreshCw
 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Input } from '@/components/ui/input';
@@ -60,9 +60,36 @@ import { PdfVisualQuestionExtractor } from '@/components/admin/PdfVisualQuestion
 import { MissingDiagramAuditTab } from '@/components/admin/MissingDiagramAuditTab';
 
 export default function Admin() {
-  const { profile, user, signOut } = useAuth();
+  const { profile, user, signOut, loading: authLoading } = useAuth();
   const navigate = useNavigate();
-  const [activeModule, setActiveModule] = useState('dashboard');
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  // Read initial module from URL search query (?module=... or ?tab=...), fallback to sessionStorage, fallback to 'dashboard'
+  const urlModule = searchParams.get('module') || searchParams.get('tab');
+  const savedModule = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('scholar_admin_active_module') : null;
+  const [activeModule, setActiveModuleState] = useState<string>(() => {
+    return urlModule || savedModule || 'dashboard';
+  });
+
+  const setActiveModule = (moduleId: string) => {
+    setActiveModuleState(moduleId);
+    setSearchParams({ module: moduleId }, { replace: true });
+    try {
+      sessionStorage.setItem('scholar_admin_active_module', moduleId);
+    } catch {}
+  };
+
+  // Sync state if browser back/forward or external URL param changes
+  useEffect(() => {
+    const currentParam = searchParams.get('module') || searchParams.get('tab');
+    if (currentParam && currentParam !== activeModule) {
+      setActiveModuleState(currentParam);
+      try {
+        sessionStorage.setItem('scholar_admin_active_module', currentParam);
+      } catch {}
+    }
+  }, [searchParams]);
+
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -82,6 +109,15 @@ export default function Admin() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center text-center p-4">
+        <RefreshCw className="w-10 h-10 animate-spin text-primary mb-4" />
+        <p className="text-sm text-muted-foreground font-semibold">Authenticating Admin OS Session...</p>
+      </div>
+    );
+  }
 
   const AUTHORIZED_ADMIN_EMAILS = ['admitwise2@gmail.com', 'olanrewajuhamilot@gmail.com'];
   const isAdmin = profile?.role === 'admin' || 
@@ -281,6 +317,7 @@ export default function Admin() {
               <div className="space-y-0.5">
                 {grp.items.map((item) => (
                   <button
+                    type="button"
                     key={item.id}
                     onClick={() => setActiveModule(item.id)}
                     className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-xs font-medium
@@ -331,6 +368,7 @@ export default function Admin() {
                 <div className="grid grid-cols-1 gap-1">
                   {grp.items.map((item) => (
                     <button
+                      type="button"
                       key={item.id}
                       onClick={() => { setActiveModule(item.id); setIsMobileMenuOpen(false); }}
                       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors text-xs font-medium

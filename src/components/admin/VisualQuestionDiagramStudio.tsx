@@ -20,6 +20,7 @@ import { supabase } from '@/lib/supabase';
 import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
 import { MathText } from '@/components/MathText';
 import { toast } from 'sonner';
+import { exportExtractedVisualQuestionsToCSV } from '@/utils/exportUtils';
 
 const VISUAL_KEYWORDS = [
   'diagram', 'figure', 'fig.', 'fig ', 'circuit', 'apparatus', 
@@ -30,7 +31,7 @@ const VISUAL_KEYWORDS = [
 ];
 
 export const VisualQuestionDiagramStudio: React.FC = () => {
-  const [selectedSubject, setSelectedSubject] = useState<string>('Physics');
+  const [selectedSubject, setSelectedSubject] = useState<string>('Chemistry');
   const [activeTab, setActiveTab] = useState<'extractor' | 'gallery' | 'audit' | 'training'>('extractor');
   const [loading, setLoading] = useState<boolean>(false);
 
@@ -43,6 +44,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [examYear, setExamYear] = useState<number>(2024);
   const [extractVisualOnly, setExtractVisualOnly] = useState<boolean>(true);
+  const [detectedSubjectMeta, setDetectedSubjectMeta] = useState<{ subject: string; confidence: number; isChemistry: boolean } | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -164,9 +166,21 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
         }
       );
 
+      // Apply auto-detected subject (especially Chemistry or other official JAMB subject)
+      if (result.detectedSubject) {
+        setSelectedSubject(result.detectedSubject);
+        setDetectedSubjectMeta({
+          subject: result.detectedSubject,
+          confidence: result.detectedSubjectConfidence,
+          isChemistry: result.isChemistry
+        });
+        toast.success(`Auto-detected Subject: ${result.detectedSubject} (${result.detectedSubjectConfidence}% confidence)!`);
+      }
+
       let processedQuestions = result.questions.map(q => ({
         ...q,
-        year: examYear
+        year: q.year || examYear,
+        subject: q.subject || result.detectedSubject || selectedSubject
       }));
 
       if (extractVisualOnly) {
@@ -284,12 +298,12 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
 
     try {
       const canonical = normalizeSubjectName(selectedSubject);
-      let subjectId = '';
       const { data: dbSubs } = await supabase.from('subjects').select('id, name');
-      if (dbSubs) {
-        const matched = dbSubs.find(s => normalizeSubjectName(s.name).toLowerCase() === canonical.toLowerCase());
-        subjectId = matched?.id || dbSubs[0]?.id || '';
-      }
+      const subjectMap = new Map<string, string>();
+      dbSubs?.forEach(s => {
+        subjectMap.set(normalizeSubjectName(s.name).toLowerCase(), s.id);
+      });
+      const defaultSubId = subjectMap.get(canonical.toLowerCase()) || dbSubs?.[0]?.id || '';
 
       const payloads = extractedQuestions.map(q => {
         let qText = q.questionText.trim();
@@ -301,8 +315,11 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
           ? ['needs_diagram', 'missing_figure']
           : [];
 
+        const targetSubject = q.subject || selectedSubject;
+        const targetSubjectId = subjectMap.get(normalizeSubjectName(targetSubject).toLowerCase()) || defaultSubId;
+
         return {
-          subject_id: subjectId,
+          subject_id: targetSubjectId,
           question_text: qText,
           options: q.options,
           correct_answer: q.correctAnswer,
@@ -618,8 +635,26 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-4 pt-2">
+              {/* Auto-detected Subject Banner */}
+              {detectedSubjectMeta && (
+                <div className="flex items-center justify-between p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs font-semibold text-emerald-600 dark:text-emerald-400 animate-fadeIn">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <span>
+                      Auto-detected Subject: <strong className="uppercase underline tracking-wider">{detectedSubjectMeta.subject}</strong> ({detectedSubjectMeta.confidence}% confidence from official JAMB curriculum analysis).
+                    </span>
+                  </div>
+                  {detectedSubjectMeta.isChemistry && (
+                    <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 rounded text-[11px] font-bold">
+                      Chemistry Formulas & Diagrams Enabled
+                    </span>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <Button
+                  type="button"
                   onClick={handleStartExtraction}
                   disabled={!selectedFile || isProcessing}
                   className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 h-11 px-6 shadow-md"
@@ -638,14 +673,28 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                 </Button>
 
                 {extractedQuestions.length > 0 && (
-                  <Button
-                    onClick={handleIngestAllQuestions}
-                    disabled={isIngesting}
-                    className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold gap-2 h-11 px-6 shadow-md"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Publish {extractedQuestions.length} Questions to Live Bank</span>
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => exportExtractedVisualQuestionsToCSV(extractedQuestions, selectedSubject)}
+                      className="border-emerald-600/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 font-bold gap-2 h-11 px-4 shadow-sm"
+                      title="Safely export extracted questions to Excel / CSV spreadsheet"
+                    >
+                      <Download className="w-4 h-4" />
+                      <span>Export to Excel / CSV ({extractedQuestions.length})</span>
+                    </Button>
+
+                    <Button
+                      type="button"
+                      onClick={handleIngestAllQuestions}
+                      disabled={isIngesting}
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground font-extrabold gap-2 h-11 px-6 shadow-md"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Publish {extractedQuestions.length} Questions to Live Bank</span>
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardContent>

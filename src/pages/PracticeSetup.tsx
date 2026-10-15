@@ -128,19 +128,46 @@ const PracticeSetup = () => {
         supabase.from('topics').select('*').eq('subject_id', selectedSubject)
           .then(({ data }) => {
             const dbTopics = data || [];
-            const seen = new Set(dbTopics.map(t => t.name.toLowerCase().trim()));
-            const merged = [...dbTopics];
+            
+            // Build a clean, streamlined topic list:
+            // 1. Prioritize canonical syllabus topics (2-6 per subject)
+            // 2. Map existing DB topic UUIDs so question querying works directly
+            const seenNames = new Set<string>();
+            const streamlined: any[] = [];
+
             for (const st of syllabusTopics) {
-              if (!seen.has(st.name.toLowerCase().trim())) {
-                merged.push(st);
-                seen.add(st.name.toLowerCase().trim());
+              const stLower = st.name.toLowerCase().trim();
+              const matchedDb = dbTopics.find(d => 
+                d.name.toLowerCase().trim() === stLower ||
+                d.name.toLowerCase().includes(stLower) ||
+                stLower.includes(d.name.toLowerCase().trim())
+              );
+              
+              streamlined.push({
+                id: matchedDb ? matchedDb.id : st.name,
+                name: st.name,
+                subject_id: selectedSubject,
+                is_syllabus: true
+              });
+              seenNames.add(stLower);
+            }
+
+            // 3. Add any distinct non-duplicate DB topics up to a comfortable cap (max 8 topics per subject)
+            for (const dt of dbTopics) {
+              const dtLower = dt.name.toLowerCase().trim();
+              const alreadyCovered = Array.from(seenNames).some(name => 
+                name.includes(dtLower) || dtLower.includes(name)
+              );
+              if (!alreadyCovered && streamlined.length < 8) {
+                streamlined.push(dt);
+                seenNames.add(dtLower);
               }
             }
 
-            setTopics(merged);
+            setTopics(streamlined);
             const topicParam = searchParams.get('topic') || searchParams.get('topicId');
             if (topicParam) {
-              const matched = merged.find((t: any) =>
+              const matched = streamlined.find((t: any) =>
                 t.id === topicParam ||
                 t.name.toLowerCase() === topicParam.toLowerCase() ||
                 t.name.toLowerCase().includes(topicParam.toLowerCase())
@@ -171,11 +198,14 @@ const PracticeSetup = () => {
       return;
     }
 
+    const matchedTopicObj = topics.find(t => t.id === selectedTopic);
+
     navigate('/practice/session', { 
       state: { 
         mode,
         subjectId: selectedSubject, 
         topicId: selectedTopic,
+        topicName: matchedTopicObj ? matchedTopicObj.name : (selectedTopic || undefined),
         difficulty,
         questionCount: parseInt(questionCount),
         learningStyle,

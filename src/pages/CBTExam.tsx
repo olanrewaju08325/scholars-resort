@@ -132,6 +132,37 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
   const [swipeDirection, setSwipeDirection] = useState<'left' | 'right' | null>(null);
   const hasWarnedFiveMinutes = useRef(false);
 
+  // JAMB 8-Key Physical Layout & Network Resilience State
+  const [eightKeyMode, setEightKeyMode] = useState<boolean>(() => localStorage.getItem('jamb_8key_mode_enabled') !== 'false');
+  const [lastPressedKey, setLastPressedKey] = useState<string | null>(null);
+  const [networkStatus, setNetworkStatus] = useState<'online' | 'slow' | 'offline'>(() => typeof navigator !== 'undefined' && navigator.onLine ? 'online' : 'offline');
+  const [isLowBandwidthMode, setIsLowBandwidthMode] = useState<boolean>(() => localStorage.getItem('jamb_low_bandwidth_mode') === 'true');
+
+  useEffect(() => {
+    localStorage.setItem('jamb_8key_mode_enabled', String(eightKeyMode));
+  }, [eightKeyMode]);
+
+  useEffect(() => {
+    localStorage.setItem('jamb_low_bandwidth_mode', String(isLowBandwidthMode));
+  }, [isLowBandwidthMode]);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setNetworkStatus('online');
+      toast.success('Connection restored! Background sync active.');
+    };
+    const handleOffline = () => {
+      setNetworkStatus('offline');
+      toast.warning('Network disconnected! Offline zero-loss mode active. Continue your exam seamlessly.');
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
   // Focus Lock Anti-Cheat Hook
   const {
     isLocked,
@@ -565,62 +596,6 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     };
   }, [hasStarted, questions, currentQuestionIdx, soundEnabled]);
 
-  // JAMB Keyboard Navigation Shortcuts
-  useEffect(() => {
-    if (!hasStarted || questions.length === 0) return;
-    
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in scratchpad or other input
-      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement).tagName)) return;
-
-      const key = e.key.toUpperCase();
-      const currentQ = questions[currentQuestionIdx];
-      if (!currentQ) return;
-
-      let options: any[] = [];
-      if (Array.isArray(currentQ.options) && currentQ.options.length > 0) {
-        options = currentQ.options;
-      } else {
-        options = [currentQ.option_a, currentQ.option_b, currentQ.option_c, currentQ.option_d].filter(Boolean);
-      }
-      
-      switch (key) {
-        case 'A':
-          if (options[0]) handleSelectAnswer(currentQ.id, options[0]);
-          break;
-        case 'B':
-          if (options[1]) handleSelectAnswer(currentQ.id, options[1]);
-          break;
-        case 'C':
-          if (options[2]) handleSelectAnswer(currentQ.id, options[2]);
-          break;
-        case 'D':
-          if (options[3]) handleSelectAnswer(currentQ.id, options[3]);
-          break;
-        case 'P':
-          handlePrev();
-          break;
-        case 'N':
-          handleNext();
-          break;
-        case 'S':
-          e.preventDefault();
-          confirmAction(
-            "Submit Exam",
-            "Are you sure you want to submit your exam now?",
-            () => submitExam()
-          );
-          break;
-        case '?':
-          setShowShortcutsModal(true);
-          break;
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasStarted, currentQuestionIdx, questions, answers, handleNext, handlePrev, confirmAction]);
-
   // Auto-save to both localStorage and Dexie periodically and on state change (crash safety)
   useEffect(() => {
     if (!hasStarted || !profile || questions.length === 0) return;
@@ -833,6 +808,28 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     });
   }, [profile, questions, sessionStartedAt, timeLeft]);
 
+  // Reverse / Deselect answer (JAMB physical 8-key layout 'R' key)
+  const handleDeselectAnswer = useCallback((questionId: string) => {
+    setAnswers(prev => {
+      if (!prev[questionId]) return prev;
+      const newAnswers = { ...prev };
+      delete newAnswers[questionId];
+      if (profile) {
+        saveExamSnapshot({
+          id: `session_${profile.id}`,
+          userId: profile.id,
+          questions,
+          answers: newAnswers,
+          startedAt: sessionStartedAt,
+          savedAt: new Date().toISOString(),
+          timeLeft
+        }).catch(console.warn);
+      }
+      return newAnswers;
+    });
+    toast.info('Answer reversed / cleared (JAMB Key R)');
+  }, [profile, questions, sessionStartedAt, timeLeft]);
+
   const [isCapturingSnapshot, setIsCapturingSnapshot] = useState(false);
 
   const handleTakeSnapshot = async () => {
@@ -865,7 +862,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
     setFlagged(prev => ({ ...prev, [currentQuestionIdx]: !prev[currentQuestionIdx] }));
   }, [currentQuestionIdx]);
 
-  // Keyboard Shortcuts (A, B, C, D, 1, 2, 3, 4, N, P, F, G, C, K, M, S, ?, H)
+  // Unified JAMB Keyboard Shortcuts (A, B, C, D, P, N, S, R + F, G, C, M, ?)
   useEffect(() => {
     if (!hasStarted) return;
     
@@ -923,8 +920,8 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
         return;
       }
 
-      // Calculator Toggle (C or K)
-      if (key === 'K' || (key === 'C' && !['A', 'B', 'D'].includes(key) && e.altKey)) {
+      // Calculator Toggle (K or Alt+C)
+      if (key === 'K' || (key === 'C' && !eightKeyMode && e.altKey)) {
         e.preventDefault();
         setShowCalculator(prev => !prev);
         return;
@@ -932,33 +929,53 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
       
       if (!q) return;
 
-      // Option A, B, C, D selection
+      // Extract options array safely
+      let optionsList: any[] = [];
+      if (Array.isArray(q.options) && q.options.length > 0) {
+        optionsList = q.options;
+      } else {
+        optionsList = [q.option_a, q.option_b, q.option_c, q.option_d].filter(Boolean);
+      }
+
+      // Flash Tactile Key Feedback
+      if (['A', 'B', 'C', 'D', 'P', 'N', 'S', 'R'].includes(key)) {
+        setLastPressedKey(key);
+        setTimeout(() => setLastPressedKey(null), 300);
+      }
+
+      // Official JAMB 8-Key Layout: A, B, C, D Selection
       if (['A', 'B', 'C', 'D'].includes(key)) {
         const optionIndex = key.charCodeAt(0) - 65; // A=0, B=1, C=2, D=3
-        if (q.options[optionIndex]) {
-          handleSelectAnswer(q.id, q.options[optionIndex]);
+        if (optionsList[optionIndex]) {
+          handleSelectAnswer(q.id, optionsList[optionIndex]);
         }
-      } else if (['1', '2', '3', '4'].includes(e.key)) {
+      } else if (!eightKeyMode && ['1', '2', '3', '4'].includes(e.key)) {
         const optionIndex = parseInt(e.key, 10) - 1;
-        if (q.options[optionIndex]) {
-          handleSelectAnswer(q.id, q.options[optionIndex]);
+        if (optionsList[optionIndex]) {
+          handleSelectAnswer(q.id, optionsList[optionIndex]);
         }
-      } else if (key === 'N' || e.key === 'ArrowRight') {
+      } else if (key === 'N' || (!eightKeyMode && e.key === 'ArrowRight')) {
         handleNext();
-      } else if (key === 'P' || e.key === 'ArrowLeft') {
+      } else if (key === 'P' || (!eightKeyMode && e.key === 'ArrowLeft')) {
         handlePrev();
+      } else if (key === 'R') {
+        // Official JAMB Reverse / Deselect Key
+        e.preventDefault();
+        handleDeselectAnswer(q.id);
       } else if (key === 'S') {
+        // Official JAMB Submit Key
+        e.preventDefault();
         confirmAction(
-            "Submit Exam",
-            "Are you sure you want to submit your exam now?",
-            () => submitExam()
+          "Submit Exam",
+          "Are you sure you want to submit your exam now?",
+          () => submitExam()
         );
       }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasStarted, currentQuestionIdx, questions, handleSelectAnswer, handleNext, handlePrev, soundEnabled, toggleFlag]);
+  }, [hasStarted, currentQuestionIdx, questions, handleSelectAnswer, handleDeselectAnswer, handleNext, handlePrev, soundEnabled, toggleFlag, eightKeyMode, confirmAction]);
 
   if (loading) {
     return <div className="flex flex-col h-screen bg-background items-center justify-center font-display text-xl animate-pulse">Loading Official Exam Engine...</div>;
@@ -1184,6 +1201,48 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
             <span className="hidden md:inline">{soundEnabled ? 'Sound' : 'Muted'}</span>
           </Button>
 
+          {/* JAMB 8-Key Mode Quick Toggle */}
+          <Button
+            variant={eightKeyMode ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              const next = !eightKeyMode;
+              setEightKeyMode(next);
+              if (next) {
+                toast.success('Official JAMB 8-Key Layout Enabled (A, B, C, D, P, N, S, R)');
+              } else {
+                toast.info('Standard navigation enabled');
+              }
+            }}
+            className={`h-8 sm:h-9 px-2 sm:px-3 text-xs font-bold gap-1 sm:gap-1.5 shadow-xs transition-all ${
+              eightKeyMode
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-500 shadow-emerald-900/30'
+                : 'bg-slate-100 dark:bg-muted text-muted-foreground border-slate-300 dark:border-border'
+            }`}
+            title="Toggle Official JAMB 8-Key Console Mode (A, B, C, D, P, N, S, R) - Builds Muscle Memory for Exam Hall"
+          >
+            <Keyboard className={`w-3.5 h-3.5 ${eightKeyMode ? 'text-white' : 'text-primary'}`} />
+            <span className="hidden sm:inline">8-Key:</span>
+            <span>{eightKeyMode ? 'ON' : 'OFF'}</span>
+          </Button>
+
+          {/* Network Health / Offline Resilience Pill */}
+          <div 
+            className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold border bg-card/60 backdrop-blur-xs select-none"
+            title={
+              networkStatus === 'online'
+                ? 'Online: Local IndexedDB + Server Auto-Sync'
+                : 'Offline Mode: CBT Engine running with 100% zero-loss from device storage'
+            }
+          >
+            <div className={`w-2 h-2 rounded-full ${
+              networkStatus === 'online' ? 'bg-emerald-500 shadow-xs shadow-emerald-500/50' : 'bg-amber-500 animate-ping'
+            }`} />
+            <span className="text-muted-foreground font-medium">
+              {networkStatus === 'online' ? 'Sync: Realtime' : 'Zero-Loss Offline'}
+            </span>
+          </div>
+
           <Button 
             variant="outline" 
             size="sm" 
@@ -1312,47 +1371,58 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
           className="flex-1 flex flex-col relative bg-card text-card-foreground m-1.5 sm:m-2 md:m-4 lg:mr-0 rounded-xl shadow-xs border border-border min-h-0 touch-pan-y"
         >
           <ErrorBoundary isComponentLevel resetLabel="Reset Corrupted Session">
-            {/* Real JAMB Subject Switcher Tabs */}
-          <div className="bg-slate-900 dark:bg-slate-950 px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto rounded-t-xl hide-scrollbar">
-            {examSubjectsList.map((subjItem, idx) => {
-              const subjName = typeof subjItem === 'object' ? (subjItem as any)?.name || 'Subject' : String(subjItem || '');
-              const activeQSubject = typeof q?.subject_name === 'object' ? q?.subject_name?.name : q?.subject_name;
-              const isSelectedSubject = (activeQSubject || '').toLowerCase() === subjName.toLowerCase();
-              
-              // Count answered in this subject
-              const subjectQs = questions.filter(item => {
-                const itemSubj = typeof item.subject_name === 'object' ? item.subject_name?.name : item.subject_name;
-                return (itemSubj || '').toLowerCase() === subjName.toLowerCase();
-              });
-              const answeredSubjCount = subjectQs.filter(item => !!answers[item.id]).length;
+            {/* Real JAMB Sticky One-Tap Subject Switcher Tabs */}
+            <div className="sticky top-0 z-20 bg-slate-900/95 dark:bg-slate-950/95 backdrop-blur-md px-2 sm:px-3 py-1.5 sm:py-2 flex items-center gap-1.5 sm:gap-2 overflow-x-auto rounded-t-xl hide-scrollbar border-b border-slate-800 shadow-sm">
+              {examSubjectsList.map((subjItem, idx) => {
+                const subjName = typeof subjItem === 'object' ? (subjItem as any)?.name || 'Subject' : String(subjItem || '');
+                const activeQSubject = typeof q?.subject_name === 'object' ? q?.subject_name?.name : q?.subject_name;
+                const isSelectedSubject = (activeQSubject || '').toLowerCase() === subjName.toLowerCase();
+                
+                // Count answered and unanswered in this subject
+                const subjectQs = questions.filter(item => {
+                  const itemSubj = typeof item.subject_name === 'object' ? item.subject_name?.name : item.subject_name;
+                  return (itemSubj || '').toLowerCase() === subjName.toLowerCase();
+                });
+                const totalSubjCount = subjectQs.length || (examMode === 'past_questions' ? questions.length : (subjName === 'Use of English' ? 60 : 40));
+                const answeredSubjCount = subjectQs.filter(item => !!answers[item.id]).length;
+                const unansweredSubjCount = Math.max(0, totalSubjCount - answeredSubjCount);
 
-              return (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    const firstSubjIdx = questions.findIndex(item => {
-                      const itemSubj = typeof item.subject_name === 'object' ? item.subject_name?.name : item.subject_name;
-                      return (itemSubj || '').toLowerCase() === subjName.toLowerCase();
-                    });
-                    if (firstSubjIdx >= 0) {
-                      setCurrentQuestionIdx(firstSubjIdx);
-                      setActiveSubjectTab(subjName);
-                    }
-                  }}
-                  className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded text-[10px] sm:text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1 sm:gap-2 ${
-                    isSelectedSubject
-                      ? 'bg-emerald-600 text-white shadow-xs border border-emerald-400'
-                      : 'bg-slate-800 text-slate-300 hover:bg-slate-700 hover:text-white'
-                  }`}
-                >
-                  <span>{subjName}</span>
-                  <span className={`px-1.5 py-0.2 rounded-full text-[9px] sm:text-[10px] ${isSelectedSubject ? 'bg-emerald-800 text-emerald-100' : 'bg-slate-800 text-slate-400'}`}>
-                    {answeredSubjCount}/{subjectQs.length || (examMode === 'past_questions' ? questions.length : (subjName === 'Use of English' ? 60 : 40))}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                return (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      const firstSubjIdx = questions.findIndex(item => {
+                        const itemSubj = typeof item.subject_name === 'object' ? item.subject_name?.name : item.subject_name;
+                        return (itemSubj || '').toLowerCase() === subjName.toLowerCase();
+                      });
+                      if (firstSubjIdx >= 0) {
+                        setCurrentQuestionIdx(firstSubjIdx);
+                        setActiveSubjectTab(subjName);
+                      }
+                    }}
+                    className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded text-[10px] sm:text-xs font-bold uppercase transition-all whitespace-nowrap flex items-center gap-1.5 sm:gap-2 ${
+                      isSelectedSubject
+                        ? 'bg-emerald-600 text-white shadow-xs border border-emerald-400'
+                        : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700 hover:text-white border border-slate-700/60'
+                    }`}
+                  >
+                    <span>{subjName}</span>
+                    {unansweredSubjCount === 0 ? (
+                      <span className="px-1.5 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-0.5">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Done
+                      </span>
+                    ) : (
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] sm:text-[10px] font-bold ${
+                        isSelectedSubject ? 'bg-amber-400 text-slate-950 font-black' : 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                      }`}>
+                        {unansweredSubjCount} left
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
 
           {/* Mobile Swipe Navigation Helper */}
           <div className="px-3 py-1.5 bg-muted/20 border-b border-border/50 text-[11px] text-muted-foreground flex items-center justify-between sm:hidden select-none">
@@ -1512,6 +1582,59 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
             </div>
           </motion.div>
 
+          {/* Official JAMB 8-Key Physical Console Bar */}
+          {eightKeyMode && (
+            <div className="px-2.5 sm:px-3 py-2 bg-slate-950/95 dark:bg-slate-900/95 border-t border-slate-800 text-slate-200 select-none">
+              <div className="flex items-center justify-between mb-1.5 text-[10px] text-slate-400">
+                <span className="flex items-center gap-1.5 font-bold text-emerald-400 uppercase tracking-wider">
+                  <Keyboard className="w-3.5 h-3.5" /> Official JAMB 8-Key Console
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">
+                  Keyboard: <span className="font-mono text-emerald-300 font-bold">A, B, C, D, P, N, S, R</span>
+                </span>
+              </div>
+              <div className="grid grid-cols-8 gap-1 sm:gap-1.5">
+                {[
+                  { key: 'A', label: 'Opt A', action: () => { const opt = q?.options?.[0] || q?.option_a; if (opt) handleSelectAnswer(q.id, opt); } },
+                  { key: 'B', label: 'Opt B', action: () => { const opt = q?.options?.[1] || q?.option_b; if (opt) handleSelectAnswer(q.id, opt); } },
+                  { key: 'C', label: 'Opt C', action: () => { const opt = q?.options?.[2] || q?.option_c; if (opt) handleSelectAnswer(q.id, opt); } },
+                  { key: 'D', label: 'Opt D', action: () => { const opt = q?.options?.[3] || q?.option_d; if (opt) handleSelectAnswer(q.id, opt); } },
+                  { key: 'P', label: 'Prev', action: handlePrev },
+                  { key: 'N', label: 'Next', action: handleNext },
+                  { key: 'R', label: 'Reverse', action: () => handleDeselectAnswer(q?.id) },
+                  { key: 'S', label: 'Submit', action: () => confirmAction("Submit Exam", "Are you sure you want to submit your exam now?", () => submitExam()) },
+                ].map(btn => {
+                  const isPressed = lastPressedKey === btn.key;
+                  return (
+                    <button
+                      key={btn.key}
+                      type="button"
+                      onClick={() => {
+                        setLastPressedKey(btn.key);
+                        btn.action();
+                        setTimeout(() => setLastPressedKey(null), 300);
+                      }}
+                      className={`py-1.5 sm:py-2 px-1 rounded-lg border font-mono transition-all flex flex-col items-center justify-center active:scale-95 ${
+                        isPressed
+                          ? 'bg-emerald-500 text-slate-950 border-emerald-300 scale-95 shadow-md shadow-emerald-500/40'
+                          : btn.key === 'R'
+                          ? 'bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border-rose-800/60'
+                          : btn.key === 'S'
+                          ? 'bg-amber-950/40 hover:bg-amber-900/60 text-amber-300 border-amber-800/60'
+                          : 'bg-slate-900 hover:bg-slate-850 text-slate-200 border-slate-800'
+                      }`}
+                    >
+                      <span className="text-xs sm:text-sm font-black">{btn.key}</span>
+                      <span className="text-[7.5px] sm:text-[8.5px] uppercase font-sans tracking-tight text-slate-400">
+                        {btn.label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="p-2.5 sm:p-3 md:p-4 border-t border-border bg-muted/30 rounded-b-xl flex justify-between items-center gap-2">
             <Button 
               variant="outline" 
@@ -1519,9 +1642,21 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               disabled={currentQuestionIdx === 0} 
               className="flex-1 sm:flex-none sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm font-semibold active:scale-95"
             >
-              <ChevronLeft className="w-4 h-4 mr-1" /> Prev
+              <ChevronLeft className="w-4 h-4 mr-1" /> Prev {eightKeyMode && <span className="ml-1 text-[10px] text-muted-foreground font-mono">(P)</span>}
             </Button>
             
+            {eightKeyMode && answers[q?.id] && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleDeselectAnswer(q?.id)}
+                className="h-9 px-2.5 text-xs font-semibold text-rose-500 hover:text-rose-600 border-rose-500/30 hover:bg-rose-500/10 flex items-center gap-1 active:scale-95"
+                title="Reverse / Clear Selected Option (Key: R)"
+              >
+                <span>Reverse (R)</span>
+              </Button>
+            )}
+
             <Button 
               variant="outline" 
               size="sm" 
@@ -1537,7 +1672,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               disabled={currentQuestionIdx === questions.length - 1} 
               className="flex-1 sm:flex-none sm:w-28 md:w-32 h-9 md:h-10 text-xs md:text-sm bg-primary hover:bg-primary/90 font-semibold active:scale-95"
             >
-              Next <ChevronRight className="w-4 h-4 ml-1" />
+              Next {eightKeyMode && <span className="ml-1 text-[10px] opacity-80 font-mono">(N)</span>} <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
 
             {/* Mobile-only Submit Quick Action */}
@@ -1553,7 +1688,7 @@ export default function CBTExam({ defaultMode }: CBTExamProps) {
               size="sm"
               className="lg:hidden h-9 px-2.5 sm:px-3 text-xs font-bold shadow-xs active:scale-95"
             >
-              Submit
+              Submit {eightKeyMode && <span className="ml-0.5 text-[9px] opacity-80">(S)</span>}
             </Button>
           </div>
           </ErrorBoundary>

@@ -298,7 +298,28 @@ const Results = () => {
 
   const handleRetakeMissedQuestions = () => {
     if (missedList.length > 0) {
-      navigate('/practice/session', { state: { retakeQuestions: missedList, mode: 'mistakes' } });
+      navigate('/practice/session', { 
+        state: { 
+          retakeQuestions: missedList, 
+          mode: 'mistakes',
+          learningStyle: 'Complete Mistake Drill'
+        } 
+      });
+    }
+  };
+
+  const handleRetakeAdaptiveMicroQuiz = (count = 5) => {
+    if (missedList.length > 0) {
+      const topMissed = missedList.slice(0, count);
+      navigate('/practice/session', {
+        state: {
+          retakeQuestions: topMissed,
+          mode: 'adaptive_micro_quiz',
+          learningStyle: 'Adaptive Weak-Area Micro-Quiz',
+          subjectId: topMissed[0]?.subject_id,
+          subjectName: topMissed[0]?.subject_name
+        }
+      });
     }
   };
 
@@ -363,33 +384,45 @@ const Results = () => {
             </div>
           )}
 
-          {/* Retake & Mistake Drill Actions Bar */}
-          <div className="mt-6 pt-6 border-t border-border/50 grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button
-              onClick={handleRetakeExactSession}
-              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm"
-            >
-              <RotateCcw className="w-4 h-4" /> Retake This Exact Session ({questions.length} Qs)
-            </Button>
-
-            {missedList.length > 0 ? (
+          {/* Adaptive Weak-Area Micro-Quiz Action Bar */}
+          <div className="mt-6 pt-6 border-t border-border/50 flex flex-col gap-3">
+            {missedList.length > 0 && (
               <Button
-                onClick={handleRetakeMissedQuestions}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm"
+                onClick={() => handleRetakeAdaptiveMicroQuiz(5)}
+                className="w-full bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-600 hover:to-orange-600 text-slate-950 font-black h-12 rounded-xl shadow-md flex items-center justify-center gap-2 text-sm sm:text-base transition-all hover:scale-[1.01] active:scale-[0.99]"
               >
-                <Target className="w-4 h-4" /> Retake {missedList.length} Missed Questions
-              </Button>
-            ) : (
-              <Button
-                asChild
-                variant="outline"
-                className="w-full border-border h-11 rounded-xl text-xs sm:text-sm font-medium"
-              >
-                <Link to="/exam">
-                  <PlayCircle className="w-4 h-4 mr-1.5 text-emerald-500" /> Start New CBT Mock
-                </Link>
+                <Zap className="w-5 h-5 fill-slate-950" /> Retake My {Math.min(5, missedList.length)} Missed Questions (Adaptive Micro-Quiz)
               </Button>
             )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Button
+                onClick={handleRetakeExactSession}
+                variant="outline"
+                className="w-full border-border bg-card/50 hover:bg-accent font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm"
+              >
+                <RotateCcw className="w-4 h-4" /> Retake Exact Session ({questions.length} Qs)
+              </Button>
+
+              {missedList.length > 5 ? (
+                <Button
+                  onClick={handleRetakeMissedQuestions}
+                  className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold h-11 rounded-xl shadow-xs flex items-center justify-center gap-2 text-xs sm:text-sm"
+                >
+                  <Target className="w-4 h-4" /> Retake All {missedList.length} Missed Questions
+                </Button>
+              ) : (
+                <Button
+                  asChild
+                  variant="outline"
+                  className="w-full border-border h-11 rounded-xl text-xs sm:text-sm font-medium"
+                >
+                  <Link to="/exam">
+                    <PlayCircle className="w-4 h-4 mr-1.5 text-emerald-500" /> Start New CBT Mock
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
         </motion.div>
 

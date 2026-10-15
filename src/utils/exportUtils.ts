@@ -3,8 +3,34 @@ import jsPDF from 'jspdf';
 import { toast } from 'sonner';
 import { logAdminActivity } from '@/services/adminActivityService';
 
+export const triggerSafeFileDownload = (blob: Blob, filename: string) => {
+  try {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.rel = 'noopener noreferrer';
+    link.style.display = 'none';
+    link.onclick = (e) => {
+      e.stopPropagation();
+    };
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      try {
+        if (link.parentNode) {
+          document.body.removeChild(link);
+        }
+        URL.revokeObjectURL(url);
+      } catch {}
+    }, 300);
+  } catch (err) {
+    console.error('[triggerSafeFileDownload failed]:', err);
+  }
+};
+
 /**
- * Export questions array to CSV
+ * Export questions array to CSV safely
  */
 export const exportQuestionsToCSV = (questions: any[], filename = 'Question_Bank_Export.csv') => {
   if (!questions || questions.length === 0) {
@@ -39,14 +65,7 @@ export const exportQuestionsToCSV = (questions: any[], filename = 'Question_Bank
 
   const csv = Papa.unparse(exportData);
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  triggerSafeFileDownload(blob, filename);
 
   logAdminActivity('EXPORT_CSV', `Exported ${questions.length} questions to ${filename}`, 'export', { count: questions.length });
   toast.success(`Exported ${questions.length} questions to CSV!`);
@@ -219,15 +238,45 @@ export const exportLiteratureToCSV = (books: any[], filename = 'JAMB_Literature_
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url;
-  link.setAttribute('download', filename);
-  document.body.appendChild(link);
-  link.click();
-  document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  triggerSafeFileDownload(blob, filename);
 
   logAdminActivity('EXPORT_CSV', `Exported Literature Bank (${books.length} novels) to ${filename}`, 'export', { novels: books.length });
   toast.success(`Exported ${books.length} Literature Novels to CSV!`);
+};
+
+/**
+ * Export extracted visual questions & diagram metadata to CSV
+ */
+export const exportExtractedVisualQuestionsToCSV = (questions: any[], subject = 'Chemistry', filename?: string) => {
+  if (!questions || questions.length === 0) {
+    toast.error('No extracted questions to export.');
+    return;
+  }
+
+  const exportFilename = filename || `Extracted_${subject.replace(/\s+/g, '_')}_Visual_Questions_${Date.now()}.csv`;
+
+  const rows = questions.map((q, idx) => ({
+    'S/N': idx + 1,
+    'Question Number': q.questionNumber || idx + 1,
+    'Subject': q.subject || subject,
+    'Year': q.year || 2024,
+    'Question Text': q.questionText || '',
+    'Option A': q.options?.[0] || '',
+    'Option B': q.options?.[1] || '',
+    'Option C': q.options?.[2] || '',
+    'Option D': q.options?.[3] || '',
+    'Correct Answer': q.correctAnswer || 'A',
+    'Explanation': q.explanation || '',
+    'Has Visual Diagram': q.hasVisualReference || Boolean(q.diagramImageUrl) ? 'YES' : 'NO',
+    'Diagram Image Status': q.diagramImageUrl ? 'Attached (Base64/URL)' : 'Missing/Needs Snapping',
+    'Page Number': q.pageNumber || 1,
+    'Review Status': q.status || 'ready'
+  }));
+
+  const csv = Papa.unparse(rows);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  triggerSafeFileDownload(blob, exportFilename);
+  toast.success(`Exported ${questions.length} questions to ${exportFilename}!`);
 };
 
 /**

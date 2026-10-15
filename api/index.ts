@@ -4336,6 +4336,179 @@ app.post('/api/admin/materials/delete', verifyAdminToken, async (req, res) => {
   }
 });
 
+// ==========================================
+// VIDEO DISTRIBUTION & LESSONS API ENDPOINTS
+// ==========================================
+
+// Get SQL Schema for Supabase Video Distribution
+app.get('/api/admin/videos/sql-schema', (_req, res) => {
+  const sql = `-- Scholars Resort: Video Distribution & Lessons Setup for Supabase
+CREATE TABLE IF NOT EXISTS public.video_lessons (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    description TEXT,
+    subject_id UUID REFERENCES public.subjects(id) ON DELETE SET NULL,
+    topic_id UUID REFERENCES public.topics(id) ON DELETE SET NULL,
+    video_url TEXT NOT NULL,
+    thumbnail_url TEXT,
+    duration_seconds INTEGER DEFAULT 0,
+    video_provider VARCHAR(50) DEFAULT 'direct' CHECK (video_provider IN ('direct', 'youtube', 'vimeo', 'bunny', 'supabase_storage', 'cloudflare_stream')),
+    quality_resolutions JSONB DEFAULT '{"1080p": "", "720p": "", "480p": "", "360p": ""}'::jsonb,
+    low_bandwidth_url TEXT,
+    file_size_bytes BIGINT DEFAULT 0,
+    is_premium BOOLEAN DEFAULT false,
+    is_published BOOLEAN DEFAULT true,
+    views_count INTEGER DEFAULT 0,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_video_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+    video_id UUID REFERENCES public.video_lessons(id) ON DELETE CASCADE,
+    watched_seconds INTEGER DEFAULT 0,
+    duration_seconds INTEGER DEFAULT 0,
+    completion_percentage NUMERIC(5, 2) DEFAULT 0.00,
+    completed BOOLEAN DEFAULT false,
+    last_watched_at TIMESTAMPTZ DEFAULT NOW(),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT user_video_unique UNIQUE (user_id, video_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_video_lessons_subject_id ON public.video_lessons(subject_id);
+CREATE INDEX IF NOT EXISTS idx_video_lessons_topic_id ON public.video_lessons(topic_id);
+CREATE INDEX IF NOT EXISTS idx_user_video_progress_user ON public.user_video_progress(user_id);
+
+ALTER TABLE public.video_lessons ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_video_progress ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Public can view published video lessons" ON public.video_lessons;
+CREATE POLICY "Public can view published video lessons" ON public.video_lessons FOR SELECT USING (is_published = true);
+
+DROP POLICY IF EXISTS "Admins can manage video lessons" ON public.video_lessons;
+CREATE POLICY "Admins can manage video lessons" ON public.video_lessons FOR ALL USING (EXISTS (SELECT 1 FROM public.profiles WHERE profiles.id = auth.uid() AND profiles.role = 'admin'));
+
+DROP POLICY IF EXISTS "Users can view their own video progress" ON public.user_video_progress;
+CREATE POLICY "Users can view their own video progress" ON public.user_video_progress FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES ('video-lessons', 'video-lessons', true, 524288000, ARRAY['video/mp4', 'video/webm', 'video/ogg', 'image/jpeg', 'image/png', 'image/webp'])
+ON CONFLICT (id) DO UPDATE SET public = true, file_size_limit = 524288000;
+
+DROP POLICY IF EXISTS "Public Read Access for Video Lessons" ON storage.objects;
+CREATE POLICY "Public Read Access for Video Lessons" ON storage.objects FOR SELECT USING (bucket_id IN ('video-lessons', 'study-materials', 'materials', 'library'));
+
+DROP POLICY IF EXISTS "Authenticated Upload Access for Video Lessons" ON storage.objects;
+CREATE POLICY "Authenticated Upload Access for Video Lessons" ON storage.objects FOR INSERT WITH CHECK (bucket_id IN ('video-lessons', 'study-materials', 'materials', 'library'));
+`;
+  return res.json({ success: true, sql });
+});
+
+// GET /api/videos - Fetch video lessons with low-bandwidth optimization
+app.get('/api/videos', async (req, res) => {
+  try {
+    const { subjectId, topicId, search, lowBandwidth } = req.query;
+    let query = supabase.from('video_lessons').select('*, subjects(name)').eq('is_published', true).order('created_at', { ascending: false });
+
+    if (subjectId) query = query.eq('subject_id', subjectId);
+    if (topicId) query = query.eq('topic_id', topicId);
+    if (search) query = query.ilike('title', `%${search}%`);
+
+    const { data, error } = await query;
+    if (error) {
+      // Fallback: check library_materials with video urls
+      const { data: libData } = await supabase.from('library_materials').select('*, subjects(name)').eq('is_active', true);
+      const videoItems = (libData || []).filter(item => {
+        const u = (item.file_url || '').toLowerCase();
+        return u.includes('.mp4') || u.includes('.webm') || u.includes('youtube') || u.includes('vimeo');
+      });
+      return res.json({ success: true, videos: videoItems, source: 'fallback_materials' });
+    }
+
+    const isLowData = String(lowBandwidth) === 'true';
+    const optimized = (data || []).map(v => ({
+      ...v,
+      streamUrl: isLowData && v.low_bandwidth_url ? v.low_bandwidth_url : v.video_url
+    }));
+
+    return res.json({ success: true, videos: optimized, source: 'video_lessons' });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/videos/progress - Record video watch progress
+app.post('/api/videos/progress', async (req, res) => {
+  try {
+    const { userId, videoId, watchedSeconds, durationSeconds, completed } = req.body;
+    if (!userId || !videoId) {
+      return res.status(400).json({ success: false, error: 'userId and videoId are required' });
+    }
+
+    const completion = durationSeconds > 0 ? Math.min(100, Math.round((watchedSeconds / durationSeconds) * 100)) : (completed ? 100 : 0);
+
+    const { data, error } = await supabase.from('user_video_progress').upsert({
+      user_id: userId,
+      video_id: videoId,
+      watched_seconds: watchedSeconds || 0,
+      duration_seconds: durationSeconds || 0,
+      completion_percentage: completion,
+      completed: !!completed || completion >= 90,
+      last_watched_at: new Date().toISOString()
+    }, { onConflict: 'user_id,video_id' });
+
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/admin/videos/upload - Admin video metadata upload
+app.post('/api/admin/videos/upload', verifyAdminToken, async (req, res) => {
+  try {
+    const { title, description, subjectId, topicId, videoUrl, thumbnailUrl, durationSeconds, videoProvider, isPremium, lowBandwidthUrl } = req.body;
+    if (!title || !videoUrl) {
+      return res.status(400).json({ success: false, error: 'Title and videoUrl are required' });
+    }
+
+    const payload = {
+      title,
+      description: description || '',
+      subject_id: subjectId || null,
+      topic_id: topicId || null,
+      video_url: videoUrl,
+      thumbnail_url: thumbnailUrl || null,
+      duration_seconds: Number(durationSeconds) || 0,
+      video_provider: videoProvider || 'direct',
+      low_bandwidth_url: lowBandwidthUrl || videoUrl,
+      is_premium: !!isPremium,
+      is_published: true,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    const { data, error } = await supabase.from('video_lessons').insert(payload).select().single();
+    if (error) {
+      // Fallback: insert to library_materials so it is never lost even if migration has not run yet in user's Supabase!
+      await supabase.from('library_materials').insert({
+        title,
+        description: description || '',
+        subject_id: subjectId || null,
+        file_url: videoUrl,
+        material_type: 'video',
+        is_premium: !!isPremium,
+        is_active: true
+      });
+      return res.json({ success: true, data: payload, note: 'Saved to library_materials fallback. Run Supabase SQL to enable full video_lessons table.' });
+    }
+
+    return res.json({ success: true, data });
+  } catch (err: any) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // API Route: Global Leaderboard (Partitioned for Proctored Official Mocks vs Practice & Drills)
 app.get('/api/leaderboard', async (req, res) => {
   try {
