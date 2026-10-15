@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Search, Download, Filter, RefreshCcw, AlertTriangle, Bug, Copy, Trash2, Database, Terminal } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-import { errorTracker, type SystemErrorLog } from '@/lib/errorTracker';
+import { errorTracker, type SystemErrorLog } from '@/lib/diagnosticsTracker';
 import { AdminActivityLog } from '@/components/AdminActivityLog';
 
 export const LogsTab = () => {

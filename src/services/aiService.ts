@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import { errorTracker } from '../lib/errorTracker';
+import { errorTracker } from '../lib/diagnosticsTracker';
 import { reportGroqCallTelemetry } from './groqTelemetryService';
 
 /**

@@ -119,4 +119,5 @@ class ErrorTracker {
   }
 }
 
-export const errorTracker = new ErrorTracker();
+export const diagnosticsTracker = new ErrorTracker();
+export const errorTracker = diagnosticsTracker;

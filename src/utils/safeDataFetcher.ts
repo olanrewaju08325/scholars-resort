@@ -1,4 +1,4 @@
-import { errorTracker } from '@/lib/errorTracker';
+import { errorTracker } from '@/lib/diagnosticsTracker';
 import { DataSanitizer } from './dataSanitizer';
 import { supabase } from '@/lib/supabase';
 

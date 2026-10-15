@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { errorTracker } from './errorTracker';
+import { errorTracker } from './diagnosticsTracker';
 import { DataSanitizer } from '../utils/dataSanitizer';
 
 export interface SafeQueryResult<T> {
