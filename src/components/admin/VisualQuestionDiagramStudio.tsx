@@ -146,7 +146,8 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
   };
 
   // Run Automated Extraction
-  const handleStartExtraction = async () => {
+  const handleStartExtraction = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
     if (!selectedFile) {
       toast.error('Please select a past question PDF first.');
       return;

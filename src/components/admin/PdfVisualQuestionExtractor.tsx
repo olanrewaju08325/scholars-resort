@@ -56,7 +56,8 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
     }
   };
 
-  const handleStartExtraction = async () => {
+  const handleStartExtraction = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
     if (!selectedFile) {
       toast.error('Please select a PDF document first.');
       return;
@@ -304,6 +305,7 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
           {/* Action Button & Progress */}
           <div className="pt-2 flex flex-col sm:flex-row items-center justify-between gap-4">
             <Button
+              type="button"
               onClick={handleStartExtraction}
               disabled={!selectedFile || isProcessing}
               className="w-full sm:w-auto bg-primary font-bold h-11 px-6 gap-2 shadow-xs"
