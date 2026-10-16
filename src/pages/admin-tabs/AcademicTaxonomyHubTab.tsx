@@ -10,7 +10,22 @@ import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 type SubView = 'taxonomy' | 'syllabus' | 'career' | 'eligibility' | 'pdf-extractor';
 
 export function AcademicTaxonomyHubTab() {
-  const [activeTab, setActiveTab] = useState<SubView>('taxonomy');
+  const [activeTab, setActiveTabState] = useState<SubView>(() => {
+    if (typeof sessionStorage !== 'undefined') {
+      const saved = sessionStorage.getItem('scholar_academic_hub_tab');
+      if (saved === 'taxonomy' || saved === 'syllabus' || saved === 'career' || saved === 'eligibility' || saved === 'pdf-extractor') {
+        return saved as SubView;
+      }
+    }
+    return 'pdf-extractor'; // Default directly to extractor as requested by user priority
+  });
+
+  const setActiveTab = (tab: SubView) => {
+    setActiveTabState(tab);
+    try {
+      sessionStorage.setItem('scholar_academic_hub_tab', tab);
+    } catch {}
+  };
 
   return (
     <div className="space-y-6 w-full max-w-full">
