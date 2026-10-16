@@ -34,23 +34,30 @@ export const ExtractImageButton: React.FC<ExtractImageButtonProps> = ({
   };
 
   return (
-    <Button
-      type="button"
-      onClick={handleClick}
-      disabled={isProcessing || disabled}
-      className={className}
-    >
-      {isProcessing ? (
-        <>
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+    <div className="flex flex-col gap-2 w-full">
+      <Button
+        type="button"
+        onClick={handleClick}
+        disabled={isProcessing || disabled}
+        className={className}
+      >
+        {isProcessing ? (
+          <>
+            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+            Processing...
+          </>
+        ) : (
+          <>
+            <Sparkles className="w-4 h-4 mr-2" />
+            {label}
+          </>
+        )}
+      </Button>
+      {isProcessing && (
+        <div className="text-[10px] text-muted-foreground font-mono truncate animate-pulse">
           {progressStatus}
-        </>
-      ) : (
-        <>
-          <Sparkles className="w-4 h-4 mr-2" />
-          {label}
-        </>
+        </div>
       )}
-    </Button>
+    </div>
   );
 };
