@@ -51,6 +51,13 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
   const [extractedQuestions, setExtractedQuestions] = useState<ExtractedVisualQuestion[]>([]);
   const [isIngesting, setIsIngesting] = useState<boolean>(false);
 
+  // Topic Management for Extraction & Taxonomy Mapping
+  const [subjectTopics, setSubjectTopics] = useState<any[]>([]);
+  const [selectedTopicId, setSelectedTopicId] = useState<string>('all');
+  const [customTopicName, setCustomTopicName] = useState<string>('');
+  const [detectedTopics, setDetectedTopics] = useState<string[]>([]);
+  const [filterTopic, setFilterTopic] = useState<string>('all');
+
   // Interactive PDF Page Snapper & Visual Cropper
   const [renderedPages, setRenderedPages] = useState<RenderedPdfPage[]>([]);
   const [selectedPageNum, setSelectedPageNum] = useState<number>(1);
@@ -77,6 +84,18 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
       const { data: dbSubs } = await supabase.from('subjects').select('id, name');
       const matched = dbSubs?.find(s => normalizeSubjectName(s.name).toLowerCase() === canonical.toLowerCase());
       const subId = matched?.id || dbSubs?.[0]?.id || '';
+
+      // Fetch topics under this subject
+      if (subId) {
+        const { data: topicsData } = await supabase
+          .from('topics')
+          .select('id, name, sequence_order')
+          .eq('subject_id', subId)
+          .order('sequence_order', { ascending: true });
+        setSubjectTopics(topicsData || []);
+      } else {
+        setSubjectTopics([]);
+      }
 
       const questions = await fetchAllRowsPaginated<any>(() =>
         supabase.from('questions')
@@ -154,18 +173,30 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
     }
 
     setIsProcessing(true);
-    setProgressStatus('Reading PDF pages and isolating diagrams...');
+    setProgressStatus('Reading PDF pages, matching curriculum topics, and isolating diagrams...');
     setProgressPercent(10);
 
     try {
+      const chosenTopic = subjectTopics.find(t => t.id === selectedTopicId);
+      const topicHint = selectedTopicId === 'custom' 
+        ? customTopicName.trim() 
+        : (chosenTopic?.name || undefined);
+
       const result = await extractQuestionsAndDiagramsFromPdf(
         selectedFile,
         selectedSubject,
         (status, percent) => {
           setProgressStatus(status);
           setProgressPercent(percent);
-        }
+        },
+        topicHint
       );
+
+      // Record any detected topic headers from the book
+      if (result.detectedTopics && result.detectedTopics.length > 0) {
+        setDetectedTopics(result.detectedTopics);
+        toast.info(`Detected ${result.detectedTopics.length} topics from PDF: ${result.detectedTopics.slice(0, 3).join(', ')}${result.detectedTopics.length > 3 ? '...' : ''}`);
+      }
 
       // Apply auto-detected subject (especially Chemistry or other official JAMB subject)
       if (result.detectedSubject) {
@@ -181,7 +212,8 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
       let processedQuestions = result.questions.map(q => ({
         ...q,
         year: q.year || examYear,
-        subject: q.subject || result.detectedSubject || selectedSubject
+        subject: q.subject || result.detectedSubject || selectedSubject,
+        topicName: q.topicName || topicHint || (chosenTopic?.name) || undefined
       }));
 
       if (extractVisualOnly) {
@@ -306,43 +338,80 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
       });
       const defaultSubId = subjectMap.get(canonical.toLowerCase()) || dbSubs?.[0]?.id || '';
 
+      const chosenTopic = subjectTopics.find(t => t.id === selectedTopicId);
+      const defaultTopicName = selectedTopicId === 'custom' ? customTopicName.trim() : (chosenTopic?.name || '');
+
       const payloads = extractedQuestions.map(q => {
-        let qText = q.questionText.trim();
-        if (q.diagramImageUrl && !qText.includes('![Diagram]')) {
-          qText = `![Diagram](${q.diagramImageUrl})\n\n${qText}`;
-        }
-
-        const qualityFlags = q.hasVisualReference && !q.diagramImageUrl
-          ? ['needs_diagram', 'missing_figure']
-          : [];
-
         const targetSubject = q.subject || selectedSubject;
         const targetSubjectId = subjectMap.get(normalizeSubjectName(targetSubject).toLowerCase()) || defaultSubId;
 
         return {
           subject_id: targetSubjectId,
-          question_text: qText,
+          topic_id: q.topicId || (chosenTopic ? chosenTopic.id : null),
+          topic_name: q.topicName || defaultTopicName,
+          question_text: q.questionText.trim(),
           options: q.options,
           correct_answer: q.correctAnswer,
           explanation: q.explanation,
           year: q.year || examYear,
           difficulty: 'medium',
-          is_active: true,
-          is_draft: false,
-          quality_flags: qualityFlags
+          diagram_image_url: q.diagramImageUrl || null
         };
       });
 
-      const CHUNK_SIZE = 50;
-      let insertedCount = 0;
-      for (let i = 0; i < payloads.length; i += CHUNK_SIZE) {
-        const chunk = payloads.slice(i, i + CHUNK_SIZE);
-        const { error } = await supabase.from('questions').insert(chunk);
-        if (error) throw error;
-        insertedCount += chunk.length;
+      // 1. Try server-side atomic ingestion with Supabase storage upload & topic creation
+      let ingestedViaServer = false;
+      try {
+        const res = await authFetch('/api/admin/questions/ingest-extracted', {
+          method: 'POST',
+          body: JSON.stringify({
+            questions: payloads,
+            defaultSubjectId: defaultSubId,
+            defaultTopicId: chosenTopic?.id || null,
+            defaultTopicName: defaultTopicName
+          })
+        });
+        const resData = await res.json();
+        if (resData.success) {
+          ingestedViaServer = true;
+          toast.success(resData.message || `Successfully published ${payloads.length} questions & diagrams to ${selectedSubject}!`);
+        } else {
+          console.warn('[VisualStudio] Server ingestion notice, falling back:', resData.error);
+        }
+      } catch (serverErr) {
+        console.warn('[VisualStudio] Server ingest unreachable, attempting client-side insert:', serverErr);
       }
 
-      toast.success(`Successfully published ${insertedCount} authentic questions & diagrams to ${selectedSubject}!`);
+      // 2. Client-side fallback if server route was unavailable
+      if (!ingestedViaServer) {
+        const clientPayloads = payloads.map(p => {
+          let qText = p.question_text;
+          if (p.diagram_image_url && !qText.includes('![Diagram]')) {
+            qText = `![Diagram](${p.diagram_image_url})\n\n${qText}`;
+          }
+          return {
+            subject_id: p.subject_id,
+            question_text: qText,
+            options: p.options,
+            correct_answer: p.correct_answer,
+            explanation: p.explanation,
+            year: p.year,
+            difficulty: p.difficulty,
+            is_active: true
+          };
+        });
+
+        const CHUNK_SIZE = 50;
+        let insertedCount = 0;
+        for (let i = 0; i < clientPayloads.length; i += CHUNK_SIZE) {
+          const chunk = clientPayloads.slice(i, i + CHUNK_SIZE);
+          const { error } = await supabase.from('questions').insert(chunk);
+          if (error) throw error;
+          insertedCount += chunk.length;
+        }
+        toast.success(`Successfully published ${insertedCount} questions to ${selectedSubject}!`);
+      }
+
       setExtractedQuestions([]);
       setSelectedFile(null);
       fetchSubjectData();
@@ -590,7 +659,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
             </CardHeader>
 
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
                     Exam Year
@@ -621,6 +690,23 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
 
                 <div>
                   <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
+                    JAMB Curriculum Topic
+                  </label>
+                  <select
+                    value={selectedTopicId}
+                    onChange={(e) => setSelectedTopicId(e.target.value)}
+                    className="w-full h-10 bg-background border border-border rounded-lg px-3 text-xs font-bold text-foreground"
+                  >
+                    <option value="all">Auto-Detect Topics from Book / PDF</option>
+                    {subjectTopics.map(t => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                    <option value="custom">+ Specify Custom Topic / Chapter</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block mb-1">
                     Select PDF Document
                   </label>
                   <label className="flex items-center justify-center gap-2 h-10 px-3 bg-muted/40 hover:bg-muted/70 border border-dashed border-border rounded-lg cursor-pointer text-xs font-bold text-foreground truncate">
@@ -635,6 +721,33 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                   </label>
                 </div>
               </div>
+
+              {selectedTopicId === 'custom' && (
+                <div className="p-3 bg-muted/40 border border-border rounded-xl flex items-center gap-3">
+                  <span className="text-xs font-bold text-foreground shrink-0">Custom Topic Name:</span>
+                  <Input
+                    placeholder="e.g. Electric Cells and DC Circuits, Work Energy & Power, Organic Chemistry..."
+                    value={customTopicName}
+                    onChange={e => setCustomTopicName(e.target.value)}
+                    className="h-9 text-xs"
+                  />
+                </div>
+              )}
+
+              {detectedTopics.length > 0 && (
+                <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-xs space-y-1.5">
+                  <div className="font-bold text-blue-600 dark:text-blue-400 flex items-center gap-1.5">
+                    <BookOpen className="w-3.5 h-3.5" /> Detected Topics in Book / PDF:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {detectedTopics.map((top, tIdx) => (
+                      <span key={tIdx} className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-700 dark:text-blue-300 text-[11px] font-semibold">
+                        {top}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Auto-detected Subject Banner */}
               {detectedSubjectMeta && (
@@ -839,9 +952,16 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                 {extractedQuestions.map((q, idx) => (
                   <Card key={idx} className="border-border bg-card p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
-                        Question #{idx + 1}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                          Question #{idx + 1}
+                        </span>
+                        {q.topicName && (
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-500/10 text-blue-500 border border-blue-500/20 truncate max-w-[220px]" title={q.topicName}>
+                            Topic: {q.topicName}
+                          </span>
+                        )}
+                      </div>
                       <span className="text-xs font-bold text-muted-foreground">
                         JAMB {q.year || examYear}
                       </span>

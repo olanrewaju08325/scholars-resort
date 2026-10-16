@@ -1,12 +1,13 @@
 import { useState } from 'react';
-import { BookOpen, Layers, Compass, GraduationCap } from 'lucide-react';
+import { BookOpen, Layers, Compass, GraduationCap, Scissors, Sparkles } from 'lucide-react';
 import { SubjectsTab } from './SubjectsTab';
 import { SyllabusAdminTab } from './SyllabusAdminTab';
 import { CareerGuideAdminTab } from './CareerGuideAdminTab';
 import { CourseEligibilityAdminTab } from './CourseEligibilityAdminTab';
+import { VisualQuestionDiagramStudio } from '@/components/admin/VisualQuestionDiagramStudio';
 import { AdminErrorBoundary } from '@/components/AdminErrorBoundary';
 
-type SubView = 'taxonomy' | 'syllabus' | 'career' | 'eligibility';
+type SubView = 'taxonomy' | 'syllabus' | 'career' | 'eligibility' | 'pdf-extractor';
 
 export function AcademicTaxonomyHubTab() {
   const [activeTab, setActiveTab] = useState<SubView>('taxonomy');
@@ -20,13 +21,14 @@ export function AcademicTaxonomyHubTab() {
             <BookOpen className="w-7 h-7 text-primary" /> Academic Taxonomy Hub
           </h1>
           <p className="text-xs text-muted-foreground mt-1">
-            Configure canonical UTME/JAMB subjects, topics, syllabus mappings, career prerequisites, and institutional cutoff benchmarks.
+            Configure canonical UTME/JAMB subjects, topics, syllabus mappings, career prerequisites, and extract topic-based diagrams & questions directly from past question books.
           </p>
         </div>
 
         {/* Sub-Tabs Pills */}
         <div className="flex flex-wrap items-center gap-1.5 p-1 bg-muted/60 rounded-xl border border-border">
           <button
+            type="button"
             onClick={() => setActiveTab('taxonomy')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'taxonomy'
@@ -34,9 +36,21 @@ export function AcademicTaxonomyHubTab() {
                 : 'text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
-            <BookOpen className="w-4 h-4" /> Subjects, Topics & Subtopics
+            <BookOpen className="w-4 h-4" /> Subjects & Topics
           </button>
           <button
+            type="button"
+            onClick={() => setActiveTab('pdf-extractor')}
+            className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
+              activeTab === 'pdf-extractor'
+                ? 'bg-emerald-600 text-white shadow-xs'
+                : 'text-emerald-500 hover:text-emerald-400 hover:bg-emerald-500/10'
+            }`}
+          >
+            <Scissors className="w-4 h-4" /> Topic & Diagram Extractor
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab('syllabus')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'syllabus'
@@ -47,6 +61,7 @@ export function AcademicTaxonomyHubTab() {
             <Layers className="w-4 h-4" /> Dynamic Syllabus
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('career')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'career'
@@ -57,6 +72,7 @@ export function AcademicTaxonomyHubTab() {
             <Compass className="w-4 h-4" /> Career Guide DB
           </button>
           <button
+            type="button"
             onClick={() => setActiveTab('eligibility')}
             className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-semibold transition-all ${
               activeTab === 'eligibility'
@@ -74,6 +90,11 @@ export function AcademicTaxonomyHubTab() {
         {activeTab === 'taxonomy' && (
           <AdminErrorBoundary fallbackTitle="Subjects & Topics Taxonomy" moduleKey="subjects-taxonomy">
             <SubjectsTab />
+          </AdminErrorBoundary>
+        )}
+        {activeTab === 'pdf-extractor' && (
+          <AdminErrorBoundary fallbackTitle="PDF Topic & Diagram Extractor" moduleKey="pdf-extractor">
+            <VisualQuestionDiagramStudio />
           </AdminErrorBoundary>
         )}
         {activeTab === 'syllabus' && (

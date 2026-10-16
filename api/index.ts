@@ -7193,6 +7193,157 @@ app.get('/api/admin/questions/incomplete', verifyAdminToken, async (req, res) =>
   }
 });
 
+app.post('/api/admin/questions/ingest-extracted', verifyAdminToken, async (req, res) => {
+  try {
+    const { questions, defaultSubjectId, defaultTopicId, defaultTopicName } = req.body;
+    if (!Array.isArray(questions) || questions.length === 0) {
+      return res.status(400).json({ success: false, error: 'Questions array must not be empty.' });
+    }
+
+    const client = getScopedSupabaseClient(req);
+    let resolvedSubjectId = defaultSubjectId;
+    
+    // Topic mapping cache to avoid duplicate DB calls
+    const topicCache = new Map<string, string>();
+    if (defaultTopicId && defaultTopicName) {
+      topicCache.set(defaultTopicName.toLowerCase().trim(), defaultTopicId);
+    }
+
+    // Resolve or create topics as needed
+    const resolveTopicId = async (topicName: string, subId: string): Promise<string | null> => {
+      const trimmed = topicName.trim();
+      if (!trimmed) return null;
+      const cacheKey = `${subId}_${trimmed.toLowerCase()}`;
+      if (topicCache.has(cacheKey)) return topicCache.get(cacheKey)!;
+
+      try {
+        const { data: existingTopic } = await client
+          .from('topics')
+          .select('id')
+          .eq('subject_id', subId)
+          .ilike('name', trimmed)
+          .maybeSingle();
+
+        if (existingTopic?.id) {
+          topicCache.set(cacheKey, existingTopic.id);
+          return existingTopic.id;
+        }
+
+        // Create new topic under subject
+        const { data: createdTopic, error: createErr } = await client
+          .from('topics')
+          .insert({
+            subject_id: subId,
+            name: trimmed,
+            description: `Auto-extracted JAMB curriculum topic: ${trimmed}`,
+            sequence_order: 1
+          })
+          .select('id')
+          .single();
+
+        if (!createErr && createdTopic?.id) {
+          topicCache.set(cacheKey, createdTopic.id);
+          return createdTopic.id;
+        }
+      } catch (topicErr) {
+        console.warn('[IngestExtracted] Topic resolution notice:', topicErr);
+      }
+      return null;
+    };
+
+    // Prepare questions payload
+    const preparedQuestions: any[] = [];
+    const timestamp = Date.now();
+
+    for (let idx = 0; idx < questions.length; idx++) {
+      const q = questions[idx];
+      const targetSubjectId = q.subject_id || resolvedSubjectId;
+      if (!targetSubjectId) continue;
+
+      let targetTopicId = q.topic_id || defaultTopicId || null;
+      if (!targetTopicId && (q.topic_name || defaultTopicName)) {
+        targetTopicId = await resolveTopicId(q.topic_name || defaultTopicName, targetSubjectId);
+      }
+
+      let qText = (q.question_text || q.question || '').trim();
+      let diagramUrl = q.diagram_image_url || q.image_url || '';
+
+      // If diagram is a base64 string, attempt to persist to Supabase Storage
+      if (diagramUrl && diagramUrl.startsWith('data:image/')) {
+        try {
+          const mimeMatch = diagramUrl.match(/^data:image\/([a-zA-Z0-9]+);base64,/);
+          const ext = mimeMatch ? mimeMatch[1] : 'jpeg';
+          const base64Data = diagramUrl.replace(/^data:image\/[a-zA-Z0-9]+;base64,/, '');
+          const buffer = Buffer.from(base64Data, 'base64');
+          const fileName = `diagram_${timestamp}_${idx}_${Math.random().toString(36).substring(2, 7)}.${ext}`;
+
+          // Try uploading to 'study-materials' or 'materials' bucket
+          const { data: uploadData, error: uploadErr } = await client.storage
+            .from('study-materials')
+            .upload(`diagrams/${fileName}`, buffer, {
+              contentType: `image/${ext}`,
+              upsert: true
+            });
+
+          if (!uploadErr && uploadData?.path) {
+            const { data: publicData } = client.storage
+              .from('study-materials')
+              .getPublicUrl(`diagrams/${fileName}`);
+            if (publicData?.publicUrl) {
+              diagramUrl = publicData.publicUrl;
+            }
+          }
+        } catch (uploadStorageErr) {
+          console.warn('[IngestExtracted] Storage upload notice, retaining original URL:', uploadStorageErr);
+        }
+      }
+
+      // If question text doesn't contain the markdown diagram image yet, embed it cleanly
+      if (diagramUrl && !qText.includes('![Diagram]') && !qText.includes('<img')) {
+        qText = `![Diagram](${diagramUrl})\n\n${qText}`;
+      }
+
+      preparedQuestions.push({
+        subject_id: targetSubjectId,
+        topic_id: targetTopicId,
+        question_text: qText,
+        options: Array.isArray(q.options) && q.options.length >= 2 ? q.options : ['Option A', 'Option B', 'Option C', 'Option D'],
+        correct_answer: q.correct_answer || (Array.isArray(q.options) ? q.options[0] : 'Option A'),
+        explanation: q.explanation || 'Step-by-step past question solution.',
+        year: Number(q.year) || 2024,
+        difficulty: q.difficulty || 'medium',
+        is_active: true
+      });
+    }
+
+    if (preparedQuestions.length === 0) {
+      return res.status(400).json({ success: false, error: 'No valid questions could be formulated for ingestion.' });
+    }
+
+    // Insert in chunks of 50 to avoid Postgres statement timeouts
+    const CHUNK_SIZE = 50;
+    let totalInserted = 0;
+    for (let i = 0; i < preparedQuestions.length; i += CHUNK_SIZE) {
+      const chunk = preparedQuestions.slice(i, i + CHUNK_SIZE);
+      const { data, error } = await client.from('questions').insert(chunk).select('id');
+      if (error) {
+        console.error('[IngestExtracted] Insertion error on chunk:', error);
+        throw error;
+      }
+      totalInserted += (data?.length || chunk.length);
+    }
+
+    return res.json({
+      success: true,
+      message: `Successfully ingested ${totalInserted} questions and diagrams into the question bank!`,
+      count: totalInserted
+    });
+  } catch (err: any) {
+    console.error('[IngestExtracted Exception]:', err);
+    return res.status(500).json({ success: false, error: err.message || 'Failed to ingest questions.' });
+  }
+});
+
 // ─── ADMIN AI MOCK CONFIGURATION ENDPOINTS ARE IMPLEMENTED ABOVE ───
 
 app.get('/api/cbt/past-question-years', async (req, res) => {

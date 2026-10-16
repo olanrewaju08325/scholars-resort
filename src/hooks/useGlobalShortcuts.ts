@@ -63,8 +63,8 @@ export function useGlobalShortcuts() {
 
     if (isInputActive) return;
 
-    const isAuthRoute = ['/login', '/signup', '/forgot-password', '/reset-password', '/onboarding'].some(p => location.pathname.startsWith(p));
-    if (isAuthRoute) return;
+    const isAuthOrAdminRoute = ['/login', '/signup', '/forgot-password', '/reset-password', '/onboarding', '/admin'].some(p => location.pathname.startsWith(p));
+    if (isAuthOrAdminRoute) return;
 
     const key = e.key || '';
     if (!key) return;

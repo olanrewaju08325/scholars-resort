@@ -1,16 +1,15 @@
 import * as pdfjsLib from 'pdfjs-dist';
+// @ts-ignore
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { normalizeSubjectName, OFFICIAL_JAMB_SUBJECTS } from '@/utils/subjectUtils';
 
-// Configure pdfjs worker dynamically with fallback
+// Configure pdfjs worker: prefer bundled local asset for instant offline performance with safe fallback
 try {
   if (typeof window !== 'undefined') {
-    const installedVersion = (pdfjsLib as any).version || '6.2.108';
-    try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-        'pdfjs-dist/build/pdf.worker.min.mjs',
-        import.meta.url
-      ).href;
-    } catch {
+    if (pdfWorkerUrl) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+    } else {
+      const installedVersion = (pdfjsLib as any).version || '6.2.108';
       pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
     }
   }
@@ -27,6 +26,8 @@ export interface ExtractedVisualQuestion {
   explanation: string;
   year?: number;
   subject?: string;
+  topicName?: string;
+  topicId?: string;
   hasVisualReference: boolean;
   diagramImageUrl?: string;
   pageNumber: number;
@@ -41,6 +42,7 @@ export interface PdfVisualExtractionResult {
   detectedSubject: string;
   detectedSubjectConfidence: number;
   isChemistry: boolean;
+  detectedTopics: string[];
   questions: ExtractedVisualQuestion[];
   extractedDiagrams: Array<{ pageNumber: number; dataUrl: string; label: string }>;
 }
@@ -218,7 +220,8 @@ export function detectJambSubjectFromContent(text: string, fileName = ''): { sub
 export async function extractQuestionsAndDiagramsFromPdf(
   file: File,
   subjectHint?: string,
-  onProgress?: (status: string, percent: number) => void
+  onProgress?: (status: string, percent: number) => void,
+  topicHint?: string
 ): Promise<PdfVisualExtractionResult> {
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({
@@ -232,13 +235,19 @@ export async function extractQuestionsAndDiagramsFromPdf(
   const numPages = pdf.numPages;
   const extractedDiagrams: Array<{ pageNumber: number; dataUrl: string; label: string }> = [];
   const allExtractedQuestions: ExtractedVisualQuestion[] = [];
-  let fullAccumulatedText = '';
+  const detectedTopicsSet = new Set<string>();
+  if (topicHint && topicHint.trim() && topicHint !== 'All Topics') {
+    detectedTopicsSet.add(topicHint.trim());
+  }
 
-  onProgress?.(`Loaded PDF with ${numPages} pages. Processing and auto-detecting subject...`, 10);
+  let fullAccumulatedText = '';
+  let activeTopicAcrossPages = topicHint && topicHint !== 'All Topics' ? topicHint.trim() : '';
+
+  onProgress?.(`Loaded PDF with ${numPages} pages. Processing and auto-detecting subject & topics...`, 10);
 
   // Process each page: Extract text items and render visual page snapshots for diagrams
   for (let pageNum = 1; pageNum <= numPages; pageNum++) {
-    onProgress?.(`Analyzing page ${pageNum} of ${numPages} & isolating visual diagrams...`, 10 + Math.round((pageNum / numPages) * 70));
+    onProgress?.(`Analyzing page ${pageNum} of ${numPages} (isolating topic-based diagrams & questions)...`, 10 + Math.round((pageNum / numPages) * 70));
     
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
@@ -269,8 +278,8 @@ export async function extractQuestionsAndDiagramsFromPdf(
     try {
       const viewport = page.getViewport({ scale: 1.6 });
       const canvas = document.createElement('canvas');
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      canvas.width = Math.floor(viewport.width);
+      canvas.height = Math.floor(viewport.height);
       const ctx = canvas.getContext('2d');
       if (ctx) {
         await page.render({ canvasContext: ctx, viewport }).promise;
@@ -285,12 +294,14 @@ export async function extractQuestionsAndDiagramsFromPdf(
       console.warn(`[PdfVisualExtractor] Canvas render notice for page ${pageNum}:`, renderErr);
     }
 
-    // Parse question blocks from page text
-    const pageQuestions = parseQuestionsFromText(fullPageText, pageNum, pageDiagramDataUrl);
-    allExtractedQuestions.push(...pageQuestions);
+    // Parse question blocks from page text with cross-page topic continuity
+    const parseResult = parseQuestionsFromText(fullPageText, pageNum, pageDiagramDataUrl, activeTopicAcrossPages);
+    activeTopicAcrossPages = parseResult.currentTopic || activeTopicAcrossPages;
+    parseResult.detectedTopics.forEach(t => detectedTopicsSet.add(t));
+    allExtractedQuestions.push(...parseResult.questions);
   }
 
-  onProgress?.('Classifying official JAMB subject & linking diagrams...', 92);
+  onProgress?.('Classifying official JAMB subject & topic taxonomy mapping...', 92);
 
   // Auto-detect overall subject from accumulated document content
   const detectionResult = detectJambSubjectFromContent(fullAccumulatedText, file.name);
@@ -298,12 +309,14 @@ export async function extractQuestionsAndDiagramsFromPdf(
     ? subjectHint
     : detectionResult.subject;
 
-  // Tag questions with detected subject
+  // Tag questions with detected subject and fallback topic
   allExtractedQuestions.forEach(q => {
     if (!q.subject) {
-      // Also test individual question for mixed PDFs
       const qDetect = detectJambSubjectFromContent(q.questionText);
       q.subject = qDetect.confidence > 75 ? qDetect.subject : resolvedSubject;
+    }
+    if (!q.topicName && activeTopicAcrossPages) {
+      q.topicName = activeTopicAcrossPages;
     }
   });
 
@@ -317,6 +330,7 @@ export async function extractQuestionsAndDiagramsFromPdf(
     detectedSubject: resolvedSubject,
     detectedSubjectConfidence: detectionResult.confidence,
     isChemistry: resolvedSubject.toLowerCase() === 'chemistry',
+    detectedTopics: Array.from(detectedTopicsSet),
     questions: allExtractedQuestions,
     extractedDiagrams
   };
@@ -329,10 +343,12 @@ export async function extractQuestionsAndDiagramsFromPdf(
 function parseQuestionsFromText(
   text: string, 
   pageNumber: number,
-  pageDiagramUrl: string
-): ExtractedVisualQuestion[] {
+  pageDiagramUrl: string,
+  initialTopic = ''
+): { questions: ExtractedVisualQuestion[]; currentTopic: string; detectedTopics: string[] } {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   const questions: ExtractedVisualQuestion[] = [];
+  const detectedTopics: string[] = [];
 
   // Regex to detect question starts like: "1.", "1)", "Question 1:", "1 "
   const questionStartRegex = /^(\d{1,3})[\.\)\:\s]\s*(.+)/i;
@@ -346,12 +362,12 @@ function parseQuestionsFromText(
   const inlineCDRegex = /[\(\[]?C[\)\]\.\:]\s*(.+?)\s+[\(\[]?D[\)\]\.\:]\s*(.+)/i;
   // Regex to detect correct answer like: "Answer: A" or "Ans: B" or "[Ans: C]"
   const answerRegex = /(?:Answer|Ans|Correct)\s*[:=\-]?\s*[\(\[]?([A-D])[\)\]]?/i;
-  // Regex to detect topic headers like: "TOPIC 1: Organic Chemistry", "Chapter 3: Motion"
-  const topicHeaderRegex = /(?:TOPIC|CHAPTER|SECTION)\s*(?:\d+)?\s*[:\-–]?\s*([A-Za-z\s,\-&]{3,50})/i;
+  // Regex to detect topic headers like: "TOPIC 1: Organic Chemistry", "Chapter 3: Motion", "UNIT 2 - ELECTRICITY", "1.0 INTRODUCTION TO..."
+  const topicHeaderRegex = /(?:TOPIC|CHAPTER|SECTION|MODULE|UNIT|PART)\s*(?:\d+|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|[IVXLCDM]+)?\s*[:\-–]?\s*([A-Za-z0-9\s,\-&]{3,60})/i;
   // Regex to detect per-question year tags (e.g. [JAMB 2018 Q14], (UTME 2022/3), [2004], (1998 No. 5))
   const yearTagRegex = /(?:\[|\(|\b)(?:JAMB|UTME|UME|SSCE|WAEC|NECO)?\s*(19[7-9]\d|20[0-2]\d)\s*(?:[\/,]\s*(?:Q|No\.?|Question)?\s*\d+)?\s*(?:\]|\)|\b)/i;
 
-  let currentTopic = '';
+  let currentTopic = initialTopic;
   let currentQ: Partial<ExtractedVisualQuestion> | null = null;
   let currentOptions: string[] = [];
 
@@ -364,7 +380,6 @@ function parseQuestionsFromText(
       const stemYearMatch = rawText.match(yearTagRegex);
       if (stemYearMatch && stemYearMatch[1]) {
         extractedYear = parseInt(stemYearMatch[1], 10);
-        // Clean out leading/trailing bracketed year tags from stem
         rawText = rawText.replace(yearTagRegex, '').replace(/^[\s:\-\.–]+/, '').trim();
       }
 
@@ -392,6 +407,7 @@ function parseQuestionsFromText(
         correctAnswer: finalAnswer,
         explanation: currentQ.explanation || (currentTopic ? `JAMB Past Question Solution (${currentTopic}).` : 'Step-by-step past question solution.'),
         year: extractedYear || 2024,
+        topicName: currentTopic || undefined,
         hasVisualReference: hasVisualRef,
         diagramImageUrl: hasVisualRef ? pageDiagramUrl : undefined,
         pageNumber,
@@ -404,8 +420,12 @@ function parseQuestionsFromText(
     // Check for Topic / Chapter header in page
     const topMatch = line.match(topicHeaderRegex);
     if (topMatch && topMatch[1]) {
-      currentTopic = topMatch[1].trim();
-      continue;
+      const cleanTop = topMatch[1].trim();
+      if (cleanTop.length > 2 && !cleanTop.toLowerCase().startsWith('question')) {
+        currentTopic = cleanTop;
+        detectedTopics.push(cleanTop);
+        continue;
+      }
     }
 
     // Check for 4 inline options on one line: A. xx B. yy C. zz D. ww
@@ -476,7 +496,7 @@ function parseQuestionsFromText(
   }
 
   finalizeCurrentQuestion();
-  return questions;
+  return { questions, currentTopic, detectedTopics };
 }
 
 export interface RenderedPdfPage {
