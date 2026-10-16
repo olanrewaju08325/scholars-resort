@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { ExtractImageButton } from './ExtractImageButton';
 import { Input } from '@/components/ui/input';
 import { 
   Image as ImageIcon, Upload, FileText, CheckCircle2, AlertTriangle, 
@@ -750,61 +751,53 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button
-                    type="button"
-                    onClick={handleStartExtraction}
-                    disabled={!selectedFile || isProcessing}
+                <div className="flex flex-wrap items-center gap-2">
+                  <ExtractImageButton
+                    label="Extract Questions & Render Diagram Canvas"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 h-11 px-5 shadow-md"
-                  >
-                    {isProcessing ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        <span>{progressStatus || 'Processing PDF...'}</span>
-                      </>
-                    ) : (
-                      <>
-                        <Sparkles className="w-4 h-4" />
-                        <span>Extract Questions & Render Diagram Canvas</span>
-                      </>
-                    )}
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    disabled={!selectedFile || isProcessing}
-                    onClick={async () => {
-                      if (!selectedFile) {
-                        toast.error('Please upload a PDF past question book first.');
-                        return;
+                    disabled={!selectedFile}
+                    onExtract={async (updateProgress) => {
+                      if (!selectedFile) return;
+                      const { splitPdfIntoChunks } = await import('@/lib/pdfProcessor');
+                      const { extractQuestionsAndDiagramsFromPdf } = await import('@/lib/pdfVisualQuestionExtractor');
+                      
+                      const chunks = await splitPdfIntoChunks(selectedFile, 5);
+                      updateProgress(`Created ${chunks.length} chunks. Processing...`);
+                      
+                      const allQuestions: any[] = [];
+                      for (let i = 0; i < chunks.length; i++) {
+                        updateProgress(`Processing chunk ${i + 1} of ${chunks.length}...`);
+                        const result = await extractQuestionsAndDiagramsFromPdf(
+                          new File([chunks[i]], `chunk_${i}.pdf`),
+                          selectedSubject
+                        );
+                        allQuestions.push(...result.questions);
                       }
-                      setIsProcessing(true);
-                      setProgressStatus('Isolating and rendering all book diagrams and figures only (no text questions)...');
-                      try {
-                        const { renderPdfPagesForVisualSnapping } = await import('@/lib/pdfVisualQuestionExtractor');
-                        const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.8, (curr, total) => {
-                          setProgressPercent(Math.round((curr / total) * 100));
-                        });
-                        setRenderedPages(pages);
-                        if (pages.length > 0) {
-                          setSelectedPageNum(1);
-                          setActiveTab('extractor');
-                          toast.success(`Successfully extracted ${pages.length} high-resolution page diagram snapshots! You can now snip, crop, and attach figures directly.`);
-                        } else {
-                          toast.info('No pages rendered.');
-                        }
-                      } catch (err: any) {
-                        toast.error(`Image extraction failed: ${err.message}`);
-                      } finally {
-                        setIsProcessing(false);
-                      }
+                      setExtractedQuestions(allQuestions);
+                      toast.success(`Extracted ${allQuestions.length} questions total!`);
                     }}
+                  />
+
+                  <ExtractImageButton
+                    label="Extract Images & Diagrams Only"
                     className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold gap-2 h-11 px-5 shadow-md"
-                    title="Extract only diagram images and figures from each PDF page without parsing text questions"
-                  >
-                    <Eye className="w-4 h-4" />
-                    <span className="font-bold">Extract Images & Diagrams Only</span>
-                  </Button>
+                    disabled={!selectedFile}
+                    onExtract={async (updateProgress) => {
+                      if (!selectedFile) return;
+                      const { renderPdfPagesForVisualSnapping } = await import('@/lib/pdfVisualQuestionExtractor');
+                      updateProgress('Extracting visual diagrams...');
+                      const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.8, (curr, total) => {
+                        updateProgress(`Snapping page ${curr} of ${total}...`);
+                      });
+                      setRenderedPages(pages);
+                      if (pages.length > 0) {
+                        setSelectedPageNum(1);
+                        setActiveTab('extractor');
+                      }
+                      toast.success(`Successfully extracted ${pages.length} high-resolution page diagram snapshots!`);
+                    }}
+                  />
+                </div>
                 </div>
 
                 {extractedQuestions.length > 0 && (
