@@ -280,7 +280,7 @@ export const BadgesAdminTab = () => {
                 setBadgeIcon(randomAi.icon);
                 setBadgeCategory(randomAi.category);
                 setIsEditing(true);
-                toast.success(`✨ Gemini AI generated badge: "${randomAi.name}"! Review and click Save.`);
+                toast.success(`AI generated badge: "${randomAi.name}"! Review and click Save.`);
               }}
             >
               <Sparkles className="w-4 h-4" /> AI Generate Badge

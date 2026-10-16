@@ -826,7 +826,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                     title="Extract only diagram images and figures from each PDF page without parsing text questions"
                   >
                     <Eye className="w-4 h-4" />
-                    <span>🖼️ Extract Images & Diagrams Only</span>
+                    <span className="font-bold">Extract Images & Diagrams Only</span>
                   </Button>
                 </div>
 
