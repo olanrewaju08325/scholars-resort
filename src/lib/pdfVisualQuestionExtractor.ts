@@ -214,6 +214,73 @@ export function detectJambSubjectFromContent(text: string, fileName = ''): { sub
 }
 
 /**
+ * Processes a single page for text and diagrams.
+ */
+export async function extractPdfPageChunk(
+  page: any,
+  pageNum: number,
+  activeTopic: string
+): Promise<{ 
+  questions: ExtractedVisualQuestion[]; 
+  diagrams: Array<{ pageNumber: number; dataUrl: string; label: string }>;
+  currentTopic: string;
+  detectedTopics: string[];
+  fullPageText: string;
+}> {
+  const textContent = await page.getTextContent();
+  const textLines: string[] = [];
+  let currentLine = '';
+  let lastY: number | null = null;
+
+  for (const item of textContent.items as any[]) {
+    const str = item.str || '';
+    const y = item.transform ? Math.round(item.transform[5]) : null;
+
+    if (lastY !== null && y !== null && Math.abs(y - lastY) > 5) {
+      if (currentLine.trim()) textLines.push(currentLine.trim());
+      currentLine = str;
+    } else {
+      currentLine += ' ' + str;
+    }
+    lastY = y;
+  }
+  if (currentLine.trim()) textLines.push(currentLine.trim());
+  const fullPageText = textLines.join('\n');
+
+  let pageDiagramDataUrl = '';
+  const diagrams: Array<{ pageNumber: number; dataUrl: string; label: string }> = [];
+
+  try {
+    const viewport = page.getViewport({ scale: 1.6 });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      pageDiagramDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      diagrams.push({
+        pageNumber: pageNum,
+        dataUrl: pageDiagramDataUrl,
+        label: `Page ${pageNum} Visual Diagram Snapshot`
+      });
+    }
+  } catch (renderErr) {
+    console.warn(`[PdfVisualExtractor] Canvas render notice for page ${pageNum}:`, renderErr);
+  }
+
+  const parseResult = parseQuestionsFromText(fullPageText, pageNum, pageDiagramDataUrl, activeTopic);
+  
+  return {
+    questions: parseResult.questions,
+    diagrams,
+    currentTopic: parseResult.currentTopic || activeTopic,
+    detectedTopics: parseResult.detectedTopics,
+    fullPageText
+  };
+}
+
+/**
  * Extracts question text, multiple choice options, and renders diagrams directly from a PDF.
  * Eliminates manual screenshotting and typing.
  */

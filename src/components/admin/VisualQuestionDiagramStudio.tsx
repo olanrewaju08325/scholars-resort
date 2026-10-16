@@ -179,77 +179,53 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
     }
 
     setIsProcessing(true);
-    setProgressStatus('Reading PDF pages, matching curriculum topics, and isolating diagrams...');
-    setProgressPercent(10);
+    setExtractedQuestions([]); // Clear previous
+    setRenderedPages([]);
 
     try {
-      const chosenTopic = subjectTopics.find(t => t.id === selectedTopicId);
-      const topicHint = selectedTopicId === 'custom' 
-        ? customTopicName.trim() 
-        : (chosenTopic?.name || undefined);
-
-      const result = await extractQuestionsAndDiagramsFromPdf(
-        selectedFile,
-        selectedSubject,
-        (status, percent) => {
-          setProgressStatus(status);
-          setProgressPercent(percent);
-        },
-        topicHint
-      );
-
-      // Record any detected topic headers from the book
-      if (result.detectedTopics && result.detectedTopics.length > 0) {
-        setDetectedTopics(result.detectedTopics);
-        toast.info(`Detected ${result.detectedTopics.length} topics from PDF: ${result.detectedTopics.slice(0, 3).join(', ')}${result.detectedTopics.length > 3 ? '...' : ''}`);
-      }
-
-      // Apply auto-detected subject (especially Chemistry or other official JAMB subject)
-      if (result.detectedSubject) {
-        setSelectedSubject(result.detectedSubject);
-        setDetectedSubjectMeta({
-          subject: result.detectedSubject,
-          confidence: result.detectedSubjectConfidence,
-          isChemistry: result.isChemistry
-        });
-        toast.success(`Auto-detected Subject: ${result.detectedSubject} (${result.detectedSubjectConfidence}% confidence)!`);
-      }
-
-      let processedQuestions = result.questions.map(q => ({
-        ...q,
-        year: q.year || examYear,
-        subject: q.subject || result.detectedSubject || selectedSubject,
-        topicName: q.topicName || topicHint || (chosenTopic?.name) || undefined
-      }));
-
-      if (extractVisualOnly) {
-        const visualOnly = processedQuestions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl));
-        if (visualOnly.length > 0) {
-          processedQuestions = visualOnly;
-          toast.success(`Isolated ${visualOnly.length} questions requiring diagrams!`);
-        } else {
-          toast.info('No explicit diagram references detected. Showing all questions.');
-        }
-      } else {
-        toast.success(`Extracted ${result.totalQuestions} questions! (${result.questionsWithDiagrams} with diagrams isolated)`);
-      }
-
-      setExtractedQuestions(processedQuestions);
-
-      // Also render page snapshots for interactive visual cropper
-      setProgressStatus('Generating high-resolution page viewer for interactive cropping...');
-      const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.8, (curr, total) => {
-        setProgressPercent(80 + Math.round((curr / total) * 18));
+      // 1. Initialize PDF
+      const arrayBuffer = await selectedFile.arrayBuffer();
+      const loadingTask = (window as any).pdfjsLib.getDocument({
+        data: arrayBuffer,
+        useWorkerFetch: false,
+        isEvalSupported: false,
+        useSystemFonts: true,
       });
-      setRenderedPages(pages);
-      if (pages.length > 0) setSelectedPageNum(1);
+      const pdf = await loadingTask.promise;
+      const numPages = pdf.numPages;
 
+      const { extractPdfPageChunk } = await import('@/lib/pdfVisualQuestionExtractor');
+      
+      const allQuestions: any[] = [];
+      const allDiagrams: any[] = [];
+      let activeTopic = selectedTopicId === 'custom' ? customTopicName.trim() : '';
+
+      // 2. Process page-by-page
+      for (let pageNum = 1; pageNum <= numPages; pageNum++) {
+        setProgressStatus(`Processing page ${pageNum} / ${numPages}...`);
+        setProgressPercent(Math.round((pageNum / numPages) * 100));
+
+        const page = await pdf.getPage(pageNum);
+        const pageResult = await extractPdfPageChunk(page, pageNum, activeTopic);
+        
+        activeTopic = pageResult.currentTopic;
+        allQuestions.push(...pageResult.questions);
+        allDiagrams.push(...pageResult.diagrams);
+
+        // Update UI state visually after each page
+        setExtractedQuestions([...allQuestions]);
+        setRenderedPages(prev => [...prev, ...pageResult.diagrams.map(d => ({
+          pageNumber: d.pageNumber,
+          dataUrl: d.dataUrl,
+          width: 800, // placeholder
+          height: 1000 // placeholder
+        }))]);
+      }
+      toast.success('Successfully extracted all images and questions!');
     } catch (err: any) {
-      console.error('PDF extraction failed:', err);
-      toast.error(`Extraction failed: ${err.message}`);
+      toast.error(`Extraction error: ${err.message}`);
     } finally {
       setIsProcessing(false);
-      setProgressPercent(100);
     }
   };
 
