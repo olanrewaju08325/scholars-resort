@@ -1121,6 +1121,26 @@ app.post('/api/send-bulk-email', verifyAdminToken, async (req, res) => {
       });
     }
 
+    try {
+      const { data: existingStat } = await supabase.from('admin_settings').select('setting_value').eq('setting_key', 'smtp_stats_counter').maybeSingle();
+      const currentStats = existingStat?.setting_value || { emailsSentToday: 0, emailsSentThisMonth: 0, failedToday: 0 };
+      const today = new Date().toDateString();
+      const lastDate = currentStats.lastDate || today;
+      const todayCount = lastDate === today ? (currentStats.emailsSentToday || 0) + sentCount : sentCount;
+      const monthCount = (currentStats.emailsSentThisMonth || 0) + sentCount;
+
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'smtp_stats_counter',
+        setting_value: {
+          emailsSentToday: todayCount,
+          emailsSentThisMonth: monthCount,
+          failedToday: (currentStats.failedToday || 0) + failedCount,
+          lastDate: today
+        },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+    } catch {}
+
     return res.json({
       success: true,
       count: recipientList.length,

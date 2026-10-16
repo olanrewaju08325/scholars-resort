@@ -772,24 +772,63 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
               )}
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                <Button
-                  type="button"
-                  onClick={handleStartExtraction}
-                  disabled={!selectedFile || isProcessing}
-                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 h-11 px-6 shadow-md"
-                >
-                  {isProcessing ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>{progressStatus || 'Processing PDF...'}</span>
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-4 h-4" />
-                      <span>Extract Questions & Render Diagram Canvas</span>
-                    </>
-                  )}
-                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleStartExtraction}
+                    disabled={!selectedFile || isProcessing}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 h-11 px-5 shadow-md"
+                  >
+                    {isProcessing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>{progressStatus || 'Processing PDF...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4" />
+                        <span>Extract Questions & Render Diagram Canvas</span>
+                      </>
+                    )}
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    disabled={!selectedFile || isProcessing}
+                    onClick={async () => {
+                      if (!selectedFile) {
+                        toast.error('Please upload a PDF past question book first.');
+                        return;
+                      }
+                      setIsProcessing(true);
+                      setProgressStatus('Isolating and rendering all book diagrams and figures only (no text questions)...');
+                      try {
+                        const { renderPdfPagesForVisualSnapping } = await import('@/lib/pdfVisualQuestionExtractor');
+                        const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.8, (curr, total) => {
+                          setProgressPercent(Math.round((curr / total) * 100));
+                        });
+                        setRenderedPages(pages);
+                        if (pages.length > 0) {
+                          setSelectedPageNum(1);
+                          setActiveTab('extractor');
+                          toast.success(`Successfully extracted ${pages.length} high-resolution page diagram snapshots! You can now snip, crop, and attach figures directly.`);
+                        } else {
+                          toast.info('No pages rendered.');
+                        }
+                      } catch (err: any) {
+                        toast.error(`Image extraction failed: ${err.message}`);
+                      } finally {
+                        setIsProcessing(false);
+                      }
+                    }}
+                    className="bg-purple-600 hover:bg-purple-700 text-white font-extrabold gap-2 h-11 px-5 shadow-md"
+                    title="Extract only diagram images and figures from each PDF page without parsing text questions"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>🖼️ Extract Images & Diagrams Only</span>
+                  </Button>
+                </div>
 
                 {extractedQuestions.length > 0 && (
                   <div className="flex items-center gap-2">

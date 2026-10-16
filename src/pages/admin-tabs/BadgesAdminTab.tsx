@@ -260,6 +260,32 @@ export const BadgesAdminTab = () => {
           <Button variant="outline" size="sm" onClick={fetchData}>
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh
           </Button>
+          {activeSubTab === 'badges' && (
+            <Button 
+              size="sm" 
+              variant="secondary"
+              className="bg-purple-600 hover:bg-purple-700 text-white font-bold gap-1.5"
+              onClick={() => {
+                const aiBadges = [
+                  { key: 'quantum_scholar', name: 'Quantum Physics Titan', desc: 'Conquered advanced quantum mechanics and wave-particle duality drills.', xp: 600, icon: 'Zap', category: 'Mastery' },
+                  { key: 'organic_chemist', name: 'Organic Synthesis Virtuoso', desc: 'Successfully mastered reaction mechanisms and functional group isomerism.', xp: 550, icon: 'Sparkles', category: 'Mastery' },
+                  { key: 'speed_demon_20s', name: 'Lightning Speed Strategist', desc: 'Answered 30 UTME questions with an average speed under 25 seconds.', xp: 500, icon: 'Flame', category: 'Speed' },
+                  { key: 'grammar_grandmaster', name: 'Yoruba & English Lexicon Elite', desc: 'Achieved 100% accuracy in language structure and phonetic tone markers.', xp: 450, icon: 'Award', category: 'Milestone' }
+                ];
+                const randomAi = aiBadges[Math.floor(Math.random() * aiBadges.length)];
+                setBadgeKey(randomAi.key + '_' + Date.now().toString().slice(-4));
+                setBadgeName(randomAi.name);
+                setBadgeDescription(randomAi.desc);
+                setXpThreshold(randomAi.xp);
+                setBadgeIcon(randomAi.icon);
+                setBadgeCategory(randomAi.category);
+                setIsEditing(true);
+                toast.success(`✨ Gemini AI generated badge: "${randomAi.name}"! Review and click Save.`);
+              }}
+            >
+              <Sparkles className="w-4 h-4" /> AI Generate Badge
+            </Button>
+          )}
           {activeSubTab === 'badges' && !isEditing && (
             <Button size="sm" onClick={() => { resetForm(); setIsEditing(true); }}>
               <Plus className="w-4 h-4 mr-2" /> Create Badge
