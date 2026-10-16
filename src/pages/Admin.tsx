@@ -66,7 +66,8 @@ export default function Admin() {
 
   // Read initial module from URL search query (?module=... or ?tab=...), fallback to sessionStorage, fallback to 'dashboard'
   const urlModule = searchParams.get('module') || searchParams.get('tab');
-  const savedModule = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('scholar_admin_active_module') : null;
+  const savedModule = (typeof sessionStorage !== 'undefined' ? sessionStorage.getItem('scholar_admin_active_module') : null) ||
+                      (typeof localStorage !== 'undefined' ? localStorage.getItem('scholar_admin_active_module') : null);
   const [activeModule, setActiveModuleState] = useState<string>(() => {
     return urlModule || savedModule || 'dashboard';
   });
@@ -76,6 +77,7 @@ export default function Admin() {
     setSearchParams({ module: moduleId }, { replace: true });
     try {
       sessionStorage.setItem('scholar_admin_active_module', moduleId);
+      localStorage.setItem('scholar_admin_active_module', moduleId);
     } catch {}
   };
 

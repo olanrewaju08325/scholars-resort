@@ -77,6 +77,21 @@ export const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ chil
   // Allow accessing login or admin path directly so master admin can log in during maintenance
   const isLoginPageOrAdminPath = location.pathname === '/login' || location.pathname.includes('scholarresortadmin');
 
+  const handleDeactivateLockdown = async () => {
+    try {
+      await supabase.from('admin_settings').upsert({
+        setting_key: 'maintenance_mode',
+        setting_value: { enabled: false, message: '' },
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'setting_key' });
+      setMaintenanceEnabled(false);
+      localStorage.setItem('scholar_maintenance_mode', 'false');
+      window.dispatchEvent(new CustomEvent('scholar:maintenance-changed', { detail: { enabled: false } }));
+    } catch (e: any) {
+      console.error('Failed to deactivate maintenance:', e);
+    }
+  };
+
   if (!loading && maintenanceEnabled && !isAdmin && !isLoginPageOrAdminPath) {
     return (
       <div className="min-h-screen bg-background text-foreground flex items-center justify-center p-6">
@@ -87,7 +102,7 @@ export const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ chil
           <div className="space-y-2">
             <h2 className="text-2xl font-bold font-display tracking-tight text-foreground">Platform Under Scheduled Maintenance</h2>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              {maintenanceMessage || 'We are currently deploying system updates to improve performance. Normal student access will resume shortly.'}
+              {maintenanceMessage || 'We are currently deploying system updates to improve question databases, security, and offline engines. Normal student access will resume shortly.'}
             </p>
           </div>
           <div className="p-4 rounded-2xl bg-muted/40 border border-border/80 text-xs text-muted-foreground flex items-center gap-3 text-left">
@@ -104,6 +119,26 @@ export const MaintenanceGuard: React.FC<{ children: React.ReactNode }> = ({ chil
     );
   }
 
-  return <>{children}</>;
+  return (
+    <>
+      {maintenanceEnabled && isAdmin && (
+        <div className="bg-amber-500 text-slate-950 px-4 py-2 text-xs font-bold flex items-center justify-between shadow-md sticky top-0 z-50">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-slate-950 animate-pulse" />
+            <span>⚠️ PLATFORM UNDER MAINTENANCE LOCKDOWN: Non-admin students are currently locked out.</span>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleDeactivateLockdown}
+            className="bg-slate-950 hover:bg-slate-900 text-white font-extrabold text-[11px] h-7 px-3 rounded-lg"
+          >
+            Deactivate Lockdown Now
+          </Button>
+        </div>
+      )}
+      {children}
+    </>
+  );
 };
 

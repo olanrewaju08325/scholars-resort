@@ -85,14 +85,19 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
       const matched = dbSubs?.find(s => normalizeSubjectName(s.name).toLowerCase() === canonical.toLowerCase());
       const subId = matched?.id || dbSubs?.[0]?.id || '';
 
-      // Fetch topics under this subject
+      // Fetch topics under this subject safely using canonical columns
       if (subId) {
-        const { data: topicsData } = await supabase
+        const { data: topicsData, error: topicsErr } = await supabase
           .from('topics')
-          .select('id, name, sequence_order')
+          .select('id, name')
           .eq('subject_id', subId)
-          .order('sequence_order', { ascending: true });
-        setSubjectTopics(topicsData || []);
+          .order('name', { ascending: true });
+
+        if (!topicsErr && topicsData) {
+          setSubjectTopics(topicsData);
+        } else {
+          setSubjectTopics([]);
+        }
       } else {
         setSubjectTopics([]);
       }

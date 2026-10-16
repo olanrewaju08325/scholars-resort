@@ -7234,9 +7234,7 @@ app.post('/api/admin/questions/ingest-extracted', verifyAdminToken, async (req, 
           .from('topics')
           .insert({
             subject_id: subId,
-            name: trimmed,
-            description: `Auto-extracted JAMB curriculum topic: ${trimmed}`,
-            sequence_order: 1
+            name: trimmed
           })
           .select('id')
           .single();

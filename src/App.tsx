@@ -172,6 +172,7 @@ import { InterruptedExamPrompt } from './components/InterruptedExamPrompt';
 import { AiQuotaStatusModal } from './components/AiQuotaStatusModal';
 import { ExamSessionProvider } from './context/ExamSessionContext';
 import { ApiDebugConsole } from './utils/api-health';
+import { YouTubeOfflineVault } from './components/offline/YouTubeOfflineVault';
 
 function App() {
   return (
@@ -189,6 +190,7 @@ function App() {
                 <GlobalShortcutsHandler />
                 <InstallPrompt />
                 <OfflineIndicator />
+                <YouTubeOfflineVault />
                 <AiQuotaStatusModal />
                 <ApiDebugConsole />
               </MaintenanceGuard>
