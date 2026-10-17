@@ -27,6 +27,8 @@ export const ExtractImageButton: React.FC<ExtractImageButtonProps> = ({
   const handleClick = async (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    e.nativeEvent?.preventDefault?.();
+    e.nativeEvent?.stopImmediatePropagation?.();
 
     if (isProcessing || disabled) return;
 

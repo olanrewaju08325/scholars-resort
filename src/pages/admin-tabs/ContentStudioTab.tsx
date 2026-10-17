@@ -163,7 +163,9 @@ export const ContentStudioTab = () => {
   };
 
   // Process Document Upload (PDF, Scanned PDF, Image, CSV, TXT)
-  const handleUpload = async () => {
+  const handleUpload = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (!selectedFile) return;
     setUploading(true);
     setSourceDocumentName(selectedFile.name);
@@ -232,7 +234,9 @@ export const ContentStudioTab = () => {
     setUploading(false);
   };
 
-  const handleProcessRawText = async () => {
+  const handleProcessRawText = async (e?: React.MouseEvent) => {
+    e?.preventDefault();
+    e?.stopPropagation();
     if (!rawText.trim()) return;
     setProcessingText(true);
     setSourceDocumentName('Direct Passage Text');
@@ -487,6 +491,7 @@ export const ContentStudioTab = () => {
               </div>
 
               <Button
+                type="button"
                 onClick={handleUpload}
                 disabled={!selectedFile || uploading}
                 className="w-full bg-primary text-primary-foreground font-bold py-5 rounded-xl flex items-center justify-center gap-2"
@@ -523,6 +528,7 @@ export const ContentStudioTab = () => {
               />
 
               <Button
+                type="button"
                 onClick={handleProcessRawText}
                 disabled={!rawText.trim() || processingText}
                 className="w-full bg-secondary text-secondary-foreground hover:bg-secondary/80 font-bold py-5 rounded-xl flex items-center justify-center gap-2"

@@ -18,7 +18,7 @@ import {
   type ExtractedVisualQuestion,
   type RenderedPdfPage
 } from '@/lib/pdfVisualQuestionExtractor';
-import { splitPdfIntoChunks } from '@/lib/pdfProcessor';
+import { splitPdfIntoChunks, processPdfChunksStreaming } from '@/lib/pdfProcessor';
 import { OFFICIAL_JAMB_SUBJECTS, normalizeSubjectName } from '@/utils/subjectUtils';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
@@ -761,54 +761,27 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                       const chosenTopic = subjectTopics.find(t => t.id === selectedTopicId);
                       const topicHint = selectedTopicId === 'custom' ? customTopicName.trim() : (chosenTopic?.name || '');
 
-                      updateProgress('Slicing PDF into processing segments...', 0, 1);
-                      const chunks = await splitPdfIntoChunks(selectedFile, 5, (curr, total, status) => {
-                        updateProgress(status, curr, total);
-                      });
-                      
-                      const totalChunks = chunks.length;
-                      updateProgress(`Created ${totalChunks} chunks. Starting question & diagram extraction...`, 0, totalChunks);
-                      
-                      const allQuestions: any[] = [];
-                      const allDiagrams: any[] = [];
-
-                      for (let i = 0; i < totalChunks; i++) {
-                        const chunkNumber = i + 1;
-                        updateProgress(`Processing Chunk ${chunkNumber} of ${totalChunks}...`, chunkNumber, totalChunks);
-                        
-                        const chunkFileName = `${selectedFile.name.replace(/\.pdf$/i, '')}_part${chunkNumber}.pdf`;
-                        const chunkFile = new File([chunks[i]], chunkFileName, { type: 'application/pdf' });
-                        
-                        const result = await extractQuestionsAndDiagramsFromPdf(
-                          chunkFile,
-                          selectedSubject,
-                          (status) => {
-                            updateProgress(`Processing Chunk ${chunkNumber} of ${totalChunks}: ${status}`, chunkNumber, totalChunks);
-                          },
-                          topicHint
-                        );
-                        
-                        if (result.questions && result.questions.length > 0) {
-                          allQuestions.push(...result.questions);
+                      const result = await processPdfChunksStreaming(
+                        selectedFile,
+                        selectedSubject,
+                        5,
+                        topicHint,
+                        (status, currChunk, totalChunks, _pct) => {
+                          updateProgress(status, currChunk, totalChunks);
                         }
-                        if (result.extractedDiagrams && result.extractedDiagrams.length > 0) {
-                          allDiagrams.push(...result.extractedDiagrams);
-                        }
-                      }
+                      );
                       
-                      setExtractedQuestions(allQuestions);
-                      if (allDiagrams.length > 0) {
-                        setRenderedPages(prev => [
-                          ...prev,
-                          ...allDiagrams.map(d => ({
-                            pageNumber: d.pageNumber,
-                            dataUrl: d.dataUrl,
-                            width: 800,
-                            height: 1000
-                          }))
-                        ]);
+                      setExtractedQuestions(result.questions);
+                      if (result.diagrams.length > 0) {
+                        setRenderedPages(result.diagrams.map(d => ({
+                          pageNumber: d.pageNumber,
+                          dataUrl: d.dataUrl,
+                          width: 800,
+                          height: 1000
+                        })));
+                        setSelectedPageNum(result.diagrams[0].pageNumber);
                       }
-                      toast.success(`Extracted ${allQuestions.length} questions across ${totalChunks} chunks!`);
+                      toast.success(`Successfully extracted ${result.questions.length} questions across ${result.totalChunks} chunks!`);
                     }}
                   />
 

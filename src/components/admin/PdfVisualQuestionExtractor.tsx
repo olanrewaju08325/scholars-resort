@@ -11,7 +11,7 @@ import {
   type ExtractedVisualQuestion, 
   type PdfVisualExtractionResult 
 } from '@/lib/pdfVisualQuestionExtractor';
-import { splitPdfIntoChunks } from '@/lib/pdfProcessor';
+import { splitPdfIntoChunks, processPdfChunksStreaming } from '@/lib/pdfProcessor';
 import { OFFICIAL_JAMB_SUBJECTS, normalizeSubjectName } from '@/utils/subjectUtils';
 import { supabase } from '@/lib/supabase';
 import { MathText } from '@/components/MathText';
@@ -69,59 +69,34 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
     setProgressPercent(5);
 
     try {
-      setProgressStatus('Slicing PDF document into optimized segments...');
-      const chunks = await splitPdfIntoChunks(selectedFile, 5, (curr, total, status) => {
-        setProgressStatus(status);
-        setProgressPercent(Math.round((curr / total) * 25));
-      });
-
-      const totalChunks = chunks.length;
-      const allExtractedQuestions: ExtractedVisualQuestion[] = [];
-      const allExtractedDiagrams: Array<{ pageNumber: number; dataUrl: string; label: string }> = [];
-      let primaryResult: PdfVisualExtractionResult | null = null;
-
-      for (let i = 0; i < totalChunks; i++) {
-        const chunkNum = i + 1;
-        const chunkFileName = `${selectedFile.name.replace(/\.pdf$/i, '')}_part${chunkNum}.pdf`;
-        const chunkFile = new File([chunks[i]], chunkFileName, { type: 'application/pdf' });
-
-        const result = await extractQuestionsAndDiagramsFromPdf(
-          chunkFile,
-          selectedSubject,
-          (status, percent) => {
-            const chunkBase = 25 + Math.round((i / totalChunks) * 70);
-            const chunkContribution = Math.round((percent / 100) * (70 / totalChunks));
-            setProgressStatus(`Processing Chunk ${chunkNum} of ${totalChunks}: ${status}`);
-            setProgressPercent(Math.min(95, chunkBase + chunkContribution));
-          }
-        );
-
-        if (!primaryResult) {
-          primaryResult = result;
+      const streamingRes = await processPdfChunksStreaming(
+        selectedFile,
+        selectedSubject,
+        5,
+        undefined,
+        (status, _curr, _total, percent) => {
+          setProgressStatus(status);
+          setProgressPercent(percent);
         }
-        allExtractedQuestions.push(...result.questions);
-        if (result.extractedDiagrams) {
-          allExtractedDiagrams.push(...result.extractedDiagrams);
-        }
-      }
+      );
 
       const finalResult: PdfVisualExtractionResult = {
         fileName: selectedFile.name,
-        numPages: primaryResult?.numPages || totalChunks * 5,
-        totalQuestions: allExtractedQuestions.length,
-        questionsWithDiagrams: allExtractedQuestions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl)).length,
-        detectedSubject: primaryResult?.detectedSubject || selectedSubject,
-        detectedSubjectConfidence: primaryResult?.detectedSubjectConfidence || 85,
-        isChemistry: primaryResult?.isChemistry || selectedSubject.toLowerCase() === 'chemistry',
-        detectedTopics: primaryResult?.detectedTopics || [],
-        questions: allExtractedQuestions,
-        extractedDiagrams: allExtractedDiagrams
+        numPages: streamingRes.totalPages,
+        totalQuestions: streamingRes.questions.length,
+        questionsWithDiagrams: streamingRes.questions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl)).length,
+        detectedSubject: streamingRes.detectedSubject || selectedSubject,
+        detectedSubjectConfidence: 85,
+        isChemistry: streamingRes.detectedSubject.toLowerCase() === 'chemistry',
+        detectedTopics: [],
+        questions: streamingRes.questions,
+        extractedDiagrams: streamingRes.diagrams
       };
 
       setExtractionResult(finalResult);
       
       // Attach selected subject and year to all extracted questions (preserve individual detected question years)
-      let processedQuestions = allExtractedQuestions.map(q => ({
+      let processedQuestions = streamingRes.questions.map(q => ({
         ...q,
         year: q.year || examYear
       }));
@@ -131,12 +106,12 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
         const visualQuestions = processedQuestions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl));
         if (visualQuestions.length > 0) {
           processedQuestions = visualQuestions;
-          toast.success(`Found ${visualQuestions.length} visual questions with diagram figures across ${totalChunks} chunks!`);
+          toast.success(`Found ${visualQuestions.length} visual questions with diagram figures across ${streamingRes.totalChunks} chunks!`);
         } else {
           toast.info('No explicit diagram references detected. Showing all extracted questions.');
         }
       } else {
-        toast.success(`Extracted ${allExtractedQuestions.length} questions across ${totalChunks} chunks!`);
+        toast.success(`Extracted ${streamingRes.questions.length} questions across ${streamingRes.totalChunks} chunks!`);
       }
 
       setExtractedQuestions(processedQuestions);

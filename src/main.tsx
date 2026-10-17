@@ -47,7 +47,11 @@ initSupabaseLifecycle();
 
 // Handle Vite dynamic import chunk reload events gracefully
 window.addEventListener('vite:preloadError', (event: any) => {
-  console.warn('[Vite Preload Error] Asset chunk hash mismatch detected. Refreshing for latest deployment...', event);
+  console.warn('[Vite Preload Error] Asset chunk hash mismatch detected:', event);
+  if (window.location.pathname.includes('admin') || window.location.pathname.includes('scholarresortadmin')) {
+    console.warn('[Admin Active] Suppressing auto-reload to preserve administrative state.');
+    return;
+  }
   const lastReload = Number(sessionStorage.getItem('last_vite_preload_reload') || 0);
   if (Date.now() - lastReload > 10000) {
     sessionStorage.setItem('last_vite_preload_reload', String(Date.now()));
@@ -64,7 +68,11 @@ window.addEventListener('unhandledrejection', (event) => {
     msg.includes('loading chunk') ||
     reason?.name === 'ChunkLoadError'
   ) {
-    console.warn('[Chunk Load Intercepted] Reloading with fresh assets...', msg);
+    console.warn('[Chunk Load Intercepted]:', msg);
+    if (window.location.pathname.includes('admin') || window.location.pathname.includes('scholarresortadmin')) {
+      console.warn('[Admin Active] Suppressing auto-reload to preserve administrative state.');
+      return;
+    }
     const lastReload = Number(sessionStorage.getItem('last_chunk_unhandled_reload') || 0);
     if (Date.now() - lastReload > 10000) {
       sessionStorage.setItem('last_chunk_unhandled_reload', String(Date.now()));
