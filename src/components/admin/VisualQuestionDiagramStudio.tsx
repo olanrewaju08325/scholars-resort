@@ -914,7 +914,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                         onChange={(e) => setTargetQuestionIndex(Number(e.target.value))}
                         className="bg-background border border-border rounded-lg px-3 py-1.5 text-xs font-bold"
                       >
-                        {extractedQuestions.map((q, idx) => (
+                        {(extractedQuestions || []).map((q, idx) => (
                           <option key={idx} value={idx}>
                             Question #{idx + 1}: {q.questionText.slice(0, 30)}...
                           </option>
@@ -1072,7 +1072,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
             </Card>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {diagramQuestions
+              {(diagramQuestions || [])
                 .filter(q => !searchFilter || q.question_text.toLowerCase().includes(searchFilter.toLowerCase()))
                 .map((q, idx) => (
                   <Card key={q.id || idx} className="border-border bg-card p-4 space-y-3">
