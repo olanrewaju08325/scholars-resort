@@ -460,24 +460,43 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
                   </div>
 
                   {/* Diagram Preview if present */}
-                  {q.diagramImageUrl && (
-                    <div className="flex items-center gap-3 bg-muted/40 p-2.5 rounded-lg border border-border">
-                      <img 
-                        src={q.diagramImageUrl} 
-                        alt="Question Diagram" 
-                        className="w-20 h-16 object-cover rounded border border-border cursor-pointer"
-                        onClick={() => setSelectedPreviewImage(q.diagramImageUrl!)}
-                      />
-                      <div className="text-xs space-y-1">
-                        <span className="font-bold text-foreground block">Isolated Page Diagram</span>
-                        <Button 
-                          size="sm" 
-                          variant="outline" 
+                  {q.diagramImageUrl && extractionResult && (
+                    <div className="flex flex-col gap-2 bg-muted/40 p-3 rounded-lg border border-border">
+                      <div className="flex items-center gap-3">
+                        <img 
+                          src={q.diagramImageUrl} 
+                          alt="Question Diagram" 
+                          className="w-20 h-16 object-cover rounded border border-border cursor-pointer"
                           onClick={() => setSelectedPreviewImage(q.diagramImageUrl!)}
-                          className="text-[11px] h-6 px-2"
+                        />
+                        <div className="text-xs space-y-1">
+                          <span className="font-bold text-foreground block">Attached Visual Diagram</span>
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            onClick={() => setSelectedPreviewImage(q.diagramImageUrl!)}
+                            className="text-[11px] h-6 px-2"
+                          >
+                            <Eye className="w-3 h-3 mr-1" /> View Full
+                          </Button>
+                        </div>
+                      </div>
+                      
+                      {/* Diagram Re-linker */}
+                      <div className="pt-2 border-t border-border mt-1">
+                        <label className="text-[10px] font-bold text-muted-foreground uppercase">Re-link different diagram:</label>
+                        <select 
+                          className="w-full bg-background border border-border rounded p-1.5 text-xs font-mono"
+                          onChange={(e) => {
+                            const newUrl = e.target.value;
+                            updateQuestionField(idx, 'diagramImageUrl', newUrl);
+                          }}
+                          value={q.diagramImageUrl}
                         >
-                          <Eye className="w-3 h-3 mr-1" /> View Full Image
-                        </Button>
+                          {extractionResult.extractedDiagrams.map(diag => (
+                            <option key={diag.dataUrl} value={diag.dataUrl}>{diag.label}</option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   )}

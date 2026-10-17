@@ -165,7 +165,7 @@ export async function processPdfChunksStreaming(
       const chunkPercent = Math.round((chunkNum / totalChunks) * 90);
 
       onProgress?.(
-        `Processing Chunk ${chunkNum} of ${totalChunks} (Pages ${startPage} - ${endPage})...`,
+        `Parsing PDF: Processing Page ${pageNum} of ${totalPages} (Chunk ${chunkNum}/${totalChunks})...`,
         chunkNum,
         totalChunks,
         chunkPercent
