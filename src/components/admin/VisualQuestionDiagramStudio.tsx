@@ -780,8 +780,19 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                           height: 1000
                         })));
                         setSelectedPageNum(result.diagrams[0].pageNumber);
+                      } else {
+                        // Fallback: render all pages if no explicit diagrams isolated
+                        const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.2, (curr, total) => {
+                          updateProgress(`Rendering page snapshot ${curr} of ${total}...`, curr, total);
+                        });
+                        setRenderedPages(pages);
+                        if (pages.length > 0) setSelectedPageNum(1);
                       }
+
                       toast.success(`Successfully extracted ${result.questions.length} questions across ${result.totalChunks} chunks!`);
+                      setTimeout(() => {
+                        document.getElementById('extracted-results-container')?.scrollIntoView({ behavior: 'smooth' });
+                      }, 200);
                     }}
                   />
 
@@ -801,6 +812,9 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                         setActiveTab('extractor');
                       }
                       toast.success(`Successfully extracted ${pages.length} high-resolution page diagram snapshots!`);
+                      setTimeout(() => {
+                        document.getElementById('extracted-results-container')?.scrollIntoView({ behavior: 'smooth' });
+                      }, 200);
                     }}
                   />
                 </div>
@@ -835,7 +849,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
 
           {/* Interactive PDF Page Viewer & Visual Snapper */}
           {renderedPages.length > 0 && (
-            <Card className="border-emerald-500/40 bg-card shadow-md">
+            <Card id="extracted-results-container" className="border-emerald-500/40 bg-card shadow-md">
               <CardHeader className="pb-3">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div>
