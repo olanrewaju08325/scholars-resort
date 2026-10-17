@@ -68,19 +68,61 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
     setProgressPercent(5);
 
     try {
-      const result = await extractQuestionsAndDiagramsFromPdf(
-        selectedFile,
-        selectedSubject,
-        (status, percent) => {
-          setProgressStatus(status);
-          setProgressPercent(percent);
-        }
-      );
+      const { splitPdfIntoChunks } = await import('@/lib/pdfProcessor');
+      
+      setProgressStatus('Slicing PDF document into optimized segments...');
+      const chunks = await splitPdfIntoChunks(selectedFile, 5, (curr, total, status) => {
+        setProgressStatus(status);
+        setProgressPercent(Math.round((curr / total) * 25));
+      });
 
-      setExtractionResult(result);
+      const totalChunks = chunks.length;
+      const allExtractedQuestions: ExtractedVisualQuestion[] = [];
+      const allExtractedDiagrams: Array<{ pageNumber: number; dataUrl: string; label: string }> = [];
+      let primaryResult: PdfVisualExtractionResult | null = null;
+
+      for (let i = 0; i < totalChunks; i++) {
+        const chunkNum = i + 1;
+        const chunkFileName = `${selectedFile.name.replace(/\.pdf$/i, '')}_part${chunkNum}.pdf`;
+        const chunkFile = new File([chunks[i]], chunkFileName, { type: 'application/pdf' });
+
+        const result = await extractQuestionsAndDiagramsFromPdf(
+          chunkFile,
+          selectedSubject,
+          (status, percent) => {
+            const chunkBase = 25 + Math.round((i / totalChunks) * 70);
+            const chunkContribution = Math.round((percent / 100) * (70 / totalChunks));
+            setProgressStatus(`Processing Chunk ${chunkNum} of ${totalChunks}: ${status}`);
+            setProgressPercent(Math.min(95, chunkBase + chunkContribution));
+          }
+        );
+
+        if (!primaryResult) {
+          primaryResult = result;
+        }
+        allExtractedQuestions.push(...result.questions);
+        if (result.extractedDiagrams) {
+          allExtractedDiagrams.push(...result.extractedDiagrams);
+        }
+      }
+
+      const finalResult: PdfVisualExtractionResult = {
+        fileName: selectedFile.name,
+        numPages: primaryResult?.numPages || totalChunks * 5,
+        totalQuestions: allExtractedQuestions.length,
+        questionsWithDiagrams: allExtractedQuestions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl)).length,
+        detectedSubject: primaryResult?.detectedSubject || selectedSubject,
+        detectedSubjectConfidence: primaryResult?.detectedSubjectConfidence || 85,
+        isChemistry: primaryResult?.isChemistry || selectedSubject.toLowerCase() === 'chemistry',
+        detectedTopics: primaryResult?.detectedTopics || [],
+        questions: allExtractedQuestions,
+        extractedDiagrams: allExtractedDiagrams
+      };
+
+      setExtractionResult(finalResult);
       
       // Attach selected subject and year to all extracted questions (preserve individual detected question years)
-      let processedQuestions = result.questions.map(q => ({
+      let processedQuestions = allExtractedQuestions.map(q => ({
         ...q,
         year: q.year || examYear
       }));
@@ -90,12 +132,12 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
         const visualQuestions = processedQuestions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl));
         if (visualQuestions.length > 0) {
           processedQuestions = visualQuestions;
-          toast.success(`Found ${visualQuestions.length} visual questions with diagram figures!`);
+          toast.success(`Found ${visualQuestions.length} visual questions with diagram figures across ${totalChunks} chunks!`);
         } else {
           toast.info('No explicit diagram references detected. Showing all extracted questions.');
         }
       } else {
-        toast.success(`Extracted ${result.totalQuestions} questions! (${result.questionsWithDiagrams} with diagrams isolated)`);
+        toast.success(`Extracted ${allExtractedQuestions.length} questions across ${totalChunks} chunks!`);
       }
 
       setExtractedQuestions(processedQuestions);

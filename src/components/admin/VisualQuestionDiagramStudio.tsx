@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import * as pdfjsLib from 'pdfjs-dist';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ExtractImageButton } from './ExtractImageButton';
@@ -186,7 +187,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
     try {
       // 1. Initialize PDF
       const arrayBuffer = await selectedFile.arrayBuffer();
-      const loadingTask = (window as any).pdfjsLib.getDocument({
+      const loadingTask = pdfjsLib.getDocument({
         data: arrayBuffer,
         useWorkerFetch: false,
         isEvalSupported: false,
@@ -751,7 +752,6 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
 
               <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
                 <div className="flex flex-wrap items-center gap-2">
-                <div className="flex flex-wrap items-center gap-2">
                   <ExtractImageButton
                     label="Extract Questions & Render Diagram Canvas"
                     className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 h-11 px-5 shadow-md"
@@ -761,20 +761,57 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                       const { splitPdfIntoChunks } = await import('@/lib/pdfProcessor');
                       const { extractQuestionsAndDiagramsFromPdf } = await import('@/lib/pdfVisualQuestionExtractor');
                       
-                      const chunks = await splitPdfIntoChunks(selectedFile, 5);
-                      updateProgress(`Created ${chunks.length} chunks. Processing...`);
+                      const chosenTopic = subjectTopics.find(t => t.id === selectedTopicId);
+                      const topicHint = selectedTopicId === 'custom' ? customTopicName.trim() : (chosenTopic?.name || '');
+
+                      updateProgress('Slicing PDF into processing segments...', 0, 1);
+                      const chunks = await splitPdfIntoChunks(selectedFile, 5, (curr, total, status) => {
+                        updateProgress(status, curr, total);
+                      });
+                      
+                      const totalChunks = chunks.length;
+                      updateProgress(`Created ${totalChunks} chunks. Starting question & diagram extraction...`, 0, totalChunks);
                       
                       const allQuestions: any[] = [];
-                      for (let i = 0; i < chunks.length; i++) {
-                        updateProgress(`Processing chunk ${i + 1} of ${chunks.length}...`);
+                      const allDiagrams: any[] = [];
+
+                      for (let i = 0; i < totalChunks; i++) {
+                        const chunkNumber = i + 1;
+                        updateProgress(`Processing Chunk ${chunkNumber} of ${totalChunks}...`, chunkNumber, totalChunks);
+                        
+                        const chunkFileName = `${selectedFile.name.replace(/\.pdf$/i, '')}_part${chunkNumber}.pdf`;
+                        const chunkFile = new File([chunks[i]], chunkFileName, { type: 'application/pdf' });
+                        
                         const result = await extractQuestionsAndDiagramsFromPdf(
-                          new File([chunks[i]], `chunk_${i}.pdf`),
-                          selectedSubject
+                          chunkFile,
+                          selectedSubject,
+                          (status) => {
+                            updateProgress(`Processing Chunk ${chunkNumber} of ${totalChunks}: ${status}`, chunkNumber, totalChunks);
+                          },
+                          topicHint
                         );
-                        allQuestions.push(...result.questions);
+                        
+                        if (result.questions && result.questions.length > 0) {
+                          allQuestions.push(...result.questions);
+                        }
+                        if (result.extractedDiagrams && result.extractedDiagrams.length > 0) {
+                          allDiagrams.push(...result.extractedDiagrams);
+                        }
                       }
+                      
                       setExtractedQuestions(allQuestions);
-                      toast.success(`Extracted ${allQuestions.length} questions total!`);
+                      if (allDiagrams.length > 0) {
+                        setRenderedPages(prev => [
+                          ...prev,
+                          ...allDiagrams.map(d => ({
+                            pageNumber: d.pageNumber,
+                            dataUrl: d.dataUrl,
+                            width: 800,
+                            height: 1000
+                          }))
+                        ]);
+                      }
+                      toast.success(`Extracted ${allQuestions.length} questions across ${totalChunks} chunks!`);
                     }}
                   />
 
@@ -785,9 +822,9 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                     onExtract={async (updateProgress) => {
                       if (!selectedFile) return;
                       const { renderPdfPagesForVisualSnapping } = await import('@/lib/pdfVisualQuestionExtractor');
-                      updateProgress('Extracting visual diagrams...');
+                      updateProgress('Extracting visual diagrams...', 0, 100);
                       const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.8, (curr, total) => {
-                        updateProgress(`Snapping page ${curr} of ${total}...`);
+                        updateProgress(`Snapping page ${curr} of ${total}...`, curr, total);
                       });
                       setRenderedPages(pages);
                       if (pages.length > 0) {
@@ -797,7 +834,6 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                       toast.success(`Successfully extracted ${pages.length} high-resolution page diagram snapshots!`);
                     }}
                   />
-                </div>
                 </div>
 
                 {extractedQuestions.length > 0 && (

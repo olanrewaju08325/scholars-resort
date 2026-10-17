@@ -46,6 +46,7 @@
     "mermaid": "^11.17.2",
     "nodemailer": "^9.0.3",
     "papaparse": "^5.5.4",
+    "pdf-lib": "^1.17.1",
     "pdfjs-dist": "^6.2.108",
     "pg": "^8.22.0",
     "qrcode": "^1.5.4",
