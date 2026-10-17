@@ -58,7 +58,16 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
   };
 
   const handleStartExtraction = async (e?: React.MouseEvent) => {
+    console.log('[Diagnostic Lifecycle - Direct Extractor] 1. handleStartExtraction called', {
+      hasEvent: Boolean(e),
+      defaultPrevented: e?.defaultPrevented,
+      fileName: selectedFile?.name
+    });
     e?.preventDefault();
+    e?.stopPropagation();
+    e?.nativeEvent?.preventDefault?.();
+    e?.nativeEvent?.stopImmediatePropagation?.();
+
     if (!selectedFile) {
       toast.error('Please select a PDF document first.');
       return;
@@ -69,16 +78,22 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
     setProgressPercent(5);
 
     try {
+      console.log('[Diagnostic Lifecycle - Direct Extractor] 2. Calling processPdfChunksStreaming...');
       const streamingRes = await processPdfChunksStreaming(
         selectedFile,
         selectedSubject,
         5,
         undefined,
-        (status, _curr, _total, percent) => {
+        (status, curr, total, percent) => {
+          console.log('[Diagnostic Lifecycle - Direct Extractor] 3. Streaming progress:', { status, curr, total, percent });
           setProgressStatus(status);
           setProgressPercent(percent);
         }
       );
+      console.log('[Diagnostic Lifecycle - Direct Extractor] 4. Streaming extraction completed successfully:', {
+        questionsCount: streamingRes.questions.length,
+        diagramsCount: streamingRes.diagrams.length
+      });
 
       const finalResult: PdfVisualExtractionResult = {
         fileName: selectedFile.name,

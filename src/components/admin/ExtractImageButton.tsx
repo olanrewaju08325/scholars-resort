@@ -25,12 +25,23 @@ export const ExtractImageButton: React.FC<ExtractImageButtonProps> = ({
   const [progressPercent, setProgressPercent] = useState<number>(0);
 
   const handleClick = async (e: React.MouseEvent) => {
+    console.log('[Diagnostic Lifecycle] 1. ExtractImageButton click triggered', {
+      target: e.target,
+      currentTarget: e.currentTarget,
+      defaultPreventedBefore: e.defaultPrevented
+    });
+
     e.preventDefault();
     e.stopPropagation();
     e.nativeEvent?.preventDefault?.();
     e.nativeEvent?.stopImmediatePropagation?.();
 
-    if (isProcessing || disabled) return;
+    console.log('[Diagnostic Lifecycle] 2. preventDefault enforced. defaultPreventedAfter:', e.defaultPrevented);
+
+    if (isProcessing || disabled) {
+      console.log('[Diagnostic Lifecycle] Extraction aborted: already processing or disabled.');
+      return;
+    }
 
     setIsProcessing(true);
     setProgressStatus('Initializing extraction...');
@@ -39,6 +50,7 @@ export const ExtractImageButton: React.FC<ExtractImageButtonProps> = ({
     setProgressPercent(5);
 
     const updateProgress = (status: string, curr?: number, total?: number) => {
+      console.log('[Diagnostic Lifecycle] 3. Chunking Progress Update:', { status, curr, total });
       setProgressStatus(status);
       if (typeof curr === 'number' && typeof total === 'number' && total > 0) {
         setCurrentChunk(curr);
@@ -49,11 +61,13 @@ export const ExtractImageButton: React.FC<ExtractImageButtonProps> = ({
     };
 
     try {
+      console.log('[Diagnostic Lifecycle] 4. Starting onExtract execution...');
       await onExtract(updateProgress);
+      console.log('[Diagnostic Lifecycle] 5. onExtract execution completed successfully.');
       setProgressPercent(100);
       setProgressStatus('Extraction completed successfully.');
     } catch (err: any) {
-      console.error('[ExtractImageButton] Extraction error:', err);
+      console.error('[Diagnostic Lifecycle] Extraction error encountered:', err);
       toast.error(err?.message || 'Extraction encountered an error. Please try again.');
       setProgressStatus('Extraction halted on error.');
     } finally {

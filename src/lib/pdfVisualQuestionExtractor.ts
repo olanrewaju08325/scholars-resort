@@ -3,15 +3,10 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import { normalizeSubjectName, OFFICIAL_JAMB_SUBJECTS } from '@/utils/subjectUtils';
 
-// Configure pdfjs worker: prefer bundled local asset for instant offline performance with safe fallback
+// Configure pdfjs worker to use built-in fake worker for reliable browser execution without CDN fetch errors
 try {
   if (typeof window !== 'undefined') {
-    if (pdfWorkerUrl) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-    } else {
-      const installedVersion = (pdfjsLib as any).version || '6.2.108';
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
-    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
   }
 } catch (e) {
   console.warn('Could not set workerSrc for pdfjs:', e);

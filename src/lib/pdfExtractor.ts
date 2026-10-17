@@ -1,10 +1,9 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure pdfjs worker dynamically to match installed version
+// Configure pdfjs worker to use built-in fake worker
 try {
   if (typeof window !== 'undefined') {
-    const installedVersion = (pdfjsLib as any).version || '6.2.108';
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
   }
 } catch (e) {
   console.warn('Could not set workerSrc for pdfjs:', e);

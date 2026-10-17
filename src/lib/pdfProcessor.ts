@@ -9,16 +9,11 @@ import {
   type ExtractedVisualQuestion
 } from '@/lib/pdfVisualQuestionExtractor';
 
-// Ensure PDF.js worker is properly set up in all browser contexts
+// Ensure PDF.js worker uses built-in fake worker to prevent CDN fetch failures
 try {
   if (typeof window !== 'undefined') {
     (window as any).pdfjsLib = pdfjsLib;
-    if (pdfWorkerUrl) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-    } else {
-      const installedVersion = (pdfjsLib as any).version || '6.2.108';
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${installedVersion}/build/pdf.worker.min.mjs`;
-    }
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
   }
 } catch (e) {
   console.warn('[PDFProcessor] Could not set workerSrc for pdfjs:', e);
