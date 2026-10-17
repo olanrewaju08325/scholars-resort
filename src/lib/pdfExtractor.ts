@@ -1,9 +1,10 @@
 import * as pdfjsLib from 'pdfjs-dist';
 
-// Configure pdfjs worker to use built-in fake worker
+// Configure pdfjs worker to use cdnjs worker URL
 try {
   if (typeof window !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    const ver = (pdfjsLib as any).version || '3.11.174';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${ver}/pdf.worker.min.js`;
   }
 } catch (e) {
   console.warn('Could not set workerSrc for pdfjs:', e);

@@ -9,11 +9,16 @@ import {
   type ExtractedVisualQuestion
 } from '@/lib/pdfVisualQuestionExtractor';
 
-// Ensure PDF.js worker uses built-in fake worker to prevent CDN fetch failures
+// Ensure PDF.js worker uses local bundled Vite asset or cdnjs fallback
 try {
   if (typeof window !== 'undefined') {
     (window as any).pdfjsLib = pdfjsLib;
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+    if (pdfWorkerUrl) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+    } else {
+      const ver = (pdfjsLib as any).version || '3.11.174';
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${ver}/pdf.worker.min.js`;
+    }
   }
 } catch (e) {
   console.warn('[PDFProcessor] Could not set workerSrc for pdfjs:', e);
