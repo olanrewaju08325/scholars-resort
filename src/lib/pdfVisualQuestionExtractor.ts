@@ -1,5 +1,6 @@
 import { pdfjsLib } from '@/lib/pdfWorkerSetup';
 import { normalizeSubjectName, OFFICIAL_JAMB_SUBJECTS } from '@/utils/subjectUtils';
+import { PdfGridEngine } from '@/utils/PdfGridEngine';
 
 export interface ExtractedVisualQuestion {
   id: string;
@@ -211,25 +212,9 @@ export async function extractPdfPageChunk(
   detectedTopics: string[];
   fullPageText: string;
 }> {
-  const textContent = await page.getTextContent();
-  const textLines: string[] = [];
-  let currentLine = '';
-  let lastY: number | null = null;
-
-  for (const item of textContent.items as any[]) {
-    const str = item.str || '';
-    const y = item.transform ? Math.round(item.transform[5]) : null;
-
-    if (lastY !== null && y !== null && Math.abs(y - lastY) > 5) {
-      if (currentLine.trim()) textLines.push(currentLine.trim());
-      currentLine = str;
-    } else {
-      currentLine += ' ' + str;
-    }
-    lastY = y;
-  }
-  if (currentLine.trim()) textLines.push(currentLine.trim());
-  const fullPageText = textLines.join('\n');
+  const elements = await PdfGridEngine.mapToGrid(page);
+  const blocks = PdfGridEngine.clusterElements(elements);
+  const fullPageText = blocks.map(block => block.elements.map(e => e.content).join(' ')).join('\n');
 
   let pageDiagramDataUrl = '';
   const diagrams: Array<{ pageNumber: number; dataUrl: string; label: string }> = [];
@@ -305,25 +290,10 @@ export async function extractQuestionsAndDiagramsFromPdf(
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
     
-    // Combine text items preserving lines
-    const textLines: string[] = [];
-    let currentLine = '';
-    let lastY: number | null = null;
-
-    for (const item of textContent.items as any[]) {
-      const str = item.str || '';
-      const y = item.transform ? Math.round(item.transform[5]) : null;
-
-      if (lastY !== null && y !== null && Math.abs(y - lastY) > 5) {
-        if (currentLine.trim()) textLines.push(currentLine.trim());
-        currentLine = str;
-      } else {
-        currentLine += ' ' + str;
-      }
-      lastY = y;
-    }
-    if (currentLine.trim()) textLines.push(currentLine.trim());
-    const fullPageText = textLines.join('\n');
+    // Process each page: Extract text items and render visual page snapshots for diagrams
+    const elements = await PdfGridEngine.mapToGrid(page);
+    const blocks = PdfGridEngine.clusterElements(elements);
+    const fullPageText = blocks.map(block => block.elements.map(e => e.content).join(' ')).join('\n');
     fullAccumulatedText += ' ' + fullPageText;
 
     // Render page to canvas to isolate visual diagrams

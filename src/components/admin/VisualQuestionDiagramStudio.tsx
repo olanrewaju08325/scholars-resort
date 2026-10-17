@@ -878,9 +878,9 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                       onChange={(e) => setSelectedPageNum(Number(e.target.value))}
                       className="bg-background border border-border rounded-lg px-2.5 py-1.5 text-xs font-bold"
                     >
-                      {renderedPages.map(p => (
+                      {(renderedPages || []).map(p => (
                         <option key={p.pageNumber} value={p.pageNumber}>
-                          Page {p.pageNumber} of {renderedPages.length}
+                          Page {p.pageNumber} of {(renderedPages || []).length}
                         </option>
                       ))}
                     </select>
