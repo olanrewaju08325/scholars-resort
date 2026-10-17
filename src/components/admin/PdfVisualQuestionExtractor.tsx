@@ -11,6 +11,7 @@ import {
   type ExtractedVisualQuestion, 
   type PdfVisualExtractionResult 
 } from '@/lib/pdfVisualQuestionExtractor';
+import { splitPdfIntoChunks } from '@/lib/pdfProcessor';
 import { OFFICIAL_JAMB_SUBJECTS, normalizeSubjectName } from '@/utils/subjectUtils';
 import { supabase } from '@/lib/supabase';
 import { MathText } from '@/components/MathText';
@@ -68,8 +69,6 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
     setProgressPercent(5);
 
     try {
-      const { splitPdfIntoChunks } = await import('@/lib/pdfProcessor');
-      
       setProgressStatus('Slicing PDF document into optimized segments...');
       const chunks = await splitPdfIntoChunks(selectedFile, 5, (curr, total, status) => {
         setProgressStatus(status);

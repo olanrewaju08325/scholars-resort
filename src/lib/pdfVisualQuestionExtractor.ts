@@ -259,6 +259,8 @@ export async function extractPdfPageChunk(
     if (ctx) {
       await page.render({ canvasContext: ctx, viewport }).promise;
       pageDiagramDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+      canvas.width = 0;
+      canvas.height = 0;
       diagrams.push({
         pageNumber: pageNum,
         dataUrl: pageDiagramDataUrl,
@@ -351,12 +353,15 @@ export async function extractQuestionsAndDiagramsFromPdf(
       if (ctx) {
         await page.render({ canvasContext: ctx, viewport }).promise;
         pageDiagramDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        canvas.width = 0;
+        canvas.height = 0;
         extractedDiagrams.push({
           pageNumber: pageNum,
           dataUrl: pageDiagramDataUrl,
           label: `Page ${pageNum} Visual Diagram Snapshot`
         });
       }
+      await new Promise(r => setTimeout(r, 6));
     } catch (renderErr) {
       console.warn(`[PdfVisualExtractor] Canvas render notice for page ${pageNum}:`, renderErr);
     }
@@ -578,7 +583,7 @@ export interface RenderedPdfPage {
  */
 export async function renderPdfPagesForVisualSnapping(
   file: File,
-  scale = 1.8,
+  scale = 1.4,
   onProgress?: (current: number, total: number) => void
 ): Promise<RenderedPdfPage[]> {
   const arrayBuffer = await file.arrayBuffer();
@@ -598,18 +603,21 @@ export async function renderPdfPagesForVisualSnapping(
     const page = await pdf.getPage(pageNum);
     const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+    canvas.width = Math.floor(viewport.width);
+    canvas.height = Math.floor(viewport.height);
     const ctx = canvas.getContext('2d');
     if (ctx) {
       await page.render({ canvasContext: ctx, viewport }).promise;
       pages.push({
         pageNumber: pageNum,
-        dataUrl: canvas.toDataURL('image/jpeg', 0.90),
+        dataUrl: canvas.toDataURL('image/jpeg', 0.88),
         width: viewport.width,
         height: viewport.height
       });
+      canvas.width = 0;
+      canvas.height = 0;
     }
+    await new Promise(r => setTimeout(r, 6));
   }
 
   return pages;

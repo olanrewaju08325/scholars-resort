@@ -14,9 +14,11 @@ import {
   extractQuestionsAndDiagramsFromPdf, 
   renderPdfPagesForVisualSnapping,
   cropRegionFromPageDataUrl,
+  extractPdfPageChunk,
   type ExtractedVisualQuestion,
   type RenderedPdfPage
 } from '@/lib/pdfVisualQuestionExtractor';
+import { splitPdfIntoChunks } from '@/lib/pdfProcessor';
 import { OFFICIAL_JAMB_SUBJECTS, normalizeSubjectName } from '@/utils/subjectUtils';
 import { supabase } from '@/lib/supabase';
 import { fetchAllRowsPaginated } from '@/lib/supabasePagination';
@@ -195,9 +197,6 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
       });
       const pdf = await loadingTask.promise;
       const numPages = pdf.numPages;
-
-      const { extractPdfPageChunk } = await import('@/lib/pdfVisualQuestionExtractor');
-      
       const allQuestions: any[] = [];
       const allDiagrams: any[] = [];
       let activeTopic = selectedTopicId === 'custom' ? customTopicName.trim() : '';
@@ -758,8 +757,6 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                     disabled={!selectedFile}
                     onExtract={async (updateProgress) => {
                       if (!selectedFile) return;
-                      const { splitPdfIntoChunks } = await import('@/lib/pdfProcessor');
-                      const { extractQuestionsAndDiagramsFromPdf } = await import('@/lib/pdfVisualQuestionExtractor');
                       
                       const chosenTopic = subjectTopics.find(t => t.id === selectedTopicId);
                       const topicHint = selectedTopicId === 'custom' ? customTopicName.trim() : (chosenTopic?.name || '');
@@ -821,9 +818,8 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
                     disabled={!selectedFile}
                     onExtract={async (updateProgress) => {
                       if (!selectedFile) return;
-                      const { renderPdfPagesForVisualSnapping } = await import('@/lib/pdfVisualQuestionExtractor');
                       updateProgress('Extracting visual diagrams...', 0, 100);
-                      const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.8, (curr, total) => {
+                      const pages = await renderPdfPagesForVisualSnapping(selectedFile, 1.4, (curr, total) => {
                         updateProgress(`Snapping page ${curr} of ${total}...`, curr, total);
                       });
                       setRenderedPages(pages);
