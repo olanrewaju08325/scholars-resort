@@ -982,7 +982,7 @@ export const VisualQuestionDiagramStudio: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {extractedQuestions.map((q, idx) => (
+                {(extractedQuestions || []).map((q, idx) => (
                   <Card key={idx} className="border-border bg-card p-4 space-y-3">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
