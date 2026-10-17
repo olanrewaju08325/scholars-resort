@@ -1,14 +1,4 @@
-import * as pdfjsLib from 'pdfjs-dist';
-
-// Configure pdfjs worker to use cdnjs worker URL
-try {
-  if (typeof window !== 'undefined') {
-    const ver = (pdfjsLib as any).version || '3.11.174';
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${ver}/pdf.worker.min.js`;
-  }
-} catch (e) {
-  console.warn('Could not set workerSrc for pdfjs:', e);
-}
+import { pdfjsLib } from '@/lib/pdfWorkerSetup';
 
 export interface DocumentExtractionResult {
   isScanned: boolean;

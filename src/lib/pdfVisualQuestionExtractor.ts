@@ -1,21 +1,5 @@
-import * as pdfjsLib from 'pdfjs-dist';
-// @ts-ignore
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { pdfjsLib } from '@/lib/pdfWorkerSetup';
 import { normalizeSubjectName, OFFICIAL_JAMB_SUBJECTS } from '@/utils/subjectUtils';
-
-// Configure pdfjs worker to use local bundled Vite asset or cdnjs fallback
-try {
-  if (typeof window !== 'undefined') {
-    if (pdfWorkerUrl) {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
-    } else {
-      const ver = (pdfjsLib as any).version || '3.11.174';
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${ver}/pdf.worker.min.js`;
-    }
-  }
-} catch (e) {
-  console.warn('Could not set workerSrc for pdfjs:', e);
-}
 
 export interface ExtractedVisualQuestion {
   id: string;
