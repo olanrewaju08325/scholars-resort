@@ -22,6 +22,7 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
   const [selectedSubject, setSelectedSubject] = useState<string>('Physics');
   const [examYear, setExamYear] = useState<number>(2024);
   const [extractVisualOnly, setExtractVisualOnly] = useState<boolean>(true);
+  const [ingestVisualOnly, setIngestVisualOnly] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [progressStatus, setProgressStatus] = useState<string>('');
   const [progressPercent, setProgressPercent] = useState<number>(0);
@@ -149,14 +150,26 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
     try {
       // Resolve subject ID from Supabase
       const canonical = normalizeSubjectName(selectedSubject);
-      let subjectId = '';
       const { data: dbSubs } = await supabase.from('subjects').select('id, name');
-      if (dbSubs) {
-        const matched = dbSubs.find(s => normalizeSubjectName(s.name).toLowerCase() === canonical.toLowerCase());
-        subjectId = matched?.id || dbSubs[0]?.id || '';
+      
+      const matched = dbSubs?.find(s => normalizeSubjectName(s.name).toLowerCase() === canonical.toLowerCase());
+      const subjectId = matched?.id || dbSubs?.[0]?.id;
+
+      if (!subjectId) {
+        throw new Error('Subject mapping failed. Ensure the subject is selected correctly.');
       }
 
-      const payloads = extractedQuestions.map(q => {
+      const questionsToIngest = ingestVisualOnly 
+        ? extractedQuestions.filter(q => q.hasVisualReference || Boolean(q.diagramImageUrl))
+        : extractedQuestions;
+
+      if (questionsToIngest.length === 0) {
+        toast.info('No visual questions found to ingest.');
+        setIsIngesting(false);
+        return;
+      }
+
+      const payloads = questionsToIngest.map(q => {
         const qualityFlags = q.hasVisualReference && !q.diagramImageUrl
           ? ['needs_diagram', 'missing_figure']
           : [];
@@ -385,23 +398,33 @@ export const PdfVisualQuestionExtractor: React.FC = () => {
               </CardDescription>
             </div>
 
-            <Button
-              onClick={handleIngestAllQuestions}
-              disabled={isIngesting}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 shadow-xs"
-            >
-              {isIngesting ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  <span>Ingesting to Database...</span>
-                </>
-              ) : (
-                <>
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Approve & Ingest All {extractedQuestions.length} Questions</span>
-                </>
-              )}
-            </Button>
+            <div className="flex flex-col gap-2">
+              <label className="flex items-center gap-2 text-xs font-bold cursor-pointer">
+                <input 
+                  type="checkbox" 
+                  checked={ingestVisualOnly} 
+                  onChange={(e) => setIngestVisualOnly(e.target.checked)}
+                />
+                Ingest Visual Questions Only
+              </label>
+              <Button
+                onClick={handleIngestAllQuestions}
+                disabled={isIngesting}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-extrabold gap-2 shadow-xs"
+              >
+                {isIngesting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Ingesting to Database...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Approve & Ingest {ingestVisualOnly ? 'Visual' : 'All'} {extractedQuestions.length} Questions</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </CardHeader>
 
           <CardContent className="space-y-4">
